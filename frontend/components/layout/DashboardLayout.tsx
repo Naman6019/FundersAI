@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useCanvasStore } from '@/store/useCanvasStore';
 import { ChevronRight, ChevronLeft, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import SignOutButton from '@/components/auth/SignOutButton';
 import ChatWindow from '@/components/chat/ChatWindow';
 import StockDetailView from '@/components/canvas/StockDetailView';
 import MFDetailView from '@/components/canvas/MFDetailView';
@@ -70,6 +71,8 @@ export default function DashboardLayout() {
         <div className="disclaimer-sidebar">
           <p>MarketMind is an informational research tool only. Nothing presented constitutes investment advice. Always consult a SEBI-registered Advisor.</p>
         </div>
+
+        <SignOutButton />
       </aside>
 
       <main className="flex-1 h-full relative flex overflow-hidden gap-4">

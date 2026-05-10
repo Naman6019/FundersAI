@@ -1,6 +1,7 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Send } from 'lucide-react';
@@ -8,6 +9,7 @@ import { useCanvasStore } from '@/store/useCanvasStore';
 import { AssetType, Message, useChatStore } from '@/store/useChatStore';
 
 export default function ChatWindow() {
+  const searchParams = useSearchParams();
   const { setView, setIds, openCanvas } = useCanvasStore();
   const messages = useChatStore((state) => state.messages);
   const input = useChatStore((state) => state.input);
@@ -19,6 +21,7 @@ export default function ChatWindow() {
   const addMessage = useChatStore((state) => state.addMessage);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const initialQuerySentRef = useRef(false);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -36,8 +39,8 @@ export default function ChatWindow() {
     setInput(text);
   };
 
-  const handleSend = async () => {
-    const text = input.trim();
+  const sendQuery = useCallback(async (queryText: string, selectedAssetType: AssetType = assetType) => {
+    const text = queryText.trim();
     if (!text) return;
 
     const userMsg: Message = { id: Date.now().toString(), role: 'user', content: text };
@@ -53,7 +56,7 @@ export default function ChatWindow() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: text, asset_type: assetType }),
+        body: JSON.stringify({ query: text, asset_type: selectedAssetType }),
       });
 
       if (!res.ok) throw new Error('API Error');
@@ -73,6 +76,24 @@ export default function ChatWindow() {
     } finally {
       setIsProcessing(false);
     }
+  }, [addMessage, assetType, openCanvas, setIds, setInput, setIsProcessing, setView]);
+
+  useEffect(() => {
+    if (initialQuerySentRef.current) return;
+    const query = searchParams.get('query')?.trim();
+    if (!query) return;
+
+    initialQuerySentRef.current = true;
+    const selectedAssetType = searchParams.get('asset_type');
+    const nextAssetType: AssetType =
+      selectedAssetType === 'stock' || selectedAssetType === 'mutual_fund' ? selectedAssetType : 'auto';
+
+    setAssetType(nextAssetType);
+    void sendQuery(query, nextAssetType);
+  }, [searchParams, sendQuery, setAssetType]);
+
+  const handleSend = async () => {
+    await sendQuery(input, assetType);
   };
 
   return (

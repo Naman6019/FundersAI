@@ -110,6 +110,96 @@ def test_quant_compare_isolates_symbol_failure(monkeypatch):
     assert response["comparison"]["BROKEN"]["error"] == "Data lookup failed for this symbol."
 
 
+def test_stock_profile_merges_live_and_stored_ratios(monkeypatch):
+    from app.services import quant_service
+
+    class FakeProvider:
+        name = "indianapi"
+
+        def get_company_profile(self, symbol):
+            return None
+
+        def get_ratios_snapshot(self, symbol):
+            return {"symbol": symbol, "pe": 16.8, "roe": None, "source": "indianapi"}
+
+        def get_shareholding(self, symbol):
+            return []
+
+    monkeypatch.setattr(quant_service, "get_fundamentals_provider", lambda: FakeProvider())
+    monkeypatch.setattr(quant_service, "get_stock_metadata", lambda symbol: {"symbol": symbol, "company_name": symbol, "source": "test"})
+    monkeypatch.setattr(quant_service.indianapi_service, "get_stock_research_profile", lambda symbol: {"ok": False})
+    monkeypatch.setattr(quant_service.indianapi_service, "get_stock_corporate_actions", lambda symbol: {"ok": False})
+    monkeypatch.setattr(quant_service.indianapi_service, "get_stock_recent_announcements", lambda symbol: {"ok": False})
+    monkeypatch.setattr(quant_service, "get_stock_price_history", lambda symbol, days=2: [])
+    monkeypatch.setattr(quant_service, "_latest_ratios", lambda symbol: {"symbol": symbol, "pe": None, "roe": 0.25, "source": "calculated"})
+    monkeypatch.setattr(quant_service, "_latest_shareholding", lambda symbol: None)
+
+    profile = quant_service.build_stock_profile("TCS")
+
+    assert profile["ratios"]["pe"] == 16.8
+    assert profile["ratios"]["roe"] == 0.25
+    assert profile["ratios"]["source"] == "indianapi+calculated"
+
+
+def test_stock_profile_ignores_empty_provider_shareholding(monkeypatch):
+    from app.services import quant_service
+
+    class FakeProvider:
+        name = "indianapi"
+
+        def get_company_profile(self, symbol):
+            return None
+
+        def get_ratios_snapshot(self, symbol):
+            return None
+
+        def get_shareholding(self, symbol):
+            return [{"symbol": symbol, "period_end_date": "2026-03-31", "promoter_holding": None, "source": "indianapi"}]
+
+    monkeypatch.setattr(quant_service, "get_fundamentals_provider", lambda: FakeProvider())
+    monkeypatch.setattr(quant_service, "get_stock_metadata", lambda symbol: {"symbol": symbol, "company_name": symbol, "source": "test"})
+    monkeypatch.setattr(quant_service.indianapi_service, "get_stock_research_profile", lambda symbol: {"ok": False})
+    monkeypatch.setattr(quant_service.indianapi_service, "get_stock_corporate_actions", lambda symbol: {"ok": False})
+    monkeypatch.setattr(quant_service.indianapi_service, "get_stock_recent_announcements", lambda symbol: {"ok": False})
+    monkeypatch.setattr(quant_service, "get_stock_price_history", lambda symbol, days=2: [])
+    monkeypatch.setattr(quant_service, "_latest_ratios", lambda symbol: None)
+    monkeypatch.setattr(quant_service, "_latest_shareholding", lambda symbol: {"symbol": symbol, "promoter_holding": 72.3, "source": "stored"})
+
+    profile = quant_service.build_stock_profile("TCS")
+
+    assert profile["shareholding"]["promoter_holding"] == 72.3
+
+
+def test_comparison_item_uses_meaningful_quarter_and_eps_ttm(monkeypatch):
+    from app.services import quant_service
+
+    monkeypatch.setattr(quant_service, "normalize_symbol", lambda symbol: symbol.upper())
+    monkeypatch.setattr(quant_service, "build_stock_profile", lambda symbol: {
+        "metadata": {"company_name": symbol, "industry": "IT"},
+        "ratios": {},
+        "shareholding": {},
+        "latest_price": None,
+        "source_summary": {},
+    })
+    monkeypatch.setattr(quant_service, "get_stock_price_history", lambda symbol, days=365: [])
+    monkeypatch.setattr(quant_service, "get_stock_financials", lambda symbol: {
+        "quarterly": [
+            {"period_type": "quarterly", "revenue": None, "net_profit": None, "eps": None},
+            {"period_type": "quarterly", "revenue": 100, "net_profit": 20, "eps": 2},
+            {"period_type": "quarterly", "revenue": 90, "net_profit": 18, "eps": 2},
+            {"period_type": "quarterly", "revenue": 80, "net_profit": 16, "eps": 2},
+            {"period_type": "quarterly", "revenue": 70, "net_profit": 14, "eps": 2},
+        ],
+        "annual": [],
+    })
+
+    item = quant_service._comparison_item("TCS")
+
+    assert item["fundamentals"]["revenue_qtr"] == 100
+    assert item["fundamentals"]["net_profit_qtr"] == 20
+    assert item["fundamentals"]["eps_ttm"] == 8
+
+
 def test_chat_compare_table_handles_empty_risk_period():
     from app import main
 

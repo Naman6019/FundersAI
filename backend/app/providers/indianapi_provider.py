@@ -21,6 +21,7 @@ class IndianAPIProvider(FundamentalsProvider):
 
     def __init__(self) -> None:
         self.api_key = os.environ.get("INDIANAPI_KEY") or os.environ.get("INDIAN_API_KEY")
+        self.base_url = os.environ.get("INDIANAPI_BASE_URL", self.base_url).rstrip("/")
         self.request_sleep_seconds = float(os.environ.get("INDIANAPI_REQUEST_SLEEP_SECONDS", "0"))
         self._last_request_at = 0.0
         self._stock_cache: dict[str, dict[str, Any] | None] = {}

@@ -44,8 +44,8 @@ def main():
     for symbol in symbols:
         try:
             statements = repo.get_financial_statements(symbol)
-            prices = repo.get_price_history(symbol, limit=1)
-            latest_price = prices[0].close if prices and prices[0].close is not None else None
+            prices = repo.get_recent_price_history(symbol, limit=1)
+            latest_price = prices[-1].close if prices and prices[-1].close is not None else None
             
             # Retrieve latest market cap if available
             market_cap = None
@@ -56,7 +56,7 @@ def main():
             snapshot = calculate_ratios(symbol, statements, latest_price, market_cap)
             
             # Log data quality issues
-            for field in snapshot.data_quality.get("missing_fields", []):
+            for field in getattr(snapshot, "metadata", {}).get("data_quality", []):
                 repo.log_data_quality_issue(DataQualityIssue(
                     symbol=symbol,
                     table_name="ratios_snapshot",

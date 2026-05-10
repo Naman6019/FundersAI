@@ -269,6 +269,44 @@ def _latest_ratios(symbol: str) -> dict[str, Any] | None:
     }
 
 
+def _has_meaningful_values(row: Any, exclude: set[str] | None = None) -> bool:
+    if not isinstance(row, dict):
+        return False
+    ignored = exclude or set()
+    return any(value is not None for key, value in row.items() if key not in ignored)
+
+
+def _merge_sparse(primary: dict[str, Any] | None, fallback: dict[str, Any] | None) -> dict[str, Any]:
+    if not primary:
+        return fallback or {}
+    if not fallback:
+        return primary
+    merged = dict(primary)
+    for key, value in fallback.items():
+        if merged.get(key) is None and value is not None:
+            merged[key] = value
+    primary_source = primary.get("source")
+    fallback_source = fallback.get("source")
+    if primary_source and fallback_source and primary_source != fallback_source:
+        merged["source"] = f"{primary_source}+{fallback_source}"
+    return merged
+
+
+def _first_meaningful_statement(rows: list[dict[str, Any]], fields: tuple[str, ...]) -> dict[str, Any]:
+    for row in rows:
+        if any(row.get(field) is not None for field in fields):
+            return row
+    return rows[0] if rows else {}
+
+
+def _eps_ttm(quarterly_rows: list[dict[str, Any]]) -> float | None:
+    values = [_num(row.get("eps")) for row in quarterly_rows]
+    values = [value for value in values if value is not None][:4]
+    if len(values) != 4:
+        return None
+    return sum(values)
+
+
 def build_stock_profile(symbol: str) -> dict[str, Any]:
     clean = normalize_symbol(symbol)
     provider = get_fundamentals_provider()
@@ -287,14 +325,17 @@ def build_stock_profile(symbol: str) -> dict[str, Any]:
     except Exception as exc:
         logger.warning("Provider ratios failed for %s via %s: %s", clean, provider.name, exc)
         provider_ratios = None
-    ratios = provider_ratios or _latest_ratios(clean) or {}
+    ratios = _merge_sparse(provider_ratios, _latest_ratios(clean))
 
     try:
         shareholding_rows = provider.get_shareholding(clean)
     except Exception as exc:
         logger.warning("Provider shareholding failed for %s via %s: %s", clean, provider.name, exc)
         shareholding_rows = []
-    shareholding = shareholding_rows[0] if shareholding_rows else _latest_shareholding(clean)
+    provider_shareholding = shareholding_rows[0] if shareholding_rows else None
+    if not _has_meaningful_values(provider_shareholding, {"symbol", "period_end_date", "source"}):
+        provider_shareholding = None
+    shareholding = provider_shareholding or _latest_shareholding(clean)
     shareholding_source = shareholding.get("source") if isinstance(shareholding, dict) else None
     indianapi_actions = indianapi_service.get_stock_corporate_actions(clean)
     indianapi_announcements = indianapi_service.get_stock_recent_announcements(clean)
@@ -325,7 +366,7 @@ def _comparison_item(symbol: str) -> dict[str, Any]:
     prices = get_stock_price_history(clean, days=365)
     financials = get_stock_financials(clean)
     quarterly = financials["quarterly"]
-    latest_quarter = quarterly[0] if quarterly else {}
+    latest_quarter = _first_meaningful_statement(quarterly, ("revenue", "net_profit", "eps"))
     ratios = profile.get("ratios") or {}
     shareholding = profile.get("shareholding") or {}
     latest = prices[-1] if prices else profile.get("latest_price") or {}
@@ -350,7 +391,7 @@ def _comparison_item(symbol: str) -> dict[str, Any]:
         "sales_growth_3y": ratios.get("sales_growth_3y"),
         "profit_growth_3y": ratios.get("profit_growth_3y"),
         "eps_growth_3y": ratios.get("eps_growth_3y"),
-        "eps_ttm": ratios.get("eps_ttm"),
+        "eps_ttm": ratios.get("eps_ttm") or _eps_ttm(quarterly),
         "promoter_holding": shareholding.get("promoter_holding"),
         "fii_holding": shareholding.get("fii_holding"),
         "dii_holding": shareholding.get("dii_holding"),
@@ -359,7 +400,7 @@ def _comparison_item(symbol: str) -> dict[str, Any]:
     missing = [key for key, value in fundamentals.items() if value is None and key != "source"]
     data_quality = {
         "missing_fields": missing,
-        "message": "Some fundamentals are unavailable because no fundamentals provider is configured yet." if missing else "Complete for requested fields.",
+        "message": "Some fundamentals are unavailable from the current provider data." if missing else "Complete for requested fields.",
     }
     return {
         "symbol": clean,

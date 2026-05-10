@@ -11,7 +11,6 @@ GitHub Actions runs stock and MF jobs from `.github/workflows/`. Jobs are Python
 | `sync-price-history.yml` | Manual only | `python -m backend.app.jobs.sync_price_history` |
 | `sync-fundamentals-weekly.yml` | Saturdays `0 2 * * 6`, monthly `0 2 1 * *`, manual | `python -m backend.app.jobs.sync_fundamentals` + `calculate_ratios` |
 | `sync-corporate-events.yml` | Daily `0 3 * * *` | `python -m backend.app.jobs.sync_corporate_events` |
-| `fetch_stocks.yml` | Daily `0 11 * * *` | `python backend/scripts/run_fetch.py` (legacy EOD fetch) |
 
 ## MF Workflows
 
