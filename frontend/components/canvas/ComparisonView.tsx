@@ -5,18 +5,44 @@ import { useFundData } from '../../hooks/useFundData';
 import FundComparisonChart, { Period } from '../funds/FundComparisonChart';
 import FundDetailsPanel from '../funds/FundDetailsPanel';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import type { CanvasPayload, MetricValue as SharedMetricValue } from '@/types/funds';
 
-type MetricValue = string | number | null | undefined;
+type MetricValue = SharedMetricValue;
 type FundamentalMetric = Record<string, MetricValue>;
 type ComparisonMetric = Record<string, unknown>;
-type AuxiliaryData = {
-  quant_data?: any;
+type QuantRecord = Record<string, unknown>;
+
+interface QuantFinancialRow {
+  period_type?: string;
+  revenue?: MetricValue;
+  net_profit?: MetricValue;
+}
+
+interface QuantPriceRow {
+  date?: string;
+  close?: MetricValue;
+}
+
+interface QuantResponsePayload {
+  comparison?: Record<string, ComparisonMetric>;
+  profiles?: Record<string, QuantRecord>;
+  ratios?: Record<string, QuantRecord>;
+  financials?: Record<string, QuantFinancialRow[]>;
+  shareholding?: Record<string, QuantRecord[]>;
+  price_history?: Record<string, QuantPriceRow[]>;
+  available?: string[];
+}
+
+type StockComparisonMetric = ComparisonMetric & {
+  source_summary?: { stale?: boolean };
+  fundamentals?: FundamentalMetric;
+  price_history?: QuantPriceRow[];
 };
 
 interface Props {
   ids: string[];
   type: 'STOCK' | 'MUTUAL_FUND';
-  auxiliaryData?: AuxiliaryData | null;
+  auxiliaryData?: CanvasPayload | null;
 }
 
 const formatValue = (value: MetricValue) => {
@@ -41,14 +67,6 @@ const formatPrice = (value: MetricValue) => {
   return `₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 };
 
-const formatPercent = (value: MetricValue) => {
-  if (value === null || value === undefined || value === '' || value === 'N/A') return 'Not available';
-  if (typeof value === 'string' && value.endsWith('%')) return value;
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return String(value);
-  return `${amount.toFixed(2)}%`;
-};
-
 const formatRatioPercent = (value: MetricValue) => {
   if (value === null || value === undefined || value === '' || value === 'N/A') return 'Not available';
   if (typeof value === 'string' && value.endsWith('%')) return value;
@@ -56,18 +74,6 @@ const formatRatioPercent = (value: MetricValue) => {
   if (!Number.isFinite(amount)) return String(value);
   const percent = Math.abs(amount) <= 1 ? amount * 100 : amount;
   return `${percent.toFixed(2)}%`;
-};
-
-const formatTechnicalRating = (value: MetricValue) => {
-  if (value === null || value === undefined || value === '' || value === 'N/A') return 'Not available';
-  const text = String(value).trim().toLowerCase();
-  const ratings: Record<string, string> = {
-    'strong buy': 'Strong positive technical rating',
-    buy: 'Positive technical rating',
-    sell: 'Negative technical rating',
-    'strong sell': 'Strong negative technical rating',
-  };
-  return ratings[text] || String(value);
 };
 
 const metricValue = (data: ComparisonMetric | undefined, key: string): MetricValue => {
@@ -120,50 +126,59 @@ const buildPriceRows = (comparison: Record<string, ComparisonMetric>) => {
   return Array.from(byDate.values()).sort((a, b) => String(a.date).localeCompare(String(b.date)));
 };
 
-const mapQuantResponse = (data: any) => {
-  if (!data || !data.profiles) return data.comparison || {};
-  const mapped: Record<string, any> = {};
-  for (const sym of data.available || []) {
-    const profile = data.profiles[sym] || {};
-    const ratios = data.ratios[sym] || {};
-    const fin = data.financials[sym] || [];
-    const latest_qtr = fin.find((f: any) => f.period_type === 'quarterly') || {};
-    const latest_ann = fin.find((f: any) => f.period_type === 'annual') || {};
-    const sh = data.shareholding[sym] || [];
+const hasComparisonPayload = (value: unknown): boolean => {
+  if (!value || typeof value !== 'object') return false;
+  const payload = value as Record<string, unknown>;
+  return Boolean(payload.comparison || payload.profiles);
+};
+
+const mapQuantResponse = (data: unknown): Record<string, StockComparisonMetric> => {
+  if (!data || typeof data !== 'object') return {};
+  const payload = data as QuantResponsePayload;
+  if (!payload.profiles) return (payload.comparison as Record<string, StockComparisonMetric> | undefined) || {};
+
+  const mapped: Record<string, StockComparisonMetric> = {};
+  for (const sym of payload.available || []) {
+    const profile = payload.profiles[sym] || {};
+    const ratios = payload.ratios?.[sym] || {};
+    const fin = payload.financials?.[sym] || [];
+    const latest_qtr = fin.find((f) => f.period_type === 'quarterly') || {};
+    const latest_ann = fin.find((f) => f.period_type === 'annual') || {};
+    const sh = payload.shareholding?.[sym] || [];
     const latest_sh = sh[0] || {};
-    const price_hist = data.price_history[sym] || [];
+    const price_hist = payload.price_history?.[sym] || [];
     const latest_price = price_hist.length > 0 ? price_hist[price_hist.length - 1].close : null;
     
     mapped[sym] = {
       price: latest_price,
-      market_cap: ratios.market_cap,
-      enterprise_value: ratios.enterprise_value,
+      market_cap: ratios['market_cap'] as MetricValue,
+      enterprise_value: ratios['enterprise_value'] as MetricValue,
       fundamentals: {
-        industry: profile.industry,
-        pe: ratios.pe,
-        pb: ratios.pb,
-        ps: ratios.ps,
-        ev_ebitda: ratios.ev_ebitda,
-        roe: ratios.roe,
-        roce: ratios.roce,
-        roa: ratios.roa,
-        debt_to_equity: ratios.debt_to_equity,
-        dividend_yield: ratios.dividend_yield,
-        sales_growth_1y: ratios.sales_growth_1y,
-        sales_growth_3y: ratios.sales_growth_3y,
-        profit_growth_1y: ratios.profit_growth_1y,
-        profit_growth_3y: ratios.profit_growth_3y,
-        eps_growth_1y: ratios.eps_growth_1y,
-        eps_growth_3y: ratios.eps_growth_3y,
+        industry: profile['industry'] as MetricValue,
+        pe: ratios['pe'] as MetricValue,
+        pb: ratios['pb'] as MetricValue,
+        ps: ratios['ps'] as MetricValue,
+        ev_ebitda: ratios['ev_ebitda'] as MetricValue,
+        roe: ratios['roe'] as MetricValue,
+        roce: ratios['roce'] as MetricValue,
+        roa: ratios['roa'] as MetricValue,
+        debt_to_equity: ratios['debt_to_equity'] as MetricValue,
+        dividend_yield: ratios['dividend_yield'] as MetricValue,
+        sales_growth_1y: ratios['sales_growth_1y'] as MetricValue,
+        sales_growth_3y: ratios['sales_growth_3y'] as MetricValue,
+        profit_growth_1y: ratios['profit_growth_1y'] as MetricValue,
+        profit_growth_3y: ratios['profit_growth_3y'] as MetricValue,
+        eps_growth_1y: ratios['eps_growth_1y'] as MetricValue,
+        eps_growth_3y: ratios['eps_growth_3y'] as MetricValue,
         revenue_qtr: latest_qtr.revenue,
         net_profit_qtr: latest_qtr.net_profit,
         revenue_ann: latest_ann.revenue,
         net_profit_ann: latest_ann.net_profit,
-        promoter_holding: latest_sh.promoter_holding,
-        fii_holding: latest_sh.fii_holding,
-        dii_holding: latest_sh.dii_holding,
-        public_holding: latest_sh.public_holding,
-        source: profile.source
+        promoter_holding: latest_sh['promoter_holding'] as MetricValue,
+        fii_holding: latest_sh['fii_holding'] as MetricValue,
+        dii_holding: latest_sh['dii_holding'] as MetricValue,
+        public_holding: latest_sh['public_holding'] as MetricValue,
+        source: profile['source'] as MetricValue
       },
       price_history: price_hist
     };
@@ -181,11 +196,11 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
 
   const fundA = useFundData(isMF ? idA : null);
   const fundB = useFundData(isMF ? idB : null);
-  const [fetchedComparison, setFetchedComparison] = useState<Record<string, ComparisonMetric>>({});
+  const [fetchedComparison, setFetchedComparison] = useState<Record<string, StockComparisonMetric>>({});
   const [stockError, setStockError] = useState<string | null>(null);
 
   useEffect(() => {
-    const hasAuxComparison = Boolean(auxiliaryData?.quant_data && (auxiliaryData.quant_data.comparison || auxiliaryData.quant_data.profiles));
+    const hasAuxComparison = hasComparisonPayload(auxiliaryData?.quant_data);
     if (isMF || hasAuxComparison || ids.length < 2) return;
 
     let cancelled = false;
@@ -255,7 +270,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
     const growthRows = chartRows(comparison, [['Sales 3Y', 'fundamentals.sales_growth_3y'], ['Profit 3Y', 'fundamentals.profit_growth_3y'], ['EPS 3Y', 'fundamentals.eps_growth_3y']]);
     const holdingRows = chartRows(comparison, [['Promoter', 'fundamentals.promoter_holding'], ['FII', 'fundamentals.fii_holding'], ['DII', 'fundamentals.dii_holding']]);
     const priceRows = buildPriceRows(comparison);
-    const staleEntities = entities.filter(entity => Boolean((comparison[entity] as any)?.source_summary?.stale));
+    const staleEntities = entities.filter(entity => Boolean(comparison[entity]?.source_summary?.stale));
 
     const renderBarChart = (title: string, rows: Record<string, string | number | null>[], suffix = '%') => (
       <section className="rounded-xl border border-white/10 bg-black/10 p-4">

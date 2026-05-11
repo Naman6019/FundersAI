@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { CanvasPayload } from '@/types/funds';
 
 type ViewMode = 'NONE' | 'STOCK_DETAIL' | 'MF_DETAIL' | 'COMPARISON';
 
@@ -6,11 +7,11 @@ interface CanvasState {
   activeView: ViewMode;
   selectedIds: string[];
   isCanvasOpen: boolean;
-  auxiliaryData: any; // Data passed from chat to canvas
-  setView: (view: ViewMode, data?: any) => void;
+  auxiliaryData: CanvasPayload | null; // Data passed from chat to canvas
+  setView: (view: ViewMode, data?: CanvasPayload | null) => void;
   setIds: (ids: string[]) => void;
   toggleCanvas: () => void;
-  openCanvas: (data?: any) => void;
+  openCanvas: (data?: CanvasPayload | null) => void;
   closeCanvas: () => void;
 }
 

@@ -1,9 +1,11 @@
+import type { NavPoint, RebasedNavPoint } from '../types/funds';
+
 export function parseNavDate(dateStr: string): Date {
   const [day, month, year] = dateStr.split('-');
   return new Date(`${year}-${month}-${day}`);
 }
 
-export function filterByPeriod(data: any[], period: '1D' | '6M' | '1Y' | '3Y' | '5Y') {
+export function filterByPeriod(data: NavPoint[], period: '1D' | '6M' | '1Y' | '3Y' | '5Y'): NavPoint[] {
   if (!data || data.length === 0) return [];
   
   const latestDate = parseNavDate(data[0].date); // data is newest-first
@@ -22,7 +24,7 @@ export function filterByPeriod(data: any[], period: '1D' | '6M' | '1Y' | '3Y' | 
   return filtered.reverse();
 }
 
-export function normalizeTo100(data: any[]) {
+export function normalizeTo100(data: NavPoint[]): RebasedNavPoint[] {
   if (!data || data.length === 0) return [];
   const firstNav = parseFloat(data[0].nav);
   return data.map(d => ({
@@ -31,9 +33,9 @@ export function normalizeTo100(data: any[]) {
   }));
 }
 
-export function downsample(data: any[], targetPoints: number) {
+export function downsample<T>(data: T[], targetPoints: number): T[] {
   if (data.length <= targetPoints) return data;
-  const result = [];
+  const result: T[] = [];
   const step = (data.length - 1) / (targetPoints - 1);
   for (let i = 0; i < targetPoints; i++) {
     const index = Math.min(Math.round(i * step), data.length - 1);

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import type { SearchResultItem } from '@/types/funds';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -11,7 +12,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    let results: any[] = [];
+    const results: SearchResultItem[] = [];
 
     if (type === 'all' || type === 'mf') {
       const words = query.split(/\s+/).filter(w => w.length > 0);
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
       if (mfData) {
         results.push(...mfData.map(mf => ({
           id: mf.scheme_code.toString(),
-          type: 'MUTUAL_FUND',
+          type: 'MUTUAL_FUND' as const,
           displayName: mf.scheme_name,
           subLabel: mf.fund_house,
           identifier: mf.scheme_code.toString()
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
       if (stockData) {
         results.push(...stockData.map(stock => ({
           id: stock.symbol,
-          type: 'STOCK',
+          type: 'STOCK' as const,
           displayName: stock.symbol,
           subLabel: 'NSE',
           identifier: stock.symbol

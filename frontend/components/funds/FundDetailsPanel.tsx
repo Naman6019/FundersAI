@@ -88,7 +88,11 @@ function FundColumn({ schemeCode, colorHex }: { schemeCode: string, colorHex: st
     let precomputedExpenseRatio: string | null = null;
 
     // --- USE PRE-FETCHED DATA FROM CHAT IF AVAILABLE ---
-    const comparisonData = auxiliaryData?.quant_data?.comparison ?? auxiliaryData?.comparison;
+    const quantComparison =
+      auxiliaryData?.quant_data && typeof auxiliaryData.quant_data === 'object'
+        ? (auxiliaryData.quant_data as { comparison?: Record<string, unknown> }).comparison
+        : undefined;
+    const comparisonData = quantComparison ?? auxiliaryData?.comparison;
 
     if (comparisonData) {
        // Look for this fund in comparison data

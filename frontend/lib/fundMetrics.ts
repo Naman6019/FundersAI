@@ -1,4 +1,4 @@
-import { NavPoint, DailyReturn } from '../types/funds';
+import { NavPoint, DailyReturn, FundHolding, FundOverlapItem } from '../types/funds';
 import { parseNavDate } from './fundDataUtils';
 
 export function toReturnsArray(navData: NavPoint[]): DailyReturn[] {
@@ -119,24 +119,34 @@ export function computeSharpe(fundReturns: DailyReturn[], rfr = 0.065): number |
   return (annualizedReturn - (rfr * 100)) / stdDev;
 }
 
-export function computeFundOverlap(holdingsA: any[], holdingsB: any[]): { percentage: number, overlapping: any[] } {
+export function computeFundOverlap(
+  holdingsA: FundHolding[],
+  holdingsB: FundHolding[],
+): { percentage: number; overlapping: FundOverlapItem[] } {
   // Holdings format assumed: { isin: string, weight: number, name: string }
   if (!holdingsA || !holdingsB) return { percentage: 0, overlapping: [] };
   
-  const mapA = new Map(holdingsA.map(h => [h.isin, h]));
+  const mapA = new Map(
+    holdingsA
+      .filter((h): h is FundHolding & { isin: string } => typeof h.isin === 'string' && h.isin.length > 0)
+      .map((h) => [h.isin, h]),
+  );
   let overlap = 0;
-  const overlapping = [];
+  const overlapping: FundOverlapItem[] = [];
 
   for (const hB of holdingsB) {
-    if (mapA.has(hB.isin)) {
-      const hA = mapA.get(hB.isin);
-      const minWeight = Math.min(hA.weight, hB.weight);
+    if (typeof hB.isin !== 'string' || !mapA.has(hB.isin)) continue;
+    const hA = mapA.get(hB.isin);
+    const weightA = typeof hA?.weight === 'number' ? hA.weight : 0;
+    const weightB = typeof hB.weight === 'number' ? hB.weight : 0;
+    const minWeight = Math.min(weightA, weightB);
+    if (hA) {
       overlap += minWeight;
       overlapping.push({
         isin: hB.isin,
-        name: hB.name,
-        weightA: hA.weight,
-        weightB: hB.weight,
+        name: typeof hB.name === 'string' ? hB.name : '',
+        weightA,
+        weightB,
         overlap: minWeight
       });
     }

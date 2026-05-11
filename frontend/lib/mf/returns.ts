@@ -3,15 +3,21 @@ export type NAVData = {
   nav: string;
 };
 
+type MFHistoryResponse = {
+  chartData?: Array<{ date?: string; value?: number | string | null }>;
+};
+
 export async function fetchMFHistory(schemeCode: string): Promise<NAVData[]> {
   const res = await fetch(`/api/mf/${schemeCode}`);
   if (!res.ok) throw new Error('Failed to fetch MF history');
-  const json = await res.json();
+  const json = (await res.json()) as MFHistoryResponse;
   // Map internal chartData back to NAVData format for utilities
-  return (json.chartData || []).map((h: any) => ({
-    date: h.date,
-    nav: h.value.toString()
-  }));
+  return (json.chartData || [])
+    .filter((h): h is { date: string; value: number | string } => typeof h.date === 'string' && h.value !== null && h.value !== undefined)
+    .map((h) => ({
+      date: h.date,
+      nav: h.value.toString()
+    }));
 }
 
 export function parseDate(dateStr: string): Date {

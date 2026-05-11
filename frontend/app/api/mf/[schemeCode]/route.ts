@@ -70,7 +70,7 @@ export async function GET(_request: Request, context: { params: Promise<{ scheme
     }
     const localHistory = historyQuery.data;
 
-    let history = (localHistory || []).map(h => ({
+    const history = (localHistory || []).map(h => ({
       date: h.nav_date.split('-').reverse().join('-'), // Convert YYYY-MM-DD to DD-MM-YYYY
       nav: h.nav.toString()
     }));

@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useCanvasStore } from '@/store/useCanvasStore';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import type { MFDetailApiResponse } from '@/types/funds';
 
 export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<MFDetailApiResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -17,10 +17,10 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
       try {
         const res = await fetch(`/api/mf/${schemeCode}`);
         if (!res.ok) throw new Error('Failed to load Mutual Fund details');
-        const json = await res.json();
+        const json = (await res.json()) as MFDetailApiResponse;
         setData(json);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to load Mutual Fund details');
       }
       setLoading(false);
     };
@@ -28,6 +28,10 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
   }, [schemeCode]);
 
   if (!schemeCode) return <div className="p-6">No fund selected.</div>;
+
+  const navDateLabel = data?.details.nav_date ? new Date(data.details.nav_date).toLocaleDateString() : 'N/A';
+  const returns = data?.returns;
+  const riskMetrics = data?.riskMetrics ?? null;
 
   return (
     <div className="mf-detail p-6 bg-[var(--panel-bg)] rounded-2xl h-full flex flex-col border border-white/10 text-white overflow-hidden">
@@ -47,7 +51,7 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-black/30 p-4 rounded-xl border border-white/5">
-              <div className="text-gray-400 text-sm mb-1">NAV ({new Date(data.details.nav_date).toLocaleDateString()})</div>
+              <div className="text-gray-400 text-sm mb-1">NAV ({navDateLabel})</div>
               <div className="text-xl font-medium text-[var(--accent-color)]">₹{data.details.nav}</div>
             </div>
             <div className="bg-black/30 p-4 rounded-xl border border-white/5">
@@ -69,48 +73,52 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
             <div className="grid grid-cols-3 gap-4 text-center">
               <div className="bg-white/5 p-3 rounded-lg border border-white/10">
                 <div className="text-gray-400 text-sm mb-1">1 Year</div>
-                <div className={`font-semibold ${data.returns['1Y'] > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {data.returns['1Y'] !== null ? `${data.returns['1Y']}%` : 'N/A'}
+                <div className={`font-semibold ${(returns?.['1Y'] ?? 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {returns?.['1Y'] !== null && returns?.['1Y'] !== undefined ? `${returns['1Y']}%` : 'N/A'}
                 </div>
               </div>
               <div className="bg-white/5 p-3 rounded-lg border border-white/10">
                 <div className="text-gray-400 text-sm mb-1">3 Years</div>
-                <div className={`font-semibold ${data.returns['3Y'] > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {data.returns['3Y'] !== null ? `${data.returns['3Y']}%` : 'N/A'}
+                <div className={`font-semibold ${(returns?.['3Y'] ?? 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {returns?.['3Y'] !== null && returns?.['3Y'] !== undefined ? `${returns['3Y']}%` : 'N/A'}
                 </div>
               </div>
               <div className="bg-white/5 p-3 rounded-lg border border-white/10">
                 <div className="text-gray-400 text-sm mb-1">5 Years</div>
-                <div className={`font-semibold ${data.returns['5Y'] > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {data.returns['5Y'] !== null ? `${data.returns['5Y']}%` : 'N/A'}
+                <div className={`font-semibold ${(returns?.['5Y'] ?? 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {returns?.['5Y'] !== null && returns?.['5Y'] !== undefined ? `${returns['5Y']}%` : 'N/A'}
                 </div>
               </div>
             </div>
           </div>
 
-          {data.riskMetrics && (
+          {riskMetrics && (
             <div className="mb-6">
               <h3 className="text-lg font-medium text-[var(--accent-color)] mb-3">Risk Metrics <span className="text-xs text-gray-500 font-normal">(based on full NAV history, RFR 6%)</span></h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
                 <div className="bg-white/5 p-3 rounded-lg border border-white/10">
                   <div className="text-gray-400 text-xs mb-1">Sharpe Ratio</div>
-                  <div className={`font-semibold text-sm ${data.riskMetrics.sharpeRatio >= 1 ? 'text-green-400' : data.riskMetrics.sharpeRatio >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
-                    {data.riskMetrics.sharpeRatio}
+                  <div className={`font-semibold text-sm ${(riskMetrics.sharpeRatio ?? 0) >= 1 ? 'text-green-400' : (riskMetrics.sharpeRatio ?? 0) >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    {riskMetrics.sharpeRatio ?? 'N/A'}
                   </div>
                 </div>
                 <div className="bg-white/5 p-3 rounded-lg border border-white/10">
                   <div className="text-gray-400 text-xs mb-1">Sortino Ratio</div>
-                  <div className={`font-semibold text-sm ${data.riskMetrics.sortinoRatio >= 1 ? 'text-green-400' : data.riskMetrics.sortinoRatio >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
-                    {data.riskMetrics.sortinoRatio}
+                  <div className={`font-semibold text-sm ${(riskMetrics.sortinoRatio ?? 0) >= 1 ? 'text-green-400' : (riskMetrics.sortinoRatio ?? 0) >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    {riskMetrics.sortinoRatio ?? 'N/A'}
                   </div>
                 </div>
                 <div className="bg-white/5 p-3 rounded-lg border border-white/10">
                   <div className="text-gray-400 text-xs mb-1">Std Dev (Ann.)</div>
-                  <div className="font-semibold text-sm text-white">{(data.riskMetrics.stdDev * 100).toFixed(1)}%</div>
+                  <div className="font-semibold text-sm text-white">
+                    {typeof riskMetrics.stdDev === 'number' ? `${(riskMetrics.stdDev * 100).toFixed(1)}%` : 'N/A'}
+                  </div>
                 </div>
                 <div className="bg-white/5 p-3 rounded-lg border border-white/10">
                   <div className="text-gray-400 text-xs mb-1">Max Drawdown</div>
-                  <div className="font-semibold text-sm text-red-400">-{(data.riskMetrics.maxDrawdown * 100).toFixed(1)}%</div>
+                  <div className="font-semibold text-sm text-red-400">
+                    {typeof riskMetrics.maxDrawdown === 'number' ? `-${(riskMetrics.maxDrawdown * 100).toFixed(1)}%` : 'N/A'}
+                  </div>
                 </div>
               </div>
             </div>

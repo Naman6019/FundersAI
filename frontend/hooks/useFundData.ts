@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'react';
-import { FundDataResponse } from '../types/funds';
+import { FundDataResponse, MFChartPoint, MFDetailApiResponse } from '../types/funds';
 
 const globalCache = new Map<string, FundDataResponse>();
 const pendingRequests = new Map<string, Promise<FundDataResponse>>();
+
+function isValidMFPayload(payload: unknown): payload is MFDetailApiResponse {
+  if (!payload || typeof payload !== 'object') return false;
+  const candidate = payload as MFDetailApiResponse;
+  return Boolean(candidate.details) && Array.isArray(candidate.chartData);
+}
 
 export function useFundData(schemeCode: string | null) {
   const [data, setData] = useState<FundDataResponse | null>(schemeCode ? (globalCache.get(schemeCode) || null) : null);
@@ -11,17 +17,27 @@ export function useFundData(schemeCode: string | null) {
 
   useEffect(() => {
     if (!schemeCode) return;
+    let isMounted = true;
 
     if (globalCache.has(schemeCode)) {
-      setData(globalCache.get(schemeCode)!);
-      setLoading(false);
-      return;
+      const cached = globalCache.get(schemeCode)!;
+      Promise.resolve().then(() => {
+        if (!isMounted) return;
+        setData(cached);
+        setLoading(false);
+        setError(null);
+      });
+      return () => {
+        isMounted = false;
+      };
     }
 
-    let isMounted = true;
-    setData(null);
-    setLoading(true);
-    setError(null);
+    Promise.resolve().then(() => {
+      if (!isMounted) return;
+      setData(null);
+      setLoading(true);
+      setError(null);
+    });
 
     if (!pendingRequests.has(schemeCode)) {
       const p = fetch(`/api/mf/${schemeCode}`)
@@ -37,21 +53,22 @@ export function useFundData(schemeCode: string | null) {
           }
           return res.json();
         })
-        .then((json: any) => {
-          if (!json?.details || !Array.isArray(json?.chartData)) {
+        .then((json: unknown) => {
+          if (!isValidMFPayload(json)) {
             throw new Error(`Failed to fetch data for ${schemeCode}`);
           }
 
           // Map local API response to existing FundDataResponse type
+          const rawHistory: MFChartPoint[] = (json.fullData || json.chartData || []) as MFChartPoint[];
           const formatted: FundDataResponse = {
             meta: {
-              fund_house: json.details.fund_house,
-              scheme_type: json.details.category,
-              scheme_category: json.details.sub_category,
-              scheme_code: json.details.scheme_code,
-              scheme_name: json.details.scheme_name
+              fund_house: String(json.details.fund_house || ''),
+              scheme_type: String(json.details.category || ''),
+              scheme_category: String(json.details.sub_category || ''),
+              scheme_code: json.details.scheme_code ?? '',
+              scheme_name: String(json.details.scheme_name || '')
             },
-            data: (json.fullData || json.chartData).map((d: any) => ({
+            data: rawHistory.map((d) => ({
               date: d.date,
               nav: d.value.toString()
             })),
