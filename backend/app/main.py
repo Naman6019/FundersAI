@@ -372,6 +372,46 @@ def fetch_quant_data(ticker: str, period: str = "1mo") -> dict:
             logger.warning(f"Supabase local snapshot error for {symbol}: {e}")
             return None
 
+    def get_indianapi_quant_snapshot(symbol: str) -> dict | None:
+        if not symbol or symbol == "NIFTY":
+            return None
+        try:
+            item = _stock_compare_item(symbol)
+            if not isinstance(item, dict) or item.get("error"):
+                return None
+
+            source_summary = item.get("source_summary") or {}
+            fundamentals = item.get("fundamentals") or {}
+            local_data = get_local_quant_snapshot(symbol) or {}
+
+            def _pick(primary: Any, fallback: Any) -> Any:
+                return fallback if _is_missing(primary) and not _is_missing(fallback) else primary
+
+            data = {
+                "timestamp": item.get("timestamp") or datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S IST"),
+                "price": item.get("price"),
+                "change_pct": item.get("change_pct"),
+                "pe_ratio": _pick(item.get("pe_ratio"), local_data.get("pe_ratio")),
+                "market_cap": _pick(item.get("market_cap"), local_data.get("market_cap")),
+                "beta": _pick(item.get("beta"), local_data.get("beta")),
+                "alpha_vs_nifty": _pick(item.get("alpha_vs_nifty"), local_data.get("alpha_vs_nifty")),
+                "historical_period": item.get("historical_period") or local_data.get("historical_period") or "1y",
+                "rsi_14d": _pick(item.get("rsi_14d"), local_data.get("rsi_14d")),
+                "tv_recommendation": _pick(item.get("tv_recommendation"), local_data.get("tv_recommendation")),
+                "fundamentals": fundamentals,
+                "source_summary": source_summary,
+                "source": (
+                    "indianapi"
+                    if source_summary.get("indianapi_fetched_at")
+                    else source_summary.get("metadata")
+                ),
+                "fetchedAt": source_summary.get("indianapi_fetched_at"),
+            }
+            return data
+        except Exception as e:
+            logger.warning(f"IndianAPI-backed snapshot failed for {symbol}: {e}")
+            return None
+
     def get_live_nifty_snapshot() -> dict | None:
         try:
             nifty = yf.Ticker("^NSEI")
@@ -412,6 +452,9 @@ def fetch_quant_data(ticker: str, period: str = "1mo") -> dict:
             if live_nifty:
                 return cache_and_return(live_nifty)
         else:
+            indianapi_data = get_indianapi_quant_snapshot(clean_ticker)
+            if indianapi_data:
+                return cache_and_return(indianapi_data)
             live_quote = fetch_live_quote(clean_ticker)
             if live_quote:
                 local_data = get_local_quant_snapshot(clean_ticker) or {}
@@ -434,6 +477,10 @@ def fetch_quant_data(ticker: str, period: str = "1mo") -> dict:
         local_data = get_local_quant_snapshot(clean_ticker)
         if local_data:
             return cache_and_return(local_data)
+    elif not is_market_open():
+        indianapi_data = get_indianapi_quant_snapshot(clean_ticker)
+        if indianapi_data:
+            return cache_and_return(indianapi_data)
 
     try:
         if period not in ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"]:
@@ -482,6 +529,9 @@ def fetch_quant_data(ticker: str, period: str = "1mo") -> dict:
         return cache_and_return(enrich_with_source_neutral_fundamentals(data, clean_ticker))
     except Exception as e:
         logger.error(f"Quant Error: {e}")
+        indianapi_data = get_indianapi_quant_snapshot(clean_ticker)
+        if indianapi_data:
+            return cache_and_return(indianapi_data)
         local_data = get_local_quant_snapshot(clean_ticker)
         if local_data:
             return cache_and_return(local_data)
@@ -1233,7 +1283,7 @@ async def chat_endpoint(req: ChatRequest):
             name = row.get("scheme_name") or row.get("schemeName") or row.get("fund_name") or row.get("name")
             if not name:
                 continue
-            return {
+            data = {
                 "name": name,
                 "nav": row.get("nav") or row.get("latest_nav"),
                 "nav_date": row.get("nav_date") or row.get("date"),
@@ -1244,6 +1294,18 @@ async def chat_endpoint(req: ChatRequest):
                 "source": "indianapi",
                 "fetchedAt": result.get("fetchedAt"),
             }
+            details = indianapi_service.get_mutual_fund_research_profile(name)
+            if details.get("ok"):
+                for drow in _walk_dicts(details.get("data")):
+                    data["nav"] = data.get("nav") or drow.get("nav") or drow.get("latest_nav")
+                    data["nav_date"] = data.get("nav_date") or drow.get("nav_date") or drow.get("date")
+                    data["category"] = data.get("category") or drow.get("category") or drow.get("schemeType")
+                    data["fund_house"] = data.get("fund_house") or drow.get("fund_house") or drow.get("fundHouse") or drow.get("amc")
+                    data["expense_ratio"] = data.get("expense_ratio") or drow.get("expense_ratio") or drow.get("expenseRatio")
+                    data["aum"] = data.get("aum") or drow.get("aum") or drow.get("asset_size")
+                    break
+                data["fetchedAt"] = details.get("fetchedAt") or data.get("fetchedAt")
+            return data
         return None
     
     if intent == "screen":
