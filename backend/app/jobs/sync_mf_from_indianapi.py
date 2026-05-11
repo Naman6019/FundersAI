@@ -24,6 +24,10 @@ BATCH_SIZE = 200
 
 
 def main():
+    if os.environ.get("ENABLE_MF_ENRICHMENT_SYNC", "false").strip().lower() not in {"1", "true", "yes", "on"}:
+        logger.info("ENABLE_MF_ENRICHMENT_SYNC is false. Skipping IndianAPI mutual fund enrichment sync.")
+        return
+
     provider = IndianAPIProvider()
     if not provider.is_available():
         logger.error("INDIANAPI_KEY not set. Exiting.")

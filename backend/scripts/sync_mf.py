@@ -106,6 +106,24 @@ def main():
                 "nav_date": u["nav_date"]
             } for u in batch]
             supabase.table('mutual_fund_history').upsert(history_batch, on_conflict='scheme_code,nav_date').execute()
+            # 3. Keep new normalized nav history in sync.
+            nav_history_batch = [{
+                "scheme_code": str(u["scheme_code"]),
+                "nav": u["nav"],
+                "nav_date": u["nav_date"],
+                "data_source": "amfi_navall",
+            } for u in batch]
+            supabase.table('mutual_fund_nav_history').upsert(nav_history_batch, on_conflict='scheme_code,nav_date').execute()
+            core_snapshot_batch = [{
+                "scheme_code": str(u["scheme_code"]),
+                "scheme_name": u["scheme_name"],
+                "nav": u["nav"],
+                "nav_date": u["nav_date"],
+                "data_source": "amfi_navall",
+                "provider_payload": None,
+                "last_updated": datetime.now(timezone.utc).isoformat(),
+            } for u in batch]
+            supabase.table('mutual_fund_core_snapshot').upsert(core_snapshot_batch, on_conflict='scheme_code').execute()
             
             success += len(batch)
             logger.info(f"Upserted batch {i//BATCH_SIZE + 1}: {success}/{len(updates)} schemes done.")

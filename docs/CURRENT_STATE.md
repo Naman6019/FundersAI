@@ -31,12 +31,12 @@ MarketMind is a research-only Indian equities and mutual fund app.
 - Next.js `/api/*` proxy pattern is the required frontend/backend boundary.
 - GitHub Actions handles scheduled fetch jobs, not Vercel cron.
 - Mobile dashboard layout keeps chat mounted behind comparison overlays, and chat state lives in a shared store so query/messages survive canvas-to-chat switches.
-- `IndianAPIProvider` is implemented for stock universe, `/stock` profile data, `/statement` fundamentals/ratios/shareholding, `/historical_data` price history, corporate actions, and MF data (AUM, NAV, returns).
+- `IndianAPIProvider` is now restricted to stock profile/fundamental enrichment (`/stock` and `/statement`) with quota guard and usage logging.
 - `FinEdgeProvider` remains a fallback only; free keys should not be relied on for fundamentals.
 - `sync_corporate_events.py` uses IndianAPI with `INDIANAPI_KEY`/`INDIAN_API_KEY`.
 - Stock EOD and historical price backfill use NSE CM-UDiFF bhavcopy zip files and write `stock_prices_daily` with source `nse_bhavcopy`.
-- Scheduled stock EOD and historical price jobs stay on NSE CM-UDiFF bhavcopy, with IndianAPI `/historical_data` available in the adapter as a fallback path.
-- `sync_mf_from_indianapi.py` job syncs MF AUM and returns from IndianAPI into the `mutual_funds` Supabase table, running as part of the `mf-sync.yml` workflow.
+- Scheduled stock EOD and historical price jobs stay on NSE CM-UDiFF bhavcopy; IndianAPI historical endpoint is disabled by default.
+- Mutual fund NAV/history sync now uses AMFI + MFapi and writes `mutual_fund_nav_history` / `mutual_fund_core_snapshot` for Supabase-first reads.
 
 ## In Progress
 - Expanding stock coverage beyond the current Nifty-focused list.
@@ -46,7 +46,7 @@ MarketMind is a research-only Indian equities and mutual fund app.
 - Mutual fund missing data cleanup after stock historical backfill.
 
 ## Known Gaps
-- IndianAPI fundamentals use `/statement` plus `/stock` where allowed. If those return 403, limited valuation fields can still come from `/historical_data` filters.
+- IndianAPI fundamentals use `/statement` plus `/stock` only. Disallowed endpoints are feature-flagged off by default.
 - Frontend proxy route rate limiting still pending.
 - YFinance rate limits often on Render.
 - Portfolio overlap is partial because AMFI holdings often returns `Nil`.

@@ -37,6 +37,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           STOCK_DATA_PROVIDER: nse
+          ENABLE_STOCK_PRICE_SYNC: "true"
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
             echo "Error: Missing SUPABASE_URL or SUPABASE_KEY"

@@ -2,7 +2,7 @@ name: Sync Stock Universe
 
 on:
   schedule:
-    - cron: '0 1 * * *'
+    - cron: '0 1 1 * *'
   workflow_dispatch:
 
 jobs:
@@ -26,6 +26,11 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           STOCK_DATA_PROVIDER: indianapi
           INDIANAPI_KEY: ${{ secrets.INDIAN_API_KEY }}
+          INDIANAPI_ENABLE_SCHEDULED_SYNC: "true"
+          INDIANAPI_ENABLE_LIVE_CALLS: "false"
+          INDIANAPI_MONTHLY_LIMIT: "5000"
+          INDIANAPI_MONTHLY_RESERVE: "500"
+          INDIANAPI_DAILY_SOFT_LIMIT: "120"
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ] || [ -z "$INDIANAPI_KEY" ]; then
             echo "Error: Missing SUPABASE_URL, SUPABASE_KEY, or INDIAN_API_KEY"

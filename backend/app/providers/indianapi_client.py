@@ -59,7 +59,8 @@ class IndianAPIClient:
         self.enabled = os.getenv("INDIANAPI_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
         self.base_url = (base_url or os.getenv("INDIANAPI_BASE_URL") or "https://stock.indianapi.in").rstrip("/")
         self.api_key = api_key or os.getenv("INDIANAPI_KEY") or os.getenv("INDIAN_API_KEY")
-        self.timeout_seconds = timeout_seconds
+        self.timeout_seconds = float(os.getenv("INDIANAPI_REQUEST_TIMEOUT_SECONDS", str(timeout_seconds)))
+        self.max_retries = max(int(os.getenv("INDIANAPI_MAX_RETRIES", "1")), 0)
         self.spec = _load_spec(spec_path)
 
     def search_stocks(self, query: str) -> ProviderResult:
@@ -137,42 +138,55 @@ class IndianAPIClient:
         status = None
         safe_params = {key: value for key, value in params.items() if value not in (None, "")}
 
-        try:
-            response = httpx.get(
-                f"{self.base_url}{endpoint}",
-                params=safe_params,
-                headers={"x-api-key": self.api_key},
-                timeout=self.timeout_seconds,
-            )
-            status = response.status_code
-            duration_ms = int((time.monotonic() - started) * 1000)
-            logger.info(
-                "IndianAPI endpoint=%s params=%s status=%s duration_ms=%s",
-                endpoint,
-                safe_params,
-                status,
-                duration_ms,
-            )
-
-            if response.status_code >= 400:
-                return self._error(
+        last_error: ProviderResult | None = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = httpx.get(
+                    f"{self.base_url}{endpoint}",
+                    params=safe_params,
+                    headers={"x-api-key": self.api_key},
+                    timeout=self.timeout_seconds,
+                )
+                status = response.status_code
+                duration_ms = int((time.monotonic() - started) * 1000)
+                logger.info(
+                    "IndianAPI endpoint=%s params=%s status=%s duration_ms=%s attempt=%s",
                     endpoint,
-                    f"http_{response.status_code}",
-                    "Provider request failed.",
-                    status=response.status_code,
-                    body=response.text,
+                    safe_params,
+                    status,
+                    duration_ms,
+                    attempt + 1,
                 )
 
-            try:
-                data = response.json()
-            except ValueError:
-                return self._error(endpoint, "invalid_json", "Provider returned invalid JSON.", status=status, body=response.text)
+                if response.status_code >= 400:
+                    last_error = self._error(
+                        endpoint,
+                        f"http_{response.status_code}",
+                        "Provider request failed.",
+                        status=response.status_code,
+                        body=response.text,
+                    )
+                    if response.status_code >= 500 and attempt < self.max_retries:
+                        continue
+                    return last_error
 
-            return {"ok": True, "source": self.source, "endpoint": endpoint, "data": data}
-        except httpx.TimeoutException:
-            return self._error(endpoint, "timeout", "Provider request timed out.", status=status)
-        except Exception as exc:
-            return self._error(endpoint, "request_error", "Provider request failed.", status=status, body=str(exc))
+                try:
+                    data = response.json()
+                except ValueError:
+                    return self._error(endpoint, "invalid_json", "Provider returned invalid JSON.", status=status, body=response.text)
+
+                return {"ok": True, "source": self.source, "endpoint": endpoint, "data": data}
+            except httpx.TimeoutException:
+                last_error = self._error(endpoint, "timeout", "Provider request timed out.", status=status)
+                if attempt < self.max_retries:
+                    continue
+                return last_error
+            except Exception as exc:
+                last_error = self._error(endpoint, "request_error", "Provider request failed.", status=status, body=str(exc))
+                if attempt < self.max_retries:
+                    continue
+                return last_error
+        return last_error or self._error(endpoint, "request_error", "Provider request failed.", status=status)
 
     def _validate(self, endpoint: str, params: dict[str, Any]) -> str | None:
         definition = ENDPOINTS.get(endpoint, {})

@@ -25,6 +25,10 @@ def get_corporate_events_provider():
     return None
 
 def main():
+    if os.environ.get("ENABLE_CORPORATE_ACTIONS_SYNC", "false").strip().lower() not in {"1", "true", "yes", "on"}:
+        logger.info("ENABLE_CORPORATE_ACTIONS_SYNC is false. Skipping sync_corporate_events.")
+        return
+
     provider = get_corporate_events_provider()
     if not provider:
         return

@@ -10,6 +10,7 @@ from app.providers import get_fundamentals_provider
 from app.providers.base import normalize_symbol
 from app.providers.yfinance_provider import YFinanceProvider
 from app.services import indianapi_service
+from app.services.stock_snapshot_service import get_stock_snapshot_with_freshness
 from app.stock_universe import load_stock_universe, resolve_stock_symbol
 
 logger = logging.getLogger(__name__)
@@ -364,6 +365,8 @@ def build_stock_profile(symbol: str) -> dict[str, Any]:
 
 def _comparison_item(symbol: str) -> dict[str, Any]:
     clean = normalize_symbol(symbol)
+    snapshot_context = get_stock_snapshot_with_freshness(clean)
+    snapshot = snapshot_context.get("row") or {}
     profile = build_stock_profile(clean)
     prices = get_stock_price_history(clean, days=365)
     financials = get_stock_financials(clean)
@@ -373,27 +376,27 @@ def _comparison_item(symbol: str) -> dict[str, Any]:
     shareholding = profile.get("shareholding") or {}
     latest = prices[-1] if prices else profile.get("latest_price") or {}
     previous = prices[-2] if len(prices) > 1 else {}
-    close = _num(latest.get("close"))
+    close = _num(snapshot.get("close_price")) if snapshot.get("close_price") is not None else _num(latest.get("close"))
     prev_close = _num(previous.get("close"))
     change_pct = ((close - prev_close) / prev_close * 100) if close is not None and prev_close not in (None, 0) else None
 
     fundamentals = {
         **_empty_fundamentals(),
-        "industry": (profile.get("metadata") or {}).get("industry"),
-        "revenue_qtr": latest_quarter.get("revenue"),
-        "net_profit_qtr": latest_quarter.get("net_profit"),
-        "market_cap": ratios.get("market_cap"),
-        "pe": ratios.get("pe"),
-        "pb": ratios.get("pb"),
+        "industry": snapshot.get("industry") or (profile.get("metadata") or {}).get("industry"),
+        "revenue_qtr": latest_quarter.get("revenue") or snapshot.get("revenue_ttm"),
+        "net_profit_qtr": latest_quarter.get("net_profit") or snapshot.get("net_profit_ttm"),
+        "market_cap": snapshot.get("market_cap") if snapshot.get("market_cap") is not None else ratios.get("market_cap"),
+        "pe": snapshot.get("pe_ratio") if snapshot.get("pe_ratio") is not None else ratios.get("pe"),
+        "pb": snapshot.get("pb_ratio") if snapshot.get("pb_ratio") is not None else ratios.get("pb"),
         "ev_ebitda": ratios.get("ev_ebitda"),
-        "roe": ratios.get("roe"),
-        "roce": ratios.get("roce"),
-        "debt_to_equity": ratios.get("debt_to_equity"),
-        "dividend_yield": ratios.get("dividend_yield"),
+        "roe": snapshot.get("roe") if snapshot.get("roe") is not None else ratios.get("roe"),
+        "roce": snapshot.get("roce") if snapshot.get("roce") is not None else ratios.get("roce"),
+        "debt_to_equity": snapshot.get("debt_to_equity") if snapshot.get("debt_to_equity") is not None else ratios.get("debt_to_equity"),
+        "dividend_yield": snapshot.get("dividend_yield") if snapshot.get("dividend_yield") is not None else ratios.get("dividend_yield"),
         "sales_growth_3y": ratios.get("sales_growth_3y"),
         "profit_growth_3y": ratios.get("profit_growth_3y"),
         "eps_growth_3y": ratios.get("eps_growth_3y"),
-        "eps_ttm": ratios.get("eps_ttm") or _eps_ttm(quarterly),
+        "eps_ttm": snapshot.get("eps_ttm") if snapshot.get("eps_ttm") is not None else (ratios.get("eps_ttm") or _eps_ttm(quarterly)),
         "promoter_holding": shareholding.get("promoter_holding"),
         "fii_holding": shareholding.get("fii_holding"),
         "dii_holding": shareholding.get("dii_holding"),
@@ -404,6 +407,8 @@ def _comparison_item(symbol: str) -> dict[str, Any]:
         "missing_fields": missing,
         "message": "Some fundamentals are unavailable from the current provider data." if missing else "Complete for requested fields.",
     }
+    if snapshot_context.get("stale"):
+        data_quality["stale_warning"] = snapshot_context.get("warning") or "Data may be stale."
     return {
         "symbol": clean,
         "name": (profile.get("metadata") or {}).get("company_name") or clean,
@@ -423,7 +428,13 @@ def _comparison_item(symbol: str) -> dict[str, Any]:
         "shareholding": shareholding,
         "price_history": prices,
         "data_quality": data_quality,
-        "source_summary": profile.get("source_summary", {}),
+        "source_summary": {
+            **profile.get("source_summary", {}),
+            "snapshot_last_updated": snapshot.get("last_updated"),
+            "price_date": snapshot.get("price_date"),
+            "stale": bool(snapshot_context.get("stale")),
+            "stale_warning": snapshot_context.get("warning"),
+        },
     }
 
 

@@ -20,13 +20,13 @@ interface Props {
 }
 
 const formatValue = (value: MetricValue) => {
-  if (value === null || value === undefined || value === '' || value === 'N/A') return 'Unavailable';
+  if (value === null || value === undefined || value === '' || value === 'N/A') return 'Not available';
   if (typeof value === 'number') return Number.isInteger(value) ? value.toLocaleString('en-IN') : value.toLocaleString('en-IN', { maximumFractionDigits: 2 });
   return value;
 };
 
 const formatMarketCap = (value: MetricValue) => {
-  if (value === null || value === undefined || value === '' || value === 'N/A') return 'Unavailable';
+  if (value === null || value === undefined || value === '' || value === 'N/A') return 'Not available';
   const amount = Number(value);
   if (!Number.isFinite(amount)) return String(value);
   if (amount >= 1_00_00_00_00_000) return `₹${(amount / 1_00_00_00_00_000).toFixed(2)} lakh crore`;
@@ -35,14 +35,14 @@ const formatMarketCap = (value: MetricValue) => {
 };
 
 const formatPrice = (value: MetricValue) => {
-  if (value === null || value === undefined || value === '' || value === 'N/A') return 'Unavailable';
+  if (value === null || value === undefined || value === '' || value === 'N/A') return 'Not available';
   const amount = Number(value);
   if (!Number.isFinite(amount)) return String(value);
   return `₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 };
 
 const formatPercent = (value: MetricValue) => {
-  if (value === null || value === undefined || value === '' || value === 'N/A') return 'Unavailable';
+  if (value === null || value === undefined || value === '' || value === 'N/A') return 'Not available';
   if (typeof value === 'string' && value.endsWith('%')) return value;
   const amount = Number(value);
   if (!Number.isFinite(amount)) return String(value);
@@ -50,7 +50,7 @@ const formatPercent = (value: MetricValue) => {
 };
 
 const formatRatioPercent = (value: MetricValue) => {
-  if (value === null || value === undefined || value === '' || value === 'N/A') return 'Unavailable';
+  if (value === null || value === undefined || value === '' || value === 'N/A') return 'Not available';
   if (typeof value === 'string' && value.endsWith('%')) return value;
   const amount = Number(value);
   if (!Number.isFinite(amount)) return String(value);
@@ -59,7 +59,7 @@ const formatRatioPercent = (value: MetricValue) => {
 };
 
 const formatTechnicalRating = (value: MetricValue) => {
-  if (value === null || value === undefined || value === '' || value === 'N/A') return 'Unavailable';
+  if (value === null || value === undefined || value === '' || value === 'N/A') return 'Not available';
   const text = String(value).trim().toLowerCase();
   const ratings: Record<string, string> = {
     'strong buy': 'Strong positive technical rating',
@@ -255,6 +255,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
     const growthRows = chartRows(comparison, [['Sales 3Y', 'fundamentals.sales_growth_3y'], ['Profit 3Y', 'fundamentals.profit_growth_3y'], ['EPS 3Y', 'fundamentals.eps_growth_3y']]);
     const holdingRows = chartRows(comparison, [['Promoter', 'fundamentals.promoter_holding'], ['FII', 'fundamentals.fii_holding'], ['DII', 'fundamentals.dii_holding']]);
     const priceRows = buildPriceRows(comparison);
+    const staleEntities = entities.filter(entity => Boolean((comparison[entity] as any)?.source_summary?.stale));
 
     const renderBarChart = (title: string, rows: Record<string, string | number | null>[], suffix = '%') => (
       <section className="rounded-xl border border-white/10 bg-black/10 p-4">
@@ -270,7 +271,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                 contentStyle={{ background: '#111827', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#fff' }}
                 formatter={(value) => {
                   const formatted = formatValue(value as MetricValue);
-                  return [formatted === 'Unavailable' ? formatted : `${formatted}${suffix}`, ''];
+                  return [formatted === 'Not available' ? formatted : `${formatted}${suffix}`, ''];
                 }}
               />
               {entities.map((entity, index) => (
@@ -291,6 +292,11 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
           </p>
         </div>
         <div className="custom-scroll flex-1 space-y-5 overflow-y-auto pr-2">
+          {staleEntities.length > 0 && (
+            <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm text-amber-100">
+              Data may be stale for: {staleEntities.join(', ')}.
+            </div>
+          )}
           {priceRows.length > 0 && (
             <section className="rounded-xl border border-white/10 bg-black/10 p-4">
               <h3 className="mb-3 text-sm font-semibold text-gray-200">Price History</h3>

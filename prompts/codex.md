@@ -29,6 +29,13 @@ frontend/node_modules/next/dist/docs/
 The root `AGENTS.md` explicitly warns that this is not the Next.js version most
 models were trained on.
 
+## Frontend commands
+
+The frontend package.json is located in:
+
+```bash
+frontend/
+
 ## Repository Map
 
 ```text

@@ -296,6 +296,8 @@ def test_corporate_events_job_uses_indianapi(monkeypatch):
 
     monkeypatch.setenv("STOCK_DATA_PROVIDER", "indianapi")
     monkeypatch.setenv("INDIANAPI_KEY", "good-key")
+    monkeypatch.setenv("INDIANAPI_ENABLED", "true")
+    monkeypatch.setenv("ENABLE_CORPORATE_ACTIONS_SYNC", "true")
 
     provider = sync_corporate_events.get_corporate_events_provider()
 
@@ -356,6 +358,9 @@ def test_indianapi_eod_prices_use_documented_stock_name_param(monkeypatch):
         return FakeResponse()
 
     monkeypatch.setenv("INDIANAPI_KEY", "test-key")
+    monkeypatch.setenv("INDIANAPI_ENABLED", "true")
+    monkeypatch.setenv("INDIANAPI_ENABLE_SCHEDULED_SYNC", "true")
+    monkeypatch.setenv("INDIANAPI_ENABLE_STOCK_HISTORY", "true")
     monkeypatch.setattr(indianapi_provider.httpx, "get", fake_get)
 
     provider = indianapi_provider.IndianAPIProvider()
@@ -409,6 +414,9 @@ def test_indianapi_stock_endpoint_maps_ratios_and_shareholding(monkeypatch):
         return FakeResponse()
 
     monkeypatch.setenv("INDIANAPI_KEY", "test-key")
+    monkeypatch.setenv("INDIANAPI_ENABLED", "true")
+    monkeypatch.setenv("INDIANAPI_ENABLE_SCHEDULED_SYNC", "true")
+    monkeypatch.setenv("ENABLE_SHAREHOLDING_SYNC", "true")
     monkeypatch.setattr(indianapi_provider.httpx, "get", fake_get)
 
     provider = indianapi_provider.IndianAPIProvider()
@@ -459,6 +467,8 @@ def test_indianapi_statement_endpoint_maps_fundamentals(monkeypatch):
         return FakeResponse({})
 
     monkeypatch.setenv("INDIANAPI_KEY", "test-key")
+    monkeypatch.setenv("INDIANAPI_ENABLED", "true")
+    monkeypatch.setenv("INDIANAPI_ENABLE_SCHEDULED_SYNC", "true")
     monkeypatch.setattr(indianapi_provider.httpx, "get", fake_get)
 
     provider = indianapi_provider.IndianAPIProvider()
@@ -496,6 +506,8 @@ def test_indianapi_flat_balance_sheet_response_maps_statement(monkeypatch):
         return FakeResponse()
 
     monkeypatch.setenv("INDIANAPI_KEY", "test-key")
+    monkeypatch.setenv("INDIANAPI_ENABLED", "true")
+    monkeypatch.setenv("INDIANAPI_ENABLE_SCHEDULED_SYNC", "true")
     monkeypatch.setattr(indianapi_provider.httpx, "get", fake_get)
 
     row = indianapi_provider.IndianAPIProvider().get_balance_sheet("TCS")[0]
@@ -508,7 +520,7 @@ def test_indianapi_flat_balance_sheet_response_maps_statement(monkeypatch):
     assert row["total_equity"] == 94756
 
 
-def test_indianapi_historical_filters_fill_limited_ratios_when_statement_forbidden(monkeypatch):
+def test_indianapi_historical_filters_disabled_for_ratios(monkeypatch):
     from app.providers import indianapi_provider
 
     calls = []
@@ -525,25 +537,18 @@ def test_indianapi_historical_filters_fill_limited_ratios_when_statement_forbidd
         calls.append((url, params))
         if url.endswith("/statement") or url.endswith("/stock"):
             return FakeResponse(403)
-        historical_values = {
-            "pe": 21.5,
-            "ptb": 7.2,
-            "evebitda": 14.1,
-            "mcs": 1200000,
-        }
-        value = historical_values.get(params.get("filter"))
-        return FakeResponse(200, {"datasets": [{"metric": params.get("filter"), "values": [["2026-05-01", value]]}]})
+        return FakeResponse(200, {"datasets": [{"metric": params.get("filter"), "values": [["2026-05-01", 21.5]]}]})
 
     monkeypatch.setenv("INDIANAPI_KEY", "test-key")
+    monkeypatch.setenv("INDIANAPI_ENABLED", "true")
+    monkeypatch.setenv("INDIANAPI_ENABLE_SCHEDULED_SYNC", "true")
+    monkeypatch.setenv("INDIANAPI_ENABLE_STOCK_HISTORY", "false")
     monkeypatch.setattr(indianapi_provider.httpx, "get", fake_get)
 
     ratios = indianapi_provider.IndianAPIProvider().get_ratios_snapshot("TCS")
 
-    assert any(params == {"stock_name": "TCS", "period": "1yr", "filter": "pe"} for _, params in calls)
-    assert ratios["pe"] == 21.5
-    assert ratios["pb"] == 7.2
-    assert ratios["ev_ebitda"] == 14.1
-    assert ratios["market_cap"] == 1200000
+    assert not any(params and params.get("filter") for _, params in calls)
+    assert ratios is None
 
 
 def test_sync_fundamentals_watchlist_uses_configured_symbols(monkeypatch):

@@ -6,6 +6,7 @@ Run:
 psql "$DATABASE_URL" -f backend/migrations/20260501_source_neutral_stock_data.sql
 psql "$DATABASE_URL" -f backend/migrations/20260503_add_stock_price_value_traded.sql
 psql "$DATABASE_URL" -f backend/migrations/20260503_add_data_quality_issues.sql
+psql "$DATABASE_URL" -f backend/migrations/20260512_quota_safe_provider_architecture.sql
 ```
 
 ## Source-Neutral Stock Tables
@@ -17,8 +18,15 @@ psql "$DATABASE_URL" -f backend/migrations/20260503_add_data_quality_issues.sql
 - `corporate_events`
 - `data_provider_runs`
 - `data_quality_issues`
+- `stock_core_snapshot`
+- `provider_usage_logs`
 
 All financial values use `numeric` columns. Unique constraints prevent duplicate symbol/date/source rows.
+
+## Mutual Fund Tables
+- `mutual_fund_core_snapshot`
+- `mutual_fund_nav_history`
+- Existing compatibility tables remain: `mutual_funds`, `mutual_fund_history`
 
 Legacy tables such as `nifty_stocks` and `stock_history` are kept as fallbacks during migration. New app paths read the source-neutral tables first.
 

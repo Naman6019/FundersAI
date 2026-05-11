@@ -6,7 +6,7 @@ GitHub Actions runs stock and MF jobs from `.github/workflows/`. Jobs are Python
 
 | Workflow file | Schedule (UTC) | Job module invoked |
 |---|---|---|
-| `sync-stock-universe.yml` | Daily `0 1 * * *` | `python -m backend.app.jobs.sync_stock_universe` |
+| `sync-stock-universe.yml` | Monthly `0 1 1 * *` | `python -m backend.app.jobs.sync_stock_universe` |
 | `sync-prices-daily.yml` | Weekdays `30 12 * * 1-5` | `python -m backend.app.jobs.sync_latest_prices` |
 | `sync-price-history.yml` | Manual only | `python -m backend.app.jobs.sync_price_history` |
 | `sync-fundamentals-weekly.yml` | Saturdays `0 2 * * 6`, monthly `0 2 1 * *`, manual | `python -m backend.app.jobs.sync_fundamentals` + `calculate_ratios` |
@@ -16,7 +16,7 @@ GitHub Actions runs stock and MF jobs from `.github/workflows/`. Jobs are Python
 
 | Workflow file | Schedule (UTC) | Steps |
 |---|---|---|
-| `mf-sync.yml` | Weekdays `30 13 * * 1-5` | `scripts/sync_mf.py` → `sync_mf_history.py` → `sync_mf_metadata.py` → `python -m backend.app.jobs.sync_mf_from_indianapi` |
+| `mf-sync.yml` | Weekdays `30 13 * * 1-5` | `scripts/sync_mf.py` → `sync_mf_history.py` → `sync_mf_metadata.py` → `python -m backend.app.jobs.sync_mf_nav` |
 | `keepalive.yml` | Scheduled ping | Pings Render `/api/keepalive` to prevent free-tier spin-down |
 
 ## Behavior
@@ -24,10 +24,10 @@ GitHub Actions runs stock and MF jobs from `.github/workflows/`. Jobs are Python
 - NSE universe sync writes `stocks`.
 - Daily and historical EOD price jobs download NSE CM-UDiFF bhavcopy zip files and write `stock_prices_daily` with source `nse_bhavcopy`.
 - EOD price jobs count an empty provider response as a failed symbol, not a successful insert.
-- Stock universe, fundamentals, and corporate event workflows select IndianAPI with `STOCK_DATA_PROVIDER=indianapi`.
+- Stock universe/fundamentals workflows use IndianAPI as controlled enrichment with quota guard.
 - Fundamentals cadence is quota-aware: weekly `watchlist` scope refreshes up to 100 configured symbols, monthly `full` scope refreshes `NIFTY500`, and manual `symbols` scope refreshes compared/on-demand stocks.
 - Configure watched symbols with GitHub Repository Variable `FUNDAMENTALS_WATCHLIST_SYMBOLS` as a comma-separated list. If it is empty, the weekly job falls back to `NIFTY100`.
-- IndianAPI stock fundamentals use `/statement` plus `/stock`; `/historical_data` is used only for price-history fallback, not for fundamentals.
+- IndianAPI stock fundamentals use `/statement` plus `/stock`; `/historical_data` is disabled by default.
 - Stock price workflows select NSE with `STOCK_DATA_PROVIDER=nse`.
 - YFinance is used only when NSE bhavcopy returns empty or local price history is unavailable.
 - Fundamentals sync is skipped when no external provider is configured.
@@ -36,4 +36,4 @@ GitHub Actions runs stock and MF jobs from `.github/workflows/`. Jobs are Python
 - Deprecated CSV scripts under `backend/scripts/deprecated/` are not scheduled.
 - Stock universe/fundamental/corporate action job secrets are stored as GitHub Repository Secrets: `SUPABASE_URL`, `SUPABASE_KEY`, `INDIAN_API_KEY`.
 - Stock price jobs only need `SUPABASE_URL` and `SUPABASE_KEY`.
-- MF sync still uses `INDIAN_API_KEY` for IndianAPI mutual fund data.
+- MF sync uses AMFI + MFapi for NAV/history and local metric computation.

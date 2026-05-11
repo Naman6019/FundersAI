@@ -9,14 +9,29 @@ from typing import Any, Callable
 
 from app.database import supabase
 from app.providers.indianapi_client import IndianAPIClient, ProviderResult
+from app.services import cache_policy
+from app.services.indianapi_quota_guard import evaluate as evaluate_quota
+from app.services.provider_usage import log_provider_usage
 
 logger = logging.getLogger(__name__)
 
 PROVIDER = "indianapi"
 UNAVAILABLE_MESSAGE = "This data is currently unavailable from the provider."
-DEFAULT_TTL_SECONDS = 24 * 60 * 60
-LIST_TTL_SECONDS = 7 * 24 * 60 * 60
 DISABLE_SECONDS_ON_403 = 24 * 60 * 60
+
+ENDPOINT_TTL_POLICY: dict[str, str] = {
+    "industry_search": "stock_profile",
+    "stock": "stock_profile",
+    "historical_stats": "stock_fundamentals",
+    "corporate_actions": "stock_profile",
+    "recent_announcements": "stock_profile",
+    "historical_data": "stock_price_history",
+    "mutual_fund_search": "mutual_fund_nav",
+    "mutual_funds": "mutual_fund_nav",
+    "mutual_funds_details": "mutual_fund_enrichment",
+    "stock_target_price": "stock_profile",
+    "stock_forecasts": "stock_profile",
+}
 
 
 def resolve_stock(query: str) -> dict[str, Any]:
@@ -72,7 +87,6 @@ def get_mutual_fund_universe() -> dict[str, Any]:
         "mutual_funds",
         {},
         lambda client: client.get_mutual_funds(),
-        ttl_seconds=LIST_TTL_SECONDS,
         normalized_table="mutual_funds",
         normalized_key={},
     )
@@ -145,32 +159,138 @@ def _cached_call(
     endpoint_name: str,
     params: dict[str, Any],
     fetcher: Callable[[IndianAPIClient], ProviderResult],
-    ttl_seconds: int = DEFAULT_TTL_SECONDS,
     optional: bool = False,
     normalized_table: str | None = None,
     normalized_key: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     now = _now()
+    ttl_seconds = cache_policy.ttl_seconds(ENDPOINT_TTL_POLICY.get(endpoint_name, "stock_profile"), 24 * 60 * 60)
     cache_key = _cache_key(endpoint_name, params)
+    symbol, scheme_code = _extract_symbol_and_scheme(params)
+
     fresh = _read_generic_cache(endpoint_name, cache_key, now, allow_stale=False)
     if fresh:
+        log_provider_usage(
+            provider=PROVIDER,
+            endpoint=endpoint_name,
+            symbol=symbol,
+            scheme_code=scheme_code,
+            cache_hit=True,
+            status_code=200,
+            success=True,
+            request_cost=0,
+        )
         return _service_ok(endpoint_name, fresh["response_json"], fresh["fetched_at"], "cache", stale=False)
 
     stale = _read_generic_cache(endpoint_name, cache_key, now, allow_stale=True)
     enabled = os.environ.get("INDIANAPI_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
     if not enabled:
+        log_provider_usage(
+            provider=PROVIDER,
+            endpoint=endpoint_name,
+            symbol=symbol,
+            scheme_code=scheme_code,
+            cache_hit=False,
+            status_code=None,
+            success=False,
+            error_message="provider_disabled",
+            request_cost=0,
+        )
         if stale:
-            return _service_ok(endpoint_name, stale["response_json"], stale["fetched_at"], "cache", stale=True)
+            return _service_ok(
+                endpoint_name,
+                stale["response_json"],
+                stale["fetched_at"],
+                "cache",
+                stale=True,
+                warning="Using stale cache because IndianAPI is disabled.",
+            )
         return _service_error(endpoint_name, "provider_disabled", UNAVAILABLE_MESSAGE, stale=True)
+
+    if _endpoint_feature_disabled(endpoint_name):
+        log_provider_usage(
+            provider=PROVIDER,
+            endpoint=endpoint_name,
+            symbol=symbol,
+            scheme_code=scheme_code,
+            cache_hit=False,
+            status_code=None,
+            success=False,
+            error_message="feature_flag_disabled",
+            request_cost=0,
+        )
+        if stale:
+            return _service_ok(
+                endpoint_name,
+                stale["response_json"],
+                stale["fetched_at"],
+                "cache",
+                stale=True,
+                warning=f"Using stale cache because {endpoint_name} is disabled by feature flag.",
+            )
+        return _service_error(endpoint_name, "endpoint_disabled", UNAVAILABLE_MESSAGE, stale=True)
 
     disabled = _disabled_until(endpoint_name, now)
     if disabled:
+        log_provider_usage(
+            provider=PROVIDER,
+            endpoint=endpoint_name,
+            symbol=symbol,
+            scheme_code=scheme_code,
+            cache_hit=False,
+            status_code=None,
+            success=False,
+            error_message="endpoint_temporarily_disabled",
+            request_cost=0,
+        )
         if stale:
-            return _service_ok(endpoint_name, stale["response_json"], stale["fetched_at"], "cache", stale=True)
+            return _service_ok(
+                endpoint_name,
+                stale["response_json"],
+                stale["fetched_at"],
+                "cache",
+                stale=True,
+                warning=f"Using stale cache because {endpoint_name} is temporarily disabled.",
+            )
         return _service_error(endpoint_name, "endpoint_disabled", UNAVAILABLE_MESSAGE, stale=True)
+
+    quota = evaluate_quota(scheduled=False, now=now)
+    if not quota.allowed:
+        log_provider_usage(
+            provider=PROVIDER,
+            endpoint=endpoint_name,
+            symbol=symbol,
+            scheme_code=scheme_code,
+            cache_hit=False,
+            status_code=None,
+            success=False,
+            error_message=f"quota_guard:{quota.reason}",
+            request_cost=0,
+        )
+        if stale:
+            return _service_ok(
+                endpoint_name,
+                stale["response_json"],
+                stale["fetched_at"],
+                "cache",
+                stale=True,
+                warning=f"Using stale cache because IndianAPI quota guard blocked live call ({quota.reason}).",
+            )
+        return _service_error(endpoint_name, "quota_guard_blocked", UNAVAILABLE_MESSAGE, stale=True)
 
     client = IndianAPIClient()
     if not client.api_key:
+        log_provider_usage(
+            provider=PROVIDER,
+            endpoint=endpoint_name,
+            symbol=symbol,
+            scheme_code=scheme_code,
+            cache_hit=False,
+            status_code=None,
+            success=False,
+            error_message="missing_api_key",
+            request_cost=0,
+        )
         if stale:
             return _service_ok(endpoint_name, stale["response_json"], stale["fetched_at"], "cache", stale=True)
         return _service_error(endpoint_name, "missing_api_key", UNAVAILABLE_MESSAGE, stale=optional)
@@ -185,21 +305,56 @@ def _cached_call(
         _write_generic_cache(endpoint_name, cache_key, params, data, fetched_at, now + timedelta(seconds=ttl_seconds))
         _write_normalized_cache(normalized_table, normalized_key or params, endpoint_name, data, fetched_at)
         _log_ingestion(endpoint_name, "success", params, status=200)
+        log_provider_usage(
+            provider=PROVIDER,
+            endpoint=endpoint_name,
+            symbol=symbol,
+            scheme_code=scheme_code,
+            cache_hit=False,
+            status_code=200,
+            success=True,
+            request_cost=1,
+        )
         return _service_ok(endpoint_name, data, fetched_at, PROVIDER, stale=False)
 
     _mark_failure(endpoint_name, status, (result.get("error") or {}).get("message"))
     _log_ingestion(endpoint_name, "failed", params, status=status, error=result.get("error"))
+    log_provider_usage(
+        provider=PROVIDER,
+        endpoint=endpoint_name,
+        symbol=symbol,
+        scheme_code=scheme_code,
+        cache_hit=False,
+        status_code=status,
+        success=False,
+        error_message=(result.get("error") or {}).get("message"),
+        request_cost=1,
+    )
 
     if stale:
-        return _service_ok(endpoint_name, stale["response_json"], stale["fetched_at"], "cache", stale=True)
+        return _service_ok(
+            endpoint_name,
+            stale["response_json"],
+            stale["fetched_at"],
+            "cache",
+            stale=True,
+            warning=f"Provider failed for {endpoint_name}. Returned stale cached data.",
+        )
 
     error = result.get("error") or {}
     message = UNAVAILABLE_MESSAGE if optional or status == 403 else error.get("message") or UNAVAILABLE_MESSAGE
     return _service_error(endpoint_name, error.get("code") or "provider_error", message, status=status, stale=optional)
 
 
-def _service_ok(endpoint: str, data: Any, fetched_at: str | None, source: str, stale: bool) -> dict[str, Any]:
-    return {
+def _service_ok(
+    endpoint: str,
+    data: Any,
+    fetched_at: str | None,
+    source: str,
+    stale: bool,
+    warning: str | None = None,
+) -> dict[str, Any]:
+    response = {
         "ok": True,
         "provider": PROVIDER,
         "source": source,
@@ -208,6 +363,9 @@ def _service_ok(endpoint: str, data: Any, fetched_at: str | None, source: str, s
         "fetchedAt": fetched_at,
         "stale": stale,
     }
+    if warning:
+        response["warning"] = warning
+    return response
 
 
 def _service_error(endpoint: str, code: str, message: str, status: int | None = None, stale: bool = False) -> dict[str, Any]:
@@ -392,3 +550,28 @@ def _parse_dt(value: Any) -> datetime | None:
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _endpoint_feature_disabled(endpoint_name: str) -> bool:
+    env_map = {
+        "corporate_actions": "ENABLE_CORPORATE_ACTIONS_SYNC",
+        "recent_announcements": "ENABLE_STOCK_NEWS",
+        "stock_target_price": "ENABLE_ANALYST_DATA",
+        "stock_forecasts": "ENABLE_ANALYST_DATA",
+        "historical_data": "INDIANAPI_ENABLE_STOCK_HISTORY",
+        "mutual_fund_search": "INDIANAPI_ENABLE_MF_ENDPOINTS",
+        "mutual_funds": "INDIANAPI_ENABLE_MF_ENDPOINTS",
+        "mutual_funds_details": "INDIANAPI_ENABLE_MF_ENDPOINTS",
+    }
+    env_name = env_map.get(endpoint_name)
+    if not env_name:
+        return False
+    return os.getenv(env_name, "0").strip().lower() not in {"1", "true", "yes", "on"}
+
+
+def _extract_symbol_and_scheme(params: dict[str, Any]) -> tuple[str | None, str | None]:
+    symbol = params.get("name") or params.get("stock_name") or params.get("symbol")
+    scheme_code = params.get("scheme_code") or params.get("fund_id")
+    if scheme_code is None and "stock_name" in params and "mutual" in str(params.get("stock_name", "")).lower():
+        scheme_code = str(params.get("stock_name"))
+    return (str(symbol).upper() if symbol else None, str(scheme_code) if scheme_code else None)

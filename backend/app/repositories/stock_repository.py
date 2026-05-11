@@ -211,6 +211,73 @@ class StockRepository:
             }
         return comparison
 
+    def upsert_stock_core_snapshot_rows(self, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
+        stamped = [{**row, "last_updated": datetime.now(timezone.utc).isoformat()} for row in rows]
+        self._upsert("stock_core_snapshot", stamped, "symbol")
+
+    def get_stock_core_snapshot(self, symbol: str) -> dict[str, Any] | None:
+        clean = self._normalize_symbol(symbol)
+        if not self._has_client():
+            return None
+        try:
+            response = (
+                self.supabase.table("stock_core_snapshot")
+                .select("*")
+                .eq("symbol", clean)
+                .limit(1)
+                .execute()
+            )
+            return (response.data or [None])[0]
+        except Exception as exc:
+            logger.warning("Stock core snapshot lookup failed for %s: %s", clean, exc)
+            return None
+
+    def upsert_mutual_fund_core_snapshot_rows(self, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
+        stamped = [{**row, "last_updated": datetime.now(timezone.utc).isoformat()} for row in rows]
+        self._upsert("mutual_fund_core_snapshot", stamped, "scheme_code")
+
+    def upsert_mutual_fund_nav_history_rows(self, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
+        self._upsert("mutual_fund_nav_history", rows, "scheme_code,nav_date")
+
+    def get_mutual_fund_core_snapshot(self, scheme_code: str) -> dict[str, Any] | None:
+        if not self._has_client():
+            return None
+        try:
+            response = (
+                self.supabase.table("mutual_fund_core_snapshot")
+                .select("*")
+                .eq("scheme_code", str(scheme_code))
+                .limit(1)
+                .execute()
+            )
+            return (response.data or [None])[0]
+        except Exception as exc:
+            logger.warning("MF core snapshot lookup failed for %s: %s", scheme_code, exc)
+            return None
+
+    def get_mutual_fund_nav_history(self, scheme_code: str, limit: int = 2500) -> list[dict[str, Any]]:
+        if not self._has_client():
+            return []
+        try:
+            response = (
+                self.supabase.table("mutual_fund_nav_history")
+                .select("*")
+                .eq("scheme_code", str(scheme_code))
+                .order("nav_date", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            return response.data or []
+        except Exception as exc:
+            logger.warning("MF nav history lookup failed for %s: %s", scheme_code, exc)
+            return []
+
     def _upsert(self, table: str, rows: list[dict[str, Any]], on_conflict: str) -> None:
         if not rows or not self._has_client():
             return

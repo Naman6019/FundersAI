@@ -14,11 +14,16 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 from app.providers import get_fundamentals_provider
 from app.repositories.stock_repository import StockRepository
 from app.models.stock_models import ProviderRun, DataQualityIssue, StockPriceDaily
+from app.services.stock_snapshot_service import refresh_stock_core_snapshot
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def main():
+    if os.environ.get("ENABLE_STOCK_PRICE_SYNC", "true").strip().lower() not in {"1", "true", "yes", "on"}:
+        logger.info("ENABLE_STOCK_PRICE_SYNC is false. Skipping sync_latest_prices.")
+        return
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--symbols", type=str, help="Comma-separated symbols to sync")
     parser.add_argument("--date", type=str, help="Trade date in YYYY-MM-DD format")
@@ -81,6 +86,11 @@ def main():
             run.symbols_attempted = len({row.get("symbol") for row in rows if row.get("symbol")})
         prices = [_to_stock_price(row, provider.name) for row in rows]
         repo.upsert_stock_prices_daily(prices)
+        for sym in {price.symbol for price in prices}:
+            try:
+                refresh_stock_core_snapshot(sym, repo)
+            except Exception as refresh_exc:
+                logger.warning("Stock core snapshot refresh failed for %s: %s", sym, refresh_exc)
 
         run.symbols_succeeded = len({price.symbol for price in prices})
         run.symbols_failed = max(run.symbols_attempted - run.symbols_succeeded, 0)
@@ -103,6 +113,10 @@ def main():
                 for h in history_dicts:
                     prices.append(_to_stock_price(h, provider.name))
                 repo.upsert_stock_prices_daily(prices)
+                try:
+                    refresh_stock_core_snapshot(symbol, repo)
+                except Exception as refresh_exc:
+                    logger.warning("Stock core snapshot refresh failed for %s: %s", symbol, refresh_exc)
                 run.symbols_succeeded += 1
             else:
                 logger.warning(f"Provider {provider.name} does not implement get_eod_prices(). Returning empty stub.")

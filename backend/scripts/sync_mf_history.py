@@ -58,6 +58,18 @@ def upsert_history(supabase, rows: list[dict]) -> int:
                 batch,
                 on_conflict="scheme_code,nav_date",
             ).execute()
+            supabase.table("mutual_fund_nav_history").upsert(
+                [
+                    {
+                        "scheme_code": str(item["scheme_code"]),
+                        "nav_date": item["nav_date"],
+                        "nav": item["nav"],
+                        "data_source": "mfapi",
+                    }
+                    for item in batch
+                ],
+                on_conflict="scheme_code,nav_date",
+            ).execute()
             written += len(batch)
         except Exception as e:
             logger.error("History batch upsert failed: %s", e)

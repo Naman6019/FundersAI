@@ -16,6 +16,10 @@ MarketMind uses Supabase (PostgreSQL) as its primary data store.
 - `data_quality_issues`: Optional provider sync issue log.
 - `mutual_funds`: Metadata for mutual funds (scheme codes, names, categories, TER, AUM).
 - `mutual_fund_history`: Historical NAV data used for MF charting, returns, Alpha, and Beta computations.
+- `stock_core_snapshot`: Bare-minimum stock snapshot for Supabase-first comparison/read paths.
+- `mutual_fund_core_snapshot`: Bare-minimum mutual fund snapshot with computed returns/risk metrics.
+- `mutual_fund_nav_history`: Normalized NAV history for local metric computation.
+- `provider_usage_logs`: Provider usage, cache-hit, failure, and quota-skip tracking.
 
 ## TODOs
 - **Holdings/Overlap**: Schema details for portfolio overlap features are incomplete or rely on partial AMFI disclosures.

@@ -149,6 +149,24 @@ def update_funds(supabase, updates: list[dict[str, Any]], source_name: str) -> i
         batch = updates[i:i + BATCH_SIZE]
         try:
             supabase.table("mutual_funds").upsert(batch, on_conflict="scheme_code").execute()
+            core_batch = [
+                {
+                    "scheme_code": str(row["scheme_code"]),
+                    "scheme_name": row.get("scheme_name"),
+                    "amc_name": row.get("fund_house"),
+                    "category": row.get("category"),
+                    "sub_category": row.get("sub_category"),
+                    "nav": row.get("nav"),
+                    "nav_date": row.get("nav_date"),
+                    "expense_ratio": row.get("expense_ratio"),
+                    "aum": row.get("aum"),
+                    "benchmark": row.get("benchmark"),
+                    "data_source": source_name,
+                    "last_updated": utc_now(),
+                }
+                for row in batch
+            ]
+            supabase.table("mutual_fund_core_snapshot").upsert(core_batch, on_conflict="scheme_code").execute()
             written += len(batch)
         except Exception as e:
             logger.error("%s metadata upsert failed: %s", source_name, e)

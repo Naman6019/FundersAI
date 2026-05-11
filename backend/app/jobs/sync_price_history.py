@@ -20,6 +20,10 @@ logger = logging.getLogger(__name__)
 
 
 def main():
+    if os.environ.get("ENABLE_STOCK_PRICE_SYNC", "true").strip().lower() not in {"1", "true", "yes", "on"}:
+        logger.info("ENABLE_STOCK_PRICE_SYNC is false. Skipping sync_price_history.")
+        return
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--symbols", type=str, help="Comma-separated symbols to sync")
     parser.add_argument("--start-date", type=str, help="Start date in YYYY-MM-DD format")

@@ -40,9 +40,9 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python backend/scripts/sync_mf_metadata.py
 
-      - name: Sync MF Metadata (IndianAPI - AUM/Returns)
+      - name: Sync MF NAV Snapshot + Metrics (MFapi)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          INDIANAPI_KEY: ${{ secrets.INDIAN_API_KEY }}
-        run: python -m backend.app.jobs.sync_mf_from_indianapi
+          ENABLE_MF_NAV_SYNC: "true"
+        run: python -m backend.app.jobs.sync_mf_nav

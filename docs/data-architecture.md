@@ -10,6 +10,10 @@ MarketMind stock data is source-neutral. App code reads normalized tables and do
 - `shareholding_pattern`: promoter, FII, DII, public holdings.
 - `corporate_events`: splits, dividends, bonuses, and other events.
 - `data_provider_runs`: job run audit log.
+- `stock_core_snapshot`: normalized read model for stock profile/fundamental comparisons.
+- `mutual_fund_core_snapshot`: normalized read model for MF compare cards.
+- `mutual_fund_nav_history`: NAV history for returns/volatility/drawdown.
+- `provider_usage_logs`: provider-level cost/health trace including cache hits and quota skips.
 
 ## Rules
 - Missing data stays `null`.
@@ -17,4 +21,4 @@ MarketMind stock data is source-neutral. App code reads normalized tables and do
 - Paid provider adapters must be disabled unless API keys exist.
 - Scheduled jobs run in GitHub Actions, not Vercel cron.
 - Stock EOD history is populated from NSE CM-UDiFF bhavcopy zip files with source `nse_bhavcopy`.
-- Mutual fund tables and jobs remain separate.
+- Mutual fund NAV/history uses MFapi/AMFI paths, not IndianAPI.

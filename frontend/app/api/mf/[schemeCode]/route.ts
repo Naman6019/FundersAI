@@ -34,23 +34,41 @@ export async function GET(_request: Request, context: { params: Promise<{ scheme
     }
 
     // Fallback: local Supabase query (for local-only runs)
-    const { data: mfDetails, error } = await supabase
-      .from('mutual_funds')
+    let detailsQuery = await supabase
+      .from('mutual_fund_core_snapshot')
       .select('*')
-      .eq('scheme_code', parseInt(schemeCode, 10))
+      .eq('scheme_code', schemeCode)
       .limit(1)
       .maybeSingle();
+    if (!detailsQuery.data) {
+      detailsQuery = await supabase
+        .from('mutual_funds')
+        .select('*')
+        .eq('scheme_code', parseInt(schemeCode, 10))
+        .limit(1)
+        .maybeSingle();
+    }
+    const mfDetails = detailsQuery.data;
+    const error = detailsQuery.error;
 
     if (error || !mfDetails) {
       return NextResponse.json({ error: 'Mutual fund not found' }, { status: 404 });
     }
 
     // 1. Try to fetch history from local Supabase table
-    const { data: localHistory } = await supabase
-      .from('mutual_fund_history')
+    let historyQuery = await supabase
+      .from('mutual_fund_nav_history')
       .select('nav, nav_date')
-      .eq('scheme_code', parseInt(schemeCode, 10))
+      .eq('scheme_code', schemeCode)
       .order('nav_date', { ascending: false });
+    if (!historyQuery.data || historyQuery.data.length === 0) {
+      historyQuery = await supabase
+        .from('mutual_fund_history')
+        .select('nav, nav_date')
+        .eq('scheme_code', parseInt(schemeCode, 10))
+        .order('nav_date', { ascending: false });
+    }
+    const localHistory = historyQuery.data;
 
     let history = (localHistory || []).map(h => ({
       date: h.nav_date.split('-').reverse().join('-'), // Convert YYYY-MM-DD to DD-MM-YYYY

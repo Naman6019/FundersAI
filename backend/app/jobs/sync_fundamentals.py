@@ -15,12 +15,17 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 from app.providers import get_fundamentals_provider
 from app.repositories.stock_repository import StockRepository
 from app.models.stock_models import ProviderRun, DataQualityIssue, FinancialStatement, RatioSnapshot, ShareholdingPattern
+from app.services.stock_snapshot_service import refresh_stock_core_snapshot
 from app.stock_universe import load_stock_universe
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def main():
+    if os.environ.get("ENABLE_STOCK_FUNDAMENTALS_SYNC", "true").strip().lower() not in {"1", "true", "yes", "on"}:
+        logger.info("ENABLE_STOCK_FUNDAMENTALS_SYNC is false. Skipping sync_fundamentals.")
+        return
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--symbols", type=str, help="Comma-separated symbols to sync")
     parser.add_argument("--scope", choices=["watchlist", "full", "all-active", "symbols"], default=os.environ.get("FUNDAMENTALS_REFRESH_SCOPE", "watchlist"))
@@ -87,6 +92,10 @@ def main():
                     repo.upsert_ratios_snapshot([RatioSnapshot(**ratio)])
 
             if statements or sh_patterns or ratio:
+                try:
+                    refresh_stock_core_snapshot(symbol, repo)
+                except Exception as refresh_exc:
+                    logger.warning("Stock core snapshot refresh failed for %s: %s", symbol, refresh_exc)
                 run.symbols_succeeded += 1
             else:
                 run.symbols_failed += 1

@@ -26,6 +26,7 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           STOCK_DATA_PROVIDER: indianapi
           INDIANAPI_KEY: ${{ secrets.INDIAN_API_KEY }}
+          ENABLE_CORPORATE_ACTIONS_SYNC: "false"
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ] || [ -z "$INDIANAPI_KEY" ]; then
             echo "Error: Missing SUPABASE_URL, SUPABASE_KEY, or INDIAN_API_KEY"

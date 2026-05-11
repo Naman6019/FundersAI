@@ -39,6 +39,10 @@ from app.services.quant_service import (
     get_stock_price_history,
 )
 from app.services import indianapi_service
+from app.services.mfapi_service import get_latest_nav as mfapi_get_latest_nav, get_nav_history as mfapi_get_nav_history, search_schemes as mfapi_search_schemes
+from app.services.indianapi_quota_guard import evaluate as evaluate_indianapi_quota
+from app.services.provider_usage import build_usage_dashboard
+from app.services import cache_policy
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -69,6 +73,29 @@ def read_root():
 def health():
     return {"status": "ok"}
 
+
+@app.get("/api/v1/providers/usage")
+def provider_usage_dashboard():
+    enabled = os.getenv("ENABLE_PROVIDER_USAGE_ENDPOINT", "false").strip().lower() in {"1", "true", "yes", "on"}
+    if not enabled:
+        raise HTTPException(status_code=404, detail="Provider usage endpoint is disabled.")
+
+    dashboard = build_usage_dashboard("indianapi")
+    quota = evaluate_indianapi_quota(scheduled=True)
+    return {
+        "provider": "indianapi",
+        "current_month_indianapi_usage": dashboard.get("month_request_cost"),
+        "remaining_safe_indianapi_budget": quota.remaining_safe,
+        "reserve_amount": quota.monthly_reserve,
+        "daily_usage": dashboard.get("daily_request_cost"),
+        "usage_by_endpoint": dashboard.get("usage_by_endpoint"),
+        "cache_hit_ratio": dashboard.get("cache_hit_ratio"),
+        "recent_provider_failures": dashboard.get("recent_failures"),
+        "scheduled_sync_allowed": quota.allowed if quota.scheduled_sync_enabled else False,
+        "scheduled_sync_reason": quota.reason,
+        "month_window": dashboard.get("month_window"),
+    }
+
 class ChatRequest(BaseModel):
     query: str
     asset_type: Literal["auto", "stock", "mutual_fund"] = "auto"
@@ -80,7 +107,8 @@ IST = pytz.timezone('Asia/Kolkata')
 QUANT_CACHE: Dict[str, Any] = {}
 QUANT_CACHE_TTL_SECONDS = int(os.getenv("QUANT_CACHE_TTL_SECONDS", "600"))
 INDIANAPI_CHAT_STOCK_ENABLED = os.getenv("INDIANAPI_CHAT_STOCK_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
-INDIANAPI_MF_DETAILS_ENABLED = os.getenv("INDIANAPI_MF_DETAILS_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+if "INDIANAPI_CHAT_STOCK_ENABLED" not in os.environ:
+    INDIANAPI_CHAT_STOCK_ENABLED = os.getenv("INDIANAPI_ENABLE_LIVE_CALLS", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 async def function_ollama_chat(messages, format="json", max_retries=2):
     groq_key = os.environ.get("GROQ_API_KEY")
@@ -1043,15 +1071,12 @@ async def get_mf_history_df(scheme_code: int, days: int = 1100):
     """Fetch MF history from Supabase and return as a DataFrame compatible with risk functions."""
     async def fetch_remote_history() -> pd.DataFrame:
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                res = await client.get(f"https://api.mfapi.in/mf/{scheme_code}")
-                res.raise_for_status()
-                payload = res.json()
+            payload = mfapi_get_nav_history(str(scheme_code))
             rows = payload.get("data") or []
             if not rows:
                 return pd.DataFrame()
             df = pd.DataFrame(rows)
-            df["date"] = pd.to_datetime(df["date"], format="%d-%m-%Y", errors="coerce")
+            df["date"] = pd.to_datetime(df["nav_date"], errors="coerce")
             df["Close"] = pd.to_numeric(df["nav"], errors="coerce")
             df = df.dropna(subset=["date", "Close"]).sort_values("date")
             df.set_index("date", inplace=True)
@@ -1063,7 +1088,9 @@ async def get_mf_history_df(scheme_code: int, days: int = 1100):
     if not supabase: return pd.DataFrame()
     try:
         # Default is ~3 years; callers can request more for 5Y UI metrics.
-        res = supabase.table('mutual_fund_history').select('nav, nav_date').eq('scheme_code', scheme_code).order('nav_date', desc=True).limit(days).execute()
+        res = supabase.table('mutual_fund_nav_history').select('nav, nav_date').eq('scheme_code', str(scheme_code)).order('nav_date', desc=True).limit(days).execute()
+        if not res.data:
+            res = supabase.table('mutual_fund_history').select('nav, nav_date').eq('scheme_code', scheme_code).order('nav_date', desc=True).limit(days).execute()
         if res.data:
             df = pd.DataFrame(res.data)
             df['date'] = pd.to_datetime(df['nav_date'])
@@ -1233,7 +1260,9 @@ async def get_mutual_fund_details(scheme_code: int):
         raise HTTPException(status_code=500, detail="Supabase client not initialized")
 
     try:
-        fund_res = supabase.table('mutual_funds').select('*').eq('scheme_code', scheme_code).limit(1).execute()
+        fund_res = supabase.table('mutual_fund_core_snapshot').select('*').eq('scheme_code', str(scheme_code)).limit(1).execute()
+        if not fund_res.data:
+            fund_res = supabase.table('mutual_funds').select('*').eq('scheme_code', scheme_code).limit(1).execute()
         if not fund_res.data:
             raise HTTPException(status_code=404, detail="Mutual fund not found")
 
@@ -1242,19 +1271,29 @@ async def get_mutual_fund_details(scheme_code: int):
         close_series = hist_df["Close"] if not hist_df.empty else pd.Series(dtype=float)
 
         returns = {
-            "1Y": _compute_cagr_from_close(close_series, 1),
-            "3Y": _compute_cagr_from_close(close_series, 3),
-            "5Y": _compute_cagr_from_close(close_series, 5)
+            "1Y": details.get("return_1y") if details.get("return_1y") is not None else _compute_cagr_from_close(close_series, 1),
+            "3Y": details.get("return_3y") if details.get("return_3y") is not None else _compute_cagr_from_close(close_series, 3),
+            "5Y": details.get("return_5y") if details.get("return_5y") is not None else _compute_cagr_from_close(close_series, 5)
         }
         risk_metrics = _compute_nav_risk_metrics(close_series)
         nifty_hist = await get_nifty_history_df(days=2200)
         if risk_metrics is None:
             risk_metrics = {}
+        if details.get("volatility_1y") is not None:
+            risk_metrics["stdDev"] = details.get("volatility_1y")
+        if details.get("max_drawdown_1y") is not None:
+            risk_metrics["maxDrawdown"] = details.get("max_drawdown_1y") / 100 if details.get("max_drawdown_1y") is not None else None
+        if details.get("beta") is not None:
+            risk_metrics["beta"] = details.get("beta")
+        if details.get("alpha") is not None:
+            risk_metrics["alpha_vs_nifty"] = details.get("alpha")
+        if details.get("sharpe_ratio") is not None:
+            risk_metrics["sharpeRatio"] = details.get("sharpe_ratio")
         if not hist_df.empty and not nifty_hist.empty:
             alpha_beta = calculate_alpha_beta_v2(hist_df, nifty_hist)
             risk_metrics.update({
-                "beta": alpha_beta.get("beta"),
-                "alpha_vs_nifty": alpha_beta.get("alpha"),
+                "beta": risk_metrics.get("beta") if risk_metrics.get("beta") is not None else alpha_beta.get("beta"),
+                "alpha_vs_nifty": risk_metrics.get("alpha_vs_nifty") if risk_metrics.get("alpha_vs_nifty") is not None else alpha_beta.get("alpha"),
                 "risk_period": f"{alpha_beta.get('period_years', 3)}Y"
             })
 
@@ -1278,12 +1317,20 @@ async def get_mutual_fund_details(scheme_code: int):
                 for idx, val in hist_df.sort_index(ascending=False)["Close"].items()
             ]
 
+        nav_ref = details.get("nav_date") or details.get("last_updated")
+        stale = not cache_policy.is_fresh(nav_ref, "mutual_fund_nav")
         return {
             "details": details,
             "returns": returns,
             "riskMetrics": risk_metrics,
             "chartData": chart_data,
-            "fullData": full_data
+            "fullData": full_data,
+            "freshness": {
+                "stale": stale,
+                "warning": "NAV data may be stale." if stale else None,
+                "nav_date": details.get("nav_date"),
+                "last_updated": details.get("last_updated"),
+            },
         }
     except HTTPException:
         raise
@@ -1325,43 +1372,29 @@ async def chat_endpoint(req: ChatRequest):
         words = [word for word in cleaned.split() if word]
         return f"%{'%'.join(words)}%" if words else "%"
 
-    def _fund_from_indianapi(search_term: str) -> dict | None:
-        result = indianapi_service.resolve_mutual_fund(search_term)
+    def _fund_from_mfapi(search_term: str) -> dict | None:
+        result = mfapi_search_schemes(search_term)
         if not result.get("ok"):
             return None
-        for row in _walk_dicts(result.get("data")):
-            name = row.get("scheme_name") or row.get("schemeName") or row.get("fund_name") or row.get("name")
-            if not name:
-                continue
-            data = {
-                "name": name,
-                "nav": _unwrap_nested_value(row.get("nav") or row.get("latest_nav"), ("nav", "latest_nav", "current", "value")),
-                "nav_date": _unwrap_nested_value(row.get("nav_date") or row.get("date"), ("nav_date", "date")),
-                "category": _unwrap_nested_value(row.get("category") or row.get("schemeType"), ("category", "schemeType", "name")),
-                "fund_house": _unwrap_nested_value(row.get("fund_house") or row.get("fundHouse") or row.get("amc"), ("name", "fund_house", "amc")),
-                "expense_ratio": _unwrap_nested_value(row.get("expense_ratio") or row.get("expenseRatio"), ("current", "expense_ratio", "expenseRatio", "ratio", "value")),
-                "aum": _unwrap_nested_value(row.get("aum") or row.get("asset_size"), ("aum", "asset_size", "current", "value")),
-                "source": "indianapi",
-                "fetchedAt": result.get("fetchedAt"),
-            }
-            needs_details = any(
-                _is_missing(data.get(key))
-                for key in ("nav", "expense_ratio", "aum", "fund_house")
-            )
-            if INDIANAPI_MF_DETAILS_ENABLED and needs_details:
-                details = indianapi_service.get_mutual_fund_research_profile(name)
-                if details.get("ok"):
-                    for drow in _walk_dicts(details.get("data")):
-                        data["nav"] = data.get("nav") or _unwrap_nested_value(drow.get("nav") or drow.get("latest_nav"), ("nav", "latest_nav", "current", "value"))
-                        data["nav_date"] = data.get("nav_date") or _unwrap_nested_value(drow.get("nav_date") or drow.get("date"), ("nav_date", "date"))
-                        data["category"] = data.get("category") or _unwrap_nested_value(drow.get("category") or drow.get("schemeType"), ("category", "schemeType", "name"))
-                        data["fund_house"] = data.get("fund_house") or _unwrap_nested_value(drow.get("fund_house") or drow.get("fundHouse") or drow.get("amc"), ("name", "fund_house", "amc"))
-                        data["expense_ratio"] = data.get("expense_ratio") or _unwrap_nested_value(drow.get("expense_ratio") or drow.get("expenseRatio"), ("current", "expense_ratio", "expenseRatio", "ratio", "value"))
-                        data["aum"] = data.get("aum") or _unwrap_nested_value(drow.get("aum") or drow.get("asset_size"), ("aum", "asset_size", "current", "value"))
-                        break
-                    data["fetchedAt"] = details.get("fetchedAt") or data.get("fetchedAt")
-            return data
-        return None
+        matches = result.get("data") or []
+        if not matches:
+            return None
+        best = _pick_best_fund_match(search_term, matches)
+        latest = mfapi_get_latest_nav(best.get("scheme_code"))
+        latest_data = latest.get("data") if latest.get("ok") else None
+        if not latest_data:
+            return None
+        return {
+            "name": latest_data.get("scheme_name") or best.get("scheme_name"),
+            "scheme_code": best.get("scheme_code"),
+            "nav": latest_data.get("nav"),
+            "nav_date": latest_data.get("nav_date"),
+            "category": latest_data.get("category"),
+            "fund_house": latest_data.get("amc_name"),
+            "expense_ratio": "N/A",
+            "aum": "N/A",
+            "source": "mfapi",
+        }
     
     if intent == "screen":
         filters = intent_info.get("screen_filters", {})
@@ -1386,7 +1419,9 @@ async def chat_endpoint(req: ChatRequest):
                     try:
                         search_term = _entity_search_term(entity)
                         search_pattern = _fund_search_pattern(search_term)
-                        res = supabase.table('mutual_funds').select('*').ilike('scheme_name', search_pattern).limit(25).execute()
+                        res = supabase.table('mutual_fund_core_snapshot').select('*').ilike('scheme_name', search_pattern).limit(25).execute()
+                        if not res.data:
+                            res = supabase.table('mutual_funds').select('*').ilike('scheme_name', search_pattern).limit(25).execute()
                         if res.data:
                             best_match = _pick_best_fund_match(search_term, res.data)
                             scheme_code = best_match['scheme_code']
@@ -1395,7 +1430,7 @@ async def chat_endpoint(req: ChatRequest):
                                 "nav": best_match['nav'],
                                 "nav_date": best_match['nav_date'],
                                 "category": best_match['category'],
-                                "fund_house": best_match['fund_house'],
+                                "fund_house": best_match.get('amc_name') or best_match.get('fund_house'),
                                 "expense_ratio": best_match.get('expense_ratio', "N/A"),
                                 "aum": best_match.get('aum', "N/A"),
                                 "source": "MarketMind DB"
@@ -1404,7 +1439,7 @@ async def chat_endpoint(req: ChatRequest):
                         logger.error(f"Supabase compare error: {e}")
 
                 if not db_data and asset_type != "stock":
-                    db_data = _fund_from_indianapi(entity)
+                    db_data = _fund_from_mfapi(entity)
 
                 risk_metrics = {}
                 yf_ticker = None if asset_type == "mutual_fund" else await resolve_mf_ticker(entity)
@@ -1468,7 +1503,9 @@ async def chat_endpoint(req: ChatRequest):
             try:
                 search_term = ticker or req.query
                 search_pattern = _fund_search_pattern(search_term)
-                res = supabase.table('mutual_funds').select('*').ilike('scheme_name', search_pattern).limit(25).execute()
+                res = supabase.table('mutual_fund_core_snapshot').select('*').ilike('scheme_name', search_pattern).limit(25).execute()
+                if not res.data:
+                    res = supabase.table('mutual_funds').select('*').ilike('scheme_name', search_pattern).limit(25).execute()
                 if res.data:
                     fund = _pick_best_fund_match(search_term, res.data)
                     scheme_code = fund['scheme_code']
@@ -1476,7 +1513,7 @@ async def chat_endpoint(req: ChatRequest):
                         "name": fund['scheme_name'],
                         "price": fund['nav'],
                         "date": fund['nav_date'],
-                        "fund_house": fund['fund_house'],
+                        "fund_house": fund.get('amc_name') or fund.get('fund_house'),
                         "aum": fund.get('aum', "N/A"),
                         "expense_ratio": fund.get('expense_ratio', "N/A"),
                         "source": "MarketMind DB"
@@ -1495,7 +1532,7 @@ async def chat_endpoint(req: ChatRequest):
             except: pass
 
         if (not quant_data or "error" in quant_data) and asset_type != "stock":
-            fund_data = _fund_from_indianapi(ticker or req.query)
+            fund_data = _fund_from_mfapi(ticker or req.query)
             if fund_data:
                 quant_data = fund_data
             
@@ -1544,7 +1581,9 @@ async def chat_endpoint(req: ChatRequest):
                     try:
                         search_term = _entity_search_term(entity)
                         search_pattern = _fund_search_pattern(search_term)
-                        res = supabase.table('mutual_funds').select('scheme_code', 'scheme_name').ilike('scheme_name', search_pattern).limit(25).execute()
+                        res = supabase.table('mutual_fund_core_snapshot').select('scheme_code', 'scheme_name').ilike('scheme_name', search_pattern).limit(25).execute()
+                        if not res.data:
+                            res = supabase.table('mutual_funds').select('scheme_code', 'scheme_name').ilike('scheme_name', search_pattern).limit(25).execute()
                         if res.data and len(res.data) > 0:
                             best_match = _pick_best_fund_match(search_term, res.data)
                             resolved_ids.append(str(best_match['scheme_code']))

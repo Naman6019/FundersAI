@@ -51,6 +51,15 @@ jobs:
           INDIANAPI_KEY: ${{ secrets.INDIAN_API_KEY }}
           FUNDAMENTALS_WATCHLIST_SYMBOLS: ${{ vars.FUNDAMENTALS_WATCHLIST_SYMBOLS }}
           INDIANAPI_REQUEST_SLEEP_SECONDS: '1.05'
+          INDIANAPI_ENABLE_SCHEDULED_SYNC: "true"
+          INDIANAPI_ENABLE_LIVE_CALLS: "false"
+          INDIANAPI_MONTHLY_LIMIT: "5000"
+          INDIANAPI_MONTHLY_RESERVE: "500"
+          INDIANAPI_DAILY_SOFT_LIMIT: "120"
+          ENABLE_STOCK_FUNDAMENTALS_SYNC: "true"
+          ENABLE_SHAREHOLDING_SYNC: "false"
+          ENABLE_STOCK_NEWS: "false"
+          ENABLE_ANALYST_DATA: "false"
           DISPATCH_SCOPE: ${{ inputs.scope }}
           DISPATCH_SYMBOLS: ${{ inputs.symbols }}
           DISPATCH_LIMIT: ${{ inputs.limit }}
