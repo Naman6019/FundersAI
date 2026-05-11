@@ -56,6 +56,7 @@ class IndianAPIClient:
         timeout_seconds: float = 8.0,
         spec_path: str | None = None,
     ) -> None:
+        self.enabled = os.getenv("INDIANAPI_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
         self.base_url = (base_url or os.getenv("INDIANAPI_BASE_URL") or "https://stock.indianapi.in").rstrip("/")
         self.api_key = api_key or os.getenv("INDIANAPI_KEY") or os.getenv("INDIAN_API_KEY")
         self.timeout_seconds = timeout_seconds
@@ -124,6 +125,8 @@ class IndianAPIClient:
     getStockForecasts = get_stock_forecasts
 
     def _get(self, endpoint: str, params: dict[str, Any]) -> ProviderResult:
+        if not self.enabled:
+            return self._error(endpoint, "provider_disabled", "INDIANAPI_ENABLED is off.")
         validation_error = self._validate(endpoint, params)
         if validation_error:
             return self._error(endpoint, "validation_error", validation_error)

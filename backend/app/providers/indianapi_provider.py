@@ -20,6 +20,7 @@ class IndianAPIProvider(FundamentalsProvider):
     base_url = "https://stock.indianapi.in"
 
     def __init__(self) -> None:
+        self.enabled = os.environ.get("INDIANAPI_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
         self.api_key = os.environ.get("INDIANAPI_KEY") or os.environ.get("INDIAN_API_KEY")
         self.base_url = os.environ.get("INDIANAPI_BASE_URL", self.base_url).rstrip("/")
         self.request_sleep_seconds = float(os.environ.get("INDIANAPI_REQUEST_SLEEP_SECONDS", "0"))
@@ -29,12 +30,14 @@ class IndianAPIProvider(FundamentalsProvider):
         self._historical_cache: dict[tuple[str, str, str], dict[str, Any] | None] = {}
 
     def is_available(self) -> bool:
-        return bool(self.api_key)
+        return self.enabled and bool(self.api_key)
 
     def _get_headers(self) -> dict:
         return {"x-api-key": self.api_key}
 
     def _get(self, path: str, params: dict[str, Any] | None = None, timeout: float = 15.0) -> httpx.Response:
+        if not self.enabled:
+            raise RuntimeError("INDIANAPI_ENABLED is off")
         if self.request_sleep_seconds > 0:
             elapsed = time.monotonic() - self._last_request_at
             if elapsed < self.request_sleep_seconds:

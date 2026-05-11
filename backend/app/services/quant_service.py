@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -12,6 +13,7 @@ from app.services import indianapi_service
 from app.stock_universe import load_stock_universe, resolve_stock_symbol
 
 logger = logging.getLogger(__name__)
+INDIANAPI_STOCK_EVENTS_ENABLED = os.getenv("INDIANAPI_STOCK_EVENTS_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _rows(table: str, symbol: str, order: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
@@ -337,8 +339,8 @@ def build_stock_profile(symbol: str) -> dict[str, Any]:
         provider_shareholding = None
     shareholding = provider_shareholding or _latest_shareholding(clean)
     shareholding_source = shareholding.get("source") if isinstance(shareholding, dict) else None
-    indianapi_actions = indianapi_service.get_stock_corporate_actions(clean)
-    indianapi_announcements = indianapi_service.get_stock_recent_announcements(clean)
+    indianapi_actions = indianapi_service.get_stock_corporate_actions(clean) if INDIANAPI_STOCK_EVENTS_ENABLED else {}
+    indianapi_announcements = indianapi_service.get_stock_recent_announcements(clean) if INDIANAPI_STOCK_EVENTS_ENABLED else {}
     return {
         "symbol": clean,
         "metadata": metadata,

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
@@ -156,6 +157,12 @@ def _cached_call(
         return _service_ok(endpoint_name, fresh["response_json"], fresh["fetched_at"], "cache", stale=False)
 
     stale = _read_generic_cache(endpoint_name, cache_key, now, allow_stale=True)
+    enabled = os.environ.get("INDIANAPI_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
+    if not enabled:
+        if stale:
+            return _service_ok(endpoint_name, stale["response_json"], stale["fetched_at"], "cache", stale=True)
+        return _service_error(endpoint_name, "provider_disabled", UNAVAILABLE_MESSAGE, stale=True)
+
     disabled = _disabled_until(endpoint_name, now)
     if disabled:
         if stale:

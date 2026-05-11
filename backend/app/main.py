@@ -78,7 +78,9 @@ GROQ_BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = "llama-3.1-8b-instant"
 IST = pytz.timezone('Asia/Kolkata')
 QUANT_CACHE: Dict[str, Any] = {}
-QUANT_CACHE_TTL_SECONDS = 120
+QUANT_CACHE_TTL_SECONDS = int(os.getenv("QUANT_CACHE_TTL_SECONDS", "600"))
+INDIANAPI_CHAT_STOCK_ENABLED = os.getenv("INDIANAPI_CHAT_STOCK_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
+INDIANAPI_MF_DETAILS_ENABLED = os.getenv("INDIANAPI_MF_DETAILS_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 async def function_ollama_chat(messages, format="json", max_retries=2):
     groq_key = os.environ.get("GROQ_API_KEY")
@@ -373,6 +375,8 @@ def fetch_quant_data(ticker: str, period: str = "1mo") -> dict:
             return None
 
     def get_indianapi_quant_snapshot(symbol: str) -> dict | None:
+        if not INDIANAPI_CHAT_STOCK_ENABLED:
+            return None
         if not symbol or symbol == "NIFTY":
             return None
         try:
@@ -611,6 +615,48 @@ def _safe_value(value: Any) -> str:
         return f"{value:.2f}".rstrip("0").rstrip(".")
     return str(value)
 
+def _unwrap_nested_value(value: Any, preferred_keys: tuple[str, ...] = ()) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        for key in preferred_keys:
+            if key in value:
+                candidate = _unwrap_nested_value(value.get(key), preferred_keys)
+                if not _is_missing(candidate):
+                    return candidate
+        for key in (
+            "current",
+            "value",
+            "nav",
+            "latest_nav",
+            "date",
+            "nav_date",
+            "name",
+            "scheme_name",
+            "fund_house",
+            "amc",
+            "expense_ratio",
+            "ratio",
+            "aum",
+            "asset_size",
+        ):
+            if key in value:
+                candidate = _unwrap_nested_value(value.get(key), preferred_keys)
+                if not _is_missing(candidate):
+                    return candidate
+        for nested in value.values():
+            candidate = _unwrap_nested_value(nested, preferred_keys)
+            if not _is_missing(candidate):
+                return candidate
+        return None
+    if isinstance(value, list):
+        for item in value:
+            candidate = _unwrap_nested_value(item, preferred_keys)
+            if not _is_missing(candidate):
+                return candidate
+        return None
+    return value
+
 def _format_percent(value: Any) -> str:
     if _is_missing(value):
         return "N/A"
@@ -721,16 +767,20 @@ def _stock_metric_rows(data: dict) -> list[tuple[str, str]]:
 
 def _fund_metric_rows(data: dict) -> list[tuple[str, str]]:
     period = _risk_period(data)
-    nav = data.get("nav", data.get("price"))
-    nav_date = data.get("nav_date", data.get("date"))
+    nav = _unwrap_nested_value(data.get("nav", data.get("price")), ("nav", "latest_nav", "current", "value"))
+    nav_date = _unwrap_nested_value(data.get("nav_date", data.get("date")), ("nav_date", "date"))
+    fund_house = _unwrap_nested_value(data.get("fund_house"), ("name", "fund_house", "amc"))
+    category = _unwrap_nested_value(data.get("category"), ("category", "schemeType", "name"))
+    expense_ratio = _unwrap_nested_value(data.get("expense_ratio"), ("current", "expense_ratio", "expenseRatio", "ratio", "value"))
+    aum = _unwrap_nested_value(data.get("aum"), ("aum", "asset_size", "value", "current"))
     return [
         ("Matched Name", _safe_value(data.get("name"))),
         ("NAV", _format_price(nav)),
         ("NAV Date", _safe_value(nav_date)),
-        ("Fund House", _safe_value(data.get("fund_house"))),
-        ("Category", _safe_value(data.get("category"))),
-        ("Expense Ratio", _safe_value(data.get("expense_ratio"))),
-        ("AUM", _format_inr_market_cap(data.get("aum"))),
+        ("Fund House", _safe_value(fund_house)),
+        ("Category", _safe_value(category)),
+        ("Expense Ratio", _safe_value(expense_ratio)),
+        ("AUM", _format_inr_market_cap(aum)),
         (f"Beta ({period})", _safe_value(data.get("beta"))),
         (f"Alpha vs Nifty ({period})", _format_percent(data.get("alpha_vs_nifty"))),
         ("Source", _safe_value(data.get("source") or "source unavailable")),
@@ -1285,26 +1335,31 @@ async def chat_endpoint(req: ChatRequest):
                 continue
             data = {
                 "name": name,
-                "nav": row.get("nav") or row.get("latest_nav"),
-                "nav_date": row.get("nav_date") or row.get("date"),
-                "category": row.get("category") or row.get("schemeType"),
-                "fund_house": row.get("fund_house") or row.get("fundHouse") or row.get("amc"),
-                "expense_ratio": row.get("expense_ratio") or row.get("expenseRatio"),
-                "aum": row.get("aum") or row.get("asset_size"),
+                "nav": _unwrap_nested_value(row.get("nav") or row.get("latest_nav"), ("nav", "latest_nav", "current", "value")),
+                "nav_date": _unwrap_nested_value(row.get("nav_date") or row.get("date"), ("nav_date", "date")),
+                "category": _unwrap_nested_value(row.get("category") or row.get("schemeType"), ("category", "schemeType", "name")),
+                "fund_house": _unwrap_nested_value(row.get("fund_house") or row.get("fundHouse") or row.get("amc"), ("name", "fund_house", "amc")),
+                "expense_ratio": _unwrap_nested_value(row.get("expense_ratio") or row.get("expenseRatio"), ("current", "expense_ratio", "expenseRatio", "ratio", "value")),
+                "aum": _unwrap_nested_value(row.get("aum") or row.get("asset_size"), ("aum", "asset_size", "current", "value")),
                 "source": "indianapi",
                 "fetchedAt": result.get("fetchedAt"),
             }
-            details = indianapi_service.get_mutual_fund_research_profile(name)
-            if details.get("ok"):
-                for drow in _walk_dicts(details.get("data")):
-                    data["nav"] = data.get("nav") or drow.get("nav") or drow.get("latest_nav")
-                    data["nav_date"] = data.get("nav_date") or drow.get("nav_date") or drow.get("date")
-                    data["category"] = data.get("category") or drow.get("category") or drow.get("schemeType")
-                    data["fund_house"] = data.get("fund_house") or drow.get("fund_house") or drow.get("fundHouse") or drow.get("amc")
-                    data["expense_ratio"] = data.get("expense_ratio") or drow.get("expense_ratio") or drow.get("expenseRatio")
-                    data["aum"] = data.get("aum") or drow.get("aum") or drow.get("asset_size")
-                    break
-                data["fetchedAt"] = details.get("fetchedAt") or data.get("fetchedAt")
+            needs_details = any(
+                _is_missing(data.get(key))
+                for key in ("nav", "expense_ratio", "aum", "fund_house")
+            )
+            if INDIANAPI_MF_DETAILS_ENABLED and needs_details:
+                details = indianapi_service.get_mutual_fund_research_profile(name)
+                if details.get("ok"):
+                    for drow in _walk_dicts(details.get("data")):
+                        data["nav"] = data.get("nav") or _unwrap_nested_value(drow.get("nav") or drow.get("latest_nav"), ("nav", "latest_nav", "current", "value"))
+                        data["nav_date"] = data.get("nav_date") or _unwrap_nested_value(drow.get("nav_date") or drow.get("date"), ("nav_date", "date"))
+                        data["category"] = data.get("category") or _unwrap_nested_value(drow.get("category") or drow.get("schemeType"), ("category", "schemeType", "name"))
+                        data["fund_house"] = data.get("fund_house") or _unwrap_nested_value(drow.get("fund_house") or drow.get("fundHouse") or drow.get("amc"), ("name", "fund_house", "amc"))
+                        data["expense_ratio"] = data.get("expense_ratio") or _unwrap_nested_value(drow.get("expense_ratio") or drow.get("expenseRatio"), ("current", "expense_ratio", "expenseRatio", "ratio", "value"))
+                        data["aum"] = data.get("aum") or _unwrap_nested_value(drow.get("aum") or drow.get("asset_size"), ("aum", "asset_size", "current", "value"))
+                        break
+                    data["fetchedAt"] = details.get("fetchedAt") or data.get("fetchedAt")
             return data
         return None
     
