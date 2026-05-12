@@ -93,8 +93,8 @@ export default function FundComparisonChart({ schemeCodeA, schemeCodeB, nameA, n
 
   if (loading) {
     return (
-      <div className="h-[320px] w-full flex items-center justify-center bg-black/20 rounded-xl border border-white/5 animate-pulse">
-        <div className="text-[var(--accent-color)] text-sm">Loading chart data...</div>
+      <div className="flex h-[320px] w-full items-center justify-center rounded-xl border border-[#2f4260] bg-[#111d32] animate-pulse">
+        <div className="text-sm text-[#8cb3f8]">Loading chart data...</div>
       </div>
     );
   }
@@ -140,26 +140,26 @@ export default function FundComparisonChart({ schemeCodeA, schemeCodeB, nameA, n
   return (
     <div className="mb-4 mt-2 sm:mb-6 sm:mt-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-medium text-gray-300 sm:text-base">Normalized Performance (Rebased to 100)</h3>
+        <h3 className="text-sm font-medium text-[#d7e4fb] sm:text-base">Normalized Performance (Rebased to 100)</h3>
       </div>
       
-      <div className="h-[260px] w-full bg-black/20 rounded-xl p-2 border border-white/5 relative sm:h-[320px] sm:p-4">
+      <div className="relative h-[260px] w-full rounded-xl border border-[#2f4260] bg-[#111d32] p-2 sm:h-[320px] sm:p-4">
         {period === '1D' && oneDayStats ? (
           <div className="flex h-full items-center justify-center gap-12">
             <div className="text-center">
-              <div className="text-sm text-gray-400 mb-2 truncate max-w-[200px]" title={nameA}>{nameA}</div>
+              <div className="mb-2 max-w-[200px] truncate text-sm text-[#c7d8f4]" title={nameA}>{nameA}</div>
               <div className={`text-3xl font-semibold ${oneDayStats.a! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {oneDayStats.a! > 0 ? '+' : ''}{oneDayStats.a?.toFixed(2)}%
               </div>
-              <div className="text-xs text-gray-500 mt-1">1D Change</div>
+              <div className="mt-1 text-xs text-[#8ca5cb]">1D Change</div>
             </div>
             <div className="w-[1px] h-20 bg-white/10"></div>
             <div className="text-center">
-              <div className="text-sm text-gray-400 mb-2 truncate max-w-[200px]" title={nameB}>{nameB}</div>
+              <div className="mb-2 max-w-[200px] truncate text-sm text-[#c7d8f4]" title={nameB}>{nameB}</div>
               <div className={`text-3xl font-semibold ${oneDayStats.b! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {oneDayStats.b! > 0 ? '+' : ''}{oneDayStats.b?.toFixed(2)}%
               </div>
-              <div className="text-xs text-gray-500 mt-1">1D Change</div>
+              <div className="mt-1 text-xs text-[#8ca5cb]">1D Change</div>
             </div>
           </div>
         ) : chartData.length > 0 ? (
@@ -178,7 +178,7 @@ export default function FundComparisonChart({ schemeCodeA, schemeCodeB, nameA, n
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis 
                 dataKey="date" 
-                stroke="#8a9199" 
+                stroke="#91a9cc" 
                 fontSize={11} 
                 tickLine={false}
                 axisLine={false}
@@ -189,7 +189,7 @@ export default function FundComparisonChart({ schemeCodeA, schemeCodeB, nameA, n
                 }} 
               />
               <YAxis 
-                stroke="#8a9199" 
+                stroke="#91a9cc" 
                 fontSize={11} 
                 tickLine={false}
                 axisLine={false}
@@ -204,7 +204,7 @@ export default function FundComparisonChart({ schemeCodeA, schemeCodeB, nameA, n
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex items-center justify-center h-full text-gray-500 text-sm">No data available for this period.</div>
+          <div className="flex h-full items-center justify-center text-sm text-[#8ca5cb]">No data available for this period.</div>
         )}
       </div>
     </div>

@@ -42,34 +42,36 @@ export default function DashboardLayout() {
   };
 
   return (
-    <div className={`app-container ${isSidebarVisible ? '' : 'sidebar-collapsed'}`}>
+    <div className={`app-container finance-shell ${isSidebarVisible ? '' : 'sidebar-collapsed'}`}>
       <aside className={`sidebar ${isSidebarVisible ? '' : 'sidebar-hidden'} z-20 h-full flex flex-col`}>
         <div className="flex justify-between items-start mb-6">
           <div className="brand">
             <div className="logo"></div>
-            <h1>MarketMind</h1>
+            <div>
+              <h1>MarketMind</h1>
+              <p className="tagline">Research Terminal</p>
+            </div>
           </div>
           <button 
             onClick={() => setIsSidebarVisible(false)}
-            className="p-1.5 hover:bg-white/10 rounded-md text-gray-400 hover:text-white transition-colors"
+            className="sidebar-toggle-btn"
             title="Hide Sidebar"
           >
             <PanelLeftClose size={18} />
           </button>
         </div>
-        <p className="tagline">Data-driven market context.</p>
 
         <div className="info-panel">
-          <h3>Agent Pipeline</h3>
+          <h3>Analysis Pipeline</h3>
           <ul className="pipeline-list">
-            <li><span className="dot q-dot"></span> Quant Agent</li>
-            <li><span className="dot n-dot"></span> News Parser</li>
-            <li><span className="dot s-dot"></span> Synthesis Core</li>
+            <li><span className="dot q-dot"></span> Quant Models</li>
+            <li><span className="dot n-dot"></span> Market Signals</li>
+            <li><span className="dot s-dot"></span> Synthesis Engine</li>
           </ul>
         </div>
 
         <div className="disclaimer-sidebar">
-          <p>MarketMind is an informational research tool only. Nothing presented constitutes investment advice. Always consult a SEBI-registered Advisor.</p>
+          <p>Research platform only. Not investment advice. Validate decisions with a SEBI-registered advisor.</p>
         </div>
 
         <SignOutButton />
@@ -82,10 +84,10 @@ export default function DashboardLayout() {
               <ChatWindow />
             </div>
             {isCanvasOpen && (
-              <div className="absolute inset-0 z-40 flex min-h-0 min-w-0">
+              <div className="absolute inset-0 z-40 flex min-h-0 min-w-0 canvas-stage">
                 <button
                   onClick={toggleCanvas}
-                  className="absolute top-3 right-3 z-50 bg-[#1f2833] border border-white/10 p-2 rounded-lg text-white hover:bg-white/10 transition-colors"
+                  className="canvas-close-btn"
                   aria-label="Close comparison"
                 >
                   <ChevronRight size={20} />
@@ -100,7 +102,7 @@ export default function DashboardLayout() {
             {!isSidebarVisible && (
               <button 
                 onClick={() => setIsSidebarVisible(true)}
-                className="absolute top-[72px] left-4 z-50 bg-[#1f2833] border border-white/10 p-2 rounded-lg text-white hover:bg-white/20 transition-all shadow-xl hover:scale-105"
+                className="sidebar-open-btn"
                 title="Show Sidebar"
               >
                 <PanelLeftOpen size={20} />
@@ -110,7 +112,7 @@ export default function DashboardLayout() {
             
             <button 
               onClick={toggleCanvas}
-              className="absolute top-4 right-4 z-50 bg-[#1f2833] border border-white/10 p-2 rounded-lg text-white hover:bg-white/10 transition-colors"
+              className="canvas-toggle-btn"
             >
               {isCanvasOpen ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
             </button>
@@ -119,9 +121,9 @@ export default function DashboardLayout() {
           {isCanvasOpen && (
             <>
               <PanelResizeHandle className="w-4 flex items-center justify-center cursor-col-resize user-select-none">
-                <div className="w-1 h-8 bg-gray-600 rounded-full"></div>
+                <div className="resize-handle-pill"></div>
               </PanelResizeHandle>
-              <Panel defaultSize={60} minSize={40} className="animate-in slide-in-from-right-4 duration-300 ease-in-out">
+              <Panel defaultSize={60} minSize={40} className="animate-in slide-in-from-right-4 duration-300 ease-in-out canvas-panel">
                 {renderCanvasContent()}
               </Panel>
             </>

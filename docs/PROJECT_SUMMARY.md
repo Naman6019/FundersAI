@@ -25,17 +25,17 @@ MarketMind is an AI-orchestrated financial research platform designed specifical
 
 ### 5. Premium User Experience
 - **Modern Dashboard**: High-fidelity UI with glassmorphism, responsive layouts, and fluid transitions.
-- **Landing Page**: A conversion-focused homepage with Framer Motion animations.
+- **Landing Page**: A research-first homepage with proof-focused messaging, live Nifty 50 strip, and direct prompt handoff into the dashboard.
 
 ---
 
 ## 🛠️ Tech Stack
 
 ### Frontend
-- **Framework**: [Next.js 15](https://nextjs.org/) (App Router)
+- **Framework**: [Next.js 16](https://nextjs.org/) (App Router)
 - **Library**: [React 19](https://react.dev/)
 - **Styling**: [Tailwind CSS 4](https://tailwindcss.com/)
-- **Animations**: [Framer Motion](https://www.framer.com/motion/)
+- **Animations**: [Framer Motion](https://www.framer.com/motion/) (installed, currently minimal usage)
 - **State Management**: [Zustand](https://github.com/pmndrs/zustand)
 - **Charts**: [Recharts](https://recharts.org/)
 - **Deployment**: [Vercel](https://vercel.com/)

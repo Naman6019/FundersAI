@@ -245,32 +245,32 @@ function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
   const holdingsBlocked = payload.holdings_based_reasoning?.status === 'blocked';
 
   return (
-    <section className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4">
-      <h3 className="mb-2 text-sm font-semibold text-emerald-200">Why this is better?</h3>
-      <p className="text-sm text-gray-200">{payload.summary || 'Deterministic comparison summary unavailable.'}</p>
+    <section className="rounded-2xl border border-[#35588f] bg-[#16243a] p-4 sm:p-5">
+      <h3 className="mb-2 text-sm font-semibold tracking-wide text-[#9ec5ff]">Why this is better?</h3>
+      <p className="text-sm text-[#d7e4fb]">{payload.summary || 'Deterministic comparison summary unavailable.'}</p>
       <div className="mt-3 flex flex-wrap gap-2 text-xs">
-        <span className="rounded-md border border-white/15 px-2 py-1 text-gray-200">
+        <span className="rounded-md border border-white/20 bg-[#0e182a] px-2 py-1 text-[#d7e4fb]">
           Winner: {winner?.status === 'winner' ? (winner.entity_name || winner.entity_id || 'N/A') : winner?.status || 'N/A'}
         </span>
-        <span className="rounded-md border border-white/15 px-2 py-1 text-gray-200">
+        <span className="rounded-md border border-white/20 bg-[#0e182a] px-2 py-1 text-[#d7e4fb]">
           Confidence: {confidence?.label || 'N/A'} ({typeof confidence?.score === 'number' ? confidence.score.toFixed(2) : 'N/A'})
         </span>
-        <span className="rounded-md border border-white/15 px-2 py-1 text-gray-200">
+        <span className="rounded-md border border-white/20 bg-[#0e182a] px-2 py-1 text-[#d7e4fb]">
           Coverage: {factors.length > 0 && factors.every((f) => (f.coverage ?? 0) >= 1) ? 'Complete' : 'Incomplete'}
         </span>
       </div>
       {holdingsBlocked && (
-        <div className="mt-3 rounded-md border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
+        <div className="mt-3 rounded-md border border-amber-300/35 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
           Holdings-based reasoning unavailable. Holdings sync pending.
         </div>
       )}
       {factors.length > 0 && (
         <div className="mt-3 grid gap-2 md:grid-cols-2">
           {factors.map((factor, idx) => (
-            <div key={`${factor.factor || 'factor'}-${idx}`} className="rounded-md border border-white/10 bg-black/20 p-2 text-xs">
-              <div className="font-semibold text-gray-100">{factor.factor || 'Factor'}</div>
-              <div className="text-gray-300">Winner: {factor.winner || 'N/A'}</div>
-              <div className="text-gray-400">Coverage: {typeof factor.coverage === 'number' ? `${Math.round(factor.coverage * 100)}%` : 'N/A'}</div>
+            <div key={`${factor.factor || 'factor'}-${idx}`} className="rounded-md border border-white/15 bg-[#0e182a] p-2 text-xs">
+              <div className="font-semibold text-white">{factor.factor || 'Factor'}</div>
+              <div className="text-[#c8d8f6]">Winner: {factor.winner || 'N/A'}</div>
+              <div className="text-[#8ea7cd]">Coverage: {typeof factor.coverage === 'number' ? `${Math.round(factor.coverage * 100)}%` : 'N/A'}</div>
             </div>
           ))}
         </div>
@@ -278,10 +278,10 @@ function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
       {freshnessRows.length > 0 && (
         <div className="mt-3 grid gap-2 md:grid-cols-2">
           {freshnessRows.map(([entity, meta]) => (
-            <div key={entity} className="rounded-md border border-white/10 bg-black/20 p-2 text-xs">
-              <div className="font-semibold text-gray-100">{entity}</div>
-              <div className="text-gray-300">Source: {meta?.source || 'N/A'}</div>
-              <div className="text-gray-300">Last Updated: {meta?.snapshot_last_updated || meta?.price_date || meta?.nav_date || 'N/A'}</div>
+            <div key={entity} className="rounded-md border border-white/15 bg-[#0e182a] p-2 text-xs">
+              <div className="font-semibold text-white">{entity}</div>
+              <div className="text-[#c8d8f6]">Source: {meta?.source || 'N/A'}</div>
+              <div className="text-[#c8d8f6]">Last Updated: {meta?.snapshot_last_updated || meta?.price_date || meta?.nav_date || 'N/A'}</div>
               <div className={meta?.stale ? 'text-amber-200' : 'text-emerald-200'}>
                 {meta?.stale ? 'Stale' : 'Fresh'}
               </div>
@@ -289,7 +289,7 @@ function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
           ))}
         </div>
       )}
-      {payload.verdict_context && <p className="mt-3 text-xs text-gray-400">{payload.verdict_context}</p>}
+      {payload.verdict_context && <p className="mt-3 text-xs text-[#8ea7cd]">{payload.verdict_context}</p>}
     </section>
   );
 }
@@ -386,8 +386,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
     const staleEntities = entities.filter(entity => Boolean(comparison[entity]?.source_summary?.stale));
 
     const renderBarChart = (title: string, rows: Record<string, string | number | null>[], suffix = '%') => (
-      <section className="rounded-xl border border-white/10 bg-black/10 p-4">
-        <h3 className="mb-3 text-sm font-semibold text-gray-200">{title}</h3>
+      <section className="rounded-2xl border border-[#2d3b55] bg-[#111b2d] p-4">
+        <h3 className="mb-3 text-sm font-semibold text-[#d7e4fb]">{title}</h3>
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={rows}>
@@ -412,11 +412,11 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
     );
 
     return (
-      <div className="comparison-detail p-3 sm:p-6 bg-[var(--panel-bg)] rounded-xl sm:rounded-2xl h-full flex flex-col border border-white/10 text-white overflow-hidden shadow-2xl">
-        <div className="mb-6 px-2">
-          <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Premium Stock Comparison</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Price, risk, and source-neutral fundamentals from MarketMind data
+      <div className="comparison-detail finance-compare-wrap p-3 sm:p-6 h-full flex flex-col overflow-hidden">
+        <div className="mb-5 rounded-2xl border border-[#2f3b57] bg-[#121a2d] px-4 py-4 sm:px-5">
+          <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Stock Comparison Console</h2>
+          <p className="text-sm text-[#a7bad9] mt-1">
+            Source-neutral valuation, growth, quality, and ownership comparison
           </p>
         </div>
         <div className="custom-scroll flex-1 space-y-5 overflow-y-auto pr-2">
@@ -427,8 +427,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
           )}
           <WhyBetterPanel payload={whyBetter} />
           {priceRows.length > 0 && (
-            <section className="rounded-xl border border-white/10 bg-black/10 p-4">
-              <h3 className="mb-3 text-sm font-semibold text-gray-200">Price History</h3>
+            <section className="rounded-2xl border border-[#2d3b55] bg-[#111b2d] p-4">
+              <h3 className="mb-3 text-sm font-semibold text-[#d7e4fb]">Price History</h3>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={priceRows}>
@@ -459,11 +459,11 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
               {stockError || 'Fundamentals are unavailable because no fundamentals provider has supplied these fields yet.'}
             </div>
           )}
-          <div className="overflow-auto rounded-xl border border-white/10">
-            <table className="w-full min-w-[720px] border-collapse text-sm">
-              <thead className="bg-white/5 text-gray-300">
+          <div className="overflow-auto rounded-2xl border border-[#2d3b55] bg-[#10192a]">
+            <table className="w-full min-w-[760px] border-collapse text-sm">
+              <thead className="bg-[#1a2740] text-[#d7e4fb]">
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold">Metric</th>
+                  <th className="sticky left-0 z-10 bg-[#1a2740] px-4 py-3 text-left font-semibold">Metric</th>
                   {entities.map(entity => (
                     <th key={entity} className="px-4 py-3 text-left font-semibold">{entity}</th>
                   ))}
@@ -471,8 +471,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
               </thead>
               <tbody>
                 {metrics.map(([label, key, formatter]) => (
-                  <tr key={label} className="border-t border-white/10">
-                    <td className="px-4 py-3 text-gray-400">{label}</td>
+                  <tr key={label} className="border-t border-white/10 odd:bg-[#111e33] even:bg-[#0f1a2d]">
+                    <td className="sticky left-0 z-10 bg-inherit px-4 py-3 font-medium text-[#bdd0ee]">{label}</td>
                     {entities.map(entity => (
                       <td key={`${entity}-${label}`} className="px-4 py-3 text-white">
                         {formatter(metricValue(comparison[entity], key))}
@@ -494,19 +494,19 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
   const periods: Period[] = ['1D', '6M', '1Y', '3Y', '5Y'];
 
   return (
-    <div className="comparison-detail p-3 sm:p-6 bg-[var(--panel-bg)] rounded-xl sm:rounded-2xl h-full flex flex-col border border-white/10 text-white overflow-hidden shadow-2xl">
-      <div className="mb-5 flex flex-col gap-4 px-1 sm:mb-8 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+    <div className="comparison-detail finance-compare-wrap p-3 sm:p-6 h-full flex flex-col overflow-hidden">
+      <div className="mb-5 flex flex-col gap-4 rounded-2xl border border-[#2f3b57] bg-[#121a2d] px-4 py-4 sm:mb-7 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div>
           <h2 className="text-xl font-bold text-white tracking-tight sm:text-2xl">Mutual Fund Comparison</h2>
-          <p className="text-sm text-gray-400 mt-1">Analyzing performance and risk metrics head-to-head</p>
+          <p className="text-sm text-[#a7bad9] mt-1">Risk-adjusted returns, cost profile, and historical performance</p>
         </div>
 
-        <div className="flex max-w-full overflow-x-auto bg-[#1f2833] rounded-lg p-1.5 border border-white/10 shadow-inner gap-1.5">
+        <div className="flex max-w-full overflow-x-auto rounded-xl bg-[#0d1628] p-1.5 border border-white/10 shadow-inner gap-1.5">
           {periods.map(p => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
-              className={`shrink-0 px-3 py-2 text-xs font-medium rounded-md transition-all duration-200 sm:px-4 ${period === p ? 'bg-[var(--accent-color)] text-black shadow-lg scale-105 font-bold' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+              className={`shrink-0 rounded-md px-3 py-2 text-xs font-semibold transition-all duration-200 sm:px-4 ${period === p ? 'bg-[#4f8ff7] text-white shadow-lg' : 'text-[#9eb5d8] hover:text-white hover:bg-white/5'}`}
             >
               {p}
             </button>
@@ -537,8 +537,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
       )}
       
       {!loading && !error && fundA.meta && fundB.meta && (
-        <div className="flex-1 overflow-y-auto px-1 custom-scroll space-y-6 pb-8 sm:space-y-10 sm:px-4 sm:pb-12">
-          <section className="animate-in fade-in slide-in-from-bottom-4 duration-500 bg-black/10 rounded-xl p-3 border border-white/5 sm:rounded-2xl sm:p-6">
+        <div className="flex-1 overflow-y-auto px-1 custom-scroll space-y-6 pb-8 sm:space-y-8 sm:px-2 sm:pb-10">
+          <section className="animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-2xl border border-[#2d3b55] bg-[#101b2d] p-3 sm:p-6">
             <FundComparisonChart 
               schemeCodeA={ids[0]} 
               schemeCodeB={ids[1]} 

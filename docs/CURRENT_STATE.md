@@ -31,6 +31,7 @@ MarketMind is a research-only Indian equities and mutual fund app.
 - Next.js `/api/*` proxy pattern is the required frontend/backend boundary.
 - GitHub Actions handles scheduled fetch jobs, not Vercel cron.
 - Mobile dashboard layout keeps chat mounted behind comparison overlays, and chat state lives in a shared store so query/messages survive canvas-to-chat switches.
+- Landing page (`/`) has been redesigned for research-first positioning with proof cards, a live Nifty 50 strip, and prompt handoff into `/dashboard`.
 - `IndianAPIProvider` is now restricted to stock profile/fundamental enrichment (`/stock` and `/statement`) with quota guard and usage logging.
 - `FinEdgeProvider` remains a fallback only; free keys should not be relied on for fundamentals.
 - `sync_corporate_events.py` uses IndianAPI with `INDIANAPI_KEY`/`INDIAN_API_KEY`.
@@ -42,7 +43,6 @@ MarketMind is a research-only Indian equities and mutual fund app.
 - Expanding stock coverage beyond the current Nifty-focused list.
 - Testing `NIFTY500` vs `NIFTYTOTALMARKET`.
 - Tuning `STOCK_INFO_ENRICH_LIMIT` and `STOCK_YFINANCE_FALLBACK_LIMIT`.
-- **Premium Landing Page (`/`) with Framer Motion animations and Dashboard moved to (`/dashboard`)**.
 - Mutual fund missing data cleanup after stock historical backfill.
 
 ## Known Gaps

@@ -1859,3 +1859,332 @@ html[data-landing-theme="dark"] .landing-page {
 html[data-landing-theme="dark"] .landing-final-cta {
   background: linear-gradient(130deg, #0b2553, #101827 60%, #0b2553);
 }
+
+/* Finance app redesign overrides */
+.finance-shell {
+  --app-bg: #090f1a;
+  --app-panel: #101a2d;
+  --app-panel-2: #121f35;
+  --app-border: #2f4260;
+  --app-text: #edf3ff;
+  --app-muted: #95abd0;
+  --app-accent: #4f8ff7;
+  --app-accent-2: #76b5ff;
+  --app-positive: #35ce94;
+  --app-negative: #ff6a84;
+}
+
+.app-container.finance-shell {
+  gap: 12px;
+  padding: 12px;
+  background:
+    radial-gradient(circle at 85% 0%, rgba(79, 143, 247, 0.16), transparent 35%),
+    radial-gradient(circle at 10% 100%, rgba(118, 181, 255, 0.08), transparent 35%),
+    var(--app-bg);
+}
+
+.finance-shell .sidebar {
+  width: 292px;
+  border: 1px solid var(--app-border);
+  background: linear-gradient(180deg, #111c30, #0f1829 55%, #0c1422);
+  border-radius: 18px;
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.45);
+  padding: 1.35rem 1.05rem;
+}
+
+.finance-shell .brand {
+  gap: 0.65rem;
+}
+
+.finance-shell .logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(140deg, #6db2ff, #356ddf);
+  box-shadow: 0 8px 18px rgba(75, 130, 220, 0.35);
+}
+
+.finance-shell .brand h1 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  color: var(--app-text);
+}
+
+.finance-shell .tagline {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.finance-shell .sidebar-toggle-btn,
+.finance-shell .sidebar-open-btn,
+.finance-shell .canvas-toggle-btn,
+.finance-shell .canvas-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--app-border);
+  background: #101a2d;
+  color: #d5e4fb;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.finance-shell .sidebar-toggle-btn:hover,
+.finance-shell .sidebar-open-btn:hover,
+.finance-shell .canvas-toggle-btn:hover,
+.finance-shell .canvas-close-btn:hover {
+  border-color: #4c77be;
+  color: #ffffff;
+}
+
+.finance-shell .sidebar-toggle-btn {
+  padding: 0.45rem;
+}
+
+.finance-shell .sidebar-open-btn {
+  position: absolute;
+  top: 72px;
+  left: 0.9rem;
+  z-index: 60;
+  padding: 0.5rem;
+  box-shadow: 0 12px 25px rgba(0, 0, 0, 0.4);
+}
+
+.finance-shell .canvas-toggle-btn,
+.finance-shell .canvas-close-btn {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  z-index: 60;
+  padding: 0.45rem;
+}
+
+.finance-shell .info-panel {
+  border-radius: 14px;
+  border: 1px solid #304562;
+  background: #121f35;
+  padding: 0.95rem;
+}
+
+.finance-shell .info-panel h3 {
+  margin-bottom: 0.8rem;
+  color: #c7d8f4;
+  font-size: 0.74rem;
+  letter-spacing: 0.13em;
+}
+
+.finance-shell .pipeline-list li {
+  color: #d5e4fb;
+  font-size: 0.86rem;
+}
+
+.finance-shell .disclaimer-sidebar {
+  color: #8fa8ce;
+  border-top-color: rgba(143, 168, 206, 0.22);
+  text-align: left;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  padding: 0.85rem 0.25rem 0.1rem;
+}
+
+.finance-shell .sign-out-button {
+  border-color: #334868;
+  background: #111d32;
+  color: #c9daf5;
+  min-height: 40px;
+  border-radius: 10px;
+}
+
+.finance-shell .sign-out-button:hover {
+  border-color: #4f8ff7;
+  color: #ffffff;
+}
+
+.finance-shell .chat-area {
+  border: 1px solid var(--app-border);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #111c2f, #0c1524 70%);
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.45);
+}
+
+.finance-shell .chat-header {
+  padding: 1.1rem 1.35rem;
+  border-bottom: 1px solid rgba(149, 171, 208, 0.22);
+  background: linear-gradient(180deg, rgba(18, 31, 53, 0.95), rgba(14, 24, 42, 0.95));
+}
+
+.finance-shell .chat-header h2 {
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #d7e4fb;
+}
+
+.finance-shell .chat-history {
+  padding: 5rem 1.2rem 8.2rem;
+  gap: 1rem;
+}
+
+.finance-shell .message {
+  max-width: min(90%, 860px);
+}
+
+.finance-shell .msg-content {
+  border-radius: 14px;
+  line-height: 1.58;
+  font-size: 0.93rem;
+}
+
+.finance-shell .user-msg .msg-content {
+  background: linear-gradient(138deg, #3d7be4, #2952a8);
+  border-bottom-right-radius: 6px;
+  color: #f8fbff;
+}
+
+.finance-shell .system-msg .msg-content {
+  background: #111d32;
+  border: 1px solid #2f4464;
+  border-bottom-left-radius: 6px;
+}
+
+.finance-shell .system-msg p,
+.finance-shell .system-msg li {
+  color: #d6e5fd;
+}
+
+.finance-shell .system-msg h2,
+.finance-shell .system-msg h3,
+.finance-shell .system-msg code,
+.finance-shell .suggestion-btn {
+  color: #8cb3f8;
+}
+
+.finance-shell .suggestion-btn {
+  border-color: #3f6eb4;
+  background: #101a2d;
+}
+
+.finance-shell .input-area {
+  padding: 1rem 1.2rem;
+  border-top: 1px solid rgba(149, 171, 208, 0.22);
+  background: linear-gradient(180deg, rgba(12, 21, 36, 0.88), rgba(9, 15, 26, 0.98));
+}
+
+.finance-shell .asset-toggle {
+  background: #0f1a2c;
+  border: 1px solid #314665;
+  border-radius: 12px;
+}
+
+.finance-shell .asset-toggle button {
+  color: #9ab2d8;
+  font-weight: 700;
+}
+
+.finance-shell .asset-toggle button.active {
+  background: #4f8ff7;
+  color: #ffffff;
+}
+
+.finance-shell .input-wrapper {
+  gap: 0.7rem;
+  background: #0f1a2c;
+  border: 1px solid #314665;
+  border-radius: 14px;
+  padding: 0.45rem;
+}
+
+.finance-shell textarea {
+  color: #edf3ff;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 0.97rem;
+}
+
+.finance-shell textarea::placeholder {
+  color: #7e97bd;
+}
+
+.finance-shell .send-button {
+  border-radius: 10px;
+  background: #4f8ff7;
+  color: #ffffff;
+}
+
+.finance-shell .send-button:hover {
+  background: #3f7ee5;
+}
+
+.finance-shell .send-button:disabled {
+  opacity: 0.55;
+}
+
+.finance-shell .canvas-panel {
+  border: 1px solid var(--app-border);
+  border-radius: 18px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #0f1a2d, #0c1524);
+}
+
+.finance-shell .resize-handle-pill {
+  width: 6px;
+  height: 80px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #36548a, #253c63);
+}
+
+.finance-shell .comparison-detail,
+.finance-shell .stock-detail,
+.finance-shell .mf-detail {
+  border: 1px solid #2f4260;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #0f1a2d, #0c1524);
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.35);
+}
+
+.finance-shell .processing-status {
+  margin-bottom: 0.55rem;
+  color: #8cb3f8;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.finance-shell .custom-scroll::-webkit-scrollbar {
+  width: 7px;
+}
+
+.finance-shell .custom-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #2e496f;
+}
+
+@media (max-width: 768px) {
+  .app-container.finance-shell {
+    padding: 8px;
+  }
+
+  .finance-shell .chat-area,
+  .finance-shell .canvas-panel,
+  .finance-shell .comparison-detail,
+  .finance-shell .stock-detail,
+  .finance-shell .mf-detail {
+    border-radius: 14px;
+  }
+
+  .finance-shell .chat-history {
+    padding: 4.8rem 0.9rem 8rem;
+  }
+
+  .finance-shell .input-area {
+    padding: 0.9rem;
+  }
+}

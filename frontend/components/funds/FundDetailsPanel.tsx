@@ -38,20 +38,20 @@ type ComparisonFundData = {
 
 function MetricCard({ label, value, tooltip, icon: Icon, subValue }: { label: string, value: string | null, tooltip: string, icon?: LucideIcon, subValue?: string }) {
   return (
-    <div className="bg-white/5 hover:bg-white/10 transition-all duration-300 rounded-xl p-4 border border-white/10 relative group cursor-help shadow-lg hover:border-[var(--accent-color)]/30 sm:rounded-2xl sm:p-5">
+    <div className="group relative cursor-help rounded-xl border border-[#324562] bg-[#12203a] p-4 shadow-lg transition-all duration-200 hover:border-[#5f8ed6] sm:rounded-2xl sm:p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          {Icon && <Icon size={16} className="text-[var(--accent-color)]" />}
-          <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">{label}</div>
+          {Icon && <Icon size={16} className="text-[#7cadff]" />}
+          <div className="text-xs font-bold uppercase tracking-widest text-[#9fb8df]">{label}</div>
         </div>
       </div>
       <div className="flex flex-col gap-1">
-        <div className="text-xl font-black text-white tracking-tight sm:text-2xl">{value ?? '—'}</div>
-        {subValue && <div className="text-[10px] text-gray-500 font-medium">{subValue}</div>}
+        <div className="text-xl font-black tracking-tight text-white sm:text-2xl">{value ?? '—'}</div>
+        {subValue && <div className="text-[10px] font-medium text-[#7d94b7]">{subValue}</div>}
       </div>
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-64 p-3 bg-[#111] text-xs leading-relaxed text-gray-300 rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-30 pointer-events-none border border-white/10 backdrop-blur-md">
+      <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-3 invisible w-64 -translate-x-1/2 rounded-xl border border-[#3b4f70] bg-[#0e182a] p-3 text-xs leading-relaxed text-[#c5d7f2] opacity-0 shadow-2xl transition-all group-hover:visible group-hover:opacity-100">
         {tooltip}
-        <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-[#111]"></div>
+        <div className="absolute left-1/2 top-full -translate-x-1/2 border-8 border-transparent border-t-[#0e182a]"></div>
       </div>
     </div>
   );
@@ -188,12 +188,12 @@ function FundColumn({ schemeCode, colorHex }: { schemeCode: string, colorHex: st
 
   if (!navData || !meta || !metrics) {
     return (
-      <div className="flex-1 p-12 text-center text-gray-500 flex flex-col items-center justify-center min-h-[500px]">
+      <div className="flex min-h-[500px] flex-1 flex-col items-center justify-center p-12 text-center text-gray-500">
         <div className="relative w-16 h-16 mb-6">
-            <div className="absolute inset-0 border-4 border-white/5 rounded-full"></div>
-            <div className="absolute inset-0 border-4 border-t-[var(--accent-color)] rounded-full animate-spin"></div>
+            <div className="absolute inset-0 rounded-full border-4 border-white/5"></div>
+            <div className="absolute inset-0 animate-spin rounded-full border-4 border-t-[#4f8ff7]"></div>
         </div>
-        <p className="text-white font-medium animate-pulse">Analyzing Risk Vectors...</p>
+        <p className="animate-pulse font-medium text-white">Preparing fund comparison signals...</p>
       </div>
     );
   }
@@ -204,61 +204,61 @@ function FundColumn({ schemeCode, colorHex }: { schemeCode: string, colorHex: st
   const expenseRatio = details?.expense_ratio ?? extraMeta?.expense_ratio;
 
   const returnRow = (label: string, val: number | null, isCAGR = false) => (
-    <div className="flex justify-between items-center py-3.5 border-b border-white/5 text-sm group/row px-3 rounded-xl transition-all hover:bg-white/5">
-      <span className="text-gray-400 group-hover/row:text-white transition-colors">{label}</span>
+    <div className="group/row flex items-center justify-between rounded-xl border-b border-white/5 px-3 py-3.5 text-sm transition-all hover:bg-white/5">
+      <span className="text-[#a6bbdc] transition-colors group-hover/row:text-white">{label}</span>
       <span className={`font-bold flex items-center gap-1.5 ${val === null ? 'text-gray-600' : val > 0 ? 'text-green-400' : 'text-red-400'}`}>
         {val !== null ? `${val > 0 ? '+' : ''}${val.toFixed(2)}%` : 'N/A'}
-        {isCAGR && val !== null && <span className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-gray-500 uppercase tracking-tighter">CAGR</span>}
+        {isCAGR && val !== null && <span className="rounded bg-white/5 px-1.5 py-0.5 text-[9px] uppercase tracking-tighter text-[#8ca5cb]">CAGR</span>}
       </span>
     </div>
   );
 
   return (
-    <div className="flex-1 flex flex-col gap-6 p-4 sm:gap-10 sm:p-8">
+    <div className="flex flex-1 flex-col gap-6 p-4 sm:gap-8 sm:p-6">
       <div className="flex flex-col gap-3">
-        <h3 className="text-2xl font-black truncate group relative cursor-default leading-tight tracking-tight" style={{ color: colorHex }}>
+        <h3 className="group relative cursor-default truncate text-2xl font-black leading-tight tracking-tight" style={{ color: colorHex }}>
           <span className="truncate block" title={meta.scheme_name}>{meta.scheme_name}</span>
         </h3>
         <div className="flex items-center gap-3">
-          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white bg-white/10 px-3 py-1 rounded-lg border border-white/10">
+          <span className="rounded-lg border border-white/10 bg-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-white">
             {meta.scheme_category}
           </span>
-          <span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>
-          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{meta.fund_house}</span>
+          <span className="h-1.5 w-1.5 rounded-full bg-white/20"></span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[#95abd0]">{meta.fund_house}</span>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
-          <div className="bg-black/30 rounded-xl p-4 border border-white/5 shadow-2xl flex flex-col gap-1 sm:rounded-2xl sm:p-5">
-              <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Latest NAV</div>
-              <div className="text-xl font-bold text-white tracking-tighter">₹{latestNav}</div>
-              <div className="text-[10px] text-gray-600 font-medium">As of {navDate}</div>
+          <div className="flex flex-col gap-1 rounded-xl border border-[#2f4260] bg-[#111d32] p-4 shadow-2xl sm:rounded-2xl sm:p-5">
+              <div className="mb-1 text-[10px] font-black uppercase tracking-widest text-[#8ca5cb]">Latest NAV</div>
+              <div className="text-xl font-bold tracking-tighter text-white">₹{latestNav}</div>
+              <div className="text-[10px] font-medium text-[#7690b6]">As of {navDate}</div>
           </div>
-          <div className="bg-black/30 rounded-xl p-4 border border-white/5 shadow-2xl flex flex-col gap-1 sm:rounded-2xl sm:p-5">
-              <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Total AUM</div>
-              <div className="text-xl font-bold text-[var(--accent-color)] tracking-tighter">
+          <div className="flex flex-col gap-1 rounded-xl border border-[#2f4260] bg-[#111d32] p-4 shadow-2xl sm:rounded-2xl sm:p-5">
+              <div className="mb-1 text-[10px] font-black uppercase tracking-widest text-[#8ca5cb]">Total AUM</div>
+              <div className="text-xl font-bold tracking-tighter text-[#8bb5ff]">
                   {metrics.precomputedAum && metrics.precomputedAum !== 'N/A' ? `₹${metrics.precomputedAum} Cr` : (aum ? `₹${aum} Cr` : 'Unavailable')}
               </div>
-              <div className="text-[10px] text-gray-600 font-medium leading-none">Not in AMFI NAV feed</div>
+              <div className="text-[10px] font-medium leading-none text-[#7690b6]">Based on latest available snapshot</div>
           </div>
       </div>
 
       <div className="grid grid-cols-1">
-          <div className="bg-black/30 rounded-xl p-4 border border-white/5 shadow-2xl flex items-center justify-between sm:rounded-2xl sm:p-5">
+          <div className="flex items-center justify-between rounded-xl border border-[#2f4260] bg-[#111d32] p-4 shadow-2xl sm:rounded-2xl sm:p-5">
               <div className="flex items-center gap-3">
-                <Wallet size={16} className="text-gray-400" />
-                <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Expense Ratio</div>
+                <Wallet size={16} className="text-[#9fb8df]" />
+                <div className="text-[10px] font-black uppercase tracking-widest text-[#8ca5cb]">Expense Ratio</div>
               </div>
-              <div className="text-lg font-bold text-white tracking-tighter">
+              <div className="text-lg font-bold tracking-tighter text-white">
                   {metrics.precomputedExpenseRatio && metrics.precomputedExpenseRatio !== 'N/A' ? `${metrics.precomputedExpenseRatio}%` : (expenseRatio ? `${expenseRatio}%` : 'Unavailable')}
               </div>
           </div>
       </div>
 
-      <div className="bg-black/20 rounded-2xl p-4 border border-white/10 shadow-2xl sm:rounded-3xl sm:p-7">
+      <div className="rounded-2xl border border-[#324562] bg-[#101b2f] p-4 shadow-2xl sm:rounded-3xl sm:p-7">
         <div className="flex items-center gap-3 mb-6">
           <TrendingUp size={18} className="text-green-400" />
-          <h4 className="text-xs font-black text-white uppercase tracking-[0.2em]">Absolute Performance</h4>
+          <h4 className="text-xs font-black uppercase tracking-[0.2em] text-white">Absolute Performance</h4>
         </div>
         <div className="space-y-1">
           {returnRow('1 Month', metrics.returns['1M'])}
@@ -269,10 +269,10 @@ function FundColumn({ schemeCode, colorHex }: { schemeCode: string, colorHex: st
         </div>
       </div>
 
-      <div className="bg-black/20 rounded-2xl p-4 border border-white/10 shadow-2xl sm:rounded-3xl sm:p-7">
+      <div className="rounded-2xl border border-[#324562] bg-[#101b2f] p-4 shadow-2xl sm:rounded-3xl sm:p-7">
         <div className="flex items-center gap-3 mb-6">
           <ShieldAlert size={18} className="text-red-400" />
-          <h4 className="text-xs font-black text-white uppercase tracking-[0.2em]">Risk Quant</h4>
+          <h4 className="text-xs font-black uppercase tracking-[0.2em] text-white">Risk Metrics</h4>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:gap-4">
           <MetricCard 
@@ -306,11 +306,11 @@ function FundColumn({ schemeCode, colorHex }: { schemeCode: string, colorHex: st
         </div>
       </div>
 
-      <div className="bg-black/40 rounded-2xl p-5 border border-white/5 border-dashed text-center sm:rounded-3xl sm:p-8">
-          <PieChart size={24} className="text-gray-700 mx-auto mb-4" />
-          <div className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-2">Portfolio Under Sync</div>
-          <p className="text-[10px] text-gray-600 leading-relaxed max-w-[200px] mx-auto">
-            Full sector allocation and stock concentration analysis is being integrated from latest AMFI fact sheets.
+      <div className="rounded-2xl border border-dashed border-[#3a4e6f] bg-[#0f1a2b] p-5 text-center sm:rounded-3xl sm:p-8">
+          <PieChart size={24} className="mx-auto mb-4 text-[#8ca5cb]" />
+          <div className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-[#8ca5cb]">Portfolio Mix Sync</div>
+          <p className="mx-auto max-w-[230px] text-[10px] leading-relaxed text-[#7690b6]">
+            Sector and concentration panels will populate as holdings snapshots become available.
           </p>
       </div>
     </div>
@@ -319,16 +319,16 @@ function FundColumn({ schemeCode, colorHex }: { schemeCode: string, colorHex: st
 
 export default function FundDetailsPanel({ schemeCodeA, schemeCodeB }: Props) {
   return (
-    <div className="flex flex-col relative w-full max-w-7xl mx-auto mb-20">
-      <div className="flex flex-col md:flex-row relative items-stretch">
+    <div className="relative mx-auto mb-12 flex w-full max-w-7xl flex-col">
+      <div className="relative flex flex-col items-stretch md:flex-row">
         <FundColumn schemeCode={schemeCodeA} colorHex="#3B82F6" />
         
-        <div className="flex md:flex-col items-center justify-center p-6 relative">
-          <div className="hidden md:block absolute top-0 bottom-0 left-1/2 w-[1px] bg-gradient-to-b from-transparent via-white/10 to-transparent"></div>
-          <div className="relative z-10 w-12 h-12 bg-[#0a0a0a] border border-white/10 rounded-full flex items-center justify-center text-[10px] font-black text-gray-500 shadow-2xl ring-8 ring-black/50">
+        <div className="relative flex items-center justify-center p-6 md:flex-col">
+          <div className="absolute bottom-0 left-1/2 top-0 hidden w-[1px] bg-gradient-to-b from-transparent via-white/15 to-transparent md:block"></div>
+          <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-full border border-[#3a4e70] bg-[#0f1728] text-[10px] font-black text-[#9cb6df] shadow-2xl ring-8 ring-[#0f1728]/70">
             VS
           </div>
-          <div className="md:hidden flex-1 h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent ml-4"></div>
+          <div className="ml-4 h-[1px] flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent md:hidden"></div>
         </div>
 
         <FundColumn schemeCode={schemeCodeB} colorHex="#F97316" />
