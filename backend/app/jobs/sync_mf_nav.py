@@ -124,18 +124,6 @@ def main() -> None:
             history_rows = history_result.get("data") if history_result.get("ok") else []
             if history_rows:
                 repo.upsert_mutual_fund_nav_history_rows(history_rows)
-                try:
-                    legacy_rows = [
-                        {
-                            "scheme_code": int(row["scheme_code"]) if str(row["scheme_code"]).isdigit() else row["scheme_code"],
-                            "nav_date": row["nav_date"],
-                            "nav": row["nav"],
-                        }
-                        for row in history_rows
-                    ]
-                    repo.supabase.table("mutual_fund_history").upsert(legacy_rows, on_conflict="scheme_code,nav_date").execute()
-                except Exception:
-                    pass
 
             full_history = repo.get_mutual_fund_nav_history(scheme_code, limit=4000)
             metrics = compute_nav_metrics(full_history)

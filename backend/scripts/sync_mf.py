@@ -98,15 +98,8 @@ def main():
         try:
             # 1. Update main table
             supabase.table('mutual_funds').upsert(batch, on_conflict='scheme_code').execute()
-            
-            # 2. Append to history table
-            history_batch = [{
-                "scheme_code": u["scheme_code"],
-                "nav": u["nav"],
-                "nav_date": u["nav_date"]
-            } for u in batch]
-            supabase.table('mutual_fund_history').upsert(history_batch, on_conflict='scheme_code,nav_date').execute()
-            # 3. Keep new normalized nav history in sync.
+
+            # 2. Keep normalized nav history in sync.
             nav_history_batch = [{
                 "scheme_code": str(u["scheme_code"]),
                 "nav": u["nav"],
@@ -114,6 +107,8 @@ def main():
                 "data_source": "amfi_navall",
             } for u in batch]
             supabase.table('mutual_fund_nav_history').upsert(nav_history_batch, on_conflict='scheme_code,nav_date').execute()
+
+            # 3. Keep core snapshot aligned.
             core_snapshot_batch = [{
                 "scheme_code": str(u["scheme_code"]),
                 "scheme_name": u["scheme_name"],

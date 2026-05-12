@@ -2,7 +2,7 @@
 Backfill mutual fund NAV history from public mfapi.in.
 
 AMFI NAVAll.txt only gives the latest NAV. This script fills
-mutual_fund_history with older NAV rows so 3Y/5Y metrics work.
+mutual_fund_nav_history with older NAV rows so 3Y/5Y metrics work.
 """
 import logging
 import os
@@ -54,10 +54,6 @@ def upsert_history(supabase, rows: list[dict]) -> int:
     for i in range(0, len(rows), BATCH_SIZE):
         batch = rows[i:i + BATCH_SIZE]
         try:
-            supabase.table("mutual_fund_history").upsert(
-                batch,
-                on_conflict="scheme_code,nav_date",
-            ).execute()
             supabase.table("mutual_fund_nav_history").upsert(
                 [
                     {
@@ -91,9 +87,9 @@ def main():
     for fund in funds:
         scheme_code = int(fund["scheme_code"])
         count_res = (
-            supabase.table("mutual_fund_history")
+            supabase.table("mutual_fund_nav_history")
             .select("scheme_code", count="exact")
-            .eq("scheme_code", scheme_code)
+            .eq("scheme_code", str(scheme_code))
             .limit(1)
             .execute()
         )

@@ -39,3 +39,4 @@ GitHub Actions runs stock and mutual-fund sync jobs from `.github/workflows/`.
 ## Notes
 - Deprecated CSV scripts under `backend/scripts/deprecated/` are not scheduled.
 - Keepalive workflow pings backend directly; frontend `/api/keepalive` is a separate client-side warm-up route.
+- MF sync jobs now write normalized history to `mutual_fund_nav_history` (and `mutual_fund_core_snapshot`), not legacy `mutual_fund_history`.
