@@ -80,21 +80,31 @@ def _empty_fundamentals() -> dict[str, Any]:
         "industry": None,
         "revenue_qtr": None,
         "net_profit_qtr": None,
+        "revenue_ann": None,
+        "net_profit_ann": None,
         "market_cap": None,
         "pe": None,
         "pb": None,
+        "ps": None,
         "ev_ebitda": None,
         "roe": None,
         "roce": None,
+        "roa": None,
         "debt_to_equity": None,
         "dividend_yield": None,
+        "sales_growth_1y": None,
         "sales_growth_3y": None,
+        "profit_growth_1y": None,
         "profit_growth_3y": None,
+        "eps_growth_1y": None,
         "eps_growth_3y": None,
         "eps_ttm": None,
         "promoter_holding": None,
         "fii_holding": None,
         "dii_holding": None,
+        "public_holding": None,
+        "operating_margin": None,
+        "net_profit_margin": None,
         "source": None,
     }
 
@@ -167,7 +177,12 @@ def resolve_stock_request(entity: str) -> str | None:
     universe = load_stock_universe()
     if resolved in universe:
         return resolved
-    if _one("stocks", resolved) or _one("stock_prices_daily", resolved, "date") or _one("stock_history", resolved, "date"):
+    if (
+        _one("stocks", resolved)
+        or _one("stock_prices_daily", resolved, "date")
+        or _one("stock_history", resolved, "date")
+        or _one("stock_core_snapshot", resolved, "last_updated")
+    ):
         return resolved
     return resolve_stock_symbol(entity)
 
@@ -177,6 +192,19 @@ def get_stock_metadata(symbol: str) -> dict[str, Any] | None:
     row = _one("stocks", clean)
     if row:
         return row
+    snapshot = _one("stock_core_snapshot", clean, "last_updated")
+    if snapshot:
+        return {
+            "symbol": clean,
+            "exchange": snapshot.get("exchange") or "NSE",
+            "company_name": snapshot.get("company_name") or clean,
+            "isin": None,
+            "series": "EQ",
+            "sector": snapshot.get("sector"),
+            "industry": snapshot.get("industry"),
+            "is_active": True,
+            "source": "stock_core_snapshot",
+        }
     universe_row = load_stock_universe().get(clean)
     if universe_row:
         return {
@@ -225,6 +253,39 @@ def get_stock_price_history(symbol: str, days: int = 365) -> list[dict[str, Any]
             }
             for row in reversed(legacy_rows)
         ]
+
+    snapshot = _one("stock_core_snapshot", clean, "last_updated")
+    if snapshot and snapshot.get("price_date") and snapshot.get("close_price") is not None:
+        history = [
+            {
+                "symbol": clean,
+                "date": snapshot.get("price_date"),
+                "open": None,
+                "high": None,
+                "low": None,
+                "close": snapshot.get("close_price"),
+                "adj_close": snapshot.get("close_price"),
+                "volume": snapshot.get("volume"),
+                "source": snapshot.get("data_source") or "stock_core_snapshot",
+            }
+        ]
+        prev_close = snapshot.get("previous_close")
+        if prev_close is not None:
+            history.insert(
+                0,
+                {
+                    "symbol": clean,
+                    "date": snapshot.get("price_date"),
+                    "open": None,
+                    "high": None,
+                    "low": None,
+                    "close": prev_close,
+                    "adj_close": prev_close,
+                    "volume": None,
+                    "source": snapshot.get("data_source") or "stock_core_snapshot",
+                },
+            )
+        return history
     return []
 
 
@@ -370,13 +431,17 @@ def _comparison_item(symbol: str) -> dict[str, Any]:
     prices = get_stock_price_history(clean, days=365)
     financials = get_stock_financials(clean)
     quarterly = financials["quarterly"]
+    annual = financials["annual"]
     latest_quarter = _first_meaningful_statement(quarterly, ("revenue", "net_profit", "eps"))
+    latest_annual = _first_meaningful_statement(annual, ("revenue", "net_profit"))
     ratios = _latest_ratios(clean) or {}
     shareholding = _latest_shareholding(clean) or {}
     latest = prices[-1] if prices else {}
     previous = prices[-2] if len(prices) > 1 else {}
     close = _num(snapshot.get("close_price")) if snapshot.get("close_price") is not None else _num(latest.get("close"))
     prev_close = _num(previous.get("close"))
+    if prev_close in (None, 0):
+        prev_close = _num(snapshot.get("previous_close"))
     change_pct = ((close - prev_close) / prev_close * 100) if close is not None and prev_close not in (None, 0) else None
 
     fundamentals = {
@@ -384,21 +449,31 @@ def _comparison_item(symbol: str) -> dict[str, Any]:
         "industry": snapshot.get("industry") or metadata.get("industry"),
         "revenue_qtr": latest_quarter.get("revenue") or snapshot.get("revenue_ttm"),
         "net_profit_qtr": latest_quarter.get("net_profit") or snapshot.get("net_profit_ttm"),
+        "revenue_ann": latest_annual.get("revenue") or snapshot.get("revenue_ttm"),
+        "net_profit_ann": latest_annual.get("net_profit") or snapshot.get("net_profit_ttm"),
         "market_cap": snapshot.get("market_cap") if snapshot.get("market_cap") is not None else ratios.get("market_cap"),
         "pe": snapshot.get("pe_ratio") if snapshot.get("pe_ratio") is not None else ratios.get("pe"),
         "pb": snapshot.get("pb_ratio") if snapshot.get("pb_ratio") is not None else ratios.get("pb"),
+        "ps": ratios.get("ps"),
         "ev_ebitda": ratios.get("ev_ebitda"),
         "roe": snapshot.get("roe") if snapshot.get("roe") is not None else ratios.get("roe"),
         "roce": snapshot.get("roce") if snapshot.get("roce") is not None else ratios.get("roce"),
+        "roa": ratios.get("roa"),
         "debt_to_equity": snapshot.get("debt_to_equity") if snapshot.get("debt_to_equity") is not None else ratios.get("debt_to_equity"),
         "dividend_yield": snapshot.get("dividend_yield") if snapshot.get("dividend_yield") is not None else ratios.get("dividend_yield"),
+        "sales_growth_1y": ratios.get("sales_growth_1y"),
         "sales_growth_3y": ratios.get("sales_growth_3y"),
+        "profit_growth_1y": ratios.get("profit_growth_1y"),
         "profit_growth_3y": ratios.get("profit_growth_3y"),
+        "eps_growth_1y": ratios.get("eps_growth_1y"),
         "eps_growth_3y": ratios.get("eps_growth_3y"),
         "eps_ttm": snapshot.get("eps_ttm") if snapshot.get("eps_ttm") is not None else (ratios.get("eps_ttm") or _eps_ttm(quarterly)),
         "promoter_holding": shareholding.get("promoter_holding"),
         "fii_holding": shareholding.get("fii_holding"),
         "dii_holding": shareholding.get("dii_holding"),
+        "public_holding": shareholding.get("public_holding"),
+        "operating_margin": snapshot.get("operating_margin"),
+        "net_profit_margin": snapshot.get("net_profit_margin"),
         "source": ratios.get("source") or shareholding.get("source"),
     }
     missing = [key for key, value in fundamentals.items() if value is None and key != "source"]
@@ -415,8 +490,9 @@ def _comparison_item(symbol: str) -> dict[str, Any]:
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "price": close,
         "change_pct": round(change_pct, 2) if change_pct is not None else None,
-        "pe_ratio": ratios.get("pe"),
-        "market_cap": ratios.get("market_cap"),
+        "pe_ratio": fundamentals.get("pe"),
+        "market_cap": fundamentals.get("market_cap"),
+        "enterprise_value": ratios.get("enterprise_value"),
         "beta": None,
         "alpha_vs_nifty": None,
         "historical_period": "1y",

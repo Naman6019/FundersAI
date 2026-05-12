@@ -1,26 +1,49 @@
 # API Contracts
 
 ## Frontend Proxy Routes (`frontend/app/api/`)
-- `POST /api/chat`: Proxies user chat prompts to the backend.
-- `GET /api/keepalive`: Calls the backend `/health` endpoint to keep the Render instance from sleeping.
-- `GET /api/mf/[schemeCode]`: Fetches Supabase-backed mutual fund details and NAV history.
-- `GET /api/search`: Supabase-backed search endpoint for stocks/funds.
-- `GET /api/cron/sync-mf`: Protected route to trigger MF synchronization.
-- `GET /api/quant/stocks/compare?symbols=RELIANCE,TCS`: Proxies source-neutral stock comparison data.
-- `GET /api/quant/stocks/[symbol]/profile`: Proxies stock metadata, latest price, ratios, and source summary.
-- `GET /api/quant/stocks/[symbol]/financials`: Proxies recent quarterly and annual statements.
-- `GET /api/quant/stocks/[symbol]/price-history`: Proxies source-neutral daily price history.
 
-## Backend FastAPI Routes (`backend/app/main.py`)
-- `POST /api/chat`: Accepts user prompts, routes to internal AI agents, fetches data, and returns synthesized markdown + structured `quant_data`.
-  - Comparison responses include every requested entity in the markdown table. Entities that cannot be resolved are marked as `Data Unavailable`.
-  - The LLM synthesis prompt uses compact table facts only; full `quant_data` is returned to the frontend but is not sent back to Groq.
-  - `system_action: { type: "COMPARE", ids: [...] }` is returned only when at least two comparison entities resolve to valid canvas IDs.
-  - News sections use explicit fallback text when configured news sources return no recent items.
-- `GET /api/quant/stocks/compare`: Returns source-neutral stock comparison data:
-  - `asset_type`, `symbols`, `available`, `unavailable`, `metrics`, `price_history`, `fundamentals`, `ratios`, `data_quality`, `source_summary`, and compatibility `comparison`.
-- `GET /api/quant/stocks/{symbol}/profile`: Returns metadata, latest price, ratios, shareholding, and source summary.
-- `GET /api/quant/stocks/{symbol}/financials`: Returns recent quarterly and annual `financial_statements`.
-- `GET /api/quant/stocks/{symbol}/price-history`: Returns daily price history from `stock_prices_daily` with safe fallbacks.
-- `GET /health`: Keepalive check.
-- **TODO**: Add rate limiting for `/api/chat` and trigger routes.
+### Chat and Health
+- `POST /api/chat` -> proxies to backend `POST /api/chat`.
+- `GET /api/keepalive` -> pings backend `/health`.
+
+### Quant Proxy Family
+- `GET /api/quant/stocks/compare?symbols=RELIANCE,TCS` -> `/api/quant/stocks/compare`.
+- `GET /api/quant/stocks/[symbol]/profile` -> `/api/quant/stocks/{symbol}/profile`.
+- `GET /api/quant/stocks/[symbol]/financials` -> `/api/quant/stocks/{symbol}/financials`.
+- `GET /api/quant/stocks/[symbol]/price-history` -> `/api/quant/stocks/{symbol}/price-history`.
+- `GET /api/quant/stocks/nifty50/ticker` -> `/api/quant/stocks/nifty50/ticker`.
+- `GET /api/quant/providers/status` -> `/api/quant/providers/status`.
+
+### Frontend Server Routes With Direct Supabase Reads
+- `GET /api/mf/[schemeCode]`: reads MF snapshot + history from Supabase tables.
+- `GET /api/search`: search endpoint across stock/fund entities.
+- `GET /api/cron/sync-mf`: protected trigger route for AMFI sync helper.
+
+## Backend FastAPI Routes
+
+### Core
+- `GET /`: basic API status message.
+- `GET /health`: backend health probe.
+- `GET /api/v1/providers/usage`: provider usage logs (flag-gated by `ENABLE_PROVIDER_USAGE_ENDPOINT`).
+
+### Quant
+- `GET /api/quant/stocks/compare`
+- `GET /api/quant/stocks/{symbol}/profile`
+- `GET /api/quant/stocks/{symbol}/financials`
+- `GET /api/quant/stocks/{symbol}/price-history`
+- `GET /api/quant/stocks/nifty50/ticker`
+- `GET /api/quant/providers/status`
+
+### Chat
+- `POST /api/chat`: returns synthesized markdown plus structured `quant_data` and optional `system_action`.
+
+### Optional IndianAPI Helper Endpoints
+Prefix: `/api/provider/indianapi`
+- Stock search/profile/fundamentals/corporate-actions/recent-announcements/historical-data.
+- Analyst target/forecast endpoints.
+- Mutual fund search/list/details endpoints.
+
+## Contract Notes
+- Compare responses keep additive fields (`metrics`, `fundamentals`, `ratios`, `data_quality`, `source_summary`, `why_better`, `verdict_context`, `comparison`).
+- If local data is missing, endpoints return partial payloads with explicit limitations instead of hard failing whenever possible.
+- Route-level rate limiting for frontend proxy endpoints is still pending.

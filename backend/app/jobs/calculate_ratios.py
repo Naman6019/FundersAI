@@ -13,6 +13,7 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 from app.repositories.stock_repository import StockRepository
 from app.services.ratio_engine import calculate_ratios
 from app.models.stock_models import DataQualityIssue, ProviderRun
+from app.services.stock_snapshot_service import refresh_stock_core_snapshot
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -66,6 +67,11 @@ def main():
                 ))
                 
             repo.upsert_ratios_snapshot([snapshot])
+            try:
+                # Keep stock_core_snapshot aligned with latest ratio writes.
+                refresh_stock_core_snapshot(symbol, repo)
+            except Exception as refresh_exc:
+                logger.warning("Stock core snapshot refresh failed for %s: %s", symbol, refresh_exc)
             run.symbols_succeeded += 1
             
         except Exception as e:

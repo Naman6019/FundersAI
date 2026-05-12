@@ -200,6 +200,88 @@ def test_comparison_item_uses_meaningful_quarter_and_eps_ttm(monkeypatch):
     assert item["fundamentals"]["eps_ttm"] == 8
 
 
+def test_resolve_stock_request_accepts_stock_core_snapshot(monkeypatch):
+    from app.services import quant_service
+
+    monkeypatch.setattr(quant_service, "resolve_stock_symbol", lambda _entity: None)
+    monkeypatch.setattr(quant_service, "load_stock_universe", lambda _key=None: {})
+
+    def fake_one(table, symbol, order=None):
+        if table == "stock_core_snapshot":
+            return {"symbol": symbol}
+        return None
+
+    monkeypatch.setattr(quant_service, "_one", fake_one)
+
+    assert quant_service.resolve_stock_request("TCS") == "TCS"
+
+
+def test_comparison_item_falls_back_to_snapshot_bare_minimum(monkeypatch):
+    from app.services import quant_service
+
+    monkeypatch.setattr(quant_service, "normalize_symbol", lambda symbol: symbol.upper())
+    monkeypatch.setattr(quant_service, "get_stock_metadata", lambda symbol: {"symbol": symbol, "company_name": symbol, "source": "stock_core_snapshot"})
+    monkeypatch.setattr(quant_service, "get_stock_price_history", lambda symbol, days=365: [])
+    monkeypatch.setattr(quant_service, "get_stock_financials", lambda symbol: {"quarterly": [], "annual": []})
+    monkeypatch.setattr(quant_service, "_latest_ratios", lambda symbol: {
+        "symbol": symbol,
+        "enterprise_value": 12345,
+        "ps": 3.2,
+        "roa": 0.14,
+        "sales_growth_1y": 11.0,
+        "profit_growth_1y": 9.0,
+        "eps_growth_1y": 8.0,
+        "source": "ratios_snapshot",
+    })
+    monkeypatch.setattr(quant_service, "_latest_shareholding", lambda symbol: {
+        "symbol": symbol,
+        "promoter_holding": 51.0,
+        "fii_holding": 22.0,
+        "dii_holding": 18.0,
+        "public_holding": 9.0,
+        "source": "shareholding_pattern",
+    })
+    monkeypatch.setattr(quant_service, "get_stock_snapshot_with_freshness", lambda symbol: {
+        "row": {
+            "symbol": symbol,
+            "close_price": 101.5,
+            "previous_close": 100.0,
+            "market_cap": 500000,
+            "pe_ratio": 21.0,
+            "pb_ratio": 4.5,
+            "roe": 0.19,
+            "roce": 0.22,
+            "debt_to_equity": 0.4,
+            "dividend_yield": 0.013,
+            "revenue_ttm": 1000,
+            "net_profit_ttm": 220,
+            "eps_ttm": 12.5,
+            "operating_margin": 0.18,
+            "net_profit_margin": 0.11,
+            "industry": "IT Services",
+            "price_date": "2026-05-12",
+            "last_updated": "2026-05-12T00:00:00+00:00",
+            "data_source": "stock_core_snapshot",
+        },
+        "stale": False,
+        "warning": None,
+    })
+
+    item = quant_service._comparison_item("TCS")
+
+    assert item["price"] == 101.5
+    assert item["change_pct"] == 1.5
+    assert item["market_cap"] == 500000
+    assert item["pe_ratio"] == 21.0
+    assert item["enterprise_value"] == 12345
+    assert item["fundamentals"]["revenue_qtr"] == 1000
+    assert item["fundamentals"]["net_profit_qtr"] == 220
+    assert item["fundamentals"]["revenue_ann"] == 1000
+    assert item["fundamentals"]["net_profit_ann"] == 220
+    assert item["fundamentals"]["public_holding"] == 9.0
+    assert item["fundamentals"]["sales_growth_1y"] == 11.0
+
+
 def test_chat_compare_table_handles_empty_risk_period():
     from app import main
 

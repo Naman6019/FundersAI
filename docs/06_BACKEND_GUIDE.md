@@ -1,63 +1,89 @@
 # Backend Guide
 
-## Framework & Tooling
-- **Framework**: FastAPI (Python 3.x).
-- **Server**: Uvicorn.
-- **Market Libraries**: `yfinance` (fallback), `feedparser` (news).
-- **Database Client**: `supabase-py`.
+## Stack
+- FastAPI + Uvicorn
+- Supabase Python client
+- Provider adapters for NSE, IndianAPI, FinEdge, YFinance, and local-manual mode
 
-## Directory Structure
+## Main Layout
 
-```
+```text
 backend/
-├── app/
-│   ├── main.py              # FastAPI entry point, endpoint definitions, AI Agent Router
-│   ├── database.py          # Supabase client initialization
-│   ├── fetcher.py           # On-demand stock fetching (NSE/Supabase first, YFinance fallback)
-│   ├── nse_client.py        # NSE bhavcopy/live data client
-│   ├── stock_universe.py    # NSE constituent CSV loader
-│   ├── models/
-│   │   └── stock_models.py  # StockProfile, StockPriceDaily, and other DTOs
-│   ├── providers/           # Source-neutral provider adapters
-│   │   ├── base.py          # Abstract FundamentalsProvider interface
-│   │   ├── indianapi_provider.py  # IndianAPI adapter (stock universe, statements, prices, corp actions, MF)
-│   │   ├── yfinance_provider.py   # YFinance fallback adapter
-│   │   ├── manual_provider.py     # Reads from Supabase source-neutral tables
-│   │   ├── nse_provider.py        # NSE bhavcopy adapter
-│   │   └── finedge_provider.py    # FinEdge fallback adapter
-│   ├── repositories/
-│   │   └── stock_repository.py    # All CRUD for source-neutral stock tables
-│   ├── services/
-│   │   ├── quant_service.py       # Assembles /api/quant responses
-│   │   └── ratio_engine.py        # Calculates financial ratios from statement data
-│   └── jobs/                # Scheduled job modules (run by GitHub Actions)
-│       ├── sync_stock_universe.py   # Writes stock metadata to `stocks`
-│       ├── sync_latest_prices.py    # Writes EOD prices to `stock_prices_daily`
-│       ├── sync_price_history.py    # Backfills historical NSE bhavcopy price data
-│       ├── sync_fundamentals.py     # Fetches financial statements from active provider
-│       ├── calculate_ratios.py      # Computes and writes `ratios_snapshot`
-│       ├── sync_corporate_events.py # Fetches dividends, splits, bonuses
-│       └── sync_mf_from_indianapi.py # Syncs MF AUM/returns from IndianAPI
-├── scripts/                 # Legacy standalone scripts (AMFI MF sync, run_fetch.py)
-│   ├── run_fetch.py
-│   ├── sync_mf.py
-│   ├── sync_mf_history.py
-│   ├── sync_mf_metadata.py
-│   └── deprecated/          # Retired CSV scripts, not scheduled
-├── migrations/              # SQL migration files
-└── requirements.txt
+  app/
+    main.py
+    routes/
+      quant.py
+      indianapi.py
+    services/
+      quant_service.py
+      comparison_reasoning.py
+      stock_snapshot_service.py
+      indianapi_service.py
+      indianapi_quota_guard.py
+      provider_usage.py
+      mf_metrics_service.py
+      mfapi_service.py
+    repositories/
+      stock_repository.py
+    providers/
+      base.py
+      manual_provider.py
+      nse_provider.py
+      indianapi_provider.py
+      finedge_provider.py
+      yfinance_provider.py
+      indianapi_client.py
+    jobs/
+      sync_stock_universe.py
+      sync_latest_prices.py
+      sync_price_history.py
+      sync_fundamentals.py
+      calculate_ratios.py
+      sync_corporate_events.py
+      sync_mf_nav.py
+      sync_mf_from_indianapi.py
+  scripts/
+    sync_mf.py
+    sync_mf_history.py
+    sync_mf_metadata.py
+    deprecated/
+  migrations/
 ```
 
-## Conventions
-- **Indentation**: 4 spaces.
-- **Async**: Use `async def` for all route handlers.
-- **Env Vars**: Use `os.getenv()`. Never hardcode secrets.
-- **Dependencies**: Do not add dependencies without updating `requirements.txt`.
-- **Scripts**: Scripts in `scripts/` are standalone. They must handle their own paths and not blindly import from `app/` without guards.
-- **Jobs**: Modules under `app/jobs/` are invoked as `python -m backend.app.jobs.<name>` by GitHub Actions.
+## Route Families
+- Core: `/`, `/health`, `/api/v1/providers/usage`
+- Quant: `/api/quant/*`
+- Chat: `POST /api/chat`
+- Optional IndianAPI helper endpoints: `/api/provider/indianapi/*`
 
-## Running Locally
+## Data Access Rules
+- Use repository/service layer (`stock_repository.py`, `quant_service.py`) instead of ad hoc table logic in routes.
+- Keep response shapes additive for frontend compatibility.
+- Return explicit missing-data metadata when tables are sparse.
+
+## Provider Selection
+- Controlled by `STOCK_DATA_PROVIDER`.
+- If selected provider is unavailable, provider registry falls back to `manual` mode.
+- Scheduled stock price workflows use NSE path (`STOCK_DATA_PROVIDER=nse`).
+
+## Important Flags
+- `ENABLE_PROVIDER_USAGE_ENDPOINT`
+- `ENABLE_STOCK_FUNDAMENTALS_SYNC`
+- `ENABLE_STOCK_PRICE_SYNC`
+- `ENABLE_MF_NAV_SYNC`
+- `ENABLE_SHAREHOLDING_SYNC`
+- `ENABLE_CORPORATE_ACTIONS_SYNC`
+- `INDIANAPI_ENABLE_LIVE_CALLS`
+- `INDIANAPI_ENABLE_SCHEDULED_SYNC`
+
+## Jobs and Scheduling
+- Jobs are executed by GitHub Actions with `python -m backend.app.jobs.<name>` (plus MF scripts).
+- Jobs should be idempotent and safe to rerun.
+- Provider and sync issues are expected to degrade gracefully when optional tables/features are absent.
+
+## Local Run
 ```bash
 cd backend
+pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```

@@ -1,0 +1,58 @@
+name: Backfill Stock Core Snapshot
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: "Optional comma-separated symbols"
+        required: false
+        default: ""
+      limit:
+        description: "Optional max symbols"
+        required: false
+        default: "0"
+      only_missing:
+        description: "Backfill only symbols missing in stock_core_snapshot (true/false)"
+        required: false
+        default: "true"
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run stock_core_snapshot backfill
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          DISPATCH_SYMBOLS: ${{ inputs.symbols }}
+          DISPATCH_LIMIT: ${{ inputs.limit }}
+          DISPATCH_ONLY_MISSING: ${{ inputs.only_missing }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "Error: Missing SUPABASE_URL or SUPABASE_KEY"
+            exit 1
+          fi
+
+          args=()
+          if [ -n "$DISPATCH_SYMBOLS" ]; then
+            args+=(--symbols "$DISPATCH_SYMBOLS")
+          fi
+          if [ -n "$DISPATCH_LIMIT" ]; then
+            args+=(--limit "$DISPATCH_LIMIT")
+          fi
+          if [ -n "$DISPATCH_ONLY_MISSING" ]; then
+            args+=(--only-missing "$DISPATCH_ONLY_MISSING")
+          fi
+
+          python -m backend.app.jobs.backfill_stock_core_snapshot "${args[@]}"

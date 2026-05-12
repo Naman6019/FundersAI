@@ -1,32 +1,48 @@
 # Deployment
 
-MarketMind utilizes a split deployment architecture due to the differing runtime requirements of the frontend and backend.
+## Current Topology
+- Frontend: Vercel project rooted at `frontend/`.
+- Backend: Render web service rooted at `backend/`.
+- Data store: Supabase project used by both runtime and jobs.
+- Scheduler: GitHub Actions workflows in `.github/workflows/`.
 
 ## Frontend (Vercel)
-- **Status**: Active Auto-Deploy.
-- **Root**: Deployed from the `frontend/` directory.
-- **Runtime**: Next.js App Router; `/api/` handlers run as Node.js serverless functions.
-- **Environment**: Configured via Vercel Dashboard. Depends on `NEXT_PUBLIC_API_URL` pointing to the Render backend URL.
+- Runtime: Next.js App Router.
+- API routes under `frontend/app/api/*` act as the browser-safe backend boundary.
+- Required envs:
+  - `NEXT_PUBLIC_API_URL`
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `CRON_SECRET` (for protected sync trigger route)
 
 ## Backend (Render)
-- **Status**: Active Auto-Deploy.
-- **Root**: Deployed from the `backend/` directory.
-- **Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT` (managed by `render.yaml`).
-- **Keepalive**: The frontend pings `/api/keepalive` to prevent the free tier Render instance from spinning down. First-heavy-query latency may still occur.
+- App entry for local dev: `uvicorn app.main:app --reload --port 8000`.
+- Health endpoint: `GET /health`.
+- Provider usage endpoint: `GET /api/v1/providers/usage` (flag-gated).
+- Note: `backend/render.yaml` currently references `uvicorn api.index:app`, but `backend/api/index.py` is not present in this repo. Verify and align Render dashboard start command before relying on `render.yaml` as source of truth.
 
-## Scheduled Jobs (GitHub Actions)
-- **Why**: Vercel serverless functions lack native Python runtime support, which is necessary for the EOD and MF syncing scripts.
-- **Workflows**:
+## Scheduled Workflows (GitHub Actions)
 
-| Workflow file | Schedule (UTC) | Description |
+| Workflow | Schedule (UTC) | Purpose |
 |---|---|---|
-| `fetch_stocks.yml` | Daily `0 11 * * *` | Runs `scripts/run_fetch.py` for legacy EOD stock fetch |
-| `mf-sync.yml` | Weekdays `30 13 * * 1-5` | AMFI NAV → NAV history → MF metadata (TER/AUM) → IndianAPI MF AUM/returns |
-| `sync-stock-universe.yml` | Daily `0 1 * * *` | Syncs all NSE/BSE stock metadata via IndianAPI |
-| `sync-prices-daily.yml` | Weekdays `30 12 * * 1-5` | Syncs latest EOD prices via NSE CM-UDiFF bhavcopy |
-| `sync-price-history.yml` | Manual only | Backfills historical EOD prices via NSE CM-UDiFF bhavcopy |
-| `sync-fundamentals-weekly.yml` | Saturdays `0 2 * * 6` | Fetches financial statements + recalculates ratios |
-| `sync-corporate-events.yml` | Daily `0 3 * * *` | Fetches dividends, splits, bonuses via IndianAPI |
-| `keepalive.yml` | Scheduled | Pings Render to prevent free-tier spin-down |
+| `sync-stock-universe.yml` | `0 1 1 * *` | Monthly stock universe sync |
+| `sync-prices-daily.yml` | `30 12 * * 1-5` | Weekday EOD price sync |
+| `sync-price-history.yml` | Manual | Historical EOD backfill |
+| `sync-fundamentals-weekly.yml` | `0 2 * * 6` + `0 2 1 * *` + manual | Fundamentals sync + ratio calc |
+| `sync-corporate-events.yml` | `0 3 * * *` | Corporate action sync |
+| `mf-sync.yml` | `30 13 * * 1-5` | MF NAV/history/metadata/snapshot pipeline |
+| `keepalive.yml` | `*/10 * * * *` | Direct Render `/health` ping |
 
-- **Secrets**: Stock price jobs use `SUPABASE_URL` and `SUPABASE_KEY`. IndianAPI stock/MF jobs also use `INDIAN_API_KEY`.
+## Secrets and Variables
+- Repository secrets used by workflows:
+  - `SUPABASE_URL`
+  - `SUPABASE_KEY`
+  - `INDIAN_API_KEY` (mapped to runtime env `INDIANAPI_KEY` in stock enrichment workflows)
+- Optional repo variable:
+  - `FUNDAMENTALS_WATCHLIST_SYMBOLS`
+
+## Operational Checks
+- Verify frontend proxies can reach backend URL.
+- Verify backend `/health` and `/api/chat` latency after idle periods.
+- Verify cron workflow last-run status and row-write counts in Supabase.
+- Verify provider quotas/flags before enabling live enrichment paths.

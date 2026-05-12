@@ -27,6 +27,14 @@ on:
         description: 'Universe for full refresh'
         required: false
         default: 'NIFTY500'
+      enable_shareholding_sync:
+        description: 'Enable shareholding sync for this run (true/false)'
+        required: false
+        default: 'false'
+      refresh_stock_core_snapshot:
+        description: 'Refresh stock_core_snapshot after sync (true/false)'
+        required: false
+        default: 'true'
 
 jobs:
   sync:
@@ -64,6 +72,8 @@ jobs:
           DISPATCH_SYMBOLS: ${{ inputs.symbols }}
           DISPATCH_LIMIT: ${{ inputs.limit }}
           DISPATCH_UNIVERSE: ${{ inputs.universe }}
+          DISPATCH_ENABLE_SHAREHOLDING: ${{ inputs.enable_shareholding_sync }}
+          DISPATCH_REFRESH_SNAPSHOT: ${{ inputs.refresh_stock_core_snapshot }}
           EVENT_SCHEDULE: ${{ github.event.schedule }}
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ] || [ -z "$INDIANAPI_KEY" ]; then
@@ -75,6 +85,8 @@ jobs:
           symbols="${DISPATCH_SYMBOLS:-}"
           limit="${DISPATCH_LIMIT:-}"
           universe="${DISPATCH_UNIVERSE:-NIFTY500}"
+          enable_shareholding="${DISPATCH_ENABLE_SHAREHOLDING:-false}"
+          refresh_snapshot="${DISPATCH_REFRESH_SNAPSHOT:-true}"
 
           if [ "$EVENT_SCHEDULE" = "0 2 1 * *" ]; then
             scope="full"
@@ -97,5 +109,12 @@ jobs:
             args=(--symbols "$symbols")
           fi
 
+          if [ "$enable_shareholding" = "true" ]; then
+            export ENABLE_SHAREHOLDING_SYNC="true"
+          fi
+
           python -m backend.app.jobs.sync_fundamentals "${args[@]}"
           python -m backend.app.jobs.calculate_ratios
+          if [ "$refresh_snapshot" = "true" ]; then
+            python -m backend.app.jobs.backfill_stock_core_snapshot --only-missing false
+          fi
