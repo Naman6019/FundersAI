@@ -25,6 +25,8 @@ interface QuantPriceRow {
 
 interface QuantResponsePayload {
   comparison?: Record<string, ComparisonMetric>;
+  why_better?: WhyBetterPayload;
+  verdict_context?: string;
   profiles?: Record<string, QuantRecord>;
   ratios?: Record<string, QuantRecord>;
   financials?: Record<string, QuantFinancialRow[]>;
@@ -44,6 +46,45 @@ interface Props {
   type: 'STOCK' | 'MUTUAL_FUND';
   auxiliaryData?: CanvasPayload | null;
 }
+
+type WhyWinner = {
+  entity_id?: string | null;
+  entity_name?: string | null;
+  asset_type?: string;
+  status?: 'winner' | 'tie' | 'insufficient_data' | string;
+  score_delta?: number;
+};
+
+type WhyConfidence = {
+  score?: number;
+  label?: string;
+};
+
+type WhyFactor = {
+  factor?: string;
+  weight?: number;
+  winner?: string | null;
+  coverage?: number;
+};
+
+type WhyBetterPayload = {
+  winner?: WhyWinner;
+  confidence?: WhyConfidence;
+  summary?: string;
+  factor_results?: WhyFactor[];
+  strengths?: string[];
+  tradeoffs?: string[];
+  data_limitations?: string[];
+  source_freshness?: Record<string, {
+    source?: string | null;
+    stale?: boolean;
+    price_date?: string | null;
+    nav_date?: string | null;
+    snapshot_last_updated?: string | null;
+  }>;
+  verdict_context?: string;
+  holdings_based_reasoning?: { status?: string; reason?: string | null };
+};
 
 const formatValue = (value: MetricValue) => {
   if (value === null || value === undefined || value === '' || value === 'N/A') return 'Not available';
@@ -186,6 +227,73 @@ const mapQuantResponse = (data: unknown): Record<string, StockComparisonMetric> 
   return mapped;
 };
 
+const getWhyBetter = (data: unknown): WhyBetterPayload | null => {
+  if (!data || typeof data !== 'object') return null;
+  const payload = data as Record<string, unknown>;
+  const why = payload.why_better;
+  if (!why || typeof why !== 'object') return null;
+  return why as WhyBetterPayload;
+};
+
+function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
+  if (!payload) return null;
+  const winner = payload.winner;
+  const confidence = payload.confidence;
+  const factors = payload.factor_results || [];
+  const freshness = payload.source_freshness || {};
+  const freshnessRows = Object.entries(freshness);
+  const holdingsBlocked = payload.holdings_based_reasoning?.status === 'blocked';
+
+  return (
+    <section className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4">
+      <h3 className="mb-2 text-sm font-semibold text-emerald-200">Why this is better?</h3>
+      <p className="text-sm text-gray-200">{payload.summary || 'Deterministic comparison summary unavailable.'}</p>
+      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+        <span className="rounded-md border border-white/15 px-2 py-1 text-gray-200">
+          Winner: {winner?.status === 'winner' ? (winner.entity_name || winner.entity_id || 'N/A') : winner?.status || 'N/A'}
+        </span>
+        <span className="rounded-md border border-white/15 px-2 py-1 text-gray-200">
+          Confidence: {confidence?.label || 'N/A'} ({typeof confidence?.score === 'number' ? confidence.score.toFixed(2) : 'N/A'})
+        </span>
+        <span className="rounded-md border border-white/15 px-2 py-1 text-gray-200">
+          Coverage: {factors.length > 0 && factors.every((f) => (f.coverage ?? 0) >= 1) ? 'Complete' : 'Incomplete'}
+        </span>
+      </div>
+      {holdingsBlocked && (
+        <div className="mt-3 rounded-md border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
+          Holdings-based reasoning unavailable. Holdings sync pending.
+        </div>
+      )}
+      {factors.length > 0 && (
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {factors.map((factor, idx) => (
+            <div key={`${factor.factor || 'factor'}-${idx}`} className="rounded-md border border-white/10 bg-black/20 p-2 text-xs">
+              <div className="font-semibold text-gray-100">{factor.factor || 'Factor'}</div>
+              <div className="text-gray-300">Winner: {factor.winner || 'N/A'}</div>
+              <div className="text-gray-400">Coverage: {typeof factor.coverage === 'number' ? `${Math.round(factor.coverage * 100)}%` : 'N/A'}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {freshnessRows.length > 0 && (
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {freshnessRows.map(([entity, meta]) => (
+            <div key={entity} className="rounded-md border border-white/10 bg-black/20 p-2 text-xs">
+              <div className="font-semibold text-gray-100">{entity}</div>
+              <div className="text-gray-300">Source: {meta?.source || 'N/A'}</div>
+              <div className="text-gray-300">Last Updated: {meta?.snapshot_last_updated || meta?.price_date || meta?.nav_date || 'N/A'}</div>
+              <div className={meta?.stale ? 'text-amber-200' : 'text-emerald-200'}>
+                {meta?.stale ? 'Stale' : 'Fresh'}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {payload.verdict_context && <p className="mt-3 text-xs text-gray-400">{payload.verdict_context}</p>}
+    </section>
+  );
+}
+
 export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
   const [period, setPeriod] = useState<Period>('1Y');
 
@@ -197,6 +305,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
   const fundA = useFundData(isMF ? idA : null);
   const fundB = useFundData(isMF ? idB : null);
   const [fetchedComparison, setFetchedComparison] = useState<Record<string, StockComparisonMetric>>({});
+  const [fetchedWhyBetter, setFetchedWhyBetter] = useState<WhyBetterPayload | null>(null);
   const [stockError, setStockError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -212,7 +321,10 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
         return res.json();
       })
       .then(data => {
-        if (!cancelled) setFetchedComparison(mapQuantResponse(data));
+        if (!cancelled) {
+          setFetchedComparison(mapQuantResponse(data));
+          setFetchedWhyBetter(getWhyBetter(data));
+        }
       })
       .catch(error => {
         if (!cancelled) setStockError((error as Error).message);
@@ -229,6 +341,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
 
   if (!isMF) {
     const comparison = mapQuantResponse(auxiliaryData?.quant_data) || fetchedComparison;
+    const whyBetter = getWhyBetter(auxiliaryData?.quant_data) || fetchedWhyBetter;
     const entities = Object.keys(comparison);
     const metrics: Array<[string, string, (value: MetricValue) => string]> = [
       ['Price', 'price', formatPrice],
@@ -312,6 +425,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
               Data may be stale for: {staleEntities.join(', ')}.
             </div>
           )}
+          <WhyBetterPanel payload={whyBetter} />
           {priceRows.length > 0 && (
             <section className="rounded-xl border border-white/10 bg-black/10 p-4">
               <h3 className="mb-3 text-sm font-semibold text-gray-200">Price History</h3>
@@ -376,6 +490,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
 
   const loading = fundA.loading || fundB.loading;
   const error = fundA.error || fundB.error;
+  const mfWhyBetter = getWhyBetter(auxiliaryData?.quant_data);
   const periods: Period[] = ['1D', '6M', '1Y', '3Y', '5Y'];
 
   return (
@@ -440,6 +555,9 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                 schemeCodeB={ids[1]} 
               />
             </div>
+          </section>
+          <section>
+            <WhyBetterPanel payload={mfWhyBetter} />
           </section>
         </div>
       )}

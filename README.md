@@ -9,7 +9,7 @@ MarketMind is an AI-orchestrated financial research platform for the Indian stoc
 - **Quota-Safe Provider Layer**: Supabase-first reads with guarded IndianAPI enrichment.
 
 ## Tech Stack
-- **Frontend**: Next.js 15, TypeScript, Tailwind CSS, Zustand, Recharts (Deployed on Vercel)
+- **Frontend**: Next.js 16, TypeScript, Tailwind CSS, Zustand, Recharts (Deployed on Vercel)
 - **Backend**: Python FastAPI, YFinance, Groq API, Feedparser (Deployed on Render)
 - **Database**: Supabase (PostgreSQL)
 - **Automation**: GitHub Actions

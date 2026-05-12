@@ -9,6 +9,7 @@ from app.database import supabase
 from app.providers import get_fundamentals_provider
 from app.providers.base import normalize_symbol
 from app.providers.yfinance_provider import YFinanceProvider
+from app.services.comparison_reasoning import build_stock_why_better
 from app.services import indianapi_service
 from app.services.stock_snapshot_service import get_stock_snapshot_with_freshness
 from app.stock_universe import load_stock_universe, resolve_stock_symbol
@@ -168,8 +169,7 @@ def resolve_stock_request(entity: str) -> str | None:
         return resolved
     if _one("stocks", resolved) or _one("stock_prices_daily", resolved, "date") or _one("stock_history", resolved, "date"):
         return resolved
-    provider_match = _resolve_indianapi_stock_symbol(entity)
-    return provider_match or resolve_stock_symbol(entity)
+    return resolve_stock_symbol(entity)
 
 
 def get_stock_metadata(symbol: str) -> dict[str, Any] | None:
@@ -225,8 +225,7 @@ def get_stock_price_history(symbol: str, days: int = 365) -> list[dict[str, Any]
             }
             for row in reversed(legacy_rows)
         ]
-
-    return YFinanceProvider().get_price_history(clean, period="1y")[:days]
+    return []
 
 
 def get_stock_financials(symbol: str) -> dict[str, Any]:
@@ -367,14 +366,14 @@ def _comparison_item(symbol: str) -> dict[str, Any]:
     clean = normalize_symbol(symbol)
     snapshot_context = get_stock_snapshot_with_freshness(clean)
     snapshot = snapshot_context.get("row") or {}
-    profile = build_stock_profile(clean)
+    metadata = get_stock_metadata(clean) or {"symbol": clean}
     prices = get_stock_price_history(clean, days=365)
     financials = get_stock_financials(clean)
     quarterly = financials["quarterly"]
     latest_quarter = _first_meaningful_statement(quarterly, ("revenue", "net_profit", "eps"))
-    ratios = profile.get("ratios") or {}
-    shareholding = profile.get("shareholding") or {}
-    latest = prices[-1] if prices else profile.get("latest_price") or {}
+    ratios = _latest_ratios(clean) or {}
+    shareholding = _latest_shareholding(clean) or {}
+    latest = prices[-1] if prices else {}
     previous = prices[-2] if len(prices) > 1 else {}
     close = _num(snapshot.get("close_price")) if snapshot.get("close_price") is not None else _num(latest.get("close"))
     prev_close = _num(previous.get("close"))
@@ -382,7 +381,7 @@ def _comparison_item(symbol: str) -> dict[str, Any]:
 
     fundamentals = {
         **_empty_fundamentals(),
-        "industry": snapshot.get("industry") or (profile.get("metadata") or {}).get("industry"),
+        "industry": snapshot.get("industry") or metadata.get("industry"),
         "revenue_qtr": latest_quarter.get("revenue") or snapshot.get("revenue_ttm"),
         "net_profit_qtr": latest_quarter.get("net_profit") or snapshot.get("net_profit_ttm"),
         "market_cap": snapshot.get("market_cap") if snapshot.get("market_cap") is not None else ratios.get("market_cap"),
@@ -405,13 +404,14 @@ def _comparison_item(symbol: str) -> dict[str, Any]:
     missing = [key for key, value in fundamentals.items() if value is None and key != "source"]
     data_quality = {
         "missing_fields": missing,
-        "message": "Some fundamentals are unavailable from the current provider data." if missing else "Complete for requested fields.",
+        "message": "Some fundamentals are unavailable from local Supabase data." if missing else "Complete for requested fields.",
+        "coverage_status": "incomplete" if missing else "complete",
     }
     if snapshot_context.get("stale"):
         data_quality["stale_warning"] = snapshot_context.get("warning") or "Data may be stale."
     return {
         "symbol": clean,
-        "name": (profile.get("metadata") or {}).get("company_name") or clean,
+        "name": metadata.get("company_name") or clean,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "price": close,
         "change_pct": round(change_pct, 2) if change_pct is not None else None,
@@ -429,7 +429,10 @@ def _comparison_item(symbol: str) -> dict[str, Any]:
         "price_history": prices,
         "data_quality": data_quality,
         "source_summary": {
-            **profile.get("source_summary", {}),
+            "metadata": metadata.get("source"),
+            "prices": (latest or {}).get("source") if latest else None,
+            "ratios": ratios.get("source"),
+            "shareholding": shareholding.get("source") if isinstance(shareholding, dict) else None,
             "snapshot_last_updated": snapshot.get("last_updated"),
             "price_date": snapshot.get("price_date"),
             "stale": bool(snapshot_context.get("stale")),
@@ -489,6 +492,8 @@ def build_stock_compare(symbols: list[str] | str) -> dict[str, Any]:
         data_quality[resolved] = item["data_quality"]
         source_summary[resolved] = item["source_summary"]
 
+    why_better = build_stock_why_better(comparison)
+
     return {
         "asset_type": "stocks",
         "symbols": requested,
@@ -500,6 +505,9 @@ def build_stock_compare(symbols: list[str] | str) -> dict[str, Any]:
         "ratios": ratios,
         "data_quality": data_quality,
         "source_summary": source_summary,
+        "source_freshness": why_better.get("source_freshness"),
+        "why_better": why_better,
+        "verdict_context": why_better.get("verdict_context"),
         "comparison": comparison,
     }
 

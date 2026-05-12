@@ -6,7 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Send } from 'lucide-react';
 import { useCanvasStore } from '@/store/useCanvasStore';
-import { AssetType, Message, useChatStore } from '@/store/useChatStore';
+import { AssetType, Message, ResearchDepth, useChatStore } from '@/store/useChatStore';
 
 export default function ChatWindow() {
   const searchParams = useSearchParams();
@@ -15,9 +15,11 @@ export default function ChatWindow() {
   const input = useChatStore((state) => state.input);
   const isProcessing = useChatStore((state) => state.isProcessing);
   const assetType = useChatStore((state) => state.assetType);
+  const researchDepth = useChatStore((state) => state.researchDepth);
   const setInput = useChatStore((state) => state.setInput);
   const setIsProcessing = useChatStore((state) => state.setIsProcessing);
   const setAssetType = useChatStore((state) => state.setAssetType);
+  const setResearchDepth = useChatStore((state) => state.setResearchDepth);
   const addMessage = useChatStore((state) => state.addMessage);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -39,7 +41,11 @@ export default function ChatWindow() {
     setInput(text);
   };
 
-  const sendQuery = useCallback(async (queryText: string, selectedAssetType: AssetType = assetType) => {
+  const sendQuery = useCallback(async (
+    queryText: string,
+    selectedAssetType: AssetType = assetType,
+    selectedResearchDepth: ResearchDepth = researchDepth,
+  ) => {
     const text = queryText.trim();
     if (!text) return;
 
@@ -56,7 +62,11 @@ export default function ChatWindow() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: text, asset_type: selectedAssetType }),
+        body: JSON.stringify({
+          query: text,
+          asset_type: selectedAssetType,
+          research_depth: selectedResearchDepth,
+        }),
       });
 
       if (!res.ok) throw new Error('API Error');
@@ -76,7 +86,7 @@ export default function ChatWindow() {
     } finally {
       setIsProcessing(false);
     }
-  }, [addMessage, assetType, openCanvas, setIds, setInput, setIsProcessing, setView]);
+  }, [addMessage, assetType, openCanvas, researchDepth, setIds, setInput, setIsProcessing, setView]);
 
   useEffect(() => {
     if (initialQuerySentRef.current) return;
@@ -87,13 +97,16 @@ export default function ChatWindow() {
     const selectedAssetType = searchParams.get('asset_type');
     const nextAssetType: AssetType =
       selectedAssetType === 'stock' || selectedAssetType === 'mutual_fund' ? selectedAssetType : 'auto';
+    const selectedResearchDepth = searchParams.get('research_depth');
+    const nextResearchDepth: ResearchDepth = selectedResearchDepth === 'deep' ? 'deep' : 'standard';
 
     setAssetType(nextAssetType);
-    void sendQuery(query, nextAssetType);
-  }, [searchParams, sendQuery, setAssetType]);
+    setResearchDepth(nextResearchDepth);
+    void sendQuery(query, nextAssetType, nextResearchDepth);
+  }, [searchParams, sendQuery, setAssetType, setResearchDepth]);
 
   const handleSend = async () => {
-    await sendQuery(input, assetType);
+    await sendQuery(input, assetType, researchDepth);
   };
 
   return (
@@ -140,6 +153,22 @@ export default function ChatWindow() {
               type="button"
               className={assetType === option.value ? 'active' : ''}
               onClick={() => setAssetType(option.value as AssetType)}
+              disabled={isProcessing}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <div className="asset-toggle" aria-label="Research depth">
+          {[
+            { label: 'Standard', value: 'standard' },
+            { label: 'Deep Research', value: 'deep' },
+          ].map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={researchDepth === option.value ? 'active' : ''}
+              onClick={() => setResearchDepth(option.value as ResearchDepth)}
               disabled={isProcessing}
             >
               {option.label}

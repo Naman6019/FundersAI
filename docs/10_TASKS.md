@@ -10,6 +10,157 @@
 - [ ] Basic strategy backtesting: simulate simple rules against clean historical EOD data with fees, slippage, benchmark comparison, and result charts.
 - [ ] Historical anomaly detection: flag unusual price, volume, valuation, or fundamentals changes with evidence; avoid predictive wording until models are validated.
 
+## MarketMind Product Improvement Roadmap
+
+### 1. Research Scorecard
+- [ ] Add a clear scorecard for each stock and mutual fund.
+- [ ] Stocks: include valuation, growth, profitability, debt risk, price trend, news sentiment, and data confidence.
+- [ ] Mutual funds: include return consistency, risk, expense ratio, AUM health, benchmark outperformance, alpha/beta/Sharpe, and category fit.
+- [ ] Keep score explainable with visible reasons; avoid black-box scoring.
+- Acceptance Criteria:
+  - Scorecard is available in stock and mutual fund analysis views.
+  - Every score dimension shows the underlying metric/value and reason.
+  - Missing inputs reduce confidence and are labeled, not fabricated.
+- Why this matters:
+  - Makes analysis easier to trust and compare quickly.
+
+### 2. Data Freshness and Source Badges
+- [ ] Show which data sources were used in each answer/analysis.
+- [ ] Show last-updated timestamps for price data, fundamentals, mutual fund data, news, and corporate actions.
+- [ ] Include confidence states: High, Medium, Low.
+- [ ] Clearly label missing, stale, estimated, or fallback-provider metrics.
+- Acceptance Criteria:
+  - All major metric blocks show source + timestamp badges.
+  - Stale/fallback states are visible in chat and canvas.
+  - Confidence state is included in deterministic analysis payloads.
+- Why this matters:
+  - Improves transparency and reduces false confidence.
+
+### 3. Beginner / Advanced Explanation Mode
+- [ ] Add a user-facing explanation depth toggle.
+- [ ] Beginner mode uses plain-language explanations of financial terms.
+- [ ] Advanced mode uses precise metrics and technical terminology.
+- [ ] Apply mode across AI summaries, metric explanations, and research canvas descriptions.
+- Acceptance Criteria:
+  - Mode toggle is persisted per user/session.
+  - Same query returns different depth output while keeping the same facts.
+  - Glossary-like plain explanations are shown in beginner mode.
+- Why this matters:
+  - Supports both first-time and experienced users without splitting products.
+
+### 4. Risk Analysis Section
+- [ ] Add a dedicated risk section for stock and mutual fund analysis.
+- [ ] Stocks: valuation risk, debt risk, margin pressure, sector slowdown, weak earnings, negative news, and data-availability risk.
+- [ ] Mutual funds: volatility, high expense ratio, underperformance, concentration, drawdown, fund manager change, and category risk.
+- [ ] Keep risk language balanced and non-promotional.
+- Acceptance Criteria:
+  - Risk section appears in stock and mutual fund analysis flows.
+  - Risk bullets are backed by deterministic data points where available.
+  - When data is unavailable, show "Not available" with low confidence.
+- Why this matters:
+  - Prevents one-sided analysis and improves research quality.
+
+### 5. Watchlist
+- [ ] Add logged-in user watchlist support for stocks and mutual funds.
+- [ ] Allow users to add/remove assets.
+- [ ] Design for future alerts, daily summaries, and personalized research history.
+- [ ] Document required frontend, backend, and Supabase changes before rollout.
+- Acceptance Criteria:
+  - Users can create and edit a watchlist from the UI.
+  - Watchlist assets are persisted and returned via API.
+  - Roadmap includes schema/API/task breakdown for alerts and history follow-ups.
+- Why this matters:
+  - Creates repeat-user workflows and personalized context.
+
+### 6. Daily MarketMind Brief
+- [ ] Add a daily market summary experience.
+- [ ] Include market mood, Nifty/Sensex trend, top/weak sectors, important news, watchlist changes, and MF NAV updates.
+- [ ] Keep structure beginner-friendly: What happened, why it matters, what to watch next.
+- Acceptance Criteria:
+  - Daily brief can be generated from deterministic data snapshots.
+  - Brief format is consistent and readable on mobile and desktop.
+  - Watchlist-aware section is supported when user watchlist exists.
+- Why this matters:
+  - Gives users a clear daily reason to return.
+
+### 7. Peer and Sector Comparison
+- [ ] Add sector and peer comparison for stocks.
+- [ ] Compare against sector median or close competitors.
+- [ ] Include valuation, profitability, growth, debt, margin, and price performance.
+- [ ] Keep future scope for dedicated sector overview pages.
+- Acceptance Criteria:
+  - Stock analysis can display peer/sector-relative metrics.
+  - Comparison highlights over/under-performance vs peer baseline.
+  - Sector data model supports future sector overview screens.
+- Why this matters:
+  - Adds market context beyond standalone stock snapshots.
+
+### 8. Saved Reports and PDF Export
+- [ ] Allow users to save stock/fund analysis reports.
+- [ ] Add exportable PDF research reports.
+- [ ] Include summary, key metrics, charts, risks, news sentiment, data sources, freshness, and disclaimer.
+- [ ] Keep future support for shareable research links.
+- Acceptance Criteria:
+  - User can save and reopen a report snapshot.
+  - PDF export matches key on-screen analysis sections.
+  - Saved report includes source/freshness/disclaimer metadata.
+- Why this matters:
+  - Improves research continuity and shareability.
+
+### 9. Suggested Questions and Research Templates
+- [ ] Add clickable suggested questions in chat, stock pages, MF pages, and comparison pages.
+- [ ] Include prompts like: expensive now, key risks, competitor compare, benchmark compare, SIP research fit.
+- [ ] Add templates: Stock Deep Dive, Mutual Fund Deep Dive, Risk Analysis, News Impact Analysis, Long-Term Investor View.
+- Acceptance Criteria:
+  - Suggested questions are context-aware by page/entity type.
+  - Template selection pre-builds deterministic analysis request payloads.
+  - Templates do not generate recommendation language.
+- Why this matters:
+  - Helps users ask better research questions faster.
+
+### 10. SEO Learning Pages
+- [ ] Add public educational pages for organic discovery.
+- [ ] Include topics: P/E ratio, MF comparison, Alpha vs Beta vs Sharpe, large cap vs flexi cap, reading stock fundamentals.
+- [ ] Add future public pages for stocks, mutual funds, and comparisons.
+- [ ] Keep all content aligned to research-only positioning.
+- Acceptance Criteria:
+  - Educational pages are published with consistent disclaimers and citations.
+  - SEO pages link to in-app research workflows without advice wording.
+  - Content quality checks ensure research-only language.
+- Why this matters:
+  - Builds top-of-funnel discovery and trust with educational content.
+
+## Recommended Release Order
+
+### Phase 1: Trust and Clarity
+1. Data Freshness and Source Badges
+2. Risk Analysis Section
+3. Beginner / Advanced Explanation Mode
+4. Suggested Questions and Research Templates
+
+### Phase 2: Differentiation
+5. Research Scorecard
+6. Peer and Sector Comparison
+
+### Phase 3: Retention
+7. Watchlist
+8. Daily MarketMind Brief
+9. Saved Reports and PDF Export
+
+### Phase 4: Growth
+10. SEO Learning Pages
+
+## Implementation Notes
+- Do not make MarketMind look like a stock tips or recommendation platform.
+- Keep the product positioning as research-only.
+- Every AI-generated insight should be backed by deterministic data where possible.
+- Add disclaimers where financial interpretation is shown.
+- Prefer incremental implementation behind feature flags where possible.
+- Each feature should eventually include frontend, backend, database, API, and testing tasks.
+- Do not break the current deployed app.
+- Do not modify production environment variables.
+- Do not make database-destructive changes.
+
 ## In Progress
 - [ ] Expanding stock coverage beyond the current Nifty-focused list.
 - [ ] Testing `NIFTY500` vs `NIFTYTOTALMARKET`.
@@ -49,4 +200,3 @@
 - YFinance rate limits often on Render deployments.
 - [ ] Portfolio overlap is partial because AMFI holdings API often returns `Nil`.
 - News uses Google News RSS and can be slow.
-- Landing page wide-screen void was fixed by removing fixed hero width caps and using full-width sections.

@@ -13,42 +13,50 @@ type TickerItem = {
 };
 
 const trustItems = [
-  { icon: "bar_chart_4_bars", label: "BSE & NSE Data", warning: false },
-  { icon: "trending_up", label: "Direct Mutual Funds", warning: false },
-  { icon: "shield", label: "Research Only", warning: true },
-  { icon: "chat_bubble", label: "AI-Assisted Analysis", warning: false },
+  { icon: "verified", label: "NSE/BSE linked datasets" },
+  { icon: "schedule", label: "Timestamped refresh signals" },
+  { icon: "analytics", label: "Metric-level stock + fund coverage" },
+  { icon: "robot_2", label: "AI explanations grounded in numbers" },
 ];
 
-const features = [
+const signalCards = [
   {
-    icon: "chat_bubble",
-    title: "AI Research Assistant",
-    body: "Ask market questions in plain English and get answers tied back to structured stock and fund data.",
+    icon: "dataset",
+    title: "Authentic Source Layer",
+    body: "Price, fundamentals, and fund metrics come from tracked market-source pipelines with visible freshness context.",
+  },
+  {
+    icon: "model_training",
+    title: "AI Research Copilot",
+    body: "Ask plain-English questions and get structured answers connected to actual symbol and scheme data.",
   },
   {
     icon: "compare_arrows",
-    title: "Side-by-Side Equities",
-    body: "Compare stocks across price, returns, ratios, risk metrics, and available fundamentals.",
+    title: "Analysis Workspace",
+    body: "Move from chat to side-by-side comparisons for returns, risk, valuation, and trend interpretation.",
+  },
+];
+
+const processSteps = [
+  {
+    number: "01",
+    title: "Select",
+    body: "Pick stocks or funds and open a unified research canvas.",
   },
   {
-    icon: "trending_up",
-    title: "Mutual Fund Metrics",
-    body: "Review AUM, expense ratio, benchmark context, rolling returns, Alpha, Beta, and Sharpe ratio.",
+    number: "02",
+    title: "Validate",
+    body: "Check freshness, source badges, and metric alignment before conclusions.",
   },
   {
-    icon: "monitoring",
-    title: "Standardized Financials",
-    body: "Keep research focused on aligned metrics instead of scattered screenshots and PDF notes.",
+    number: "03",
+    title: "Interpret",
+    body: "Use AI to explain outliers, risk shifts, and fundamental changes with context.",
   },
   {
-    icon: "menu_book",
-    title: "Concept Explanations",
-    body: "Ask what a financial metric means and how it matters for the asset you are researching.",
-  },
-  {
-    icon: "layers",
-    title: "Research Workspaces",
-    body: "Move from a chat answer into comparison views when the query needs structured tables or charts.",
+    number: "04",
+    title: "Decide",
+    body: "Export a cleaner research narrative, not trading noise.",
   },
 ];
 
@@ -97,8 +105,8 @@ export default async function LandingPage() {
             MarketMind
           </Link>
           <nav className="landing-links" aria-label="Primary">
-            <a href="#features">Features</a>
-            <a href="#workflow">Workflow</a>
+            <a href="#signals">Signals</a>
+            <a href="#process">Research Loop</a>
             <a href="#disclaimer">Disclaimer</a>
           </nav>
           <div className="landing-nav-actions">
@@ -113,19 +121,29 @@ export default async function LandingPage() {
       <main>
         <section className="landing-hero">
           <div className="landing-hero-copy">
-            <h1>Research Indian equities and mutual funds with clarity</h1>
+            <p className="landing-kicker">AI + market-verified intelligence</p>
+            <h1>Research with proof, not hype.</h1>
             <p>
-              Compare stocks, analyze mutual fund metrics, and ask context-aware questions in one
-              research workspace.
+              MarketMind blends AI reasoning with authentic Indian market datasets so your analysis
+              stays explainable, traceable, and usable.
             </p>
             <div className="landing-actions">
               <Link href="/dashboard" className="landing-primary-action">
-                Start researching
+                Start Research
               </Link>
-              <a href="#features" className="landing-secondary-action">
-                View features
+              <a href="#signals" className="landing-secondary-action">
+                Explore Signals
               </a>
             </div>
+          </div>
+
+          <div className="landing-proof-grid" aria-label="MarketMind research proof points">
+            {trustItems.map((item) => (
+              <article className="landing-proof-card" key={item.label}>
+                <span className="material-symbols-outlined">{item.icon}</span>
+                <p>{item.label}</p>
+              </article>
+            ))}
           </div>
 
           <div className="landing-chat-stage" aria-label="Try MarketMind">
@@ -134,13 +152,11 @@ export default async function LandingPage() {
             <section className="landing-market-strip" aria-label="Nifty 50 stock changes">
               <div className="landing-market-strip-label">
                 <span className="material-symbols-outlined">candlestick_chart</span>
-                Nifty 50
+                Nifty 50 snapshot
               </div>
               <div className="landing-market-strip-window">
                 {tickerItems.length === 0 ? (
-                  <div className="landing-market-strip-message">
-                    Current Nifty 50 changes unavailable.
-                  </div>
+                  <div className="landing-market-strip-message">Current Nifty 50 changes unavailable.</div>
                 ) : (
                   <div className="landing-market-strip-track">
                     {[0, 1].map((groupIndex) => (
@@ -173,33 +189,13 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        <section className="landing-trust-strip" aria-label="MarketMind trust markers">
-          {trustItems.map((item) => (
-            <span className="landing-trust-pill" key={item.label}>
-              <span className={`material-symbols-outlined ${item.warning ? "warning" : ""}`}>
-                {item.icon}
-              </span>
-              {item.label}
-            </span>
-          ))}
-        </section>
-
-        <section id="workflow" className="landing-problem">
-          <h2>The problem with retail market tools</h2>
-          <p>
-            Most platforms optimize for trading. MarketMind keeps the workspace focused on research,
-            structured comparisons, and plain-English explanations.
-          </p>
-        </section>
-
-        <section id="features" className="landing-features">
+        <section id="signals" className="landing-signals">
           <div className="landing-section-heading">
-            <h2>Core capabilities</h2>
-            <p>Structured data presentation combined with contextual AI.</p>
+            <p className="landing-kicker">Research Signals</p>
+            <h2>Built for evidence-led analysis</h2>
           </div>
-
           <div className="landing-feature-grid">
-            {features.map((feature) => (
+            {signalCards.map((feature) => (
               <article className="landing-feature-card" key={feature.title}>
                 <span className="material-symbols-outlined">{feature.icon}</span>
                 <h3>{feature.title}</h3>
@@ -209,32 +205,27 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        <section className="landing-workflow">
-          {[
-            ["1", "Search & Select", "Input stock tickers or mutual fund names."],
-            ["2", "Compare Metrics", "Review aligned fundamentals, charts, and risk ratios."],
-            ["3", "Ask Questions", "Use chat to explain variances and clarify financial terms."],
-          ].map(([step, title, body]) => (
-            <article className="landing-workflow-step" key={step}>
-              <span>{step}</span>
-              <h3>{title}</h3>
-              <p>{body}</p>
+        <section id="process" className="landing-workflow">
+          {processSteps.map((step) => (
+            <article className="landing-workflow-step" key={step.number}>
+              <span>{step.number}</span>
+              <h3>{step.title}</h3>
+              <p>{step.body}</p>
             </article>
           ))}
         </section>
 
         <section id="disclaimer" className="landing-disclaimer">
-          <span className="material-symbols-outlined">shield</span>
+          <span className="material-symbols-outlined">gpp_good</span>
           <p>
-            <strong>Regulatory Disclaimer:</strong> MarketMind is an educational and research
-            platform. It is not a SEBI-registered investment advisor, and its output is not
-            investment advice.
+            <strong>Regulatory Disclaimer:</strong> MarketMind is an educational research platform.
+            It is not a SEBI-registered investment advisor, and output is not investment advice.
           </p>
         </section>
 
         <section className="landing-final-cta">
-          <h2>Make market research less intimidating.</h2>
-          <p>Create a workspace to analyze Indian equities and mutual funds logically.</p>
+          <h2>Turn raw market data into clear research decisions.</h2>
+          <p>Open your AI-assisted workspace and analyze with better structure.</p>
           <Link href="/dashboard" className="landing-primary-action">
             Open MarketMind
           </Link>
@@ -244,9 +235,9 @@ export default async function LandingPage() {
       <footer className="landing-footer">
         <div>
           <strong>MarketMind</strong>
-          <p>AI-assisted research for Indian stocks and mutual funds.</p>
+          <p>AI-assisted analysis for Indian equities and mutual funds.</p>
         </div>
-        <p>© 2026 MarketMind Research. Built for structured data, not trading.</p>
+        <p>© 2026 MarketMind Research. Data-informed by design.</p>
       </footer>
     </div>
   );

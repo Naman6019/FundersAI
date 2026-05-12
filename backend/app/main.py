@@ -38,6 +38,7 @@ from app.services.quant_service import (
     get_stock_financials,
     get_stock_price_history,
 )
+from app.services.comparison_reasoning import build_mf_why_better
 from app.services import indianapi_service
 from app.services.mfapi_service import get_latest_nav as mfapi_get_latest_nav, get_nav_history as mfapi_get_nav_history, search_schemes as mfapi_search_schemes
 from app.services.indianapi_quota_guard import evaluate as evaluate_indianapi_quota
@@ -99,6 +100,7 @@ def provider_usage_dashboard():
 class ChatRequest(BaseModel):
     query: str
     asset_type: Literal["auto", "stock", "mutual_fund"] = "auto"
+    research_depth: Literal["standard", "deep"] = "standard"
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 GROQ_BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -987,10 +989,18 @@ async def run_stock_screen(filters: dict) -> list:
         logger.error(f"Stock screening DB error: {e}")
         return []
 
-async def synthesis_response(query: str, intent_info: dict, quant_data: Any, news_data: list, screening_results: list = None) -> str:
+async def synthesis_response(
+    query: str,
+    intent_info: dict,
+    quant_data: Any,
+    news_data: list,
+    screening_results: list = None,
+    research_depth: str = "standard",
+) -> str:
     """Synthesis Core"""
     
     intent = intent_info.get("intent")
+    deep_research = research_depth == "deep"
     
     if intent == "general":
         system_prompt_gen = """You are MarketMind, an expert AI stock market research assistant and financial educator.
@@ -998,6 +1008,15 @@ If the user asks basic educational questions (e.g., 'What is PE ratio?', 'Explai
 Break down metrics like P/E Ratio (valuation), RSI (momentum/overbought/oversold), and moving averages carefully. Use bullet points and analogies if helpful. 
 Do NOT be overly brief when explaining concepts. Provide deep value to the user.
 NEVER give direct financial advice to buy or sell a specific stock."""
+        if deep_research:
+            system_prompt_gen = """You are MarketMind, an expert AI stock market research assistant and financial educator.
+Answer as a deep research explainer with this structure:
+1) Concept Breakdown
+2) Why It Matters in Indian markets
+3) How to Read It with other metrics
+4) Red Flags and Common Mistakes
+5) Research Checklist
+Use clear language, practical examples, and no buy/sell advice."""
         messages = [
             {"role": "system", "content": system_prompt_gen},
             {"role": "user", "content": query}
@@ -1015,6 +1034,19 @@ Use the provided structured facts only. Do not add new numbers.
 Use neutral research language. Do not use advice words or phrases like buy, sell, invest, avoid, investors should, attractive option, or long-term investment.
 If data is unavailable for an entity, mention that the comparison is limited by missing data.
 Keep it to 3-5 concise sentences."""
+    if deep_research:
+        system_prompt = """You are MarketMind, a research-only Indian market analyst.
+Create a deep research note using only the provided facts, with exactly these markdown sections:
+### Executive Summary
+### What the Data Shows
+### Bull vs Bear Case
+### Risks and Missing Data
+### Research Checklist
+Rules:
+- No buy/sell/invest advice.
+- Do not invent numbers.
+- If data is missing, state it clearly.
+- Keep each section concise and factual."""
     
     notes_context = "\n".join([f"- {note}" for note in data_notes]) if data_notes else "- None"
     context = f"""
@@ -1039,14 +1071,35 @@ News Data:
     
     trend = await function_ollama_chat(messages, format="text")
     if not trend:
-        trend = "The structured data above should be read as market context, not as a recommendation. Metrics can be useful for comparison, but missing values and source freshness limit the strength of any conclusion. Use the available figures as a starting point for independent research."
+        if deep_research:
+            trend = """### Executive Summary
+- Structured metrics and recent news are available but should be treated as research context, not advice.
+
+### What the Data Shows
+- The table highlights current valuation, profitability, momentum, and recent performance where available.
+
+### Bull vs Bear Case
+- Bull case depends on consistency in reported growth and price strength.
+- Bear case depends on weak/partial data, stale inputs, or negative news flow.
+
+### Risks and Missing Data
+- Missing values, stale records, and provider limits reduce confidence.
+
+### Research Checklist
+- Validate latest filings and earnings commentary.
+- Check trend durability across longer periods."""
+        else:
+            trend = "The structured data above should be read as market context, not as a recommendation. Metrics can be useful for comparison, but missing values and source freshness limit the strength of any conclusion. Use the available figures as a starting point for independent research."
     trend = _sanitize_research_text(trend.strip())
 
     notes_markdown = ""
     if data_notes:
         notes_markdown = "\n\n### Data Notes\n" + "\n".join([f"- {note}" for note in data_notes])
 
-    return f"""### {subject} — Snapshot
+    title = "Deep Research Snapshot" if deep_research else "Snapshot"
+    analysis_heading = "Deep Research Analysis" if deep_research else "Trend Observation"
+
+    return f"""### {subject} — {title}
 > {snapshot}
 
 ### Data Table
@@ -1055,7 +1108,7 @@ News Data:
 ### News & Announcements *(last 48-72 hrs)*
 {news_markdown}
 
-### Trend Observation
+### {analysis_heading}
 
 {trend}
 
@@ -1069,23 +1122,8 @@ async def trigger_eod_fetch(background_tasks: BackgroundTasks):
 
 async def get_mf_history_df(scheme_code: int, days: int = 1100):
     """Fetch MF history from Supabase and return as a DataFrame compatible with risk functions."""
-    async def fetch_remote_history() -> pd.DataFrame:
-        try:
-            payload = mfapi_get_nav_history(str(scheme_code))
-            rows = payload.get("data") or []
-            if not rows:
-                return pd.DataFrame()
-            df = pd.DataFrame(rows)
-            df["date"] = pd.to_datetime(df["nav_date"], errors="coerce")
-            df["Close"] = pd.to_numeric(df["nav"], errors="coerce")
-            df = df.dropna(subset=["date", "Close"]).sort_values("date")
-            df.set_index("date", inplace=True)
-            return _normalize_price_df_index(df[["Close"]])
-        except Exception as e:
-            logger.warning(f"MFAPI history fallback failed for {scheme_code}: {e}")
-            return pd.DataFrame()
-
-    if not supabase: return pd.DataFrame()
+    if not supabase:
+        return pd.DataFrame()
     try:
         # Default is ~3 years; callers can request more for 5Y UI metrics.
         res = supabase.table('mutual_fund_nav_history').select('nav, nav_date').eq('scheme_code', str(scheme_code)).order('nav_date', desc=True).limit(days).execute()
@@ -1097,28 +1135,15 @@ async def get_mf_history_df(scheme_code: int, days: int = 1100):
             df = df.sort_values('date')
             df.rename(columns={'nav': 'Close'}, inplace=True)
             df.set_index('date', inplace=True)
-            if len(df) < min(days, 500):
-                remote_df = await fetch_remote_history()
-                if not remote_df.empty:
-                    return remote_df.tail(days)
             return _normalize_price_df_index(df)
     except Exception as e:
         logger.error(f"Failed to fetch local MF history for {scheme_code}: {e}")
-    return await fetch_remote_history()
+    return pd.DataFrame()
 
 async def get_nifty_history_df(days: int = 1100):
     """Fetch NIFTY history from Supabase stock_history table."""
-    def fetch_yfinance_nifty() -> pd.DataFrame:
-        try:
-            hist = yf.Ticker("^NSEI").history(period="5y")
-            if hist.empty:
-                return pd.DataFrame()
-            return _normalize_price_df_index(hist[["Close"]]).tail(days)
-        except Exception as e:
-            logger.warning(f"YFinance NIFTY fallback failed: {e}")
-            return pd.DataFrame()
-
-    if not supabase: return fetch_yfinance_nifty()
+    if not supabase:
+        return pd.DataFrame()
     try:
         res = supabase.table('stock_history').select('close, date').eq('symbol', 'NIFTY').order('date', desc=True).limit(days).execute()
         if res.data:
@@ -1127,14 +1152,10 @@ async def get_nifty_history_df(days: int = 1100):
             df = df.sort_values('date')
             df.rename(columns={'close': 'Close'}, inplace=True)
             df.set_index('date', inplace=True)
-            if len(df) < min(days, 500):
-                yf_df = fetch_yfinance_nifty()
-                if not yf_df.empty:
-                    return yf_df
             return _normalize_price_df_index(df)
     except Exception as e:
         logger.error(f"Failed to fetch local NIFTY history: {e}")
-    return fetch_yfinance_nifty()
+    return pd.DataFrame()
 
 def _normalize_fund_text(text: str) -> str:
     return " ".join(
@@ -1373,28 +1394,7 @@ async def chat_endpoint(req: ChatRequest):
         return f"%{'%'.join(words)}%" if words else "%"
 
     def _fund_from_mfapi(search_term: str) -> dict | None:
-        result = mfapi_search_schemes(search_term)
-        if not result.get("ok"):
-            return None
-        matches = result.get("data") or []
-        if not matches:
-            return None
-        best = _pick_best_fund_match(search_term, matches)
-        latest = mfapi_get_latest_nav(best.get("scheme_code"))
-        latest_data = latest.get("data") if latest.get("ok") else None
-        if not latest_data:
-            return None
-        return {
-            "name": latest_data.get("scheme_name") or best.get("scheme_name"),
-            "scheme_code": best.get("scheme_code"),
-            "nav": latest_data.get("nav"),
-            "nav_date": latest_data.get("nav_date"),
-            "category": latest_data.get("category"),
-            "fund_house": latest_data.get("amc_name"),
-            "expense_ratio": "N/A",
-            "aum": "N/A",
-            "source": "mfapi",
-        }
+        return None
     
     if intent == "screen":
         filters = intent_info.get("screen_filters", {})
@@ -1408,85 +1408,128 @@ async def chat_endpoint(req: ChatRequest):
             intent = "quant"
             ticker = entities[0]
         else:
-            comparison_results = {}
-            # Pre-fetch Nifty history once for all comparisons
-            n_hist_local = await get_nifty_history_df()
-            
-            for entity in entities:
-                db_data = None
-                scheme_code = None
-                if supabase and asset_type != "stock":
-                    try:
-                        search_term = _entity_search_term(entity)
-                        search_pattern = _fund_search_pattern(search_term)
-                        res = supabase.table('mutual_fund_core_snapshot').select('*').ilike('scheme_name', search_pattern).limit(25).execute()
-                        if not res.data:
-                            res = supabase.table('mutual_funds').select('*').ilike('scheme_name', search_pattern).limit(25).execute()
-                        if res.data:
-                            best_match = _pick_best_fund_match(search_term, res.data)
-                            scheme_code = best_match['scheme_code']
-                            db_data = {
-                                "name": best_match['scheme_name'],
-                                "nav": best_match['nav'],
-                                "nav_date": best_match['nav_date'],
-                                "category": best_match['category'],
-                                "fund_house": best_match.get('amc_name') or best_match.get('fund_house'),
-                                "expense_ratio": best_match.get('expense_ratio', "N/A"),
-                                "aum": best_match.get('aum', "N/A"),
-                                "source": "MarketMind DB"
-                            }
-                    except Exception as e:
-                        logger.error(f"Supabase compare error: {e}")
-
-                if not db_data and asset_type != "stock":
-                    db_data = _fund_from_mfapi(entity)
-
-                risk_metrics = {}
-                yf_ticker = None if asset_type == "mutual_fund" else await resolve_mf_ticker(entity)
-                stock_symbol = None if asset_type == "mutual_fund" else resolve_stock_symbol(entity)
+            if asset_type == "stock":
+                stock_payload = build_stock_compare(entities)
+                quant_data = {
+                    "comparison": stock_payload.get("comparison", {}),
+                    "why_better": stock_payload.get("why_better"),
+                    "verdict_context": stock_payload.get("verdict_context"),
+                    "source_freshness": stock_payload.get("source_freshness"),
+                    "data_quality": stock_payload.get("data_quality"),
+                    "asset_type": "stock",
+                }
+                intent_info["compare_entities"] = entities
+            else:
+                comparison_results = {}
+                # Pre-fetch Nifty history once for all comparisons
+                n_hist_local = await get_nifty_history_df()
                 
-                try:
-                    hist = pd.DataFrame()
-                    nifty_hist = pd.DataFrame()
+                for entity in entities:
+                    db_data = None
+                    scheme_code = None
+                    if supabase and asset_type != "stock":
+                        try:
+                            search_term = _entity_search_term(entity)
+                            search_pattern = _fund_search_pattern(search_term)
+                            res = supabase.table('mutual_fund_core_snapshot').select('*').ilike('scheme_name', search_pattern).limit(25).execute()
+                            if not res.data:
+                                res = supabase.table('mutual_funds').select('*').ilike('scheme_name', search_pattern).limit(25).execute()
+                            if res.data:
+                                best_match = _pick_best_fund_match(search_term, res.data)
+                                scheme_code = best_match['scheme_code']
+                                db_data = {
+                                    "name": best_match['scheme_name'],
+                                    "nav": best_match['nav'],
+                                    "nav_date": best_match['nav_date'],
+                                    "category": best_match['category'],
+                                    "fund_house": best_match.get('amc_name') or best_match.get('fund_house'),
+                                    "expense_ratio": best_match.get('expense_ratio', "N/A"),
+                                    "aum": best_match.get('aum', "N/A"),
+                                    "return_1y": best_match.get("return_1y"),
+                                    "return_3y": best_match.get("return_3y"),
+                                    "return_5y": best_match.get("return_5y"),
+                                    "volatility_1y": best_match.get("volatility_1y"),
+                                    "max_drawdown_1y": best_match.get("max_drawdown_1y"),
+                                    "alpha": best_match.get("alpha"),
+                                    "beta": best_match.get("beta"),
+                                    "source": "MarketMind DB"
+                                }
+                        except Exception as e:
+                            logger.error(f"Supabase compare error: {e}")
 
-                    # Prefer local MF history for compare mode. It is faster, more stable,
-                    # and avoids third-party ticker mismatches for Indian mutual funds.
-                    if scheme_code:
-                        hist = await get_mf_history_df(scheme_code)
-                        nifty_hist = n_hist_local
+                    if not db_data and asset_type != "stock":
+                        db_data = _fund_from_mfapi(entity)
 
-                    # Only fall back to YFinance when local history is unavailable.
-                    if hist.empty and yf_ticker:
-                        stock = yf.Ticker(yf_ticker)
-                        hist = stock.history(period="3y")
-                        nifty = yf.Ticker("^NSEI")
-                        nifty_hist = nifty.history(period="3y")
-                        # Add AUM if missing
-                        if db_data and (not db_data.get("aum") or db_data["aum"] == "N/A"):
-                            db_data["aum"] = stock.info.get("totalAssets", "N/A")
-                        
-                    if not hist.empty and not nifty_hist.empty:
-                        metrics = calculate_alpha_beta_v2(hist, nifty_hist)
-                        risk_metrics = {
-                            "beta": metrics["beta"],
-                            "alpha_vs_nifty": metrics["alpha"],
-                            "risk_period": f"{metrics.get('period_years', 3)}Y"
-                        }
-                except:
-                    pass
-
-                if db_data:
-                    db_data.update(risk_metrics)
-                    comparison_results[entity] = db_data
-                elif asset_type != "mutual_fund" and (stock_symbol or yf_ticker):
-                    sym = stock_symbol or yf_ticker
-                    comparison_results[entity] = _stock_compare_item(sym, risk_metrics)
-                elif asset_type != "mutual_fund":
-                    comparison_results[entity] = _stock_compare_item(entity, risk_metrics)
-                else:
-                    comparison_results[entity] = {"error": "Data not found for this entity"}
+                    risk_metrics = {}
+                    yf_ticker = None
+                    stock_symbol = None
                     
-            quant_data = {"comparison": comparison_results}
+                    try:
+                        hist = pd.DataFrame()
+                        nifty_hist = pd.DataFrame()
+
+                        # Prefer local MF history for compare mode. It is faster, more stable,
+                        # and avoids third-party ticker mismatches for Indian mutual funds.
+                        if scheme_code:
+                            hist = await get_mf_history_df(scheme_code)
+                            nifty_hist = n_hist_local
+
+                        if not hist.empty and not nifty_hist.empty:
+                            metrics = calculate_alpha_beta_v2(hist, nifty_hist)
+                            risk_metrics = {
+                                "beta": metrics["beta"],
+                                "alpha_vs_nifty": metrics["alpha"],
+                                "risk_period": f"{metrics.get('period_years', 3)}Y"
+                            }
+                    except:
+                        pass
+
+                    if db_data:
+                        missing_fields = [
+                            field
+                            for field in ("nav", "nav_date", "expense_ratio", "aum")
+                            if _is_missing(db_data.get(field))
+                        ]
+                        source_summary = {
+                            "metadata": db_data.get("source"),
+                            "stale": not cache_policy.is_fresh(db_data.get("nav_date") or db_data.get("updated_at"), "mutual_fund_nav"),
+                            "nav_date": db_data.get("nav_date"),
+                        }
+                        db_data.update(risk_metrics)
+                        db_data["data_quality"] = {
+                            "missing_fields": missing_fields,
+                            "message": "Some mutual fund fields are unavailable from local Supabase data." if missing_fields else "Complete for requested fields.",
+                            "coverage_status": "incomplete" if missing_fields else "complete",
+                        }
+                        db_data["source_summary"] = source_summary
+                        db_data["holdings"] = db_data.get("holdings") or []
+                        comparison_results[entity] = db_data
+                    elif asset_type != "mutual_fund" and (stock_symbol or yf_ticker):
+                        sym = stock_symbol or yf_ticker
+                        comparison_results[entity] = _stock_compare_item(sym, risk_metrics)
+                    elif asset_type != "mutual_fund":
+                        comparison_results[entity] = _stock_compare_item(entity, risk_metrics)
+                    else:
+                        comparison_results[entity] = {
+                            "error": "Data not found for this entity",
+                            "data_quality": {
+                                "missing_fields": ["scheme_code"],
+                                "message": "Mutual fund could not be matched in local Supabase data.",
+                                "coverage_status": "incomplete",
+                            },
+                            "source_summary": {"metadata": None, "stale": True, "nav_date": None},
+                            "holdings": [],
+                        }
+                        
+                why_better = build_mf_why_better(comparison_results)
+                quant_data = {
+                    "comparison": comparison_results,
+                    "why_better": why_better,
+                    "verdict_context": why_better.get("verdict_context"),
+                    "source_freshness": why_better.get("source_freshness"),
+                    "data_quality": {name: (payload.get("data_quality") or {}) for name, payload in comparison_results.items()},
+                    "asset_type": "mutual_fund",
+                }
     
     # Handle single quant lookup (or forced single comparison)
     if intent in ["quant", "both"]:
@@ -1548,7 +1591,14 @@ async def chat_endpoint(req: ChatRequest):
             news_items = await analyze_news_sentiment(news_items)
         news_data = news_items
             
-    final_answer = await synthesis_response(req.query, intent_info, quant_data, news_data, screening_results)
+    final_answer = await synthesis_response(
+        req.query,
+        intent_info,
+        quant_data,
+        news_data,
+        screening_results,
+        req.research_depth,
+    )
     response_json = {
         "answer": final_answer,
         "debug_intent": intent_info,
