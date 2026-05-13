@@ -245,6 +245,18 @@ class StockRepository:
             return
         self._upsert("mutual_fund_nav_history", rows, "scheme_code,nav_date")
 
+    def upsert_mutual_fund_holdings_rows(self, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
+        stamped = [{**row, "updated_at": datetime.now(timezone.utc).isoformat()} for row in rows if row.get("security_name")]
+        self._upsert("mutual_fund_holdings", stamped, "scheme_code,as_of_date,security_name,isin")
+
+    def upsert_mutual_fund_sector_rows(self, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
+        stamped = [{**row, "updated_at": datetime.now(timezone.utc).isoformat()} for row in rows if row.get("sector")]
+        self._upsert("mutual_fund_sectors", stamped, "scheme_code,sector")
+
     def get_mutual_fund_core_snapshot(self, scheme_code: str) -> dict[str, Any] | None:
         if not self._has_client():
             return None

@@ -24,12 +24,17 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          STOCK_DATA_PROVIDER: indianapi
-          INDIANAPI_KEY: ${{ secrets.INDIAN_API_KEY }}
+          CORPORATE_EVENTS_PROVIDER: finedge
+          FINEDGE_API_KEY: ${{ secrets.FINEDGE_API_KEY }}
+          INDIANAPI_ENABLE_CORPORATE_EVENTS_FALLBACK: "false"
           ENABLE_CORPORATE_ACTIONS_SYNC: "false"
         run: |
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ] || [ -z "$INDIANAPI_KEY" ]; then
-            echo "Error: Missing SUPABASE_URL, SUPABASE_KEY, or INDIAN_API_KEY"
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "Error: Missing SUPABASE_URL or SUPABASE_KEY"
+            exit 1
+          fi
+          if [ "$ENABLE_CORPORATE_ACTIONS_SYNC" = "true" ] && [ -z "$FINEDGE_API_KEY" ]; then
+            echo "Error: Missing FINEDGE_API_KEY"
             exit 1
           fi
           python -m backend.app.jobs.sync_corporate_events

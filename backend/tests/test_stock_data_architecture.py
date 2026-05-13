@@ -373,25 +373,26 @@ def test_synthesis_prompt_excludes_large_comparison_payload(monkeypatch):
     assert len(captured["context"]) < 5000
 
 
-def test_corporate_events_job_uses_indianapi(monkeypatch):
+def test_corporate_events_job_uses_finedge_by_default(monkeypatch):
     from app.jobs import sync_corporate_events
 
-    monkeypatch.setenv("STOCK_DATA_PROVIDER", "indianapi")
-    monkeypatch.setenv("INDIANAPI_KEY", "good-key")
-    monkeypatch.setenv("INDIANAPI_ENABLED", "true")
+    monkeypatch.setenv("CORPORATE_EVENTS_PROVIDER", "finedge")
+    monkeypatch.setenv("FINEDGE_API_KEY", "good-key")
     monkeypatch.setenv("ENABLE_CORPORATE_ACTIONS_SYNC", "true")
 
     provider = sync_corporate_events.get_corporate_events_provider()
 
-    assert provider.name == "indianapi"
+    assert provider.name == "finedge"
 
 
-def test_corporate_events_job_requires_indianapi_key(monkeypatch):
+def test_corporate_events_job_keeps_indianapi_fallback_disabled(monkeypatch):
     from app.jobs import sync_corporate_events
 
-    monkeypatch.setenv("STOCK_DATA_PROVIDER", "indianapi")
+    monkeypatch.setenv("CORPORATE_EVENTS_PROVIDER", "finedge")
+    monkeypatch.delenv("FINEDGE_API_KEY", raising=False)
     monkeypatch.delenv("INDIANAPI_KEY", raising=False)
     monkeypatch.delenv("INDIAN_API_KEY", raising=False)
+    monkeypatch.setenv("INDIANAPI_ENABLE_CORPORATE_EVENTS_FALLBACK", "false")
 
     assert sync_corporate_events.get_corporate_events_provider() is None
 
@@ -736,6 +737,52 @@ def test_finedge_annual_results_map_basic_financials(monkeypatch):
     assert result[0]["period_end_date"].isoformat() == "2025-03-31"
     assert result[0]["revenue"] == 100
     assert result[0]["source"] == "finedge"
+
+
+def test_finedge_maps_profile_ratios_and_shareholding(monkeypatch):
+    from app.providers import finedge_provider
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.status_code = 200
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    def fake_get(url, params=None, timeout=None):
+        if url.endswith("/api/v1/company-profile/ITC"):
+            return FakeResponse({"nse_code": "ITC", "name": "ITC Ltd", "sector": "FMCG", "industry": "Tobacco"})
+        if url.endswith("/api/v1/annual-price-ratios/ITC"):
+            return FakeResponse({"price_ratios": [{"header": "Mar 2025", "pe": 20.5, "pb": 5.1, "ps": 4.2}]})
+        if url.endswith("/api/v1/ratios/ITC"):
+            return FakeResponse({"ratios": [{"header": "Mar 2025", "returnOnEquity": 0.24, "returnOnCapital": 0.31}]})
+        if url.endswith("/api/v1/shareholdings/pattern/ITC"):
+            return FakeResponse({
+                "columns": ["Mar 2025"],
+                "rows": [
+                    {"catagory": "Promoter", "name": "Promoter Indian", "data": {"Mar 2025": 10}},
+                    {"catagory": "Public", "name": "Foreign Institutional Investors", "data": {"Mar 2025": 20}},
+                    {"catagory": "Public", "name": "Mutual Funds", "data": {"Mar 2025": 15}},
+                ],
+            })
+        return FakeResponse({})
+
+    monkeypatch.setenv("FINEDGE_API_KEY", "test-key")
+    monkeypatch.setenv("ENABLE_SHAREHOLDING_SYNC", "true")
+    monkeypatch.setattr(finedge_provider.httpx, "get", fake_get)
+
+    provider = finedge_provider.FinEdgeProvider()
+    profile = provider.get_company_profile("ITC")
+    ratios = provider.get_ratios_snapshot("ITC")
+    shareholding = provider.get_shareholding("ITC")
+
+    assert profile["sector"] == "FMCG"
+    assert ratios["pe"] == 20.5
+    assert ratios["roe"] == 0.24
+    assert shareholding[0]["promoter_holding"] == 10
+    assert shareholding[0]["fii_holding"] == 20
+    assert shareholding[0]["dii_holding"] == 15
 
 
 def test_data_quality_issue_allows_legacy_keyword_shape():

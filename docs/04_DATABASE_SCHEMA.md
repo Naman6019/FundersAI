@@ -19,6 +19,8 @@ MarketMind uses Supabase (PostgreSQL) as its primary data store.
 - `stock_core_snapshot`: Bare-minimum stock snapshot for Supabase-first comparison/read paths.
 - `mutual_fund_core_snapshot`: Bare-minimum mutual fund snapshot with computed returns/risk metrics.
 - `mutual_fund_nav_history`: Normalized NAV history for local metric computation.
+- `mutual_fund_holdings`: MFdata portfolio holdings used for overlap and exposure analysis.
+- `mutual_fund_sectors`: MFdata sector allocations used for MF exposure summaries.
 - `provider_usage_logs`: Provider usage, cache-hit, failure, and quota-skip tracking.
 
 ## TODOs

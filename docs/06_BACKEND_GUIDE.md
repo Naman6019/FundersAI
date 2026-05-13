@@ -41,6 +41,7 @@ backend/
       calculate_ratios.py
       sync_corporate_events.py
       sync_mf_nav.py
+      sync_mf_enrichment.py
       sync_mf_from_indianapi.py
   scripts/
     sync_mf.py
@@ -65,12 +66,15 @@ backend/
 - Controlled by `STOCK_DATA_PROVIDER`.
 - If selected provider is unavailable, provider registry falls back to `manual` mode.
 - Scheduled stock price workflows use NSE path (`STOCK_DATA_PROVIDER=nse`).
+- Scheduled stock universe/fundamentals workflows use FinEdge (`STOCK_DATA_PROVIDER=finedge`).
+- IndianAPI remains an explicitly enabled paid fallback/research path.
 
 ## Important Flags
 - `ENABLE_PROVIDER_USAGE_ENDPOINT`
 - `ENABLE_STOCK_FUNDAMENTALS_SYNC`
 - `ENABLE_STOCK_PRICE_SYNC`
 - `ENABLE_MF_NAV_SYNC`
+- `ENABLE_MF_ENRICHMENT_SYNC`
 - `ENABLE_SHAREHOLDING_SYNC`
 - `ENABLE_CORPORATE_ACTIONS_SYNC`
 - `INDIANAPI_ENABLE_LIVE_CALLS`

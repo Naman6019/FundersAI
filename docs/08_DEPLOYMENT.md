@@ -31,13 +31,15 @@
 | `sync-fundamentals-weekly.yml` | `0 2 * * 6` + `0 2 1 * *` + manual | Fundamentals sync + ratio calc |
 | `sync-corporate-events.yml` | `0 3 * * *` | Corporate action sync |
 | `mf-sync.yml` | `30 13 * * 1-5` | MF NAV/history/metadata/snapshot pipeline |
+| `sync-mf-enrichment.yml` | `0 4 2 * *` | MFdata holdings/sector/enrichment pipeline |
 | `keepalive.yml` | `*/10 * * * *` | Direct Render `/health` ping |
 
 ## Secrets and Variables
 - Repository secrets used by workflows:
   - `SUPABASE_URL`
   - `SUPABASE_KEY`
-  - `INDIAN_API_KEY` (mapped to runtime env `INDIANAPI_KEY` in stock enrichment workflows)
+  - `FINEDGE_API_KEY` (stock universe/fundamentals/corporate events)
+  - `INDIAN_API_KEY` (only for explicitly enabled IndianAPI fallback/research workflows)
 - Optional repo variable:
   - `FUNDAMENTALS_WATCHLIST_SYMBOLS`
 

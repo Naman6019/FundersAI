@@ -10,6 +10,7 @@ if BASE_DIR not in sys.path:
 from dotenv import load_dotenv
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
+from app.providers.finedge_provider import FinEdgeProvider
 from app.providers.indianapi_provider import IndianAPIProvider
 from app.repositories.stock_repository import StockRepository
 from app.models.stock_models import ProviderRun, DataQualityIssue, CorporateEvent
@@ -18,10 +19,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def get_corporate_events_provider():
-    provider = IndianAPIProvider()
-    if provider.is_available():
-        return provider
-    logger.error("INDIANAPI_KEY not set. Corporate events sync requires IndianAPI.")
+    selected = os.environ.get("CORPORATE_EVENTS_PROVIDER", "finedge").strip().lower()
+    providers = [FinEdgeProvider(), IndianAPIProvider()] if selected == "finedge" else [IndianAPIProvider(), FinEdgeProvider()]
+    if os.environ.get("INDIANAPI_ENABLE_CORPORATE_EVENTS_FALLBACK", "false").strip().lower() not in {"1", "true", "yes", "on"}:
+        providers = [provider for provider in providers if provider.name != "indianapi" or selected == "indianapi"]
+    for provider in providers:
+        if provider.is_available():
+            return provider
+    logger.error("No corporate events provider configured. Set FINEDGE_API_KEY or explicitly enable IndianAPI fallback.")
     return None
 
 def main():

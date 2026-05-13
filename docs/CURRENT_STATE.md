@@ -21,17 +21,17 @@ MarketMind is a research-only Indian equities and mutual fund platform.
   - source freshness and data limitation fields
 - Source-neutral stock data architecture with repository + provider adapters.
 - Stock EOD and price history jobs using NSE bhavcopy.
-- Mutual-fund sync chain (AMFI + MFapi + local metrics write path).
+- Mutual-fund sync chain (AMFI + MFapi NAV/history + MFdata enrichment + local metrics write path).
 - Provider usage endpoint support (`/api/v1/providers/usage`) behind feature flag.
 
 ## In Progress
 - Frontend route-level rate limiting for `/api/chat` and `/api/quant/*` proxies.
 - Broader stock coverage tuning (`NIFTY500` / `NIFTYTOTALMARKET` / enrichment limits).
-- Mutual-fund holdings completeness (portfolio overlap remains partial when holdings are missing).
+- Mutual-fund holdings completeness via monthly MFdata enrichment.
 
 ## Known Gaps
 - `backend/render.yaml` references `uvicorn api.index:app`, but `backend/api/index.py` is not in this repo; deployment command source-of-truth needs alignment.
-- `ENABLE_SHAREHOLDING_SYNC=false` in scheduled fundamentals workflow keeps shareholding coverage sparse.
+- `ENABLE_SHAREHOLDING_SYNC=false` in scheduled fundamentals workflow keeps shareholding coverage sparse unless targeted manually.
 - YFinance remains fallback and may rate-limit on hosted environments.
 - News ingestion is RSS-based and can be slow.
 - Frontend proxy error messages are mostly generic and can be improved.
@@ -47,5 +47,6 @@ MarketMind is a research-only Indian equities and mutual fund platform.
 - `sync-price-history.yml`
 - `sync-fundamentals-weekly.yml`
 - `sync-corporate-events.yml`
+- `sync-mf-enrichment.yml`
 - `mf-sync.yml`
 - `keepalive.yml`

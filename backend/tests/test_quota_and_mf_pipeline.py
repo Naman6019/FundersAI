@@ -187,6 +187,56 @@ def test_mfapi_normalization(monkeypatch):
     assert history["data"][0]["scheme_code"] == "120503"
 
 
+def test_mfdata_enrichment_normalization(monkeypatch):
+    from app.services import mfdata_service
+
+    def fake_request(path, params=None, scheme_code=None):
+        if path == "/schemes/120503":
+            return {
+                "ok": True,
+                "data": {
+                    "status": "success",
+                    "data": {
+                        "scheme_code": 120503,
+                        "scheme_name": "Fund A",
+                        "amc": "AMC A",
+                        "category": "Flexi Cap",
+                        "nav": 123.45,
+                        "nav_date": "2026-05-10",
+                        "aum_cr": 1000,
+                        "expense_ratio": 0.5,
+                        "returns": {"1y": {"value": 12.3}},
+                        "ratios": {"beta": 0.9, "sharpe": 1.1},
+                        "family_id": 99,
+                    },
+                },
+            }
+        if path == "/families/99/holdings":
+            return {
+                "ok": True,
+                "data": {
+                    "status": "success",
+                    "data": {
+                        "month": "2026-04",
+                        "equity": [{"name": "HDFC Bank Ltd.", "sector": "Financial Services", "weight_pct": 8.5}],
+                    },
+                },
+            }
+        return {"ok": False, "error": "unknown", "data": None}
+
+    monkeypatch.setattr(mfdata_service, "_request", fake_request)
+
+    details = mfdata_service.get_scheme_details("120503")
+    holdings = mfdata_service.get_family_holdings(99, scheme_code="120503")
+
+    assert details["data"]["scheme_code"] == "120503"
+    assert details["data"]["aum"] == 1000
+    assert details["data"]["return_1y"] == 12.3
+    assert details["data"]["beta"] == 0.9
+    assert holdings["data"][0]["as_of_date"] == "2026-04-01"
+    assert holdings["data"][0]["security_name"] == "HDFC Bank Ltd."
+
+
 def test_mf_metrics_compute_and_null_safety():
     from app.services.mf_metrics_service import compute_nav_metrics
 

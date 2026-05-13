@@ -24,16 +24,16 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          STOCK_DATA_PROVIDER: indianapi
-          INDIANAPI_KEY: ${{ secrets.INDIAN_API_KEY }}
+          STOCK_DATA_PROVIDER: finedge
+          FINEDGE_API_KEY: ${{ secrets.FINEDGE_API_KEY }}
           INDIANAPI_ENABLE_SCHEDULED_SYNC: "true"
           INDIANAPI_ENABLE_LIVE_CALLS: "false"
           INDIANAPI_MONTHLY_LIMIT: "5000"
           INDIANAPI_MONTHLY_RESERVE: "500"
           INDIANAPI_DAILY_SOFT_LIMIT: "120"
         run: |
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ] || [ -z "$INDIANAPI_KEY" ]; then
-            echo "Error: Missing SUPABASE_URL, SUPABASE_KEY, or INDIAN_API_KEY"
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ] || [ -z "$FINEDGE_API_KEY" ]; then
+            echo "Error: Missing SUPABASE_URL, SUPABASE_KEY, or FINEDGE_API_KEY"
             exit 1
           fi
           python -m backend.app.jobs.sync_stock_universe
