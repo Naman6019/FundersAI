@@ -8,6 +8,8 @@ psql "$DATABASE_URL" -f backend/migrations/20260503_add_stock_price_value_traded
 psql "$DATABASE_URL" -f backend/migrations/20260503_add_data_quality_issues.sql
 psql "$DATABASE_URL" -f backend/migrations/20260512_quota_safe_provider_architecture.sql
 psql "$DATABASE_URL" -f backend/migrations/20260513_add_mfdata_enrichment_tables.sql
+psql "$DATABASE_URL" -f backend/migrations/20260513_drop_legacy_mutual_fund_history.sql
+psql "$DATABASE_URL" -f backend/migrations/20260513_drop_empty_legacy_stock_tables.sql
 ```
 
 ## Source-Neutral Stock Tables
@@ -29,8 +31,8 @@ All financial values use `numeric` columns. Unique constraints prevent duplicate
 - `mutual_fund_nav_history`
 - `mutual_fund_holdings`
 - `mutual_fund_sectors`
-- Existing compatibility tables remain: `mutual_funds`, `mutual_fund_history`
+- Existing compatibility table remains: `mutual_funds`
 
-Legacy tables such as `nifty_stocks` and `stock_history` are kept as fallbacks during migration. New app paths read the source-neutral tables first.
+Legacy `nifty_stocks` remains as a small search/fallback table. `mutual_fund_history`, `stock_history`, and `stock_fundamentals` were dropped after normalized tables became active.
 
 Old CSV import helpers are isolated under `backend/scripts/deprecated/` and are not part of the active migration or production jobs.

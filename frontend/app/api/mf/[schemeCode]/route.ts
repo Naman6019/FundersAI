@@ -55,19 +55,11 @@ export async function GET(_request: Request, context: { params: Promise<{ scheme
       return NextResponse.json({ error: 'Mutual fund not found' }, { status: 404 });
     }
 
-    // 1. Try to fetch history from local Supabase table
-    let historyQuery = await supabase
+    const historyQuery = await supabase
       .from('mutual_fund_nav_history')
       .select('nav, nav_date')
       .eq('scheme_code', schemeCode)
       .order('nav_date', { ascending: false });
-    if (!historyQuery.data || historyQuery.data.length === 0) {
-      historyQuery = await supabase
-        .from('mutual_fund_history')
-        .select('nav, nav_date')
-        .eq('scheme_code', parseInt(schemeCode, 10))
-        .order('nav_date', { ascending: false });
-    }
     const localHistory = historyQuery.data;
 
     const history = (localHistory || []).map(h => ({

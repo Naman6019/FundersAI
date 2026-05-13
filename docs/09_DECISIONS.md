@@ -21,9 +21,9 @@
 **Consequences:** Agents must wait for their turn and confirm they are the active editing agent.
 
 **Date:** (Pre-existing)
-**Decision:** Supabase Local History over Live API.
+**Decision:** Normalized Supabase Local History over Live API.
 **Context:** YFinance frequently rate-limits and times out on Render free tiers.
-**Consequences:** Local Supabase snapshots (`stock_history`, `mutual_fund_history`) are preferred for NIFTY history and baseline quant metrics over hitting Yahoo Finance directly.
+**Consequences:** Local normalized tables (`stock_prices_daily`, `mutual_fund_nav_history`) are preferred for history and baseline quant metrics over hitting Yahoo Finance directly. Legacy history tables were dropped to reduce free-tier storage usage.
 
 **Date:** (Pre-existing)
 **Decision:** Next.js API Proxy Pattern.

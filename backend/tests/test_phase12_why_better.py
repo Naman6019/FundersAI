@@ -180,10 +180,10 @@ def test_chat_mf_compare_does_not_call_live_clients(monkeypatch):
             if self.table in {"mutual_fund_core_snapshot", "mutual_funds"} and "scheme_name" in self.filters:
                 needle = self.filters["scheme_name"]
                 rows = [r for r in rows if needle in str(r.get("scheme_name", "")).lower()]
-            if self.table in {"mutual_fund_nav_history", "mutual_fund_history"} and "scheme_code" in self.filters:
+            if self.table == "mutual_fund_nav_history" and "scheme_code" in self.filters:
                 code = str(self.filters["scheme_code"])
                 rows = [r for r in rows if str(r.get("scheme_code")) == code]
-            if self.table == "stock_history" and "symbol" in self.filters:
+            if self.table == "stock_prices_daily" and "symbol" in self.filters:
                 rows = [r for r in rows if r.get("symbol") == self.filters["symbol"]]
             if self._order:
                 key, desc = self._order
@@ -232,7 +232,7 @@ def test_chat_mf_compare_does_not_call_live_clients(monkeypatch):
             {"scheme_code": "1002", "nav_date": "2026-05-10", "nav": 98.7},
             {"scheme_code": "1002", "nav_date": "2026-05-09", "nav": 98.2},
         ],
-        "stock_history": [
+        "stock_prices_daily": [
             {"symbol": "NIFTY", "date": "2026-05-10", "close": 22000.0},
             {"symbol": "NIFTY", "date": "2026-05-09", "close": 21980.0},
         ],

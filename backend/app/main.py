@@ -366,7 +366,7 @@ def fetch_quant_data(ticker: str, period: str = "1mo") -> dict:
             if snapshot_res.data:
                 snapshot_row = snapshot_res.data[0]
 
-            history_res = supabase.table('stock_history').select('close, date').eq('symbol', symbol).order('date', desc=True).limit(2).execute()
+            history_res = supabase.table('stock_prices_daily').select('close, date').eq('symbol', symbol).order('date', desc=True).limit(2).execute()
             history_rows = history_res.data or []
 
             if not snapshot_row and not history_rows:
@@ -1125,10 +1125,7 @@ async def get_mf_history_df(scheme_code: int, days: int = 1100):
     if not supabase:
         return pd.DataFrame()
     try:
-        # Default is ~3 years; callers can request more for 5Y UI metrics.
         res = supabase.table('mutual_fund_nav_history').select('nav, nav_date').eq('scheme_code', str(scheme_code)).order('nav_date', desc=True).limit(days).execute()
-        if not res.data:
-            res = supabase.table('mutual_fund_history').select('nav, nav_date').eq('scheme_code', scheme_code).order('nav_date', desc=True).limit(days).execute()
         if res.data:
             df = pd.DataFrame(res.data)
             df['date'] = pd.to_datetime(df['nav_date'])
@@ -1141,11 +1138,11 @@ async def get_mf_history_df(scheme_code: int, days: int = 1100):
     return pd.DataFrame()
 
 async def get_nifty_history_df(days: int = 1100):
-    """Fetch NIFTY history from Supabase stock_history table."""
+    """Fetch NIFTY history from normalized stock price history."""
     if not supabase:
         return pd.DataFrame()
     try:
-        res = supabase.table('stock_history').select('close, date').eq('symbol', 'NIFTY').order('date', desc=True).limit(days).execute()
+        res = supabase.table('stock_prices_daily').select('close, date').eq('symbol', 'NIFTY').order('date', desc=True).limit(days).execute()
         if res.data:
             df = pd.DataFrame(res.data)
             df['date'] = pd.to_datetime(df['date'])

@@ -38,7 +38,8 @@ MarketMind is a research-only Indian equities and mutual fund platform.
 
 ## Data Architecture Notes
 - Source-neutral migrations and tables are active under `backend/migrations/` and Supabase.
-- Compatibility/legacy fallbacks (`stock_history`, `nifty_stocks`) are still used when newer tables are sparse.
+- `mutual_fund_history`, `stock_history`, and `stock_fundamentals` were removed to keep Supabase storage within the free tier.
+- `nifty_stocks` remains as a small search/fallback table until stock search is fully moved to `stocks`.
 - Stock comparison/chat flows are expected to return partial results with explicit limitations instead of blocking on missing fields.
 
 ## Workflows In Use

@@ -92,7 +92,7 @@ def get_local_history(symbol: str, days: int = 100) -> pd.DataFrame:
     if not supabase:
         return pd.DataFrame()
     try:
-        res = supabase.table('stock_history')\
+        res = supabase.table('stock_prices_daily')\
             .select('close, date')\
             .eq('symbol', symbol)\
             .order('date', desc=True)\

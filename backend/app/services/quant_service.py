@@ -180,7 +180,6 @@ def resolve_stock_request(entity: str) -> str | None:
     if (
         _one("stocks", resolved)
         or _one("stock_prices_daily", resolved, "date")
-        or _one("stock_history", resolved, "date")
         or _one("stock_core_snapshot", resolved, "last_updated")
     ):
         return resolved
@@ -236,23 +235,6 @@ def get_stock_price_history(symbol: str, days: int = 365) -> list[dict[str, Any]
     rows = _rows("stock_prices_daily", clean, order="date", limit=days)
     if rows:
         return list(reversed(rows))
-
-    legacy_rows = _rows("stock_history", clean, order="date", limit=days)
-    if legacy_rows:
-        return [
-            {
-                "symbol": clean,
-                "date": row.get("date"),
-                "open": row.get("open"),
-                "high": row.get("high"),
-                "low": row.get("low"),
-                "close": row.get("close"),
-                "adj_close": row.get("close"),
-                "volume": row.get("volume"),
-                "source": "legacy_stock_history",
-            }
-            for row in reversed(legacy_rows)
-        ]
 
     snapshot = _one("stock_core_snapshot", clean, "last_updated")
     if snapshot and snapshot.get("price_date") and snapshot.get("close_price") is not None:
