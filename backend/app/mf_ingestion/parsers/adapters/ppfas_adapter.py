@@ -381,22 +381,28 @@ def classify_documents(
     discovery_page_url: str,
 ) -> list[DiscoveredDocument]:
     docs: list[DiscoveredDocument] = []
+    allowed_file_exts = {".pdf", ".xls", ".xlsx", ".csv"}
     for link in links:
         title = link.get("title") or ""
         url = link.get("url") or ""
         context_text = link.get("context_text") or ""
         file_ext = (link.get("file_ext") or "").lower()
         combined = f"{title} {context_text} {url}".lower()
-        if document_type == "factsheet" and not any(keyword in combined for keyword in FACTSHEET_KEYWORDS):
+        if document_type == "factsheet" and not _looks_like_factsheet_link(combined, url):
             continue
-        if document_type == "portfolio_disclosure" and not any(keyword in combined for keyword in PORTFOLIO_KEYWORDS):
+        if document_type == "portfolio_disclosure" and not _looks_like_portfolio_link(combined, url):
             continue
 
         if not file_ext:
             file_ext = infer_file_ext_from_text(combined)
+        if file_ext not in allowed_file_exts:
+            continue
         report_month = detect_report_month(combined)
         base_score = FILE_PRIORITY.get(file_ext, DEFAULT_UNKNOWN_FILE_SCORE)
         month_score = 50 if report_month else 0
+        recency_score = 0
+        if report_month:
+            recency_score = (report_month.year * 12 + report_month.month) * 10
         ter_penalty = -80 if any(keyword in combined for keyword in TER_KEYWORDS) else 0
         docs.append(
             DiscoveredDocument(
@@ -408,10 +414,28 @@ def classify_documents(
                 discovery_page_url=discovery_page_url,
                 file_ext=file_ext,
                 report_month=report_month,
-                priority_score=base_score + month_score + ter_penalty,
+                priority_score=base_score + month_score + recency_score + ter_penalty,
             )
         )
     return docs
+
+
+def _looks_like_factsheet_link(combined_text: str, url: str) -> bool:
+    text = (combined_text or "").lower()
+    link = (url or "").lower()
+    if "/portfolio-disclosure/" in link:
+        return False
+    if "/factsheet/" in link:
+        return True
+    has_factsheet = any(keyword in text for keyword in FACTSHEET_KEYWORDS)
+    has_portfolio = any(keyword in text for keyword in PORTFOLIO_KEYWORDS)
+    return has_factsheet and not has_portfolio
+
+
+def _looks_like_portfolio_link(combined_text: str, url: str) -> bool:
+    text = (combined_text or "").lower()
+    link = (url or "").lower()
+    return any(keyword in text for keyword in PORTFOLIO_KEYWORDS) or "/portfolio-disclosure/" in link
 
 
 def detect_file_ext(path: str) -> str:
@@ -433,12 +457,13 @@ def _select_secondary_page_candidates(base_page_url: str, links: list[dict[str, 
     candidates: list[str] = []
     base_host = urlparse(base_page_url).netloc.lower()
     keywords = FACTSHEET_KEYWORDS if document_type == "factsheet" else PORTFOLIO_KEYWORDS
+    downloadable_exts = {".pdf", ".xls", ".xlsx", ".csv"}
     for link in links:
         url = link.get("url") or ""
         title = link.get("title") or ""
         context_text = link.get("context_text") or ""
         file_ext = (link.get("file_ext") or "").lower()
-        if file_ext:
+        if file_ext in downloadable_exts:
             continue
         parsed = urlparse(url)
         if parsed.netloc.lower() != base_host:

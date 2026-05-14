@@ -133,6 +133,7 @@ def _merge_snapshot(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[
         "aum",
         "benchmark",
         "risk_level",
+        "fund_manager",
         "alpha",
         "beta",
         "sharpe_ratio",
@@ -140,8 +141,28 @@ def _merge_snapshot(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[
         "provider_payload",
     )
     merged = {field: existing.get(field) for field in fields}
+    nav_owned_fields = {
+        "nav",
+        "nav_date",
+        "return_1m",
+        "return_3m",
+        "return_6m",
+        "return_1y",
+        "return_3y",
+        "return_5y",
+        "volatility_1y",
+        "max_drawdown_1y",
+        "alpha",
+        "beta",
+        "sharpe_ratio",
+    }
     for field in fields:
         value = incoming.get(field)
+        if field == "provider_payload":
+            merged[field] = _merge_provider_payload(existing.get(field), incoming.get(field))
+            continue
+        if field in nav_owned_fields and existing.get(field) not in (None, ""):
+            continue
         if value not in (None, ""):
             merged[field] = value
     merged["scheme_code"] = str(incoming.get("scheme_code") or existing.get("scheme_code"))
@@ -156,6 +177,14 @@ def _merged_source(existing: Any, incoming: Any) -> str:
             if part and part not in sources:
                 sources.append(part)
     return "+".join(sources) if sources else mfdata_service.PROVIDER
+
+
+def _merge_provider_payload(existing: Any, incoming: Any) -> dict[str, Any]:
+    base = existing if isinstance(existing, dict) else {}
+    update = incoming if isinstance(incoming, dict) else {}
+    merged = dict(base)
+    merged.update(update)
+    return merged
 
 
 def _family_id(data: dict[str, Any]) -> str | None:

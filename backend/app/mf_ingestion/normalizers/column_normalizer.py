@@ -10,6 +10,7 @@ COLUMN_ALIASES = {
         "security",
         "security name",
         "company name",
+        "company/issuer/instrument name",
         "name",
     },
     "isin": {
@@ -39,6 +40,8 @@ COLUMN_ALIASES = {
         "market value rs in lakhs",
         "market/fair value (rs. in lakhs)",
         "market/fair value rs in lakhs",
+        "exposure/market value(rs.lakh)",
+        "exposure/market value (rs.lakh)",
     },
 }
 

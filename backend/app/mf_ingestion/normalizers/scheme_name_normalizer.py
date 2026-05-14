@@ -19,11 +19,13 @@ DEFAULT_SCHEMES = [
 
 
 def match_scheme_name(input_name: str, candidates: Iterable[str] | None = None) -> SchemeMatch:
-    choices = [name for name in (candidates or DEFAULT_SCHEMES) if name]
+    source_choices = DEFAULT_SCHEMES if candidates is None else candidates
+    choices = [name for name in source_choices if name]
     if not input_name and choices:
         return SchemeMatch(input_name="", canonical_name=choices[0], confidence=0.0)
     if not choices:
-        return SchemeMatch(input_name=input_name, canonical_name=input_name, confidence=0.0)
+        confidence = 100.0 if input_name else 0.0
+        return SchemeMatch(input_name=input_name, canonical_name=input_name, confidence=confidence)
 
     best = process.extractOne(input_name, choices, scorer=fuzz.token_set_ratio)
     if not best:

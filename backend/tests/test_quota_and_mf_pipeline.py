@@ -261,3 +261,36 @@ def test_mf_metrics_compute_and_null_safety():
     assert short_metrics["return_1m"] is None
     assert short_metrics["return_3m"] is None
     assert short_metrics["volatility_1y"] is None
+
+
+def test_mf_enrichment_merge_preserves_nav_owned_fields_and_amc_trace():
+    from app.jobs import sync_mf_enrichment
+
+    existing = {
+        "scheme_code": "120503",
+        "nav": 123.45,
+        "nav_date": "2026-05-10",
+        "return_1y": 10.2,
+        "expense_ratio": None,
+        "provider_payload": {"amc_trace": {"holdings": {"source_document_id": "doc-1"}}, "legacy": True},
+        "data_source": "mfapi+amc_disclosure",
+    }
+    incoming = {
+        "scheme_code": "120503",
+        "nav": 111.11,
+        "nav_date": "2026-05-01",
+        "return_1y": 2.0,
+        "expense_ratio": 0.52,
+        "provider_payload": {"family_id": 99},
+        "data_source": "mfdata",
+    }
+
+    merged = sync_mf_enrichment._merge_snapshot(existing, incoming)
+
+    assert merged["nav"] == 123.45
+    assert merged["nav_date"] == "2026-05-10"
+    assert merged["return_1y"] == 10.2
+    assert merged["expense_ratio"] == 0.52
+    assert merged["provider_payload"]["amc_trace"]["holdings"]["source_document_id"] == "doc-1"
+    assert merged["provider_payload"]["family_id"] == 99
+    assert merged["data_source"] == "mfapi+amc_disclosure+mfdata"

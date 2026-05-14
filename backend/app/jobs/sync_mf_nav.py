@@ -62,6 +62,24 @@ def _latest_nav_date(repo: StockRepository, scheme_code: str) -> str | None:
     return history[0].get("nav_date")
 
 
+def _merge_sources(*values: object) -> str:
+    ordered: list[str] = []
+    for value in values:
+        for part in str(value or "").split("+"):
+            clean = part.strip()
+            if clean and clean not in ordered:
+                ordered.append(clean)
+    return "+".join(ordered)
+
+
+def _merge_provider_payload(existing: object, incoming: object) -> dict:
+    base = existing if isinstance(existing, dict) else {}
+    update = incoming if isinstance(incoming, dict) else {}
+    merged = dict(base)
+    merged.update(update)
+    return merged
+
+
 def _upsert_legacy_mutual_funds_row(repo: StockRepository, snapshot_row: dict) -> None:
     if not repo.supabase:
         return
@@ -119,6 +137,8 @@ def main() -> None:
             if not latest:
                 raise RuntimeError(latest_result.get("error") or "latest_nav_unavailable")
 
+            existing = repo.get_mutual_fund_core_snapshot(scheme_code) or {}
+
             start_date = _latest_nav_date(repo, scheme_code)
             history_result = get_nav_history(scheme_code, start_date=start_date)
             history_rows = history_result.get("data") if history_result.get("ok") else []
@@ -132,11 +152,11 @@ def main() -> None:
                 "scheme_code": str(scheme_code),
                 "scheme_name": latest.get("scheme_name"),
                 "amc_name": latest.get("amc_name"),
-                "category": latest.get("category"),
-                "sub_category": None,
-                "plan_type": None,
-                "option_type": None,
-                "fund_type": latest.get("fund_type"),
+                "category": latest.get("category") or existing.get("category"),
+                "sub_category": existing.get("sub_category"),
+                "plan_type": existing.get("plan_type"),
+                "option_type": existing.get("option_type"),
+                "fund_type": latest.get("fund_type") or existing.get("fund_type"),
                 "nav": latest.get("nav"),
                 "nav_date": latest.get("nav_date"),
                 "return_1m": metrics.get("return_1m"),
@@ -147,15 +167,16 @@ def main() -> None:
                 "return_5y": metrics.get("return_5y"),
                 "volatility_1y": metrics.get("volatility_1y"),
                 "max_drawdown_1y": metrics.get("max_drawdown_1y"),
-                "expense_ratio": None,
-                "aum": None,
-                "benchmark": None,
-                "risk_level": None,
+                "expense_ratio": existing.get("expense_ratio"),
+                "aum": existing.get("aum"),
+                "benchmark": existing.get("benchmark"),
+                "risk_level": existing.get("risk_level"),
+                "fund_manager": existing.get("fund_manager"),
                 "alpha": metrics.get("alpha"),
                 "beta": metrics.get("beta"),
                 "sharpe_ratio": metrics.get("sharpe_ratio"),
-                "data_source": "mfapi",
-                "provider_payload": latest.get("provider_payload"),
+                "data_source": _merge_sources(existing.get("data_source"), "mfapi"),
+                "provider_payload": _merge_provider_payload(existing.get("provider_payload"), latest.get("provider_payload")),
             }
             repo.upsert_mutual_fund_core_snapshot_rows([snapshot_row])
             _upsert_legacy_mutual_funds_row(repo, snapshot_row)

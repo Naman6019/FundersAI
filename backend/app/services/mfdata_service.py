@@ -144,6 +144,7 @@ def _normalize_scheme(data: dict[str, Any], scheme_code: str) -> dict[str, Any]:
         "expense_ratio": _to_float(data.get("expense_ratio")),
         "aum": _to_float(data.get("aum_cr") or data.get("aum")),
         "benchmark": data.get("benchmark"),
+        "fund_manager": data.get("fund_manager") or data.get("fundManager") or data.get("manager"),
         "risk_level": data.get("risk_level") or data.get("riskometer"),
         "alpha": _to_float(ratios.get("alpha")),
         "beta": _to_float(ratios.get("beta")),

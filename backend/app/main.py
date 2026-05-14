@@ -1422,10 +1422,65 @@ async def chat_endpoint(req: ChatRequest):
                 comparison_results = {}
                 # Pre-fetch Nifty history once for all comparisons
                 n_hist_local = await get_nifty_history_df()
+
+                def _load_amc_holdings_and_sectors(scheme_code_value: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str | None]:
+                    if not supabase or scheme_code_value in (None, ""):
+                        return [], [], None
+                    scheme_code_str = str(scheme_code_value)
+                    try:
+                        holdings_res = (
+                            supabase.table("mutual_fund_holdings")
+                            .select("as_of_date,security_name,isin,sector,weight_pct,source,provider_payload")
+                            .eq("scheme_code", int(scheme_code_str) if scheme_code_str.isdigit() else scheme_code_str)
+                            .order("as_of_date", desc=True)
+                            .order("weight_pct", desc=True)
+                            .limit(500)
+                            .execute()
+                        )
+                        holding_rows = holdings_res.data or []
+                    except Exception:
+                        holding_rows = []
+
+                    latest_as_of = None
+                    holdings: list[dict[str, Any]] = []
+                    for row in holding_rows:
+                        as_of = row.get("as_of_date")
+                        if latest_as_of is None:
+                            latest_as_of = as_of
+                        if as_of != latest_as_of:
+                            continue
+                        holdings.append(
+                            {
+                                "security_name": row.get("security_name"),
+                                "isin": row.get("isin"),
+                                "sector": row.get("sector"),
+                                "weight_pct": row.get("weight_pct"),
+                                "as_of_date": as_of,
+                                "source": row.get("source"),
+                                "provider_payload": row.get("provider_payload"),
+                            }
+                        )
+                    holdings.sort(key=lambda item: _num(item.get("weight_pct")) or -1, reverse=True)
+
+                    try:
+                        sectors_res = (
+                            supabase.table("mutual_fund_sectors")
+                            .select("sector,weight_pct,stock_count,source,provider_payload,updated_at")
+                            .eq("scheme_code", scheme_code_str)
+                            .order("weight_pct", desc=True)
+                            .limit(50)
+                            .execute()
+                        )
+                        sectors = sectors_res.data or []
+                    except Exception:
+                        sectors = []
+
+                    return holdings, sectors, latest_as_of
                 
                 for entity in entities:
                     db_data = None
                     scheme_code = None
+                    best_match_row = None
                     if supabase and asset_type != "stock":
                         try:
                             search_term = _entity_search_term(entity)
@@ -1435,12 +1490,15 @@ async def chat_endpoint(req: ChatRequest):
                                 res = supabase.table('mutual_funds').select('*').ilike('scheme_name', search_pattern).limit(25).execute()
                             if res.data:
                                 best_match = _pick_best_fund_match(search_term, res.data)
+                                best_match_row = best_match
                                 scheme_code = best_match['scheme_code']
                                 db_data = {
                                     "name": best_match['scheme_name'],
                                     "nav": best_match['nav'],
                                     "nav_date": best_match['nav_date'],
                                     "category": best_match['category'],
+                                    "benchmark": best_match.get("benchmark"),
+                                    "fund_manager": best_match.get("fund_manager") or ((best_match.get("provider_payload") or {}).get("fund_manager") if isinstance(best_match.get("provider_payload"), dict) else None),
                                     "fund_house": best_match.get('amc_name') or best_match.get('fund_house'),
                                     "expense_ratio": best_match.get('expense_ratio', "N/A"),
                                     "aum": best_match.get('aum', "N/A"),
@@ -1484,6 +1542,7 @@ async def chat_endpoint(req: ChatRequest):
                         pass
 
                     if db_data:
+                        holdings_rows, sector_rows, holdings_as_of = _load_amc_holdings_and_sectors(scheme_code)
                         missing_fields = [
                             field
                             for field in ("nav", "nav_date", "expense_ratio", "aum")
@@ -1493,6 +1552,8 @@ async def chat_endpoint(req: ChatRequest):
                             "metadata": db_data.get("source"),
                             "stale": not cache_policy.is_fresh(db_data.get("nav_date") or db_data.get("updated_at"), "mutual_fund_nav"),
                             "nav_date": db_data.get("nav_date"),
+                            "amc_trace": ((best_match_row.get("provider_payload") or {}).get("amc_trace") if isinstance((best_match_row or {}).get("provider_payload"), dict) else None),
+                            "holdings_as_of_date": holdings_as_of,
                         }
                         db_data.update(risk_metrics)
                         db_data["data_quality"] = {
@@ -1501,7 +1562,8 @@ async def chat_endpoint(req: ChatRequest):
                             "coverage_status": "incomplete" if missing_fields else "complete",
                         }
                         db_data["source_summary"] = source_summary
-                        db_data["holdings"] = db_data.get("holdings") or []
+                        db_data["holdings"] = holdings_rows
+                        db_data["sector_allocation"] = sector_rows
                         comparison_results[entity] = db_data
                     elif asset_type != "mutual_fund" and (stock_symbol or yf_ticker):
                         sym = stock_symbol or yf_ticker

@@ -1,13 +1,34 @@
 from __future__ import annotations
 
 import logging
+import re
+import uuid
+from datetime import UTC, date, datetime
 from pathlib import Path
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
+import requests
 from app.mf_ingestion.downloaders.base_downloader import BaseDownloader, DiscoveredDocument, DownloadedDocument
 from app.mf_ingestion.parsers.adapters.ppfas_adapter import PPFASAdapter
 from app.mf_ingestion.sources.registry import AMCDocumentSource
 
 logger = logging.getLogger(__name__)
+
+ICICI_SITE_BASE_URL = "https://www.icicipruamc.com"
+ICICI_API_BASE_URL = "https://apimf.icicipruamc.com"
+ICICI_CATEGORIES_ENDPOINT = f"{ICICI_API_BASE_URL}/nms/v1/downloads/categories"
+ICICI_FILES_ENDPOINT = f"{ICICI_API_BASE_URL}/nms/v1/downloads/files"
+ICICI_PAGE_SIZE = 20
+ICICI_MAX_PAGES = 6
+ICICI_USER_TYPE = "Investor"
+ICICI_SUBCATEGORY_BY_DOCUMENT_TYPE = {
+    "portfolio_disclosure": "monthly-portfolio-disclosures",
+    "factsheet": "complete-factsheet",
+}
+MONTH_PATTERN = re.compile(
+    r"(?P<month>jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:[\s\-_]+(?P<day>\d{1,2}))?[\s\-_\,]+(?P<year>20\d{2})",
+    re.IGNORECASE,
+)
 
 
 class AMCDownloader(BaseDownloader):
@@ -29,11 +50,64 @@ class AMCDownloader(BaseDownloader):
                 len(docs),
             )
             return docs
+        if adapter_key == "icici":
+            docs = _discover_icici_documents(
+                self.source,
+                document_type=document_type,
+                timeout_seconds=self.timeout_seconds,
+                user_agent=self.user_agent,
+            )
+            logger.info(
+                "event=amc_discovery_complete amc_code=%s adapter=%s document_type=%s count=%s",
+                self.source.amc_code,
+                adapter_key,
+                document_type,
+                len(docs),
+            )
+            return docs
 
         raise NotImplementedError(f"No discovery adapter configured for adapter_key={adapter_key}")
 
     def download(self, discovered: DiscoveredDocument) -> DownloadedDocument:
         adapter_key = (self.source.adapter_key or "").lower()
+        if adapter_key == "icici":
+            response = None
+            attempted_urls = []
+            for candidate_url in _icici_download_url_candidates(discovered.url):
+                attempted_urls.append(candidate_url)
+                try:
+                    response = requests.get(
+                        candidate_url,
+                        timeout=self.timeout_seconds,
+                        headers={
+                            "User-Agent": self.user_agent,
+                            "Referer": ICICI_SITE_BASE_URL + "/",
+                        },
+                    )
+                    response.raise_for_status()
+                    break
+                except Exception:
+                    response = None
+
+            if not response:
+                raise RuntimeError(f"icici_download_failed urls={attempted_urls}")
+
+            source_url = response.url or discovered.url
+            file_name = _derive_file_name(source_url, discovered.title)
+            return DownloadedDocument(
+                amc_name=discovered.amc_name,
+                amc_code=discovered.amc_code,
+                document_type=discovered.document_type,
+                source_url=source_url,
+                discovery_page_url=discovered.discovery_page_url,
+                file_name=file_name,
+                file_ext=discovered.file_ext,
+                report_month=discovered.report_month,
+                content_type=response.headers.get("Content-Type"),
+                file_size_bytes=len(response.content),
+                file_bytes=response.content,
+            )
+
         if adapter_key != "ppfas":
             raise NotImplementedError(f"No downloader configured for adapter_key={adapter_key}")
 
@@ -63,3 +137,229 @@ def _derive_file_name(url: str, fallback_title: str) -> str:
 
     safe = "_".join((fallback_title or "document").split())
     return safe or "document"
+
+
+def _discover_icici_documents(
+    source: AMCDocumentSource,
+    document_type: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    subcategory_internal_name = ICICI_SUBCATEGORY_BY_DOCUMENT_TYPE.get((document_type or "").strip().lower())
+    if not subcategory_internal_name:
+        return []
+
+    try:
+        session = requests.Session()
+        session.headers.update(_icici_request_headers(user_agent))
+        categories = _fetch_icici_categories(session=session, timeout_seconds=timeout_seconds)
+        category_id, category_code = _resolve_icici_category_metadata(categories, subcategory_internal_name)
+        if not category_id:
+            logger.warning(
+                "event=icici_subcategory_not_found subcategory=%s document_type=%s",
+                subcategory_internal_name,
+                document_type,
+            )
+            return []
+
+        files: list[dict] = []
+        for page in range(1, ICICI_MAX_PAGES + 1):
+            page_files, has_next = _fetch_icici_files_page(
+                session=session,
+                timeout_seconds=timeout_seconds,
+                category_id=category_id,
+                category_code=category_code,
+                page=page,
+            )
+            files.extend(page_files)
+            if not has_next:
+                break
+    except Exception as exc:
+        logger.exception("event=icici_discovery_failed reason=%s", exc)
+        return []
+
+    docs: list[DiscoveredDocument] = []
+    doc_type = (document_type or "").strip().lower()
+    for item in files:
+        raw_url = str(item.get("url") or "").strip()
+        if not raw_url:
+            continue
+        absolute_url = urljoin(ICICI_SITE_BASE_URL, raw_url)
+        ext = Path(absolute_url.split("?", 1)[0]).suffix.lower() or _infer_file_ext_from_text(item.get("title"))
+        if ext not in {".pdf", ".xls", ".xlsx", ".csv", ".zip"}:
+            continue
+
+        report_month = _icici_report_month(item)
+        base_score = _icici_base_score(ext=ext, document_type=doc_type)
+        recency_score = 0
+        if report_month:
+            recency_score = (report_month.year * 12 + report_month.month) * 10
+        title = _icici_title(item) or Path(absolute_url).stem
+        docs.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type=doc_type,
+                title=title,
+                url=absolute_url,
+                discovery_page_url=source.factsheet_page_url or source.portfolio_disclosure_page_url or ICICI_SITE_BASE_URL,
+                file_ext=ext,
+                report_month=report_month,
+                priority_score=base_score + recency_score,
+            )
+        )
+
+    docs.sort(key=lambda item: item.priority_score, reverse=True)
+    return docs
+
+
+def _fetch_icici_categories(session: requests.Session, timeout_seconds: float) -> list[dict]:
+    response = session.get(
+        ICICI_CATEGORIES_ENDPOINT,
+        params={"userType": ICICI_USER_TYPE},
+        timeout=timeout_seconds,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    data = payload.get("success", {}).get("data", [])
+    return data if isinstance(data, list) else []
+
+
+def _resolve_icici_category_metadata(categories: list[dict], subcategory_internal_name: str) -> tuple[str | None, str]:
+    for category in categories:
+        subcategories = category.get("subCategory") or []
+        for subcategory in subcategories:
+            if str(subcategory.get("internalName") or "").strip().lower() != subcategory_internal_name:
+                continue
+            category_id = str(subcategory.get("id") or "").strip()
+            category_code = (
+                str((category.get("title") or {}).get("code") or "").strip()
+                or str(category.get("internalName") or "").strip().upper().replace(" ", "_")
+            )
+            if category_id:
+                return category_id, category_code
+    return None, ""
+
+
+def _fetch_icici_files_page(
+    session: requests.Session,
+    timeout_seconds: float,
+    category_id: str,
+    category_code: str,
+    page: int,
+) -> tuple[list[dict], bool]:
+    payload = {
+        "categoryId": category_id,
+        "schemeCategory": "",
+        "userType": ICICI_USER_TYPE,
+        "fileType": "All",
+        "page": str(page),
+        "size": str(ICICI_PAGE_SIZE),
+        "filter": [],
+        "categoryName": category_code,
+    }
+    response = session.post(ICICI_FILES_ENDPOINT, json=payload, timeout=timeout_seconds)
+    response.raise_for_status()
+    body = response.json()
+    data = body.get("success", {}).get("data", {})
+    files = data.get("files", []) if isinstance(data, dict) else []
+    has_next = bool(data.get("isNext")) if isinstance(data, dict) else False
+    if not isinstance(files, list):
+        return [], False
+    return files, has_next
+
+
+def _icici_request_headers(user_agent: str) -> dict[str, str]:
+    return {
+        "User-Agent": user_agent,
+        "Referer": ICICI_SITE_BASE_URL + "/",
+        "Content-Type": "application/json",
+        "env": "api",
+        "requestApiId": str(uuid.uuid4()),
+    }
+
+
+def _icici_title(item: dict) -> str:
+    title = item.get("title")
+    if isinstance(title, dict):
+        return str(title.get("text") or title.get("code") or "").strip()
+    return str(title or "").strip()
+
+
+def _icici_report_month(item: dict) -> date | None:
+    for key in ("applicableMonth", "fileDate"):
+        raw = item.get(key)
+        if raw in (None, ""):
+            continue
+        try:
+            millis = int(raw)
+            return datetime.fromtimestamp(millis / 1000, UTC).date().replace(day=1)
+        except (TypeError, ValueError, OSError):
+            continue
+
+    return _detect_report_month_from_text(_icici_title(item))
+
+
+def _icici_base_score(ext: str, document_type: str) -> int:
+    if document_type == "portfolio_disclosure":
+        return {
+            ".xlsx": 220,
+            ".xls": 210,
+            ".csv": 190,
+            ".zip": 180,
+            ".pdf": 120,
+        }.get(ext, 90)
+
+    return {
+        ".pdf": 220,
+        ".xlsx": 130,
+        ".xls": 120,
+        ".csv": 110,
+        ".zip": 90,
+    }.get(ext, 80)
+
+
+def _detect_report_month_from_text(text: str) -> date | None:
+    match = MONTH_PATTERN.search(text or "")
+    if not match:
+        return None
+    month = datetime.strptime(match.group("month")[:3], "%b").month
+    year = int(match.group("year"))
+    return date(year, month, 1)
+
+
+def _infer_file_ext_from_text(text: str) -> str:
+    low = str(text or "").lower()
+    if ".xlsx" in low:
+        return ".xlsx"
+    if ".xls" in low:
+        return ".xls"
+    if ".csv" in low:
+        return ".csv"
+    if ".zip" in low:
+        return ".zip"
+    if ".pdf" in low:
+        return ".pdf"
+    return ""
+
+
+def _icici_download_url_candidates(original_url: str) -> list[str]:
+    blob_url = _icici_blob_url(original_url)
+    if blob_url and blob_url != original_url:
+        return [blob_url, original_url]
+    return [original_url]
+
+
+def _icici_blob_url(url: str) -> str:
+    parsed = urlsplit(url)
+    if parsed.scheme not in {"http", "https"}:
+        return url
+    if "icicipruamc.com" not in (parsed.netloc or "").lower():
+        return url
+    path = parsed.path or ""
+    if path.startswith("/blob/"):
+        return url
+    if not path.startswith("/downloads/"):
+        return url
+    blob_path = "/blob" + path
+    return urlunsplit((parsed.scheme, parsed.netloc, blob_path, parsed.query, parsed.fragment))
