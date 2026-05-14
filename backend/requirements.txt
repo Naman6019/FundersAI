@@ -17,4 +17,7 @@ lxml
 html5lib
 beautifulsoup4
 pypdf
+pdfplumber
+PyMuPDF
+rapidfuzz
 pytest

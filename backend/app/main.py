@@ -65,6 +65,8 @@ from app.routes.quant import router as quant_router
 app.include_router(quant_router)
 from app.routes.indianapi import router as indianapi_router
 app.include_router(indianapi_router)
+from app.routes.mf_ingestion import router as mf_ingestion_router
+app.include_router(mf_ingestion_router)
 
 @app.get("/")
 def read_root():

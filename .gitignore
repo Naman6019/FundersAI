@@ -28,6 +28,7 @@ pytest-cache-files-*/
 
 # Misc
 .DS_Store
+AMC Data/
 
 # Test Envs
 test_env/
