@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -34,8 +35,17 @@ def parse_dt(value: Any) -> datetime | None:
         return None
     if isinstance(value, datetime):
         return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    text = str(value).strip()
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+        # Date-only source fields (like NAV date) are treated as end-of-day UTC,
+        # so latest daily snapshots are not marked stale too aggressively.
+        try:
+            base = datetime.fromisoformat(text)
+            return base.replace(hour=23, minute=59, second=59, microsecond=0, tzinfo=timezone.utc)
+        except ValueError:
+            return None
     try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
         return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
     except ValueError:
         return None

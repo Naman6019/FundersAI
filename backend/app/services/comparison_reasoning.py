@@ -70,6 +70,12 @@ def _normalize(values: dict[str, float], higher_is_better: bool) -> dict[str, fl
         return {name: (value - minimum) / (maximum - minimum) for name, value in values.items()}
     return {name: (maximum - value) / (maximum - minimum) for name, value in values.items()}
 
+def _has_discriminative_signal(values: dict[str, float]) -> bool:
+    if len(values) < 2:
+        return False
+    unique_values = {round(v, 10) for v in values.values()}
+    return len(unique_values) > 1
+
 
 def _factor_scores_stock(comparison: dict[str, dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, float], dict[str, float]]:
     factors: list[dict[str, Any]] = []
@@ -99,9 +105,10 @@ def _factor_scores_stock(comparison: dict[str, dict[str, Any]]) -> tuple[list[di
 
         if len(raw) < 1:
             continue
-        normalized = _normalize(raw, higher_is_better=higher_is_better)
+        has_signal = _has_discriminative_signal(raw)
+        normalized = _normalize(raw, higher_is_better=higher_is_better) if has_signal else {name: 0.5 for name in raw}
         winner = None
-        if normalized:
+        if has_signal and normalized:
             ordered = sorted(normalized.items(), key=lambda item: item[1], reverse=True)
             winner = ordered[0][0] if len(ordered) == 1 or (ordered[0][1] - ordered[1][1]) > 1e-6 else None
         factors.append(
@@ -113,9 +120,10 @@ def _factor_scores_stock(comparison: dict[str, dict[str, Any]]) -> tuple[list[di
                 "coverage": round(len(raw) / max(len(comparison), 1), 4),
             }
         )
-        for entity, score in normalized.items():
-            totals[entity] += score * weight
-            weights_used[entity] += weight
+        if has_signal:
+            for entity, score in normalized.items():
+                totals[entity] += score * weight
+                weights_used[entity] += weight
 
     return factors, totals, weights_used
 
@@ -149,9 +157,10 @@ def _factor_scores_mf(comparison: dict[str, dict[str, Any]]) -> tuple[list[dict[
                 raw[entity] = value
         if len(raw) < 1:
             continue
-        normalized = _normalize(raw, higher_is_better=higher_is_better)
+        has_signal = _has_discriminative_signal(raw)
+        normalized = _normalize(raw, higher_is_better=higher_is_better) if has_signal else {name: 0.5 for name in raw}
         winner = None
-        if normalized:
+        if has_signal and normalized:
             ordered = sorted(normalized.items(), key=lambda item: item[1], reverse=True)
             winner = ordered[0][0] if len(ordered) == 1 or (ordered[0][1] - ordered[1][1]) > 1e-6 else None
         factors.append(
@@ -163,9 +172,10 @@ def _factor_scores_mf(comparison: dict[str, dict[str, Any]]) -> tuple[list[dict[
                 "coverage": round(len(raw) / max(len(comparison), 1), 4),
             }
         )
-        for entity, score in normalized.items():
-            totals[entity] += score * weight
-            weights_used[entity] += weight
+        if has_signal:
+            for entity, score in normalized.items():
+                totals[entity] += score * weight
+                weights_used[entity] += weight
 
     return factors, totals, weights_used, holdings_reasoning
 
