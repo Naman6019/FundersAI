@@ -30,6 +30,13 @@ pytest-cache-files-*/
 .DS_Store
 AMC Data/
 
+# AMC data artifacts (keep ingestion/parser code, ignore data only)
+AMC Data/**
+backend/data/mf_raw_docs/
+backend/data/mf_raw_docs/**
+data/mf_raw_docs/
+data/mf_raw_docs/**
+
 # Test Envs
 test_env/
 

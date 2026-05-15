@@ -21,6 +21,7 @@ COLUMN_ALIASES = {
         "industry",
         "sector",
         "industry / rating",
+        "industry/rating",
         "rating",
     },
     "percent_aum": {

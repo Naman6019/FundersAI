@@ -277,15 +277,27 @@ class StockRepository:
         if not self._has_client():
             return []
         try:
-            response = (
-                self.supabase.table("mutual_fund_nav_history")
-                .select("*")
-                .eq("scheme_code", str(scheme_code))
-                .order("nav_date", desc=True)
-                .limit(limit)
-                .execute()
-            )
-            return response.data or []
+            rows: list[dict[str, Any]] = []
+            page_size = min(max(limit, 1), 1000)
+            offset = 0
+            while offset < limit:
+                end = min(offset + page_size - 1, limit - 1)
+                response = (
+                    self.supabase.table("mutual_fund_nav_history")
+                    .select("*")
+                    .eq("scheme_code", str(scheme_code))
+                    .order("nav_date", desc=True)
+                    .range(offset, end)
+                    .execute()
+                )
+                batch = response.data or []
+                if not batch:
+                    break
+                rows.extend(batch)
+                if len(batch) < page_size:
+                    break
+                offset += page_size
+            return rows
         except Exception as exc:
             logger.warning("MF nav history lookup failed for %s: %s", scheme_code, exc)
             return []

@@ -35,6 +35,7 @@ def test_icici_parse_holdings_extracts_rows_from_icici_style_frame():
     assert len(parsed.holdings) == 2
     assert parsed.holdings[0]["instrument_name"] == "HDFC Bank Ltd."
     assert parsed.holdings[0]["isin"] == "INE040A01034"
+    assert parsed.holdings[0]["sector"] == "Banks"
     assert parsed.holdings[0]["percent_aum"] == 3.8215
     assert parsed.metrics["total_percent_aum"] == 7.2538
 

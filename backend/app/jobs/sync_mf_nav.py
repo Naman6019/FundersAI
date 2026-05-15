@@ -62,6 +62,11 @@ def _latest_nav_date(repo: StockRepository, scheme_code: str) -> str | None:
     return history[0].get("nav_date")
 
 
+def _nav_history_count(repo: StockRepository, scheme_code: str, sample_limit: int) -> int:
+    sample = repo.get_mutual_fund_nav_history(scheme_code, limit=max(sample_limit, 1))
+    return len(sample)
+
+
 def _merge_sources(*values: object) -> str:
     ordered: list[str] = []
     for value in values:
@@ -113,6 +118,7 @@ def main() -> None:
 
     scheme_codes = _existing_scheme_codes(repo)
     limit = int(os.getenv("MF_SYNC_SCHEME_LIMIT", "0"))
+    min_history_rows = int(os.getenv("MF_NAV_MIN_HISTORY_ROWS", "750"))
     if limit > 0:
         scheme_codes = scheme_codes[:limit]
 
@@ -126,7 +132,7 @@ def main() -> None:
         symbols_succeeded=0,
         symbols_failed=0,
         error_summary=None,
-        metadata={"scheme_limit": limit or None},
+        metadata={"scheme_limit": limit or None, "min_history_rows": min_history_rows},
     )
     run_id = repo.create_provider_run(run)
 
@@ -139,7 +145,12 @@ def main() -> None:
 
             existing = repo.get_mutual_fund_core_snapshot(scheme_code) or {}
 
+            history_count = _nav_history_count(repo, scheme_code, min_history_rows + 1)
             start_date = _latest_nav_date(repo, scheme_code)
+            if history_count < min_history_rows:
+                # Force a full history pull when local history is too thin,
+                # otherwise metrics stay null even though latest NAV exists.
+                start_date = None
             history_result = get_nav_history(scheme_code, start_date=start_date)
             history_rows = history_result.get("data") if history_result.get("ok") else []
             if history_rows:

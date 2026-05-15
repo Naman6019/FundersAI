@@ -1372,17 +1372,15 @@ async def chat_endpoint(req: ChatRequest):
     screening_results = None
 
     def _entity_search_term(entity: str) -> str:
-        query_lower = req.query.lower()
-        entity_lower = entity.lower()
-        additions = []
-        for phrase in ["small cap", "mid cap", "large cap", "flexi cap", "multi cap", "index"]:
-            if phrase in query_lower and phrase not in entity_lower:
-                additions.append(phrase)
-        return " ".join([entity, *additions]).strip()
+        # Keep entity matching independent in compare mode.
+        # Do not inject category words from the full query into each entity,
+        # otherwise queries like "A large cap vs B flexi cap" cross-contaminate.
+        return str(entity).strip()
 
     def _fund_search_pattern(search_term: str) -> str:
         cleaned = (
             search_term.lower()
+            .replace('felxi', 'flexi')
             .replace(' fund', '')
             .replace(' growth', '')
             .replace('.', ' ')
@@ -1460,7 +1458,15 @@ async def chat_endpoint(req: ChatRequest):
                                 "provider_payload": row.get("provider_payload"),
                             }
                         )
-                    holdings.sort(key=lambda item: _num(item.get("weight_pct")) or -1, reverse=True)
+                    def _weight_or_default(value: Any) -> float:
+                        try:
+                            if value in (None, ""):
+                                return -1.0
+                            return float(value)
+                        except (TypeError, ValueError):
+                            return -1.0
+
+                    holdings.sort(key=lambda item: _weight_or_default(item.get("weight_pct")), reverse=True)
 
                     try:
                         sectors_res = (
@@ -1492,16 +1498,39 @@ async def chat_endpoint(req: ChatRequest):
                                 best_match = _pick_best_fund_match(search_term, res.data)
                                 best_match_row = best_match
                                 scheme_code = best_match['scheme_code']
+                                provider_payload = best_match.get("provider_payload") if isinstance(best_match.get("provider_payload"), dict) else {}
+                                amc_trace = provider_payload.get("amc_trace") if isinstance(provider_payload.get("amc_trace"), dict) else {}
+
+                                def _trace_value(field_name: str):
+                                    item = amc_trace.get(field_name)
+                                    if isinstance(item, dict):
+                                        return item.get("value")
+                                    return None
+
+                                legacy_row = None
+                                if scheme_code not in (None, ""):
+                                    try:
+                                        code_filter = int(scheme_code) if str(scheme_code).isdigit() else scheme_code
+                                        legacy_res = (
+                                            supabase.table("mutual_funds")
+                                            .select("category,benchmark,aum,expense_ratio,fund_house")
+                                            .eq("scheme_code", code_filter)
+                                            .limit(1)
+                                            .execute()
+                                        )
+                                        legacy_row = (legacy_res.data or [None])[0]
+                                    except Exception:
+                                        legacy_row = None
                                 db_data = {
                                     "name": best_match['scheme_name'],
                                     "nav": best_match['nav'],
                                     "nav_date": best_match['nav_date'],
-                                    "category": best_match['category'],
-                                    "benchmark": best_match.get("benchmark"),
-                                    "fund_manager": best_match.get("fund_manager") or ((best_match.get("provider_payload") or {}).get("fund_manager") if isinstance(best_match.get("provider_payload"), dict) else None),
-                                    "fund_house": best_match.get('amc_name') or best_match.get('fund_house'),
-                                    "expense_ratio": best_match.get('expense_ratio', "N/A"),
-                                    "aum": best_match.get('aum', "N/A"),
+                                    "category": best_match.get('category') or ((legacy_row or {}).get("category") if isinstance(legacy_row, dict) else None),
+                                    "benchmark": best_match.get("benchmark") or ((legacy_row or {}).get("benchmark") if isinstance(legacy_row, dict) else None),
+                                    "fund_manager": best_match.get("fund_manager") or _trace_value("fund_manager"),
+                                    "fund_house": best_match.get('amc_name') or best_match.get('fund_house') or ((legacy_row or {}).get("fund_house") if isinstance(legacy_row, dict) else None),
+                                    "expense_ratio": best_match.get('expense_ratio') if best_match.get('expense_ratio') not in (None, "") else ((legacy_row or {}).get("expense_ratio") if isinstance(legacy_row, dict) else "N/A"),
+                                    "aum": best_match.get('aum') if best_match.get('aum') not in (None, "") else ((legacy_row or {}).get("aum") if isinstance(legacy_row, dict) else "N/A"),
                                     "return_1y": best_match.get("return_1y"),
                                     "return_3y": best_match.get("return_3y"),
                                     "return_5y": best_match.get("return_5y"),

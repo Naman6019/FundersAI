@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -11,6 +12,7 @@ from app.mf_ingestion.downloaders.amc_downloader import AMCDownloader
 from app.mf_ingestion.sources.registry import AMCDocumentSource, get_source
 from app.mf_ingestion.storage.checksum import sha256_bytes
 from app.mf_ingestion.storage.raw_file_store import RawFileStore
+from app.mf_ingestion.storage.r2_store import R2Store, build_safe_key
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +21,14 @@ class IngestionService:
     def __init__(self) -> None:
         self.config = get_config()
         self.raw_store = RawFileStore(self.config.raw_storage_root)
+        self.r2_store = R2Store(
+            endpoint=self.config.r2_endpoint,
+            access_key_id=self.config.r2_access_key_id,
+            secret_access_key=self.config.r2_secret_access_key,
+            raw_bucket=self.config.r2_raw_bucket,
+            cold_bucket=self.config.r2_cold_bucket,
+            signed_url_ttl_seconds=self.config.r2_signed_url_ttl_seconds,
+        )
 
     def ingest_latest_amc_document(self, amc: str, document_type: str, max_documents: int = 1) -> dict[str, Any]:
         result = self.ingest_documents(amc=amc, document_type=document_type, max_documents=max_documents)
@@ -109,7 +119,10 @@ class IngestionService:
                 )
                 continue
 
-            raw_path = self.raw_store.save(downloaded, checksum)
+            raw_path, storage_backend, storage_bucket, storage_key, storage_metadata = self._persist_raw_document(
+                downloaded=downloaded,
+                checksum=checksum,
+            )
             now_iso = datetime.now(timezone.utc).isoformat()
             payload = {
                 "amc_name": downloaded.amc_name,
@@ -122,6 +135,10 @@ class IngestionService:
                 "file_name": downloaded.file_name,
                 "file_ext": downloaded.file_ext,
                 "storage_path": raw_path,
+                "storage_backend": storage_backend,
+                "storage_bucket": storage_bucket,
+                "storage_key": storage_key,
+                "storage_metadata": storage_metadata,
                 "checksum": checksum,
                 "content_type": downloaded.content_type,
                 "file_size_bytes": downloaded.file_size_bytes,
@@ -174,6 +191,44 @@ class IngestionService:
         }
         supabase.table("mf_amc_sources").upsert(payload, on_conflict="amc_code").execute()
 
+    def _persist_raw_document(
+        self,
+        *,
+        downloaded: Any,
+        checksum: str,
+    ) -> tuple[str, str, str | None, str | None, dict[str, Any]]:
+        metadata = {
+            "checksum": checksum,
+            "content_type": downloaded.content_type or "",
+            "file_size_bytes": str(downloaded.file_size_bytes or 0),
+        }
+
+        ext = downloaded.file_ext or _safe_extension(downloaded.file_name)
+        if not ext.startswith("."):
+            ext = f".{ext}"
+        month_segment = downloaded.report_month.strftime("%Y-%m") if downloaded.report_month else "unknown-month"
+        key = build_safe_key(
+            "raw",
+            downloaded.amc_code,
+            month_segment,
+            downloaded.document_type,
+            f"{checksum}{ext.lower()}",
+        )
+
+        if self.r2_store.enabled:
+            uploaded = self.r2_store.upload_bytes(
+                key=key,
+                content=downloaded.file_bytes,
+                bucket=self.config.r2_raw_bucket,
+                content_type=downloaded.content_type,
+                metadata={k: str(v) for k, v in metadata.items()},
+            )
+            storage_path = f"r2://{uploaded['bucket']}/{uploaded['key']}"
+            return storage_path, "r2", uploaded["bucket"], uploaded["key"], metadata
+
+        local_path = self.raw_store.save(downloaded, checksum)
+        return str(Path(local_path).resolve()), "local", None, None, metadata
+
 
 def _base_url_from_pages(source: AMCDocumentSource) -> str | None:
     page = source.factsheet_page_url or source.portfolio_disclosure_page_url
@@ -183,3 +238,9 @@ def _base_url_from_pages(source: AMCDocumentSource) -> str | None:
     if not parsed.scheme or not parsed.netloc:
         return None
     return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _safe_extension(file_name: str) -> str:
+    if "." not in file_name:
+        return ".bin"
+    return "." + file_name.rsplit(".", 1)[-1].lower()

@@ -64,7 +64,11 @@ class FactsheetParser:
             if not current or score > current[0]:
                 best_by_scheme[scheme_name] = (score, record)
 
-        return [entry[1] for entry in sorted(best_by_scheme.values(), key=lambda value: value[1].scheme_name)]
+        records = [entry[1] for entry in sorted(best_by_scheme.values(), key=lambda value: value[1].scheme_name)]
+        for record in records:
+            if record.aum is None:
+                record.aum = _extract_aum_from_scheme_occurrences(text, record.scheme_name)
+        return records
 
 
 def _clean_scheme_name(raw: str) -> str:
@@ -92,15 +96,28 @@ def _score_fields(fields: dict[str, Any]) -> int:
 
 def _extract_aum(chunk: str) -> float | None:
     patterns = (
-        r"Closing\s+AUM[^\n]{0,80}?:\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|cr)\b",
+        r"Closing\s+AUM[\s\S]{0,120}?:\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|cr)\b",
         r"Assets\s+Under\s+Management[\s\S]{0,160}?(?:Rs\.?|`|₹)\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|cr)\b",
-        r"Monthly\s+AAUM[^\n]{0,80}?:\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|cr)\b",
+        r"Monthly\s+AAUM[\s\S]{0,120}?:\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|cr)\b",
     )
     for pattern in patterns:
         match = re.search(pattern, chunk, flags=re.IGNORECASE)
         if not match:
             continue
         value = _parse_number(match.group(1))
+        if value is not None:
+            return value
+    return None
+
+
+def _extract_aum_from_scheme_occurrences(text: str, scheme_name: str) -> float | None:
+    if not text or not scheme_name:
+        return None
+    pattern = re.compile(re.escape(scheme_name), flags=re.IGNORECASE)
+    for match in pattern.finditer(text):
+        start = max(0, match.start() - 400)
+        end = min(len(text), match.start() + 7000)
+        value = _extract_aum(text[start:end])
         if value is not None:
             return value
     return None
@@ -133,7 +150,7 @@ def _extract_benchmark(chunk: str) -> str | None:
         match = re.search(pattern, chunk, flags=re.IGNORECASE)
         if not match:
             continue
-        value = " ".join(match.group(1).split()).strip(" :;,-")
+        value = _normalize_benchmark_candidate(match.group(1))
         if not value:
             continue
         if value.lower() in {"scheme", "benchmark"}:
@@ -185,12 +202,18 @@ def _is_plausible_benchmark(value: str) -> bool:
     clean = " ".join(str(value or "").split()).strip()
     if not clean:
         return False
+    if len(clean) > 70:
+        return False
     if re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", clean):
         return False
     invalid_phrases = (
         "this product labelling is applicable only to the scheme",
         "investors should consult",
         "riskometer",
+        "performance of the scheme",
+        "returns",
+        "the risk of",
+        "notes",
     )
     lowered = clean.lower()
     if any(phrase in lowered for phrase in invalid_phrases):
@@ -202,3 +225,20 @@ def _is_plausible_benchmark(value: str) -> bool:
 
     words = clean.split()
     return len(words) <= 4
+
+
+def _normalize_benchmark_candidate(raw: str) -> str:
+    text = " ".join(str(raw or "").split()).strip(" :;,-")
+    if not text:
+        return ""
+    text = re.sub(r"(?i)^is\s+", "", text).strip()
+    text = re.split(r"[.;]", text)[0].strip(" :;,-")
+    if not text:
+        return ""
+    known_index = re.search(
+        r"(?i)((?:nifty|bse|sensex|crisil|nse|s&p|msci|ftse)[^.;,\n]{0,60})",
+        text,
+    )
+    if known_index:
+        return " ".join(known_index.group(1).split()).strip(" :;,-")
+    return text

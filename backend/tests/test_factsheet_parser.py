@@ -58,3 +58,25 @@ Direct : 0.72% p. a.
     assert record.expense_ratio == 0.72
     assert record.benchmark == "Nifty 500 TRI"
     assert "Ms. Manasvi Shah" in (record.fund_manager or "")
+
+
+def test_factsheet_parser_backfills_aum_from_later_scheme_occurrence():
+    text = """
+ICICI Prudential Large Cap Fund
+Base Expense Ratio :
+Other : 1.40% p. a.
+Direct : 0.64% p. a.
+
+Returns of ICICI Prudential Large Cap Fund - Growth Option as on April 30, 2026
+Scheme Details
+Monthly AAUM as on 30-Apr-26 : Rs. 20,441.38 crores
+Closing AUM as on 30-Apr-26 : Rs. 20,936.07 crores
+"""
+    parser = FactsheetParser()
+    records = parser.parse_text(text=text, report_month=date(2026, 4, 1))
+
+    assert len(records) == 1
+    record = records[0]
+    assert record.scheme_name == "ICICI Prudential Large Cap Fund"
+    assert record.expense_ratio == 0.64
+    assert record.aum == 20936.07

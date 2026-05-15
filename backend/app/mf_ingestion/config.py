@@ -11,6 +11,12 @@ class IngestionConfig:
     request_timeout_seconds: float
     parser_version: str
     user_agent: str
+    r2_endpoint: str
+    r2_access_key_id: str
+    r2_secret_access_key: str
+    r2_raw_bucket: str
+    r2_cold_bucket: str
+    r2_signed_url_ttl_seconds: int
 
 
 
@@ -24,4 +30,10 @@ def get_config() -> IngestionConfig:
             "MF_INGESTION_USER_AGENT",
             "MarketMindResearchBot/1.0 contact: YOUR_EMAIL_HERE",
         ),
+        r2_endpoint=os.getenv("R2_ENDPOINT", "").strip(),
+        r2_access_key_id=os.getenv("R2_ACCESS_KEY_ID", "").strip(),
+        r2_secret_access_key=os.getenv("R2_SECRET_ACCESS_KEY", "").strip(),
+        r2_raw_bucket=os.getenv("R2_RAW_BUCKET", "").strip(),
+        r2_cold_bucket=os.getenv("R2_COLD_BUCKET", "").strip(),
+        r2_signed_url_ttl_seconds=int(os.getenv("R2_SIGNED_URL_TTL_SECONDS", "300")),
     )

@@ -12,7 +12,7 @@ from app.mf_ingestion.parsers.pdf_table_parser import PDFTableParser
 from app.mf_ingestion.parsers.pdf_text_parser import PDFTextParser
 
 logger = logging.getLogger(__name__)
-ZIP_MAX_EXCEL_FILES = 30
+ZIP_MAX_EXCEL_FILES = 2000
 
 
 class HoldingsParser:
@@ -23,25 +23,58 @@ class HoldingsParser:
         self.pdf_text_parser = PDFTextParser()
 
     def parse(self, file_path: str, context: ParseContext) -> ParsedDocument:
+        parsed_documents = self.parse_many(file_path, context)
+        if not parsed_documents:
+            return ParsedDocument(
+                scheme_name="",
+                report_month=context.report_month,
+                holdings=[],
+                warnings=["holdings_not_found_in_document"],
+                confidence_score=0.0,
+            )
+        return max(parsed_documents, key=lambda item: len(item.holdings))
+
+    def parse_many(self, file_path: str, context: ParseContext) -> list[ParsedDocument]:
         extension = Path(file_path).suffix.lower()
 
-        excel_frames = []
-        pdf_frames = []
-        pdf_text = ""
-
         if extension in EXCEL_EXTENSIONS:
-            excel_frames = self.excel_parser.parse_all_sheets(file_path)
-        elif extension == ".zip":
-            excel_frames = self._parse_zip_excel_frames(file_path)
-        else:
-            pdf_frames = self.pdf_table_parser.extract_tables(file_path)
-            if not pdf_frames:
-                pdf_text = self.pdf_text_parser.extract_text(file_path)
+            frames = self.excel_parser.parse_all_sheets(file_path)
+            return self._parse_excel_frames(frames, context)
 
-        return self.adapter.parse_holdings(excel_frames, pdf_frames, pdf_text, context)
+        if extension == ".zip":
+            return self._parse_zip_documents(file_path, context)
 
-    def _parse_zip_excel_frames(self, file_path: str) -> list:
-        frames = []
+        pdf_frames = self.pdf_table_parser.extract_tables(file_path)
+        pdf_text = ""
+        if not pdf_frames:
+            pdf_text = self.pdf_text_parser.extract_text(file_path)
+        parsed = self.adapter.parse_holdings([], pdf_frames, pdf_text, context)
+        return [parsed] if parsed.holdings else []
+
+    def _parse_excel_frames(self, frames: list, context: ParseContext) -> list[ParsedDocument]:
+        if not frames:
+            return []
+
+        by_scheme: dict[str, ParsedDocument] = {}
+        for frame in frames:
+            try:
+                parsed = self.adapter.parse_holdings([frame], [], "", context)
+            except Exception:
+                logger.exception("event=excel_sheet_parse_failed source_document_id=%s", context.source_document_id)
+                continue
+            if not parsed.holdings:
+                continue
+
+            scheme_key = " ".join(str(parsed.scheme_name or "").lower().split())
+            existing = by_scheme.get(scheme_key)
+            if not existing or len(parsed.holdings) > len(existing.holdings):
+                by_scheme[scheme_key] = parsed
+
+        return list(by_scheme.values())
+
+    def _parse_zip_documents(self, file_path: str, context: ParseContext) -> list[ParsedDocument]:
+        parsed_documents: list[ParsedDocument] = []
+        by_scheme: dict[str, ParsedDocument] = {}
         with zipfile.ZipFile(file_path) as archive:
             names = sorted(archive.namelist())
             excel_names = [name for name in names if Path(name).suffix.lower() in EXCEL_EXTENSIONS]
@@ -57,8 +90,13 @@ class HoldingsParser:
                 try:
                     member_bytes = archive.read(member_name)
                     member_frames = self.excel_parser.parse_all_sheets_from_bytes(member_bytes)
-                    frames.extend(member_frames)
+                    for parsed in self._parse_excel_frames(member_frames, context):
+                        scheme_key = " ".join(str(parsed.scheme_name or "").lower().split())
+                        existing = by_scheme.get(scheme_key)
+                        if not existing or len(parsed.holdings) > len(existing.holdings):
+                            by_scheme[scheme_key] = parsed
                 except Exception:
                     logger.exception("event=zip_excel_member_parse_failed file_path=%s member=%s", file_path, member_name)
                     continue
-        return frames
+        parsed_documents.extend(by_scheme.values())
+        return parsed_documents
