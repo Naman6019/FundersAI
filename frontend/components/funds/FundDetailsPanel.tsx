@@ -29,11 +29,15 @@ type FundExtraMeta = {
 };
 
 type ComparisonFundData = {
+  scheme_code?: string | number | null;
   name?: string;
   beta?: string | number | null;
   alpha_vs_nifty?: string | number | null;
   aum?: string | number | null;
   expense_ratio?: string | number | null;
+  holdings?: Array<Record<string, unknown>> | null;
+  sector_allocation?: Array<Record<string, unknown>> | null;
+  source_summary?: { holdings_as_of_date?: string | null } | null;
 };
 
 function MetricCard({ label, value, tooltip, icon: Icon, subValue }: { label: string, value: string | null, tooltip: string, icon?: LucideIcon, subValue?: string }) {
@@ -72,6 +76,78 @@ function FundColumn({ schemeCode, colorHex }: { schemeCode: string, colorHex: st
       })
       .catch(err => console.error("Error fetching extra meta:", err));
   }, [schemeCode]);
+
+  const portfolioSnapshot = useMemo(() => {
+    const quantComparison =
+      auxiliaryData?.quant_data && typeof auxiliaryData.quant_data === 'object'
+        ? (auxiliaryData.quant_data as { comparison?: Record<string, unknown> }).comparison
+        : undefined;
+    const comparisonData = quantComparison ?? auxiliaryData?.comparison;
+    if (!comparisonData || typeof comparisonData !== 'object') {
+      return { holdings: [] as Array<{ name: string; weight: number | null }>, sectors: [] as Array<{ name: string; weight: number | null }>, asOf: null as string | null };
+    }
+
+    const fundName = (meta?.scheme_name || '').toLowerCase();
+    let matched: ComparisonFundData | null = null;
+
+    for (const val of Object.values(comparisonData)) {
+      const data = val as ComparisonFundData;
+      const payloadCode = data?.scheme_code;
+      if (payloadCode !== null && payloadCode !== undefined && String(payloadCode) === String(schemeCode)) {
+        matched = data;
+        break;
+      }
+      const backendName = typeof data?.name === 'string' ? data.name.toLowerCase() : '';
+      if (!backendName || !fundName) continue;
+      if (fundName.includes(backendName) || backendName.includes(fundName)) {
+        matched = data;
+        break;
+      }
+    }
+
+    const toWeight = (value: unknown): number | null => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const holdings = Array.isArray(matched?.holdings)
+      ? matched!.holdings
+          .map((row) => {
+            const rec = row as Record<string, unknown>;
+            const name = String(rec.security_name ?? rec.name ?? rec.holding ?? '').trim();
+            if (!name) return null;
+            return {
+              name,
+              weight: toWeight(rec.weight_pct ?? rec.weight),
+            };
+          })
+          .filter((row): row is { name: string; weight: number | null } => Boolean(row))
+          .sort((a, b) => (b.weight ?? -1) - (a.weight ?? -1))
+          .slice(0, 6)
+      : [];
+
+    const sectors = Array.isArray(matched?.sector_allocation)
+      ? matched!.sector_allocation
+          .map((row) => {
+            const rec = row as Record<string, unknown>;
+            const name = String(rec.sector ?? rec.name ?? '').trim();
+            if (!name) return null;
+            return {
+              name,
+              weight: toWeight(rec.weight_pct ?? rec.weight),
+            };
+          })
+          .filter((row): row is { name: string; weight: number | null } => Boolean(row))
+          .sort((a, b) => (b.weight ?? -1) - (a.weight ?? -1))
+          .slice(0, 6)
+      : [];
+
+    return {
+      holdings,
+      sectors,
+      asOf: matched?.source_summary?.holdings_as_of_date || null,
+    };
+  }, [auxiliaryData, meta?.scheme_name, schemeCode]);
 
   const metrics = useMemo(() => {
     if (!navData) return null;
@@ -177,7 +253,9 @@ function FundColumn({ schemeCode, colorHex }: { schemeCode: string, colorHex: st
       }
     }
 
-    const apiStdDev = typeof apiRiskMetrics?.stdDev === 'number' ? apiRiskMetrics.stdDev * 100 : null;
+    const apiStdDev = typeof apiRiskMetrics?.stdDev === 'number'
+      ? (Math.abs(apiRiskMetrics.stdDev) <= 1 ? apiRiskMetrics.stdDev * 100 : apiRiskMetrics.stdDev)
+      : null;
 
     return {
       returns, cagr1Y, cagr3Y, cagr5Y, beta, alpha, precomputedAum, precomputedExpenseRatio,
@@ -306,12 +384,46 @@ function FundColumn({ schemeCode, colorHex }: { schemeCode: string, colorHex: st
         </div>
       </div>
 
-      <div className="rounded-2xl border border-dashed border-[#3a4e6f] bg-[#0f1a2b] p-5 text-center sm:rounded-3xl sm:p-8">
-          <PieChart size={24} className="mx-auto mb-4 text-[#8ca5cb]" />
-          <div className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-[#8ca5cb]">Portfolio Mix Sync</div>
-          <p className="mx-auto max-w-[230px] text-[10px] leading-relaxed text-[#7690b6]">
-            Sector and concentration panels will populate as holdings snapshots become available.
-          </p>
+      <div className="rounded-2xl border border-dashed border-[#3a4e6f] bg-[#0f1a2b] p-5 sm:rounded-3xl sm:p-6">
+        <div className="mb-4 flex items-center gap-3">
+          <PieChart size={20} className="text-[#8ca5cb]" />
+          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#8ca5cb]">Portfolio Snapshot</div>
+        </div>
+        {portfolioSnapshot.asOf && (
+          <div className="mb-3 text-[10px] text-[#8ea7cd]">As of {portfolioSnapshot.asOf}</div>
+        )}
+        <div className="grid grid-cols-1 gap-3">
+          <div className="rounded-xl border border-white/10 bg-[#101b2f] p-3">
+            <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#9fb8df]">Top Holdings</div>
+            {portfolioSnapshot.holdings.length > 0 ? (
+              <div className="space-y-1.5">
+                {portfolioSnapshot.holdings.map((row) => (
+                  <div key={`h-${row.name}`} className="flex items-center justify-between text-[11px] text-[#d7e4fb]">
+                    <span className="truncate pr-2">{row.name}</span>
+                    <span>{row.weight !== null ? `${row.weight.toFixed(2)}%` : 'N/A'}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[10px] leading-relaxed text-[#7690b6]">Holdings not available for this matched scheme yet.</p>
+            )}
+          </div>
+          <div className="rounded-xl border border-white/10 bg-[#101b2f] p-3">
+            <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-[#9fb8df]">Top Sectors</div>
+            {portfolioSnapshot.sectors.length > 0 ? (
+              <div className="space-y-1.5">
+                {portfolioSnapshot.sectors.map((row) => (
+                  <div key={`s-${row.name}`} className="flex items-center justify-between text-[11px] text-[#d7e4fb]">
+                    <span className="truncate pr-2">{row.name}</span>
+                    <span>{row.weight !== null ? `${row.weight.toFixed(2)}%` : 'N/A'}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[10px] leading-relaxed text-[#7690b6]">Sector allocation not available for this matched scheme yet.</p>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

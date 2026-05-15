@@ -100,7 +100,10 @@ def _factor_scores_stock(comparison: dict[str, dict[str, Any]]) -> tuple[list[di
         if len(raw) < 1:
             continue
         normalized = _normalize(raw, higher_is_better=higher_is_better)
-        winner = max(normalized.items(), key=lambda item: item[1])[0] if normalized else None
+        winner = None
+        if normalized:
+            ordered = sorted(normalized.items(), key=lambda item: item[1], reverse=True)
+            winner = ordered[0][0] if len(ordered) == 1 or (ordered[0][1] - ordered[1][1]) > 1e-6 else None
         factors.append(
             {
                 "factor": label,
@@ -147,7 +150,10 @@ def _factor_scores_mf(comparison: dict[str, dict[str, Any]]) -> tuple[list[dict[
         if len(raw) < 1:
             continue
         normalized = _normalize(raw, higher_is_better=higher_is_better)
-        winner = max(normalized.items(), key=lambda item: item[1])[0] if normalized else None
+        winner = None
+        if normalized:
+            ordered = sorted(normalized.items(), key=lambda item: item[1], reverse=True)
+            winner = ordered[0][0] if len(ordered) == 1 or (ordered[0][1] - ordered[1][1]) > 1e-6 else None
         factors.append(
             {
                 "factor": label,

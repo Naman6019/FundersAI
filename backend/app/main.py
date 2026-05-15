@@ -1179,12 +1179,17 @@ def _pick_best_fund_match(entity: str, rows: list[dict]) -> dict | None:
         if entity_norm and entity_norm in name_norm:
             value += 100
         value += sum(10 for word in entity_words if word in name_norm)
-        if "direct" in name_norm and "growth" in name_norm:
+        # Always prefer Direct Growth siblings for AMC-derived fields.
+        if "direct" in name_norm:
+            value += 30
+        else:
+            value -= 20
+        if "growth" in name_norm:
             value += 20
         if "regular" in name_norm:
-            value -= 15
+            value -= 35
         if "idcw" in name_norm or "dividend" in name_norm:
-            value -= 20
+            value -= 25
         if "index" in name_norm and "index" not in entity_norm:
             value -= 35
         if "etf" in name_norm and "etf" not in entity_norm:
@@ -1522,6 +1527,7 @@ async def chat_endpoint(req: ChatRequest):
                                     except Exception:
                                         legacy_row = None
                                 db_data = {
+                                    "scheme_code": str(scheme_code) if scheme_code is not None else None,
                                     "name": best_match['scheme_name'],
                                     "nav": best_match['nav'],
                                     "nav_date": best_match['nav_date'],
@@ -1710,6 +1716,13 @@ async def chat_endpoint(req: ChatRequest):
             for entity in entities:
                 if comparison_payload and _is_unavailable_entity(comparison_payload.get(entity)):
                     continue
+                if comparison_payload:
+                    payload_row = comparison_payload.get(entity)
+                    if isinstance(payload_row, dict):
+                        payload_code = payload_row.get("scheme_code")
+                        if payload_code not in (None, "", "N/A"):
+                            resolved_ids.append(str(payload_code))
+                            continue
                 ent_lower = entity.lower()
                 resolved = False
                 if asset_type != "stock":
@@ -1721,9 +1734,9 @@ async def chat_endpoint(req: ChatRequest):
                     try:
                         search_term = _entity_search_term(entity)
                         search_pattern = _fund_search_pattern(search_term)
-                        res = supabase.table('mutual_fund_core_snapshot').select('scheme_code', 'scheme_name').ilike('scheme_name', search_pattern).limit(25).execute()
+                        res = supabase.table('mutual_fund_core_snapshot').select('scheme_code,scheme_name').ilike('scheme_name', search_pattern).limit(25).execute()
                         if not res.data:
-                            res = supabase.table('mutual_funds').select('scheme_code', 'scheme_name').ilike('scheme_name', search_pattern).limit(25).execute()
+                            res = supabase.table('mutual_funds').select('scheme_code,scheme_name').ilike('scheme_name', search_pattern).limit(25).execute()
                         if res.data and len(res.data) > 0:
                             best_match = _pick_best_fund_match(search_term, res.data)
                             resolved_ids.append(str(best_match['scheme_code']))

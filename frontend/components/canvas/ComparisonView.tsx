@@ -269,7 +269,7 @@ function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
           {factors.map((factor, idx) => (
             <div key={`${factor.factor || 'factor'}-${idx}`} className="rounded-md border border-white/15 bg-[#0e182a] p-2 text-xs">
               <div className="font-semibold text-white">{factor.factor || 'Factor'}</div>
-              <div className="text-[#c8d8f6]">Winner: {factor.winner || 'N/A'}</div>
+              <div className="text-[#c8d8f6]">Winner: {factor.winner || 'No clear edge'}</div>
               <div className="text-[#8ea7cd]">Coverage: {typeof factor.coverage === 'number' ? `${Math.round(factor.coverage * 100)}%` : 'N/A'}</div>
             </div>
           ))}
