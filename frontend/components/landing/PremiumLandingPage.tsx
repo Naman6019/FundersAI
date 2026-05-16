@@ -117,6 +117,7 @@ export default function PremiumLandingPage({ tickerItems }: Props) {
   const topLosers = [...sortedByMove].reverse().slice(0, 4);
   const latestTimestamp = tickerItems.find((item) => item.date)?.date ?? null;
   const snapshotFallback = tickerItems.length === 0;
+  const shellClass = 'mx-auto w-full max-w-screen-2xl px-4 sm:px-6 lg:px-10';
 
   return (
     <div className="relative min-h-screen overflow-x-clip bg-[#050a14] text-[#eaf0ff]">
@@ -124,7 +125,7 @@ export default function PremiumLandingPage({ tickerItems }: Props) {
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(5,10,20,0.12),rgba(5,10,20,0.86))]" />
 
       <header className="sticky top-0 z-50 px-4 py-3 sm:px-6">
-        <div className="mx-auto flex h-16 w-full max-w-[1240px] items-center justify-between rounded-2xl border border-white/10 bg-[#081122]/75 px-4 shadow-[0_14px_40px_rgba(0,0,0,0.36)] backdrop-blur-xl sm:px-6">
+        <div className={`${shellClass} flex h-16 items-center justify-between rounded-2xl border border-white/10 bg-[#081122]/75 px-4 shadow-[0_14px_40px_rgba(0,0,0,0.36)] backdrop-blur-xl sm:px-6`}>
           <Link href="/" className="flex items-center gap-2.5 text-sm font-semibold text-white" aria-label="MarketMind home">
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#72a9ff,#3f70d2)] font-bold text-white shadow-[0_10px_20px_rgba(49,109,216,0.5)]">M</span>
             <span className="text-lg leading-none">MarketMind</span>
@@ -141,14 +142,14 @@ export default function PremiumLandingPage({ tickerItems }: Props) {
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto w-full max-w-[1240px] px-4 pb-16 pt-6 sm:px-6 sm:pb-24">
-        <section className="grid items-center gap-10 pb-16 pt-8 md:grid-cols-[1.04fr_0.96fr] md:pb-22 md:pt-14">
+      <main className={`${shellClass} relative z-10 pb-16 pt-6 sm:pb-24`}>
+        <section className="grid items-center gap-12 pb-16 pt-8 xl:grid-cols-[1.04fr_0.96fr] xl:pb-22 xl:pt-14">
           <motion.div initial="hidden" animate="show" variants={fadeUp} transition={{ duration: 0.5 }}>
             <span className="inline-flex items-center gap-2 rounded-full border border-[#38588a] bg-[#12213c]/85 px-3 py-1 text-xs font-semibold text-[#d8e6ff]">
               <Sparkles size={14} />
               Research with proof, not hype.
             </span>
-            <h1 className="mt-6 max-w-[14ch] text-[clamp(2.45rem,5.8vw,5rem)] font-bold leading-[1.02] tracking-[-0.02em] text-white">
+            <h1 className="mt-6 max-w-[16ch] text-[clamp(2.1rem,5vw,4.5rem)] font-bold leading-[1.03] tracking-[-0.02em] text-white">
               AI-powered research for Indian stocks and mutual funds.
             </h1>
             <p className="mt-5 max-w-[56ch] text-[1.06rem] leading-8 text-[#b5c9eb]">
@@ -190,7 +191,7 @@ export default function PremiumLandingPage({ tickerItems }: Props) {
             animate="show"
             variants={fadeUp}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="rounded-3xl border border-white/15 bg-[linear-gradient(150deg,rgba(24,40,70,0.9),rgba(12,21,36,0.95))] p-4 shadow-[0_26px_70px_rgba(0,0,0,0.48)]"
+            className="rounded-3xl border border-white/15 bg-[linear-gradient(150deg,rgba(24,40,70,0.9),rgba(12,21,36,0.95))] p-4 shadow-[0_26px_70px_rgba(0,0,0,0.48)] xl:justify-self-end xl:w-full xl:max-w-4xl"
             aria-label="MarketMind product preview"
           >
             <div className="mb-4 flex items-center gap-2 border-b border-white/10 pb-3 text-xs text-[#adc3eb]">
