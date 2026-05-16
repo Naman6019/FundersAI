@@ -9,11 +9,14 @@ import ChatWindow from '@/components/chat/ChatWindow';
 import StockDetailView from '@/components/canvas/StockDetailView';
 import MFDetailView from '@/components/canvas/MFDetailView';
 import ComparisonView from '@/components/canvas/ComparisonView';
+import { useChatStore } from '@/store/useChatStore';
 
 export default function DashboardLayout() {
-  const { isCanvasOpen, activeView, selectedIds, auxiliaryData, toggleCanvas } = useCanvasStore();
+  const { isCanvasOpen, activeView, selectedIds, auxiliaryData, toggleCanvas, closeCanvas } = useCanvasStore();
+  const comparisonViewMode = useChatStore((state) => state.comparisonViewMode);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const comparisonLockedToChat = activeView === 'COMPARISON' && comparisonViewMode === 'chat';
 
   // Wake up the backend on load
   useEffect(() => {
@@ -27,6 +30,12 @@ export default function DashboardLayout() {
     query.addEventListener('change', update);
     return () => query.removeEventListener('change', update);
   }, []);
+
+  useEffect(() => {
+    if (comparisonLockedToChat && isCanvasOpen) {
+      closeCanvas();
+    }
+  }, [closeCanvas, comparisonLockedToChat, isCanvasOpen]);
 
   const renderCanvasContent = () => {
     switch (activeView) {
@@ -83,7 +92,7 @@ export default function DashboardLayout() {
             <div className={`chat-area relative h-full w-full ${isCanvasOpen ? 'hidden' : 'flex'}`} aria-hidden={isCanvasOpen}>
               <ChatWindow />
             </div>
-            {isCanvasOpen && (
+            {isCanvasOpen && !comparisonLockedToChat && (
               <div className="absolute inset-0 z-40 flex min-h-0 min-w-0 canvas-stage">
                 <button
                   onClick={toggleCanvas}
@@ -110,15 +119,17 @@ export default function DashboardLayout() {
             )}
             <ChatWindow />
             
-            <button 
-              onClick={toggleCanvas}
-              className="canvas-toggle-btn"
-            >
-              {isCanvasOpen ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
-            </button>
+            {!comparisonLockedToChat && (
+              <button 
+                onClick={toggleCanvas}
+                className="canvas-toggle-btn"
+              >
+                {isCanvasOpen ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+              </button>
+            )}
           </Panel>
 
-          {isCanvasOpen && (
+          {isCanvasOpen && !comparisonLockedToChat && (
             <>
               <PanelResizeHandle className="w-4 flex items-center justify-center cursor-col-resize user-select-none">
                 <div className="resize-handle-pill"></div>

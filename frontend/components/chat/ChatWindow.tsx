@@ -6,20 +6,22 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Send } from 'lucide-react';
 import { useCanvasStore } from '@/store/useCanvasStore';
-import { AssetType, Message, ResearchDepth, useChatStore } from '@/store/useChatStore';
+import { AssetType, ComparisonViewMode, Message, ResearchDepth, useChatStore } from '@/store/useChatStore';
 
 export default function ChatWindow() {
   const searchParams = useSearchParams();
-  const { setView, setIds, openCanvas } = useCanvasStore();
+  const { setView, setIds, openCanvas, closeCanvas } = useCanvasStore();
   const messages = useChatStore((state) => state.messages);
   const input = useChatStore((state) => state.input);
   const isProcessing = useChatStore((state) => state.isProcessing);
   const assetType = useChatStore((state) => state.assetType);
   const researchDepth = useChatStore((state) => state.researchDepth);
+  const comparisonViewMode = useChatStore((state) => state.comparisonViewMode);
   const setInput = useChatStore((state) => state.setInput);
   const setIsProcessing = useChatStore((state) => state.setIsProcessing);
   const setAssetType = useChatStore((state) => state.setAssetType);
   const setResearchDepth = useChatStore((state) => state.setResearchDepth);
+  const setComparisonViewMode = useChatStore((state) => state.setComparisonViewMode);
   const addMessage = useChatStore((state) => state.addMessage);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -45,6 +47,7 @@ export default function ChatWindow() {
     queryText: string,
     selectedAssetType: AssetType = assetType,
     selectedResearchDepth: ResearchDepth = researchDepth,
+    selectedComparisonViewMode: ComparisonViewMode = comparisonViewMode,
   ) => {
     const text = queryText.trim();
     if (!text) return;
@@ -66,6 +69,7 @@ export default function ChatWindow() {
           query: text,
           asset_type: selectedAssetType,
           research_depth: selectedResearchDepth,
+          comparison_view_mode: selectedComparisonViewMode,
         }),
       });
 
@@ -74,9 +78,13 @@ export default function ChatWindow() {
       
       if (data.system_action) {
         if (data.system_action.type === 'COMPARE') {
-            setIds(data.system_action.ids);
-            setView('COMPARISON', data); // Pass raw data containing quant/comparison bits
-            openCanvas(data);
+            if (selectedComparisonViewMode === 'canvas') {
+              setIds(data.system_action.ids);
+              setView('COMPARISON', data); // Pass raw data containing quant/comparison bits
+              openCanvas(data);
+            } else {
+              closeCanvas();
+            }
         }
       }
       
@@ -86,7 +94,7 @@ export default function ChatWindow() {
     } finally {
       setIsProcessing(false);
     }
-  }, [addMessage, assetType, openCanvas, researchDepth, setIds, setInput, setIsProcessing, setView]);
+  }, [addMessage, assetType, closeCanvas, comparisonViewMode, openCanvas, researchDepth, setIds, setInput, setIsProcessing, setView]);
 
   useEffect(() => {
     if (initialQuerySentRef.current) return;
@@ -106,7 +114,7 @@ export default function ChatWindow() {
   }, [searchParams, sendQuery, setAssetType, setResearchDepth]);
 
   const handleSend = async () => {
-    await sendQuery(input, assetType, researchDepth);
+    await sendQuery(input, assetType, researchDepth, comparisonViewMode);
   };
 
   return (
@@ -169,6 +177,22 @@ export default function ChatWindow() {
               type="button"
               className={researchDepth === option.value ? 'active' : ''}
               onClick={() => setResearchDepth(option.value as ResearchDepth)}
+              disabled={isProcessing}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <div className="asset-toggle" aria-label="Comparison data view">
+          {[
+            { label: 'Compare in Canvas', value: 'canvas' },
+            { label: 'Compare in Chat', value: 'chat' },
+          ].map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={comparisonViewMode === option.value ? 'active' : ''}
+              onClick={() => setComparisonViewMode(option.value as ComparisonViewMode)}
               disabled={isProcessing}
             >
               {option.label}

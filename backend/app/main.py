@@ -103,6 +103,7 @@ class ChatRequest(BaseModel):
     query: str
     asset_type: Literal["auto", "stock", "mutual_fund"] = "auto"
     research_depth: Literal["standard", "deep"] = "standard"
+    comparison_view_mode: Literal["canvas", "chat"] = "canvas"
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 GROQ_BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -951,6 +952,57 @@ def _snapshot_line(intent: str, quant_data: Any) -> str:
         return f"Latest structured NAV is {_format_price(quant_data.get('nav'))}."
     return "Structured data is limited for this query."
 
+
+def _compare_direct_answer_markdown(quant_data: Any) -> str:
+    if not isinstance(quant_data, dict):
+        return ""
+    comparison = quant_data.get("comparison")
+    if not isinstance(comparison, dict) or len(comparison) < 2:
+        return ""
+
+    why_better = quant_data.get("why_better") if isinstance(quant_data.get("why_better"), dict) else {}
+    winner = why_better.get("winner") if isinstance(why_better.get("winner"), dict) else {}
+    confidence = why_better.get("confidence") if isinstance(why_better.get("confidence"), dict) else {}
+    winner_name = winner.get("entity_name")
+    winner_status = winner.get("status")
+
+    if winner_status == "winner" and winner_name:
+        overall = f"{winner_name} ranks higher on the selected deterministic factors."
+    elif winner_status == "tie":
+        overall = "No clear overall edge based on currently available factors."
+    else:
+        overall = "Insufficient local data for a reliable overall winner."
+
+    confidence_label = _safe_value(confidence.get("label"))
+    confidence_score = confidence.get("score")
+    if isinstance(confidence_score, (int, float)):
+        confidence_text = f"{confidence_label} ({float(confidence_score):.2f})"
+    else:
+        confidence_text = confidence_label
+
+    lines = [
+        f"- Overall: {overall}",
+        f"- Confidence: {confidence_text}",
+    ]
+
+    for factor in why_better.get("factor_results") or []:
+        if not isinstance(factor, dict):
+            continue
+        factor_name = _safe_value(factor.get("factor"))
+        factor_winner = _safe_value(factor.get("winner")) if factor.get("winner") else "No clear edge"
+        coverage_raw = factor.get("coverage")
+        coverage_pct = None
+        if isinstance(coverage_raw, (int, float)):
+            coverage_pct = round(float(coverage_raw) * 100)
+        coverage_text = f"{coverage_pct}%" if coverage_pct is not None else "N/A"
+        lines.append(f"- {factor_name}: {factor_winner} (coverage: {coverage_text})")
+
+    limitations = why_better.get("data_limitations") if isinstance(why_better.get("data_limitations"), list) else []
+    if limitations:
+        lines.append(f"- Data limitations: {'; '.join(str(item) for item in limitations[:3])}")
+
+    return "\n".join(lines)
+
 async def run_stock_screen(filters: dict) -> list:
     """Stock screening against the local stock universe."""
     if not supabase:
@@ -998,6 +1050,7 @@ async def synthesis_response(
     news_data: list,
     screening_results: list = None,
     research_depth: str = "standard",
+    comparison_view_mode: str = "canvas",
 ) -> str:
     """Synthesis Core"""
     
@@ -1029,6 +1082,7 @@ Use clear language, practical examples, and no buy/sell advice."""
     news_markdown = _news_markdown(news_data)
     subject = _summary_subject(query, intent_info, quant_data)
     snapshot = _snapshot_line(intent, quant_data)
+    compare_direct_answer = _compare_direct_answer_markdown(quant_data) if intent == "compare" else ""
 
     system_prompt = """You are MarketMind, a research-only Indian market analyst.
 Write only the Trend Observation paragraph.
@@ -1101,8 +1155,22 @@ News Data:
     title = "Deep Research Snapshot" if deep_research else "Snapshot"
     analysis_heading = "Deep Research Analysis" if deep_research else "Trend Observation"
 
+    if intent == "compare" and comparison_view_mode == "canvas":
+        return f"""### {subject} — {title}
+> Detailed comparison metrics are visible in the canvas panel.
+
+### News & Announcements *(last 48-72 hrs)*
+{news_markdown}
+
+### {analysis_heading}
+
+{trend}
+
+{DISCLAIMER}"""
+
     return f"""### {subject} — {title}
 > {snapshot}
+{"\n\n### How They Differ\n" + compare_direct_answer if compare_direct_answer else ""}
 
 ### Data Table
 {table_markdown}{notes_markdown}
@@ -1694,6 +1762,7 @@ async def chat_endpoint(req: ChatRequest):
         news_data,
         screening_results,
         req.research_depth,
+        req.comparison_view_mode,
     )
     response_json = {
         "answer": final_answer,

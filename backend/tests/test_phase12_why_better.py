@@ -264,3 +264,95 @@ def test_chat_mf_compare_does_not_call_live_clients(monkeypatch):
     assert "quant_data" in response
     assert "comparison" in response["quant_data"]
     assert "why_better" in response["quant_data"]
+
+
+def test_compare_synthesis_includes_direct_difference_section(monkeypatch):
+    from app import main
+
+    async def fake_function_ollama_chat(*_args, **_kwargs):
+        return "Trend text."
+
+    monkeypatch.setattr(main, "function_ollama_chat", fake_function_ollama_chat)
+
+    quant_data = {
+        "comparison": {
+            "ICICI Multi asset fund": {
+                "name": "ICICI Multi asset fund",
+                "nav": 100.5,
+                "nav_date": "2026-05-14",
+                "expense_ratio": 1.2,
+                "source": "MarketMind DB",
+                "data_quality": {"missing_fields": []},
+                "source_summary": {"stale": False, "metadata": "MarketMind DB"},
+            },
+            "Parag Flexi Cap": {
+                "name": "Parag Flexi Cap",
+                "nav": 98.2,
+                "nav_date": "2026-05-14",
+                "expense_ratio": 1.6,
+                "source": "MarketMind DB",
+                "data_quality": {"missing_fields": []},
+                "source_summary": {"stale": False, "metadata": "MarketMind DB"},
+            },
+        },
+        "why_better": {
+            "winner": {
+                "entity_name": "ICICI Multi asset fund",
+                "status": "winner",
+            },
+            "confidence": {"label": "Low", "score": 0.2},
+            "factor_results": [
+                {"factor": "Returns (3Y)", "winner": None, "coverage": 0.5},
+                {"factor": "Risk (Volatility 1Y)", "winner": None, "coverage": 0.5},
+                {"factor": "Cost (Expense Ratio)", "winner": "ICICI Multi asset fund", "coverage": 1.0},
+            ],
+            "data_limitations": ["holdings data missing"],
+        },
+    }
+
+    response = asyncio.run(
+        main.synthesis_response(
+            query="Compare ICICI Multi asset fund and Parag Flexi Cap. How are they different?",
+            intent_info={"intent": "compare", "ticker": None},
+            quant_data=quant_data,
+            news_data=[],
+            comparison_view_mode="chat",
+        )
+    )
+
+    assert "### How They Differ" in response
+    assert "- Overall: ICICI Multi asset fund ranks higher on the selected deterministic factors." in response
+    assert "- Returns (3Y): No clear edge (coverage: 50%)" in response
+
+
+def test_compare_synthesis_canvas_mode_hides_data_table(monkeypatch):
+    from app import main
+
+    async def fake_function_ollama_chat(*_args, **_kwargs):
+        return "Trend text."
+
+    monkeypatch.setattr(main, "function_ollama_chat", fake_function_ollama_chat)
+
+    response = asyncio.run(
+        main.synthesis_response(
+            query="Compare A and B",
+            intent_info={"intent": "compare", "ticker": None},
+            quant_data={
+                "comparison": {
+                    "A": {"name": "A", "nav": 100, "source_summary": {"stale": False}},
+                    "B": {"name": "B", "nav": 110, "source_summary": {"stale": False}},
+                },
+                "why_better": {
+                    "winner": {"entity_name": "B", "status": "winner"},
+                    "confidence": {"label": "Medium", "score": 0.6},
+                    "factor_results": [{"factor": "Returns (3Y)", "winner": "B", "coverage": 1.0}],
+                },
+            },
+            news_data=[],
+            comparison_view_mode="canvas",
+        )
+    )
+
+    assert "Detailed comparison metrics are visible in the canvas panel." in response
+    assert "### Data Table" not in response
+    assert "### How They Differ" not in response
