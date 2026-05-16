@@ -58,7 +58,7 @@ export default function AuthForm() {
       <section className="auth-panel">
         <Link href="/" className="auth-brand">
           <span>M</span>
-          MarketMind
+          Mooliq
         </Link>
 
         <div className="auth-heading">

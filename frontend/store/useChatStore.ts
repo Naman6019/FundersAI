@@ -14,7 +14,7 @@ const initialMessages: Message[] = [
   {
     id: '1',
     role: 'system',
-    content: 'Welcome to MarketMind. I monitor NSE/BSE quant data and latest financial news. How can I assist your market research today?',
+    content: 'Welcome to Mooliq. I monitor NSE/BSE quant data and latest financial news. How can I assist your market research today?',
   },
 ];
 

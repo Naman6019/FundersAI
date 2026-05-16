@@ -29,11 +29,11 @@ export default function LandingPromptBox() {
             openApp();
           }
         }}
-        placeholder="Ask MarketMind about a stock, mutual fund, index, or market trend..."
+        placeholder="Ask Mooliq about a stock, mutual fund, index, or market trend..."
         rows={3}
       />
       <button type="button" onClick={openApp}>
-        Try out MarketMind
+        Try out Mooliq
         <Send size={20} />
       </button>
     </div>

@@ -54,6 +54,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://marketmind.vercel.app",
+        "https://mooliq.com",
+        "https://www.mooliq.com",
         "http://localhost:3000",
     ],
     allow_credentials=True,
@@ -70,7 +72,7 @@ app.include_router(mf_ingestion_router)
 
 @app.get("/")
 def read_root():
-    return {"message": "MarketMind API is running. Use /health for health checks."}
+    return {"message": "Mooliq API is running. Use /health for health checks."}
 
 @app.get("/health")
 def health():
@@ -163,7 +165,7 @@ The user explicitly selected Stocks mode. Treat ambiguous names as stocks or ind
 Do not classify stock requests as mutual fund requests.
 """
 
-    system_prompt = """You are the Router Agent for MarketMind. Classify the user query intent.
+    system_prompt = """You are the Router Agent for Mooliq. Classify the user query intent.
 If the query asks to filter, list, or screen stocks (e.g., "Find stocks with PE < 20", "Show me oversold stocks", "Mid cap stocks with RSI < 30"), set intent to 'screen' and populate 'screen_filters'.
 If the query asks to compare two or more mutual funds or stocks, set intent to 'compare' and populate 'compare_entities' with a list of their names (e.g. ["HDFC Flexi Cap", "Parag Parikh Flexi Cap"]).
 Otherwise, use 'quant', 'news', 'both', or 'general'.
@@ -622,7 +624,7 @@ def fetch_news(query: str, ticker: str, sentiment_flag: bool = False) -> list:
         logger.error(f"News Error: {e}")
         return []
 
-DISCLAIMER = "> ⚠️ **Disclaimer:** *MarketMind is an informational research tool only. Nothing presented here constitutes investment advice, a solicitation, or a recommendation to buy or sell any security. Always conduct your own research and consult a SEBI-registered Investment Advisor before making any financial decision.*"
+DISCLAIMER = "> ⚠️ **Disclaimer:** *Mooliq is an informational research tool only. Nothing presented here constitutes investment advice, a solicitation, or a recommendation to buy or sell any security. Always conduct your own research and consult a SEBI-registered Investment Advisor before making any financial decision.*"
 DATA_UNAVAILABLE = "Data Unavailable"
 
 ADVICE_REPLACEMENTS = {
@@ -846,7 +848,7 @@ def _comparison_rows(comparison: dict) -> tuple[list[str], list[list[str]], list
     entities = list(comparison.keys())
     valid_entities = {name: data for name, data in comparison.items() if not _is_unavailable_entity(data)}
     notes = [
-        f"{name} could not be matched in MarketMind data."
+        f"{name} could not be matched in Mooliq data."
         for name, data in comparison.items()
         if _is_unavailable_entity(data)
     ]
@@ -945,7 +947,7 @@ def _snapshot_line(intent: str, quant_data: Any) -> str:
     if isinstance(quant_data, dict) and "comparison" in quant_data:
         available = sum(1 for item in quant_data["comparison"].values() if not _is_unavailable_entity(item))
         total = len(quant_data["comparison"])
-        return f"{available} of {total} requested entities have structured MarketMind data."
+        return f"{available} of {total} requested entities have structured Mooliq data."
     if isinstance(quant_data, dict) and quant_data.get("price"):
         return f"Latest structured price is {_format_price(quant_data.get('price'))} with {_format_percent(quant_data.get('change_pct'))} change."
     if isinstance(quant_data, dict) and quant_data.get("nav"):
@@ -1058,13 +1060,13 @@ async def synthesis_response(
     deep_research = research_depth == "deep"
     
     if intent == "general":
-        system_prompt_gen = """You are MarketMind, an expert AI stock market research assistant and financial educator.
+        system_prompt_gen = """You are Mooliq, an expert AI stock market research assistant and financial educator.
 If the user asks basic educational questions (e.g., 'What is PE ratio?', 'Explain the metrics used here'), provide a clear, comprehensive, and beginner-friendly explanation. 
 Break down metrics like P/E Ratio (valuation), RSI (momentum/overbought/oversold), and moving averages carefully. Use bullet points and analogies if helpful. 
 Do NOT be overly brief when explaining concepts. Provide deep value to the user.
 NEVER give direct financial advice to buy or sell a specific stock."""
         if deep_research:
-            system_prompt_gen = """You are MarketMind, an expert AI stock market research assistant and financial educator.
+            system_prompt_gen = """You are Mooliq, an expert AI stock market research assistant and financial educator.
 Answer as a deep research explainer with this structure:
 1) Concept Breakdown
 2) Why It Matters in Indian markets
@@ -1084,14 +1086,14 @@ Use clear language, practical examples, and no buy/sell advice."""
     snapshot = _snapshot_line(intent, quant_data)
     compare_direct_answer = _compare_direct_answer_markdown(quant_data) if intent == "compare" else ""
 
-    system_prompt = """You are MarketMind, a research-only Indian market analyst.
+    system_prompt = """You are Mooliq, a research-only Indian market analyst.
 Write only the Trend Observation paragraph.
 Use the provided structured facts only. Do not add new numbers.
 Use neutral research language. Do not use advice words or phrases like buy, sell, invest, avoid, investors should, attractive option, or long-term investment.
 If data is unavailable for an entity, mention that the comparison is limited by missing data.
 Keep it to 3-5 concise sentences."""
     if deep_research:
-        system_prompt = """You are MarketMind, a research-only Indian market analyst.
+        system_prompt = """You are Mooliq, a research-only Indian market analyst.
 Create a deep research note using only the provided facts, with exactly these markdown sections:
 ### Executive Summary
 ### What the Data Shows
@@ -1612,7 +1614,7 @@ async def chat_endpoint(req: ChatRequest):
                                     "max_drawdown_1y": best_match.get("max_drawdown_1y"),
                                     "alpha": best_match.get("alpha"),
                                     "beta": best_match.get("beta"),
-                                    "source": "MarketMind DB"
+                                    "source": "Mooliq DB"
                                 }
                         except Exception as e:
                             logger.error(f"Supabase compare error: {e}")
@@ -1723,7 +1725,7 @@ async def chat_endpoint(req: ChatRequest):
                         "fund_house": fund.get('amc_name') or fund.get('fund_house'),
                         "aum": fund.get('aum', "N/A"),
                         "expense_ratio": fund.get('expense_ratio', "N/A"),
-                        "source": "MarketMind DB"
+                        "source": "Mooliq DB"
                     }
                     
                     # Compute risk metrics locally for single entity too!

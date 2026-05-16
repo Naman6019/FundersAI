@@ -68,7 +68,7 @@ const workflowSteps = [
   },
   {
     title: 'Validate',
-    body: 'MarketMind checks structured datasets and available metrics.',
+    body: 'Mooliq checks structured datasets and available metrics.',
   },
   {
     title: 'Interpret',
@@ -126,9 +126,9 @@ export default function PremiumLandingPage({ tickerItems }: Props) {
 
       <header className="sticky top-0 z-50 px-4 py-3 sm:px-6">
         <div className={`${shellClass} flex h-16 items-center justify-between rounded-2xl border border-white/10 bg-[#081122]/75 px-4 shadow-[0_14px_40px_rgba(0,0,0,0.36)] backdrop-blur-xl sm:px-6`}>
-          <Link href="/" className="flex items-center gap-2.5 text-sm font-semibold text-white" aria-label="MarketMind home">
+          <Link href="/" className="flex items-center gap-2.5 text-sm font-semibold text-white" aria-label="Mooliq home">
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#72a9ff,#3f70d2)] font-bold text-white shadow-[0_10px_20px_rgba(49,109,216,0.5)]">M</span>
-            <span className="text-lg leading-none">MarketMind</span>
+            <span className="text-lg leading-none">Mooliq</span>
           </Link>
           <nav className="hidden items-center gap-8 text-sm text-[#9eb3da] md:flex" aria-label="Primary">
             <a href="#features" className="transition hover:text-white">Features</a>
@@ -156,7 +156,7 @@ export default function PremiumLandingPage({ tickerItems }: Props) {
               Analyze stocks, compare mutual funds, check data-backed metrics, and get explainable AI summaries in one workspace.
             </p>
             <p className="mt-2.5 text-sm text-[#90a7d0]">
-              MarketMind turns scattered Indian market data into explainable research.
+              Mooliq turns scattered Indian market data into explainable research.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -192,13 +192,13 @@ export default function PremiumLandingPage({ tickerItems }: Props) {
             variants={fadeUp}
             transition={{ duration: 0.5, delay: 0.1 }}
             className="rounded-3xl border border-white/15 bg-[linear-gradient(150deg,rgba(24,40,70,0.9),rgba(12,21,36,0.95))] p-4 shadow-[0_26px_70px_rgba(0,0,0,0.48)] xl:justify-self-end xl:w-full xl:max-w-4xl"
-            aria-label="MarketMind product preview"
+            aria-label="Mooliq product preview"
           >
             <div className="mb-4 flex items-center gap-2 border-b border-white/10 pb-3 text-xs text-[#adc3eb]">
               <span className="h-2.5 w-2.5 rounded-full bg-[#f87171]" />
               <span className="h-2.5 w-2.5 rounded-full bg-[#fbbf24]" />
               <span className="h-2.5 w-2.5 rounded-full bg-[#34d399]" />
-              <span className="ml-2">MarketMind Research Workspace</span>
+              <span className="ml-2">Mooliq Research Workspace</span>
             </div>
             <div className="grid gap-3 lg:grid-cols-[1fr_1.08fr_0.82fr]">
               <div className="rounded-2xl border border-white/10 bg-[#0c172c]/90 p-3">
@@ -385,7 +385,7 @@ export default function PremiumLandingPage({ tickerItems }: Props) {
 
         <section id="how-it-works" className="pb-16 md:pb-22">
           <div className="mb-7">
-            <p className="text-xs uppercase tracking-[0.2em] text-[#90afdf]">How MarketMind Works</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-[#90afdf]">How Mooliq Works</p>
             <h2 className="mt-2 text-[clamp(1.85rem,3vw,2.6rem)] font-semibold text-white">From query to explainable research in four steps</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -472,7 +472,7 @@ export default function PremiumLandingPage({ tickerItems }: Props) {
 
         <section id="disclaimer" className="pb-16">
           <div className="rounded-2xl border border-amber-300/30 bg-amber-100/10 px-5 py-4 text-sm leading-7 text-[#f8e8b8]">
-            MarketMind is for research and education only. It does not provide financial advice, investment recommendations, or buy/sell calls. Always verify data independently before making financial decisions.
+            Mooliq is for research and education only. It does not provide financial advice, investment recommendations, or buy/sell calls. Always verify data independently before making financial decisions.
           </div>
         </section>
 

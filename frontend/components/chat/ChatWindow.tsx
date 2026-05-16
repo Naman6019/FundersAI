@@ -90,7 +90,7 @@ export default function ChatWindow() {
       
       addMessage({ id: Date.now().toString(), role: 'system', content: data.answer });
     } catch {
-      addMessage({ id: Date.now().toString(), role: 'system', content: 'Error: Unable to reach MarketMind core. Make sure the server is running.' });
+      addMessage({ id: Date.now().toString(), role: 'system', content: 'Error: Unable to reach Mooliq core. Make sure the server is running.' });
     } finally {
       setIsProcessing(false);
     }

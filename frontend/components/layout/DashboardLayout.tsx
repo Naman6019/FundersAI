@@ -57,7 +57,7 @@ export default function DashboardLayout() {
           <div className="brand">
             <div className="logo"></div>
             <div>
-              <h1>MarketMind</h1>
+              <h1>Mooliq</h1>
               <p className="tagline">Research Terminal</p>
             </div>
           </div>
