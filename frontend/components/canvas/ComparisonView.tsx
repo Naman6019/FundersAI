@@ -742,14 +742,39 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
             return (
               <div className="grid h-full min-h-0 gap-4 lg:grid-rows-[minmax(0,1fr)_minmax(0,1fr)]">
                 <section className="animate-in fade-in slide-in-from-bottom-4 duration-500 grid min-h-0 gap-4 rounded-2xl border border-[#2d3b55] bg-[#101b2d] p-3 sm:grid-cols-2 sm:p-4">
-                  <div className="min-h-0 rounded-xl border border-[#2d3b55] bg-[#0e182b] p-2 sm:p-3">
-                    <FundComparisonChart
-                      schemeCodeA={ids[0]}
-                      schemeCodeB={ids[1]}
-                      nameA={fundA.meta.scheme_name}
-                      nameB={fundB.meta.scheme_name}
-                      period={period}
-                    />
+                  <div className="grid min-h-0 gap-4">
+                    <div className="min-h-0 rounded-xl border border-[#2d3b55] bg-[#0e182b] p-2 sm:p-3">
+                      <FundComparisonChart
+                        schemeCodeA={ids[0]}
+                        schemeCodeB={ids[1]}
+                        nameA={fundA.meta.scheme_name}
+                        nameB={fundB.meta.scheme_name}
+                        period={period}
+                      />
+                    </div>
+                    <div className="min-h-0 rounded-xl border border-[#2d3b55] bg-[#0e182b] p-3">
+                      <h3 className="mb-2 text-sm font-semibold text-[#d7e4fb]">Compact Comparison Snapshot</h3>
+                      <div className="overflow-hidden rounded-xl border border-[#2d3b55]">
+                        <table className="w-full border-collapse text-xs sm:text-sm">
+                          <thead className="bg-[#15233d] text-[#d6e4fb]">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-semibold">Metric</th>
+                              <th className="px-3 py-2 text-left font-semibold">{fundA.meta.scheme_name}</th>
+                              <th className="px-3 py-2 text-left font-semibold">{fundB.meta.scheme_name}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tableRows.map((row) => (
+                              <tr key={row.label} className="border-t border-white/10 odd:bg-[#101c32] even:bg-[#0f1a2d]">
+                                <td className="px-3 py-2 font-medium text-[#bdd0ee]">{row.label}</td>
+                                <td className="px-3 py-2 text-white">{row.a}</td>
+                                <td className="px-3 py-2 text-white">{row.b}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   </div>
                   <div className="min-h-0 rounded-xl border border-[#2d3b55] bg-[#0e182b] p-3">
                     <h3 className="mb-2 text-sm font-semibold text-[#d7e4fb]">Risk Metrics Together</h3>
@@ -776,34 +801,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                   </div>
                 </section>
 
-                <section className="animate-in fade-in slide-in-from-bottom-6 duration-700 delay-200 grid min-h-0 gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-                  <div className="min-h-0 rounded-2xl border border-[#2d3b55] bg-[#101b2d] p-3 sm:p-4">
-                    <h3 className="mb-2 text-sm font-semibold text-[#d7e4fb]">Compact Comparison Snapshot</h3>
-                    <div className="overflow-hidden rounded-xl border border-[#2d3b55]">
-                      <table className="w-full border-collapse text-xs sm:text-sm">
-                        <thead className="bg-[#15233d] text-[#d6e4fb]">
-                          <tr>
-                            <th className="px-3 py-2 text-left font-semibold">Metric</th>
-                            <th className="px-3 py-2 text-left font-semibold">{fundA.meta.scheme_name}</th>
-                            <th className="px-3 py-2 text-left font-semibold">{fundB.meta.scheme_name}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {tableRows.map((row) => (
-                            <tr key={row.label} className="border-t border-white/10 odd:bg-[#101c32] even:bg-[#0f1a2d]">
-                              <td className="px-3 py-2 font-medium text-[#bdd0ee]">{row.label}</td>
-                              <td className="px-3 py-2 text-white">{row.a}</td>
-                              <td className="px-3 py-2 text-white">{row.b}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <div className="min-h-0 rounded-2xl border border-[#2d3b55] bg-[#101b2d] p-3 sm:p-4">
-                    <WhyBetterPanel payload={mfWhyBetter} />
-                  </div>
+                <section className="animate-in fade-in slide-in-from-bottom-6 duration-700 delay-200 min-h-0 rounded-2xl border border-[#2d3b55] bg-[#101b2d] p-3 sm:p-4">
+                  <WhyBetterPanel payload={mfWhyBetter} />
                 </section>
               </div>
             );

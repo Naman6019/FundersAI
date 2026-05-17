@@ -4,6 +4,55 @@ import { calculateCAGR, calculateRiskMetrics } from '@/lib/mf/returns';
 
 export const dynamic = 'force-dynamic';
 
+type MfPoint = { date: string; value: number };
+type MfPayload = {
+  details: Record<string, unknown>;
+  chartData: MfPoint[];
+  fullData?: MfPoint[];
+  returns?: Record<string, number | null>;
+  riskMetrics?: Record<string, number | null>;
+  [key: string]: unknown;
+};
+
+type HistoryRow = { nav: number | string; nav_date: string };
+
+function isMfPayload(value: unknown): value is MfPayload {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as MfPayload;
+  return Boolean(candidate.details) && Array.isArray(candidate.chartData);
+}
+
+function toDateLabel(navDate: string): string {
+  const parts = navDate.split('-');
+  if (parts.length !== 3) return navDate;
+  return [parts[2], parts[1], parts[0]].join('-');
+}
+
+function toFullData(historyRows: HistoryRow[]): MfPoint[] {
+  return historyRows
+    .map((row) => {
+      const value = Number(row.nav);
+      if (!Number.isFinite(value)) return null;
+      return { date: toDateLabel(row.nav_date), value };
+    })
+    .filter((row): row is MfPoint => row !== null);
+}
+
+function buildMetricsFromFullData(fullData: MfPoint[]) {
+  const navHistory = fullData.map((point) => ({
+    date: point.date,
+    nav: point.value.toString(),
+  }));
+  return {
+    returns: {
+      '1Y': calculateCAGR(navHistory, 1),
+      '3Y': calculateCAGR(navHistory, 3),
+      '5Y': calculateCAGR(navHistory, 5),
+    },
+    riskMetrics: calculateRiskMetrics(navHistory),
+  };
+}
+
 async function fetchFromBackend(schemeCode: string) {
   const target = process.env.NODE_ENV === 'development'
     ? `http://127.0.0.1:8000/api/mf/${schemeCode}`
@@ -13,7 +62,7 @@ async function fetchFromBackend(schemeCode: string) {
     const res = await fetch(target, { cache: 'no-store' });
     if (!res.ok) return null;
     const json = await res.json();
-    if (!json?.details || !Array.isArray(json?.chartData)) return null;
+    if (!isMfPayload(json)) return null;
     return json;
   } catch {
     return null;
@@ -30,6 +79,30 @@ export async function GET(_request: Request, context: { params: Promise<{ scheme
     // Primary source: backend API uses the same DB path as chat resolution.
     const backendJson = await fetchFromBackend(schemeCode);
     if (backendJson) {
+      // Enrich backend payload with local full history when backend fullData is short/missing.
+      const historyQuery = await supabase
+        .from('mutual_fund_nav_history')
+        .select('nav, nav_date')
+        .eq('scheme_code', schemeCode)
+        .order('nav_date', { ascending: false });
+      const localHistory = (historyQuery.data || []) as HistoryRow[];
+      const localFullData = toFullData(localHistory);
+      const backendFullData = Array.isArray(backendJson.fullData) ? backendJson.fullData : [];
+
+      if (localFullData.length > backendFullData.length) {
+        const merged: MfPayload = {
+          ...backendJson,
+          fullData: localFullData,
+          chartData: localFullData.slice(0, 250).reverse(),
+        };
+        const computed = buildMetricsFromFullData(localFullData);
+        if (!merged.returns) merged.returns = computed.returns;
+        if (!merged.riskMetrics && computed.riskMetrics) {
+          merged.riskMetrics = computed.riskMetrics as Record<string, number | null>;
+        }
+        return NextResponse.json(merged);
+      }
+
       return NextResponse.json(backendJson);
     }
 
@@ -62,9 +135,10 @@ export async function GET(_request: Request, context: { params: Promise<{ scheme
       .order('nav_date', { ascending: false });
     const localHistory = historyQuery.data;
 
-    const history = (localHistory || []).map(h => ({
-      date: h.nav_date.split('-').reverse().join('-'), // Convert YYYY-MM-DD to DD-MM-YYYY
-      nav: h.nav.toString()
+    const fullData = toFullData((localHistory || []) as HistoryRow[]);
+    const history = fullData.map((h) => ({
+      date: h.date,
+      nav: h.value.toString(),
     }));
 
     // Calculate returns
@@ -76,14 +150,7 @@ export async function GET(_request: Request, context: { params: Promise<{ scheme
     const riskMetrics = calculateRiskMetrics(history);
 
     // Filter last 365 days of NAV history for charting
-    const recentHistory = history.slice(0, 250).reverse().map(h => ({
-      date: h.date,
-      value: parseFloat(h.nav)
-    }));
-    const fullData = history.map(h => ({
-      date: h.date,
-      value: parseFloat(h.nav)
-    }));
+    const recentHistory = fullData.slice(0, 250).reverse();
 
     // --- FALLBACK FOR AUM/EXPENSE RATIO ---
     // If they are null in Supabase, we could theoretically fetch them from yfinance here.
