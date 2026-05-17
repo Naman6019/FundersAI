@@ -105,10 +105,7 @@ const steps = [
   ["Focus", "Coverage expansion", "The primary focus now is adding more AMCs and improving supported mutual fund coverage before stock research becomes a main module."],
 ];
 
-const shellStyle = {
-  width: "min(100%, 80rem)",
-  marginInline: "auto",
-};
+const shellClass = "mx-auto w-full max-w-[90rem] px-5 sm:px-8 lg:px-10";
 
 function Glow({ className = "", delay = 0 }) {
   return (
@@ -487,7 +484,7 @@ function FundPairCard() {
       initial="hidden"
       whileInView="visible"
       viewport={{ once: true, margin: "-80px" }}
-      className="mt-12 overflow-hidden rounded-[2.25rem] border border-white/10 bg-white/[0.045] shadow-2xl shadow-black/10"
+      className="mt-12 rounded-[2.25rem] border border-white/10 bg-white/[0.045] shadow-2xl shadow-black/10"
     >
       <div className="grid gap-0 lg:grid-cols-[1fr_1fr]">
         <motion.div variants={fadeUp} className="border-b border-white/10 p-6 lg:border-b-0 lg:border-r">
@@ -570,8 +567,7 @@ export default function MooliqLandingPage() {
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease }}
-          className="sticky top-4 z-40 px-5 py-5 sm:px-8 lg:px-10"
-          style={shellStyle}
+          className={`${shellClass} sticky top-4 z-40 py-5`}
         >
           <div className="flex items-center justify-between rounded-full border border-white/10 bg-[#090d18]/70 px-3 py-2 shadow-2xl shadow-black/25 backdrop-blur-2xl sm:px-4">
             <a href="#" className="flex items-center gap-3" aria-label="Mooliq home">
@@ -602,7 +598,7 @@ export default function MooliqLandingPage() {
           </div>
         </motion.nav>
 
-        <div className="px-5 pb-24 pt-28 sm:px-8 sm:pt-24 lg:px-10" style={shellStyle}>
+        <div className={`${shellClass} pb-24 pt-24 sm:pt-28`}>
           <motion.div variants={stagger} initial="hidden" animate="visible" style={{ y: heroTextY }} className="mx-auto max-w-5xl text-center">
             <motion.div variants={fadeUp} className="mb-6 flex justify-center">
               <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm text-slate-300 shadow-sm backdrop-blur-xl">
@@ -646,7 +642,7 @@ export default function MooliqLandingPage() {
         </div>
       </section>
 
-      <section className="px-5 py-16 sm:px-8 lg:px-10" style={shellStyle}>
+      <section className={`${shellClass} py-16`}>
         <motion.div
           initial={{ opacity: 0, y: 28, filter: "blur(10px)" }}
           whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
@@ -688,7 +684,7 @@ export default function MooliqLandingPage() {
         </motion.div>
       </section>
 
-      <section id="compare" className="px-5 py-24 sm:px-8 lg:px-10" style={shellStyle}>
+      <section id="compare" className={`${shellClass} py-24`}>
         <SectionHeading
           eyebrow="MVP focus"
           title="Make the page sell one thing first: fund comparison."
@@ -697,7 +693,7 @@ export default function MooliqLandingPage() {
         <FundPairCard />
       </section>
 
-      <section id="features" className="px-5 py-24 sm:px-8 lg:px-10" style={shellStyle}>
+      <section id="features" className={`${shellClass} py-24`}>
         <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
           <SectionHeading
             align="left"
@@ -709,7 +705,7 @@ export default function MooliqLandingPage() {
         </div>
       </section>
 
-      <section className="px-5 py-24 sm:px-8 lg:px-10" style={shellStyle}>
+      <section className={`${shellClass} py-24`}>
         <motion.div
           initial={{ opacity: 0, y: 30, filter: "blur(10px)" }}
           whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
@@ -749,7 +745,7 @@ export default function MooliqLandingPage() {
         </motion.div>
       </section>
 
-      <section id="how" className="px-5 py-24 sm:px-8 lg:px-10" style={shellStyle}>
+      <section id="how" className={`${shellClass} py-24`}>
         <SectionHeading
           eyebrow="Workflow"
           title="From fund factsheets to explainable comparison."
@@ -799,7 +795,7 @@ export default function MooliqLandingPage() {
         </motion.div>
       </section>
 
-      <section className="px-5 py-24 sm:px-8 lg:px-10" style={shellStyle}>
+      <section className={`${shellClass} py-24`}>
         <SectionHeading
           eyebrow="Research examples"
           title="Make the first action obvious."
@@ -808,7 +804,7 @@ export default function MooliqLandingPage() {
         <MarqueePrompts />
       </section>
 
-      <section id="trust" className="px-5 py-24 sm:px-8 lg:px-10" style={shellStyle}>
+      <section id="trust" className={`${shellClass} py-24`}>
         <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
           <SectionHeading
             align="left"
@@ -833,7 +829,7 @@ export default function MooliqLandingPage() {
         </div>
       </section>
 
-      <section id="disclaimer" className="px-5 py-12 sm:px-8 lg:px-10" style={shellStyle}>
+      <section id="disclaimer" className={`${shellClass} py-12`}>
         <div className="rounded-[2rem] border border-amber-300/20 bg-amber-300/[0.055] p-6 text-center sm:p-8">
           <h2 className="text-2xl font-semibold text-white">Research-only disclaimer</h2>
           <p className="mx-auto mt-4 max-w-4xl leading-8 text-amber-50/80">
@@ -842,7 +838,7 @@ export default function MooliqLandingPage() {
         </div>
       </section>
 
-      <section className="px-5 pb-24 pt-12 sm:px-8 lg:px-10" style={shellStyle}>
+      <section className={`${shellClass} pb-24 pt-12`}>
         <motion.div
           initial={{ opacity: 0, y: 28, filter: "blur(10px)" }}
           whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
