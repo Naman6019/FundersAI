@@ -1,7 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Circle, Clock3 } from 'lucide-react';
+import {
+  Bolt,
+  ChartSpline,
+  Clock3,
+  Database,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react';
 import { useCanvasStore } from '@/store/useCanvasStore';
 import SignOutButton from '@/components/auth/SignOutButton';
 import ChatWindow from '@/components/chat/ChatWindow';
@@ -11,11 +22,11 @@ import ComparisonView from '@/components/canvas/ComparisonView';
 
 function CanvasPlaceholder() {
   return (
-    <div className="flex h-full flex-col rounded-[1.8rem] border border-white/10 bg-[linear-gradient(160deg,rgba(13,27,46,0.9),rgba(8,18,34,0.88))] p-5 shadow-[0_20px_46px_rgba(0,0,0,0.34)]">
+    <div className="flex h-full flex-col rounded-[1.3rem] border border-[#2b3e5e] bg-[linear-gradient(160deg,rgba(12,26,47,0.95),rgba(8,19,36,0.95))] p-5 shadow-[0_18px_36px_rgba(0,0,0,0.3)]">
       <div>
-        <h2 className="text-4xl font-semibold tracking-tight text-[#e8f0ff]">Fund comparison canvas</h2>
-        <p className="mt-1 text-base text-[#9fb4d8]">Parag Parikh Flexi Cap vs ICICI Multi Asset Fund</p>
-        <span className="mt-4 inline-flex rounded-full border border-white/15 bg-white/[0.03] px-3 py-1 text-sm text-[#c6d7f3]">
+        <h2 className="text-3xl font-semibold tracking-tight text-[#e8f0ff]">Fund comparison canvas</h2>
+        <p className="mt-1 text-sm text-[#9fb4d8]">Parag Parikh Flexi Cap vs ICICI Multi Asset Fund</p>
+        <span className="mt-4 inline-flex rounded-full border border-[#385178] bg-[#142747] px-3 py-1 text-xs text-[#c6d7f3]">
           Side-by-side
         </span>
       </div>
@@ -27,15 +38,15 @@ function CanvasPlaceholder() {
           { label: 'Sharpe', value: '1.12', note: 'Risk-adjusted' },
           { label: 'Coverage', value: 'PPFAS + ICICI', note: 'Current pipeline' },
         ].map((item) => (
-          <div key={item.label} className="rounded-2xl border border-white/10 bg-[#0b1730]/90 p-4">
-            <p className="text-sm text-[#89a4ce]">{item.label}</p>
+          <div key={item.label} className="rounded-xl border border-[#2d4468] bg-[#0d1b34]/90 p-4">
+            <p className="text-xs text-[#89a4ce]">{item.label}</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-[#e8f0ff]">{item.value}</p>
-            <p className="mt-1 text-sm text-[#7f99c1]">{item.note}</p>
+            <p className="mt-1 text-xs text-[#7f99c1]">{item.note}</p>
           </div>
         ))}
       </div>
 
-      <div className="mt-5 flex-1 rounded-[1.6rem] border border-emerald-200/20 bg-[linear-gradient(180deg,rgba(19,65,71,0.34),rgba(10,27,49,0.4))] p-4">
+      <div className="mt-5 flex-1 rounded-[1.2rem] border border-emerald-200/20 bg-[linear-gradient(180deg,rgba(19,65,71,0.34),rgba(10,27,49,0.4))] p-4">
         <svg viewBox="0 0 700 260" className="h-full w-full" aria-hidden>
           <path d="M30 210 C110 180, 150 192, 220 160 C270 138, 300 150, 360 122 C410 98, 450 112, 510 86 C560 66, 620 82, 670 72" fill="none" stroke="#57E4C3" strokeWidth="4" strokeLinecap="round"/>
           <path d="M30 224 C105 202, 150 198, 220 188 C280 178, 310 166, 360 172 C412 178, 455 144, 510 150 C560 156, 620 126, 670 132" fill="none" stroke="#68BCFF" strokeWidth="3" strokeLinecap="round"/>
@@ -45,43 +56,79 @@ function CanvasPlaceholder() {
   );
 }
 
-function DataHealthPanel() {
+function SidebarContent() {
   return (
-    <aside className="flex h-full flex-col rounded-[1.8rem] border border-white/10 bg-[linear-gradient(160deg,rgba(13,26,45,0.9),rgba(8,18,34,0.88))] p-5 shadow-[0_20px_46px_rgba(0,0,0,0.34)]">
-      <h3 className="text-2xl font-semibold tracking-tight text-[#e8f0ff]">Data health</h3>
-
-      <div className="mt-4 space-y-3">
-        {[
-          { label: 'MF NAV', status: 'Fresh' },
-          { label: 'AUM / TER', status: 'Synced' },
-          { label: 'Risk metrics', status: 'Ready' },
-          { label: 'Factsheets', status: 'Indexed' },
-        ].map((item) => (
-          <div key={item.label} className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#0c1932]/90 px-4 py-3">
-            <span className="text-lg text-[#9ab2d9]">{item.label}</span>
-            <span className="text-lg font-medium text-[#56e9c5]">{item.status}</span>
+    <div className="flex h-full flex-col rounded-[1.2rem] border border-[#2b3e5f] bg-[linear-gradient(180deg,#111d31,#0d1728_60%,#0b1423)] p-4 shadow-[0_20px_40px_rgba(0,0,0,0.36)]">
+      <div>
+        <div className="flex items-center gap-2">
+          <div className="grid h-8 w-8 place-items-center rounded-lg bg-[linear-gradient(135deg,#73b6ff,#3b73de)] text-white shadow-[0_8px_18px_rgba(59,115,222,0.4)]">
+            <Sparkles className="h-4 w-4" />
           </div>
-        ))}
+          <div>
+            <h1 className="text-lg font-semibold text-[#eaf2ff]">MooliqAI</h1>
+            <p className="text-[11px] uppercase tracking-[0.14em] text-[#8ea7cb]">Research terminal</p>
+          </div>
+        </div>
       </div>
 
-      <div className="mt-5 rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-4">
-        <p className="text-sm uppercase tracking-[0.18em] text-[#8faad5]">Next module</p>
-        <p className="mt-2 text-3xl font-semibold text-[#e8f0ff]">Stock research</p>
-        <p className="mt-2 text-base leading-relaxed text-[#8ea6cd]">
-          Stock coverage is on the way. Mutual fund comparison stays the current MVP.
+      <div className="mt-6 rounded-xl border border-[#314766] bg-[#122038] p-3">
+        <p className="text-[11px] uppercase tracking-[0.16em] text-[#90a8ca]">Pipelines</p>
+        <div className="mt-3 space-y-2">
+          <div className="flex items-center gap-2 text-sm text-[#d6e5ff]">
+            <ChartSpline className="h-4 w-4 text-[#74b5ff]" />
+            Quant + comparison
+          </div>
+          <div className="flex items-center gap-2 text-sm text-[#d6e5ff]">
+            <Database className="h-4 w-4 text-[#5ad2a5]" />
+            Supabase-first data
+          </div>
+          <div className="flex items-center gap-2 text-sm text-[#d6e5ff]">
+            <ShieldCheck className="h-4 w-4 text-[#b6c7df]" />
+            Research-only guardrails
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-[#314766] bg-[#122038] p-3">
+        <p className="text-[11px] uppercase tracking-[0.16em] text-[#90a8ca]">Data health</p>
+        <div className="mt-3 space-y-2">
+          {[
+            ['MF NAV', 'Fresh'],
+            ['AUM / TER', 'Synced'],
+            ['Risk metrics', 'Ready'],
+            ['Factsheets', 'Indexed'],
+          ].map(([label, status]) => (
+            <div key={label} className="flex items-center justify-between rounded-lg border border-[#2e4466] bg-[#0f1b30] px-3 py-2 text-xs">
+              <span className="text-[#9fb4d6]">{label}</span>
+              <span className="font-semibold text-[#5be2c0]">{status}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-[#314766] bg-[#122038] p-3">
+        <div className="flex items-center gap-2 text-[#d8e7ff]">
+          <Bolt className="h-4 w-4 text-[#7eb9ff]" />
+          <p className="text-sm font-semibold">Next module</p>
+        </div>
+        <p className="mt-2 text-xs leading-relaxed text-[#91a9cc]">
+          Stock research follows after mutual fund coverage is broadened.
         </p>
       </div>
 
       <div className="mt-auto pt-4">
+        <p className="mb-3 text-[11px] text-[#7f97bc]">Not investment advice. Validate independently.</p>
         <SignOutButton />
       </div>
-    </aside>
+    </div>
   );
 }
 
 export default function DashboardLayout() {
-  const { activeView, selectedIds, auxiliaryData } = useCanvasStore();
+  const { activeView, selectedIds, auxiliaryData, isCanvasOpen, toggleCanvas } = useCanvasStore();
   const [isMobile, setIsMobile] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
     fetch('/api/keepalive').catch(() => {});
@@ -89,7 +136,13 @@ export default function DashboardLayout() {
 
   useEffect(() => {
     const query = window.matchMedia('(max-width: 1100px)');
-    const update = () => setIsMobile(query.matches);
+    const update = () => {
+      const nextIsMobile = query.matches;
+      setIsMobile(nextIsMobile);
+      if (nextIsMobile) {
+        setIsMobileSidebarOpen(false);
+      }
+    };
     update();
     query.addEventListener('change', update);
     return () => query.removeEventListener('change', update);
@@ -115,44 +168,96 @@ export default function DashboardLayout() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#040a14] text-[#e8f0ff]">
+    <div className="relative min-h-screen overflow-hidden bg-[#050a12] text-[#e8f0ff]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_6%,rgba(76,124,210,0.23),transparent_35%),radial-gradient(circle_at_90%_10%,rgba(89,236,195,0.15),transparent_30%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:42px_42px]" />
 
-      <div className="relative mx-auto max-w-[1520px] px-4 py-4 sm:px-6">
-        <div className="min-h-[calc(100vh-2rem)] overflow-hidden rounded-[2.2rem] border border-white/10 bg-[linear-gradient(160deg,rgba(7,18,36,0.9),rgba(5,13,26,0.92))] shadow-[0_28px_80px_rgba(0,0,0,0.45)]">
-          <header className="flex items-center justify-between border-b border-white/10 px-6 py-5">
-            <div className="flex items-center gap-2.5">
-              <Circle className="h-4 w-4 fill-[#f87171] text-[#f87171]" />
-              <Circle className="h-4 w-4 fill-[#facc15] text-[#facc15]" />
-              <Circle className="h-4 w-4 fill-[#34d399] text-[#34d399]" />
+      <div className="relative mx-auto max-w-[1600px] px-4 py-4 sm:px-6">
+        <div className="min-h-[calc(100vh-2rem)] overflow-hidden rounded-[1.8rem] border border-[#2b3e5f] bg-[linear-gradient(160deg,rgba(7,18,36,0.92),rgba(5,13,26,0.95))] shadow-[0_28px_80px_rgba(0,0,0,0.45)]">
+          <header className="flex items-center justify-between border-b border-[#2b3e5f] px-4 py-3 sm:px-5">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#355079] bg-[#0f1c32] text-[#c6d8f4] transition hover:border-[#4f8ff7] hover:text-white"
+                onClick={() => {
+                  if (isMobile) {
+                    setIsMobileSidebarOpen((value) => !value);
+                    return;
+                  }
+                  setIsSidebarCollapsed((value) => !value);
+                }}
+                aria-label={isMobile ? 'Toggle sidebar menu' : 'Collapse sidebar'}
+              >
+                {isMobile || isSidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              </button>
+              <div className="hidden sm:block">
+                <p className="text-sm font-semibold text-[#e9f2ff]">Mooliq Research</p>
+                <p className="text-xs text-[#90a8cb]">Centered chat + optional canvas</p>
+              </div>
             </div>
 
-            <div className="rounded-full border border-white/10 bg-[#0c1a32] px-5 py-2 text-base text-[#9ab3d8]">
+            <div className="hidden rounded-full border border-[#355079] bg-[#0f1c32] px-4 py-1.5 text-xs text-[#9ab3d8] sm:block">
               mooliq.com/fund-comparison
             </div>
 
-            <div className="flex items-center gap-2 text-sm font-medium text-[#61eac8]">
-              <Clock3 className="h-4 w-4" />
-              <span>NAV updated today</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
+                  isCanvasOpen
+                    ? 'border-emerald-300/35 bg-emerald-300/10 text-emerald-100'
+                    : 'border-[#355079] bg-[#0f1c32] text-[#bad0ef] hover:border-[#4f8ff7] hover:text-white'
+                }`}
+                onClick={toggleCanvas}
+              >
+                {isCanvasOpen ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
+                Canvas
+              </button>
+              <div className="hidden items-center gap-1.5 text-xs font-medium text-[#61eac8] sm:flex">
+                <Clock3 className="h-3.5 w-3.5" />
+                <span>NAV updated today</span>
+              </div>
             </div>
           </header>
 
-          <div className={`grid gap-4 p-4 sm:p-5 ${isMobile ? 'grid-cols-1' : 'grid-cols-[340px_minmax(0,1fr)_320px]'}`}>
-            <div className="min-h-[620px]">
-              <ChatWindow />
+          <div className="flex min-h-[calc(100vh-8.5rem)] gap-4 p-4 sm:p-5">
+            {!isMobile && !isSidebarCollapsed && (
+              <aside className="w-[276px] shrink-0">
+                <SidebarContent />
+              </aside>
+            )}
+
+            <div className="flex min-w-0 flex-1 flex-col gap-4">
+              <div className="mx-auto flex h-full min-h-[620px] w-full max-w-[860px] min-w-0">
+                <ChatWindow />
+              </div>
+
+              {isMobile && isCanvasOpen && (
+                <section className="min-h-[420px] min-w-0 rounded-[1.2rem] border border-[#2b3e5f] bg-[linear-gradient(180deg,#0f1a2d,#0c1524)] p-3">
+                  {renderCanvasContent()}
+                </section>
+              )}
             </div>
 
-            <div className="min-h-[620px] min-w-0">
-              {renderCanvasContent()}
-            </div>
-
-            <div className="min-h-[620px]">
-              <DataHealthPanel />
-            </div>
+            {!isMobile && isCanvasOpen && (
+              <section className="w-[min(42vw,620px)] min-w-[420px] rounded-[1.2rem] border border-[#2b3e5f] bg-[linear-gradient(180deg,#0f1a2d,#0c1524)] p-3">
+                {renderCanvasContent()}
+              </section>
+            )}
           </div>
         </div>
       </div>
+
+      {isMobile && isMobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 lg:hidden" onClick={() => setIsMobileSidebarOpen(false)}>
+          <aside
+            className="h-full w-[290px] border-r border-[#2b3e5f] bg-[linear-gradient(180deg,#111d31,#0d1728_60%,#0b1423)] p-4"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <SidebarContent />
+          </aside>
+        </div>
+      )}
     </div>
   );
 }

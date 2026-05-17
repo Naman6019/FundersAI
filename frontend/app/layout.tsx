@@ -14,6 +14,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="w-full min-w-full overflow-x-hidden">
       <head>
+        <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />

@@ -1,6 +1,6 @@
 # Current State
 
-**Last Updated**: 2026-05-12
+**Last Updated**: 2026-05-17
 
 ## Project Summary
 MarketMind is a research-only Indian equities and mutual fund platform.
@@ -48,6 +48,7 @@ MarketMind is a research-only Indian equities and mutual fund platform.
 - `sync-price-history.yml`
 - `sync-fundamentals-weekly.yml`
 - `sync-corporate-events.yml`
+- `backfill-stock-core-snapshot.yml`
 - `sync-mf-enrichment.yml`
 - `mf-sync.yml`
 - `keepalive.yml`

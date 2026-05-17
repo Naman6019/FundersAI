@@ -30,6 +30,7 @@
 | `sync-price-history.yml` | Manual | Historical EOD backfill |
 | `sync-fundamentals-weekly.yml` | `0 2 * * 6` + `0 2 1 * *` + manual | Fundamentals sync + ratio calc |
 | `sync-corporate-events.yml` | `0 3 * * *` | Corporate action sync |
+| `backfill-stock-core-snapshot.yml` | Manual | Backfill/refresh `stock_core_snapshot` |
 | `mf-sync.yml` | `30 13 * * 1-5` | MF NAV/history/metadata/snapshot pipeline |
 | `sync-mf-enrichment.yml` | `0 4 2 * *` | MFdata holdings/sector/enrichment pipeline |
 | `keepalive.yml` | `*/10 * * * *` | Direct Render `/health` ping |

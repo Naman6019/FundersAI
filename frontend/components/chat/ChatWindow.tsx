@@ -116,20 +116,32 @@ export default function ChatWindow() {
   };
 
   return (
-    <section className="flex h-full min-h-0 flex-col rounded-[1.8rem] border border-white/10 bg-[linear-gradient(160deg,rgba(13,26,45,0.9),rgba(9,19,34,0.88))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.38)] sm:p-5">
-      <header className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-[#58e0c1]" />
-          <h2 className="text-2xl font-semibold tracking-tight text-[#e7f1ff]">MooliqAI</h2>
+    <section className="flex h-full min-h-0 w-full flex-col rounded-[1.3rem] border border-[#2b3e5f] bg-[linear-gradient(180deg,#101b2f,#0c1627_70%)] shadow-[0_18px_40px_rgba(0,0,0,0.32)]">
+      <header className="flex items-center justify-between border-b border-[#2d4468] px-4 py-3 sm:px-5">
+        <div className="flex items-center gap-2.5">
+          <div className="grid h-7 w-7 place-items-center rounded-md bg-[linear-gradient(135deg,#74b7ff,#3f79e2)] text-white shadow-[0_8px_16px_rgba(64,121,226,0.35)]">
+            <Sparkles className="h-3.5 w-3.5" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold tracking-tight text-[#eaf2ff]">MooliqAI</h2>
+            <p className="text-[11px] text-[#91a9cc]">Ask, compare, and inspect source-backed metrics</p>
+          </div>
         </div>
-        <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-xs font-semibold text-emerald-200">
+        <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-200">
           Research only
         </span>
       </header>
 
-      <div ref={scrollRef} className="custom-scroll mt-3 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
+      <div ref={scrollRef} className="custom-scroll flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-4 sm:px-5">
         {messages.map((msg) => (
-          <div key={msg.id} className={msg.role === 'user' ? 'ml-5 rounded-2xl border border-sky-300/20 bg-sky-300/10 p-3 text-sm text-[#d8e9ff]' : 'mr-5 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-sm text-[#d4e5ff]'}>
+          <div
+            key={msg.id}
+            className={
+              msg.role === 'user'
+                ? 'ml-auto w-fit max-w-[85%] rounded-2xl border border-[#3c5f90] bg-[linear-gradient(140deg,#2f5ea8,#3a74cb)] px-4 py-3 text-sm text-[#f3f8ff]'
+                : 'mr-auto max-w-[92%] rounded-2xl border border-[#30486c] bg-[#13223a] px-4 py-3 text-sm leading-relaxed text-[#d9e8ff]'
+            }
+          >
             {msg.role === 'system' ? (
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
             ) : (
@@ -137,27 +149,27 @@ export default function ChatWindow() {
             )}
             {msg.id === '1' && (
               <div className="mt-3 flex flex-wrap gap-2">
-                <button className="rounded-full border border-white/10 bg-[#13233d] px-2.5 py-1 text-xs text-[#bed0ee] transition hover:border-[#3f6da8] hover:text-white" onClick={() => applySuggestion('Compare Parag Parikh Flexi Cap and ICICI Multi Asset Fund for long-term consistency.')}>Fund consistency</button>
-                <button className="rounded-full border border-white/10 bg-[#13233d] px-2.5 py-1 text-xs text-[#bed0ee] transition hover:border-[#3f6da8] hover:text-white" onClick={() => applySuggestion('Which of these two funds has lower expense ratio and better Sharpe?')}>Sharpe + cost</button>
-                <button className="rounded-full border border-white/10 bg-[#13233d] px-2.5 py-1 text-xs text-[#bed0ee] transition hover:border-[#3f6da8] hover:text-white" onClick={() => applySuggestion('Show NAV trend differences between Parag Parikh Flexi Cap and ICICI Multi Asset Fund.')}>NAV trend</button>
+                <button className="rounded-full border border-[#36537f] bg-[#10203a] px-2.5 py-1 text-xs text-[#bed0ee] transition hover:border-[#4f8ff7] hover:text-white" onClick={() => applySuggestion('Compare Parag Parikh Flexi Cap and ICICI Multi Asset Fund for long-term consistency.')}>Fund consistency</button>
+                <button className="rounded-full border border-[#36537f] bg-[#10203a] px-2.5 py-1 text-xs text-[#bed0ee] transition hover:border-[#4f8ff7] hover:text-white" onClick={() => applySuggestion('Which of these two funds has lower expense ratio and better Sharpe?')}>Sharpe + cost</button>
+                <button className="rounded-full border border-[#36537f] bg-[#10203a] px-2.5 py-1 text-xs text-[#bed0ee] transition hover:border-[#4f8ff7] hover:text-white" onClick={() => applySuggestion('Show NAV trend differences between Parag Parikh Flexi Cap and ICICI Multi Asset Fund.')}>NAV trend</button>
               </div>
             )}
           </div>
         ))}
 
-        <div className="rounded-2xl border border-amber-300/25 bg-amber-100/10 px-3 py-2.5 text-sm text-amber-100">
+        <div className="rounded-xl border border-amber-300/25 bg-amber-100/10 px-3 py-2 text-xs text-amber-100/90">
           This is not investment advice. Verify data independently.
         </div>
       </div>
 
-      <div className="mt-3 space-y-2">
+      <div className="space-y-2 border-t border-[#2d4468] bg-[linear-gradient(180deg,#0d1728,#0a1322)] px-3 py-3 sm:px-4">
         {isProcessing && (
-          <div className="rounded-xl border border-sky-300/20 bg-sky-300/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-sky-200">
+          <div className="rounded-lg border border-sky-300/20 bg-sky-300/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-200">
             Pipeline thinking...
           </div>
         )}
 
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {[
             { label: 'Auto', value: 'auto' },
             { label: 'Stocks', value: 'stock' },
@@ -169,7 +181,7 @@ export default function ChatWindow() {
               className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
                 assetType === option.value
                   ? 'border-[#4f8ff7] bg-[#4f8ff7]/25 text-[#e2eeff]'
-                  : 'border-white/10 bg-white/[0.03] text-[#9eb7df] hover:text-white'
+                  : 'border-[#31496d] bg-[#0f1d34] text-[#9eb7df] hover:border-[#4f8ff7] hover:text-white'
               }`}
               onClick={() => setAssetType(option.value as AssetType)}
               disabled={isProcessing}
@@ -190,7 +202,7 @@ export default function ChatWindow() {
               className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
                 comparisonViewMode === option.value
                   ? 'border-emerald-300/40 bg-emerald-300/15 text-emerald-100'
-                  : 'border-white/10 bg-white/[0.03] text-[#9eb7df] hover:text-white'
+                  : 'border-[#31496d] bg-[#0f1d34] text-[#9eb7df] hover:border-[#4f8ff7] hover:text-white'
               }`}
               onClick={() => setComparisonViewMode(option.value as ComparisonViewMode)}
               disabled={isProcessing}
@@ -200,7 +212,7 @@ export default function ChatWindow() {
           ))}
         </div>
 
-        <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-[#0e1a2f]/90 p-2">
+        <div className="flex items-end gap-2 rounded-xl border border-[#30486b] bg-[#0f1d33]/95 p-2">
           <textarea
             ref={textareaRef}
             value={input}
@@ -215,7 +227,7 @@ export default function ChatWindow() {
             rows={1}
             className="max-h-28 min-h-[2.5rem] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-[#e7f0ff] placeholder:text-[#7f98c2] focus:outline-none"
           />
-          <button className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#4f8ff7] bg-[#2f5fae] text-white transition hover:bg-[#3b70c7] disabled:cursor-not-allowed disabled:opacity-50" onClick={handleSend} aria-label="Send Message" disabled={isProcessing}>
+          <button className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#4f8ff7] bg-[#2f5fae] text-white transition hover:bg-[#3b70c7] disabled:cursor-not-allowed disabled:opacity-50" onClick={handleSend} aria-label="Send Message" disabled={isProcessing}>
             <Send size={18} />
           </button>
         </div>
