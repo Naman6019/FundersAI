@@ -364,6 +364,7 @@ def test_synthesis_prompt_excludes_large_comparison_payload(monkeypatch):
         {"intent": "compare", "compare_entities": ["TCS", "Reliance"]},
         quant_data,
         [],
+        comparison_view_mode="chat",
     ))
 
     assert "### Data Table" in answer

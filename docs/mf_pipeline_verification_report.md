@@ -99,5 +99,29 @@ The codebase compiled successfully with TypeScript and the local Next.js environ
 - `npx tsc --noEmit` returns **`Exit code: 0`** (0 warnings, 0 type errors).
 - Tested and verified through automated browser navigation checks that `/api/chat` correctly resolves the scheme entities and transitions seamlessly across dashboard components.
 
+---
+
+## 6. End-to-End User Verification & Comparison Test
+
+We successfully executed a real-time verification of the split-pane research terminal using authenticated user credentials:
+
+- **Verified User**: `thereaper6019@gmail.com`
+- **Active Query**: `"Compare Parag Parikh Flexi Cap and ICICI Multi Asset Fund"`
+
+### Outcome & Analysis:
+1. **Dynamic Intent Routing**: The backend `route_query` classified the intent as a mutual fund comparison and extracted `Parag Parikh Flexi Cap` and `ICICI Multi Asset Fund` as the target entities.
+2. **Safety Guardrail Bypass**: The validation intercept detected that both mutual funds are part of the actively integrated pipelines (PPFAS & ICICI Prudential), letting the query bypass the advisory warning notice and execute the full data resolver.
+3. **Data Resolving**: The server successfully pulled active factsheet, holdings, and daily NAV datasets from the database, calculating relative returns, volatility, Sharpe, AUM, and expense ratios.
+4. **Rich Side-by-Side UI Rendering**: The frontend research canvas resolved perfectly, presenting:
+   - A normalized, rebased performance comparison line chart mapping the funds over a 1Y timeframe.
+   - Comprehensive side-by-side performance grids containing return depths (1Y, 3Y, 5Y), volatility indicators, and expense metrics.
+   - Highly contextualized research notes on asset allocations.
+
+### Verification Screenshot:
+Below is the high-resolution E2E snapshot verifying the beautiful split-pane layout and comparison canvas under live server testing:
+
+![Mooliq Supported Mutual Fund Comparison Canvas](file:///c:/Users/naman/OneDrive/Desktop/MarketMind/docs/supported_mf_comparison.png)
+
 > [!NOTE]
-> The mutual fund analysis engine is fully validated and ready for launch on production servers. No outstanding pipeline or UI layout integration bugs were detected during this verification cycle.
+> The Mooliq financial research terminal, independent scroll areas, data health monitors, and user credentials authentication flow are fully verified and integrated under real-world runtime environments.
+

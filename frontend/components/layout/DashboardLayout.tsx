@@ -213,99 +213,91 @@ export default function DashboardLayout() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#050a12] text-[#e8f0ff]">
+    <div className="relative h-screen w-screen overflow-hidden bg-[#050a12] text-[#e8f0ff] flex flex-col">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_6%,rgba(76,124,210,0.23),transparent_35%),radial-gradient(circle_at_90%_10%,rgba(89,236,195,0.15),transparent_30%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:42px_42px]" />
 
-      <div className="relative w-full px-0 py-0">
-        <div className="min-h-screen overflow-hidden border border-[#2b3e5f] bg-[linear-gradient(160deg,rgba(7,18,36,0.92),rgba(5,13,26,0.95))] shadow-[0_28px_80px_rgba(0,0,0,0.45)]">
-          <header className="flex items-center justify-between border-b border-[#2b3e5f] px-4 py-3 sm:px-5">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#355079] bg-[#0f1c32] text-[#c6d8f4] transition hover:border-[#4f8ff7] hover:text-white"
-                onClick={() => {
-                  if (isMobile) {
-                    setIsMobileSidebarOpen((value) => !value);
-                    return;
-                  }
-                  setIsSidebarCollapsed((value) => !value);
-                }}
-                aria-label={isMobile ? 'Toggle sidebar menu' : 'Collapse sidebar'}
-              >
-                {isMobile || isSidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-              </button>
-              <div className="hidden sm:block">
-                <p className="text-sm font-semibold text-[#e9f2ff]">Mooliq Research</p>
-                <p className="text-xs text-[#90a8cb]">Centered chat + optional canvas</p>
-              </div>
+      <div className="relative flex flex-col flex-1 h-full w-full overflow-hidden border border-[#2b3e5f] bg-[linear-gradient(160deg,rgba(7,18,36,0.92),rgba(5,13,26,0.95))] shadow-[0_28px_80px_rgba(0,0,0,0.45)]">
+        <header className="h-16 shrink-0 flex items-center justify-between border-b border-[#2b3e5f] px-4 sm:px-5">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#355079] bg-[#0f1c32] text-[#c6d8f4] transition hover:border-[#4f8ff7] hover:text-white"
+              onClick={() => {
+                if (isMobile) {
+                  setIsMobileSidebarOpen((value) => !value);
+                  return;
+                }
+                setIsSidebarCollapsed((value) => !value);
+              }}
+              aria-label={isMobile ? 'Toggle sidebar menu' : 'Collapse sidebar'}
+            >
+              {isMobile || isSidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            </button>
+            <div className="hidden sm:block">
+              <p className="text-sm font-semibold text-[#e9f2ff]">Mooliq Research</p>
+              <p className="text-xs text-[#90a8cb]">Centered chat + optional canvas</p>
             </div>
+          </div>
 
-            <div className="hidden rounded-full border border-[#355079] bg-[#0f1c32] px-4 py-1.5 text-xs text-[#9ab3d8] sm:block">
-              mooliq.com/fund-comparison
+          <div className="hidden rounded-full border border-[#355079] bg-[#0f1c32] px-4 py-1.5 text-xs text-[#9ab3d8] sm:block">
+            mooliq.com/fund-comparison
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
+                isCanvasOpen
+                  ? 'border-emerald-300/35 bg-emerald-300/10 text-emerald-100'
+                  : 'border-[#355079] bg-[#0f1c32] text-[#bad0ef] hover:border-[#4f8ff7] hover:text-white'
+              }`}
+              onClick={toggleCanvas}
+            >
+              {isCanvasOpen ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
+              Canvas
+            </button>
+            <div className="hidden items-center gap-1.5 text-xs font-medium text-[#61eac8] sm:flex">
+              <Clock3 className="h-3.5 w-3.5" />
+              <span>NAV updated today</span>
             </div>
+          </div>
+        </header>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
-                  isCanvasOpen
-                    ? 'border-emerald-300/35 bg-emerald-300/10 text-emerald-100'
-                    : 'border-[#355079] bg-[#0f1c32] text-[#bad0ef] hover:border-[#4f8ff7] hover:text-white'
-                }`}
-                onClick={toggleCanvas}
-              >
-                {isCanvasOpen ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
-                Canvas
-              </button>
-              <div className="hidden items-center gap-1.5 text-xs font-medium text-[#61eac8] sm:flex">
-                <Clock3 className="h-3.5 w-3.5" />
-                <span>NAV updated today</span>
-              </div>
-            </div>
-          </header>
+        <div className="flex h-[calc(100vh-64px)] overflow-hidden relative z-10 w-full">
+          {!isMobile && !isSidebarCollapsed && (
+            <aside className="w-[276px] shrink-0 border-r border-[#2b3e5f] bg-[#0c1626]/80 p-4 min-h-0 h-full overflow-y-auto">
+              <SidebarContent />
+            </aside>
+          )}
 
-          <div className="flex min-h-[calc(100vh-4.5rem)] gap-4 p-4 sm:p-5">
-            {!isMobile && !isSidebarCollapsed && (
-              <aside className="w-[276px] shrink-0">
-                <SidebarContent />
-              </aside>
-            )}
-
-            <div className="flex min-w-0 flex-1 flex-col gap-4">
-              <div className="flex h-full min-h-[620px] w-full min-w-0">
-                <ChatWindow />
-              </div>
-
-              {isMobile && isCanvasOpen && (
-                <section className="min-h-[420px] min-w-0 rounded-[1.2rem] border border-[#2b3e5f] bg-[linear-gradient(180deg,#0f1a2d,#0c1524)] p-3">
-                  {renderCanvasContent()}
-                </section>
-              )}
-            </div>
-
-            {!isMobile && isCanvasOpen && (
-              <>
-                <div
-                  className="group relative flex w-3 shrink-0 cursor-col-resize items-center justify-center"
-                  onMouseDown={() => setIsResizingCanvas(true)}
-                  role="separator"
-                  aria-label="Resize canvas"
-                  aria-orientation="vertical"
-                >
-                  <div
-                    className={`h-24 w-[5px] rounded-full border border-[#355079] bg-[linear-gradient(180deg,#36598f,#263e66)] shadow-[0_10px_24px_rgba(0,0,0,0.45)] transition-all ${
-                      isResizingCanvas ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                    }`}
-                  />
+          <div className="flex-1 min-w-0 h-full p-6 overflow-hidden">
+            {isMobile ? (
+              <div className="flex h-full flex-col gap-4 overflow-y-auto">
+                <div className="h-[450px] shrink-0 min-h-0">
+                  <ChatWindow />
                 </div>
-                <section
-                  style={{ width: `${canvasWidth}px` }}
-                  className="shrink-0 rounded-[1.2rem] border border-[#2b3e5f] bg-[linear-gradient(180deg,#0f1a2d,#0c1524)] p-3"
-                >
+                {isCanvasOpen && (
+                  <section className="flex-1 min-h-[420px] rounded-[1.2rem] border border-[#2b3e5f] bg-[linear-gradient(180deg,#0f1a2d,#0c1524)] p-4">
+                    {renderCanvasContent()}
+                  </section>
+                )}
+              </div>
+            ) : isCanvasOpen ? (
+              <div className="grid h-full grid-cols-[420px_minmax(0,1fr)] gap-6">
+                <aside className="min-h-0 h-full">
+                  <ChatWindow />
+                </aside>
+                <main className="min-h-0 min-w-0 h-full overflow-y-auto rounded-[1.2rem] border border-[#2b3e5f] bg-[linear-gradient(180deg,#0f1a2d,#0c1524)] p-5">
                   {renderCanvasContent()}
-                </section>
-              </>
+                </main>
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <div className="h-full w-full max-w-[680px] min-h-0">
+                  <ChatWindow />
+                </div>
+              </div>
             )}
           </div>
         </div>

@@ -223,7 +223,7 @@ export default function ChatWindow() {
                 handleSend();
               }
             }}
-            placeholder={assetType === 'mutual_fund' ? 'Compare these funds for long-term consistency...' : assetType === 'stock' ? 'Stock research is in progress. Try fund comparison prompts.' : 'Ask for a fund comparison, risk, cost, or NAV view...'}
+            placeholder={assetType === 'mutual_fund' ? 'Compare PPFAS and ICICI funds for long-term consistency...' : assetType === 'stock' ? 'Stock research is in progress. Try fund comparison prompts.' : 'Ask for PPFAS vs ICICI comparison, risk, cost, or NAV view...'}
             rows={1}
             className="max-h-28 min-h-[2.5rem] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-[#e7f0ff] placeholder:text-[#7f98c2] focus:outline-none"
           />

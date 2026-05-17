@@ -1634,6 +1634,59 @@ async def chat_endpoint(req: ChatRequest):
     period = intent_info.get("historical_period", "1mo")
     sentiment = intent_info.get("sentiment_flag", False)
     
+    # Restrict mutual fund queries to PPFAS and ICICI Prudential
+    is_unsupported_mf = False
+    query_lower = req.query.lower()
+    
+    is_mf_context = (asset_type == "mutual_fund" or 
+                     any(k in query_lower for k in ["fund", "mutual fund", "flexi cap", "small cap", "mid cap", "large cap", "elss", "nav", "amc", "sip", "portfolio"]))
+    
+    if is_mf_context and intent in ["compare", "quant", "both"]:
+        unsupported_amc_keywords = [
+            "hdfc", "quant", "nippon", "sbi", "axis", "kotak", "mirae", "uti", "dsp", "tata", "motilal", 
+            "canara", "groww", "zerodha", "bandhan", "idfc", "franklin", "edelweiss", "sundaram", "lic", 
+            "pgim", "invesco", "hsbc", "union", "baroda", "bnp", "mahindra", "shriram", "whiteoak", 
+            "samco", "helios", "navi", "quantum", "taurus", "360 one", "iifl", "jm financial"
+        ]
+        
+        # Check if the query explicitly mentions an unsupported AMC
+        if any(amc in query_lower for amc in unsupported_amc_keywords):
+            is_unsupported_mf = True
+            
+        # Check if comparison entities contain unsupported AMCs or don't match the supported ones
+        if intent == "compare":
+            entities = intent_info.get("compare_entities", [])
+            if entities:
+                for ent in entities:
+                    ent_lower = str(ent).lower()
+                    if not any(k in ent_lower for k in ["parag", "ppfas", "icici"]):
+                        is_unsupported_mf = True
+                        break
+            else:
+                is_unsupported_mf = True
+        elif intent in ["quant", "both"]:
+            search_term = (ticker or req.query).lower()
+            if not any(k in search_term for k in ["parag", "ppfas", "icici"]):
+                is_unsupported_mf = True
+
+    if is_unsupported_mf:
+        advisory_message = """### ⚠️ Mooliq Premium Advisor Notice
+
+Mooliq currently only has active data pipelines set up for **PPFAS (Parag Parikh)** and **ICICI Prudential** mutual funds. 
+
+Live ingestion, portfolio holdings tracking, and historical return pipelines for other AMCs (such as **HDFC**, **Nippon India**, **Quant**, **SBI**, etc.) are currently being configured and are not yet active in this workspace.
+
+To experience Mooliq's advanced research capabilities, please try:
+- Comparing **Parag Parikh Flexi Cap** and **ICICI Multi Asset Fund** (or other ICICI funds)
+- Inspecting sector allocations, risk metrics, or portfolio holdings for these supported funds
+- Asking about NAV trends, expense ratios, or Sharpe/Alpha comparisons between PPFAS and ICICI Prudential."""
+        
+        return {
+            "answer": advisory_message,
+            "debug_intent": intent_info,
+            "quant_data": {}
+        }
+    
     quant_data = {}
     news_data = []
     screening_results = None
