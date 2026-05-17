@@ -278,12 +278,31 @@ def build_mf_why_better(comparison: dict[str, dict[str, Any]]) -> dict[str, Any]
     label = _confidence_label(confidence_score)
     verdict_context = "Deterministic comparison based on available local NAV/risk/cost factors for selected funds; not a universal investment verdict."
 
+    def _mf_style(entity: str) -> str:
+        name = entity.lower()
+        if "flexi" in name:
+            return "flexi_cap"
+        if "multi asset" in name or "multi-asset" in name:
+            return "multi_asset"
+        return "general"
+
+    flexi_entity = next((entity for entity in entities if _mf_style(entity) == "flexi_cap"), entities[0] if entities else "Fund A")
+    multi_asset_entity = next((entity for entity in entities if _mf_style(entity) == "multi_asset"), None)
+    peer_entity = next((entity for entity in entities if entity != flexi_entity), entities[1] if len(entities) > 1 else "Fund B")
+    multi_asset_entity = multi_asset_entity or peer_entity
+
     if winner.get("status") == "insufficient_data":
         summary = "Insufficient local data to determine a reliable winner."
-    elif winner.get("status") == "tie":
-        summary = "Both funds are close on the selected deterministic factors."
     else:
-        summary = f"{winner_name} ranks higher on the selected deterministic factors."
+        summary = (
+            f"{flexi_entity} is primarily an equity-oriented fund, so it should be judged on long-term equity returns, "
+            "downside control, portfolio quality, and consistency versus flexi-cap peers.\n\n"
+            f"{multi_asset_entity} should be judged differently because it uses multiple asset classes. "
+            "Its value comes from diversification, allocation decisions, and risk control rather than only maximum equity-like returns.\n\n"
+            "A direct return-only comparison may be misleading. A better comparison should include rolling returns, volatility, "
+            "drawdown, Sharpe ratio, expense ratio, AUM, and asset-allocation history. Current coverage is limited but still useful "
+            "for demonstrating deterministic comparison logic."
+        )
 
     return {
         "winner": winner,

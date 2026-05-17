@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useFundData } from '../../hooks/useFundData';
 import FundComparisonChart, { Period } from '../funds/FundComparisonChart';
-import FundDetailsPanel from '../funds/FundDetailsPanel';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { CanvasPayload, MetricValue as SharedMetricValue } from '@/types/funds';
 
@@ -84,6 +83,20 @@ type WhyBetterPayload = {
   }>;
   verdict_context?: string;
   holdings_based_reasoning?: { status?: string; reason?: string | null };
+};
+
+type MFComparisonRecord = {
+  scheme_code?: string | number | null;
+  name?: string;
+  return_3y?: string | number | null;
+  volatility_1y?: string | number | null;
+  expense_ratio?: string | number | null;
+  aum?: string | number | null;
+  beta?: string | number | null;
+  alpha?: string | number | null;
+  alpha_vs_nifty?: string | number | null;
+  sharpe_ratio?: string | number | null;
+  max_drawdown_1y?: string | number | null;
 };
 
 const formatValue = (value: MetricValue) => {
@@ -235,6 +248,63 @@ const getWhyBetter = (data: unknown): WhyBetterPayload | null => {
   return why as WhyBetterPayload;
 };
 
+const toNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '' || value === 'N/A') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const normalizePercent = (value: unknown, scaleUnitToPercent = true): number | null => {
+  const parsed = toNumber(value);
+  if (parsed === null) return null;
+  if (scaleUnitToPercent && Math.abs(parsed) <= 1) return parsed * 100;
+  return parsed;
+};
+
+const formatPlain = (value: number | null, digits = 2) => {
+  if (value === null) return 'N/A';
+  return value.toFixed(digits);
+};
+
+const formatPercent = (value: number | null, digits = 2) => {
+  if (value === null) return 'N/A';
+  return `${value >= 0 ? '+' : ''}${value.toFixed(digits)}%`;
+};
+
+const formatAum = (value: unknown) => {
+  const parsed = toNumber(value);
+  if (parsed === null) return 'N/A';
+  return `₹${parsed.toLocaleString('en-IN')} Cr`;
+};
+
+const formatExpense = (value: unknown) => {
+  const parsed = toNumber(value);
+  if (parsed === null) return 'N/A';
+  return `${parsed.toFixed(2)}%`;
+};
+
+const getMfComparisonRecord = (
+  map: unknown,
+  schemeCode: string | null,
+  schemeName: string | null,
+): MFComparisonRecord | null => {
+  if (!map || typeof map !== 'object') return null;
+  const entries = Object.values(map as Record<string, unknown>);
+  const nameLower = (schemeName || '').toLowerCase();
+
+  for (const raw of entries) {
+    const row = raw as MFComparisonRecord;
+    if (row?.scheme_code !== null && row?.scheme_code !== undefined && String(row.scheme_code) === String(schemeCode)) {
+      return row;
+    }
+    const rowName = (row?.name || '').toLowerCase();
+    if (rowName && nameLower && (rowName.includes(nameLower) || nameLower.includes(rowName))) {
+      return row;
+    }
+  }
+  return null;
+};
+
 function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
   if (!payload) return null;
   const winner = payload.winner;
@@ -243,11 +313,14 @@ function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
   const freshness = payload.source_freshness || {};
   const freshnessRows = Object.entries(freshness);
   const holdingsBlocked = payload.holdings_based_reasoning?.status === 'blocked';
+  const isMf = winner?.asset_type === 'mutual_fund';
 
   return (
     <section className="rounded-2xl border border-[#35588f] bg-[#16243a] p-4 sm:p-5">
       <h3 className="mb-2 text-sm font-semibold tracking-wide text-[#9ec5ff]">Why this is better?</h3>
-      <p className="text-sm text-[#d7e4fb]">{payload.summary || 'Deterministic comparison summary unavailable.'}</p>
+      <p className="whitespace-pre-line text-sm leading-relaxed text-[#d7e4fb]">
+        {payload.summary || 'Deterministic comparison summary unavailable.'}
+      </p>
       <div className="mt-3 flex flex-wrap gap-2 text-xs">
         <span className="rounded-md border border-white/20 bg-[#0e182a] px-2 py-1 text-[#d7e4fb]">
           Winner: {winner?.status === 'winner' ? (winner.entity_name || winner.entity_id || 'N/A') : winner?.status || 'N/A'}
@@ -259,6 +332,15 @@ function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
           Coverage: {factors.length > 0 && factors.every((f) => (f.coverage ?? 0) >= 1) ? 'Complete' : 'Incomplete'}
         </span>
       </div>
+      {isMf && (
+        <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-[#bcd0f0]">
+          <li>Flexi-cap and multi-asset funds should not be judged only by returns.</li>
+          <li>Risk profile differs by mandate, volatility, and downside behavior.</li>
+          <li>Asset allocation changes the comparison baseline and expected outcomes.</li>
+          <li>Sharpe, volatility, drawdown, and rolling-return consistency matter.</li>
+          <li>Coverage is currently limited but still useful for validating comparison logic.</li>
+        </ul>
+      )}
       {holdingsBlocked && (
         <div className="mt-3 rounded-md border border-amber-300/35 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
           Holdings-based reasoning unavailable. Holdings sync pending.
@@ -492,6 +574,10 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
   const error = fundA.error || fundB.error;
   const mfWhyBetter = getWhyBetter(auxiliaryData?.quant_data);
   const periods: Period[] = ['1D', '6M', '1Y', '3Y', '5Y'];
+  const comparisonMap =
+    auxiliaryData?.quant_data && typeof auxiliaryData.quant_data === 'object'
+      ? (auxiliaryData.quant_data as { comparison?: Record<string, unknown> }).comparison
+      : auxiliaryData?.comparison;
 
   return (
     <div className="comparison-detail finance-compare-wrap p-3 sm:p-6 h-full flex flex-col overflow-hidden">
@@ -537,28 +623,112 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
       )}
       
       {!loading && !error && fundA.meta && fundB.meta && (
-        <div className="flex-1 overflow-y-auto px-1 custom-scroll space-y-6 pb-8 sm:space-y-8 sm:px-2 sm:pb-10">
-          <section className="animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-2xl border border-[#2d3b55] bg-[#101b2d] p-3 sm:p-6">
-            <FundComparisonChart 
-              schemeCodeA={ids[0]} 
-              schemeCodeB={ids[1]} 
-              nameA={fundA.meta.scheme_name} 
-              nameB={fundB.meta.scheme_name} 
-              period={period}
-            />
-          </section>
+        <div className="flex-1 min-h-0 px-1 sm:px-2">
+          {(() => {
+            const aRecord = getMfComparisonRecord(comparisonMap, ids[0], fundA.meta.scheme_name);
+            const bRecord = getMfComparisonRecord(comparisonMap, ids[1], fundB.meta.scheme_name);
 
-          <section className="animate-in fade-in slide-in-from-bottom-6 duration-700 delay-200">
-            <div className="pt-4 border-t border-white/10 sm:pt-6">
-              <FundDetailsPanel 
-                schemeCodeA={ids[0]} 
-                schemeCodeB={ids[1]} 
-              />
-            </div>
-          </section>
-          <section>
-            <WhyBetterPanel payload={mfWhyBetter} />
-          </section>
+            const aReturn3Y = toNumber(aRecord?.return_3y ?? fundA.returns?.['3Y']);
+            const bReturn3Y = toNumber(bRecord?.return_3y ?? fundB.returns?.['3Y']);
+            const aVol = normalizePercent(aRecord?.volatility_1y ?? fundA.riskMetrics?.stdDev);
+            const bVol = normalizePercent(bRecord?.volatility_1y ?? fundB.riskMetrics?.stdDev);
+            const aSharpe = toNumber(aRecord?.sharpe_ratio ?? fundA.riskMetrics?.sharpeRatio);
+            const bSharpe = toNumber(bRecord?.sharpe_ratio ?? fundB.riskMetrics?.sharpeRatio);
+            const aAlpha = toNumber(aRecord?.alpha_vs_nifty ?? aRecord?.alpha ?? fundA.riskMetrics?.alpha_vs_nifty ?? fundA.riskMetrics?.alpha);
+            const bAlpha = toNumber(bRecord?.alpha_vs_nifty ?? bRecord?.alpha ?? fundB.riskMetrics?.alpha_vs_nifty ?? fundB.riskMetrics?.alpha);
+            const aBeta = toNumber(aRecord?.beta ?? fundA.riskMetrics?.beta);
+            const bBeta = toNumber(bRecord?.beta ?? fundB.riskMetrics?.beta);
+            const aDrawdown = normalizePercent(aRecord?.max_drawdown_1y ?? fundA.riskMetrics?.maxDrawdown);
+            const bDrawdown = normalizePercent(bRecord?.max_drawdown_1y ?? fundB.riskMetrics?.maxDrawdown);
+
+            const riskRows: Array<Record<string, string | number | null>> = [
+              { metric: 'Sharpe', a: aSharpe, b: bSharpe },
+              { metric: 'Volatility %', a: aVol, b: bVol },
+              { metric: 'Drawdown %', a: aDrawdown, b: bDrawdown },
+              { metric: 'Alpha %', a: aAlpha, b: bAlpha },
+              { metric: 'Beta', a: aBeta, b: bBeta },
+            ].filter((row) => row.a !== null || row.b !== null);
+
+            const tableRows = [
+              { label: '3Y Return', a: formatPercent(aReturn3Y), b: formatPercent(bReturn3Y) },
+              { label: 'Volatility (1Y)', a: formatPercent(aVol), b: formatPercent(bVol) },
+              { label: 'Sharpe Ratio', a: formatPlain(aSharpe), b: formatPlain(bSharpe) },
+              { label: 'Alpha vs Nifty', a: formatPercent(aAlpha), b: formatPercent(bAlpha) },
+              { label: 'Beta', a: formatPlain(aBeta), b: formatPlain(bBeta) },
+              { label: 'Max Drawdown', a: formatPercent(aDrawdown), b: formatPercent(bDrawdown) },
+              { label: 'Expense Ratio', a: formatExpense(aRecord?.expense_ratio ?? fundA.details?.expense_ratio), b: formatExpense(bRecord?.expense_ratio ?? fundB.details?.expense_ratio) },
+              { label: 'AUM', a: formatAum(aRecord?.aum ?? fundA.details?.aum), b: formatAum(bRecord?.aum ?? fundB.details?.aum) },
+            ];
+
+            return (
+              <div className="grid h-full min-h-0 gap-4 lg:grid-rows-[minmax(0,1fr)_minmax(0,1fr)]">
+                <section className="animate-in fade-in slide-in-from-bottom-4 duration-500 grid min-h-0 gap-4 rounded-2xl border border-[#2d3b55] bg-[#101b2d] p-3 sm:grid-cols-2 sm:p-4">
+                  <div className="min-h-0 rounded-xl border border-[#2d3b55] bg-[#0e182b] p-2 sm:p-3">
+                    <FundComparisonChart
+                      schemeCodeA={ids[0]}
+                      schemeCodeB={ids[1]}
+                      nameA={fundA.meta.scheme_name}
+                      nameB={fundB.meta.scheme_name}
+                      period={period}
+                    />
+                  </div>
+                  <div className="min-h-0 rounded-xl border border-[#2d3b55] bg-[#0e182b] p-3">
+                    <h3 className="mb-2 text-sm font-semibold text-[#d7e4fb]">Risk Metrics Together</h3>
+                    <p className="mb-3 text-xs text-[#95add1]">Single-view comparison for Sharpe, volatility, drawdown, alpha, and beta.</p>
+                    <div className="h-[240px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={riskRows}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                          <XAxis dataKey="metric" stroke="#9ca3af" fontSize={11} />
+                          <YAxis stroke="#9ca3af" fontSize={11} />
+                          <Tooltip
+                            cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                            contentStyle={{ background: '#111827', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#fff' }}
+                          />
+                          <Bar dataKey="a" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="b" fill="#f97316" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                      <span className="rounded-md border border-[#355b95] bg-[#122341] px-2 py-1 text-[#d4e4ff]">{fundA.meta.scheme_name}</span>
+                      <span className="rounded-md border border-[#654023] bg-[#2a1a10] px-2 py-1 text-[#ffd8bf]">{fundB.meta.scheme_name}</span>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="animate-in fade-in slide-in-from-bottom-6 duration-700 delay-200 grid min-h-0 gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+                  <div className="min-h-0 rounded-2xl border border-[#2d3b55] bg-[#101b2d] p-3 sm:p-4">
+                    <h3 className="mb-2 text-sm font-semibold text-[#d7e4fb]">Compact Comparison Snapshot</h3>
+                    <div className="overflow-hidden rounded-xl border border-[#2d3b55]">
+                      <table className="w-full border-collapse text-xs sm:text-sm">
+                        <thead className="bg-[#15233d] text-[#d6e4fb]">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-semibold">Metric</th>
+                            <th className="px-3 py-2 text-left font-semibold">{fundA.meta.scheme_name}</th>
+                            <th className="px-3 py-2 text-left font-semibold">{fundB.meta.scheme_name}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tableRows.map((row) => (
+                            <tr key={row.label} className="border-t border-white/10 odd:bg-[#101c32] even:bg-[#0f1a2d]">
+                              <td className="px-3 py-2 font-medium text-[#bdd0ee]">{row.label}</td>
+                              <td className="px-3 py-2 text-white">{row.a}</td>
+                              <td className="px-3 py-2 text-white">{row.b}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="min-h-0 rounded-2xl border border-[#2d3b55] bg-[#101b2d] p-3 sm:p-4">
+                    <WhyBetterPanel payload={mfWhyBetter} />
+                  </div>
+                </section>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
