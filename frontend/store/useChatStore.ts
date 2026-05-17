@@ -14,7 +14,7 @@ const initialMessages: Message[] = [
   {
     id: '1',
     role: 'system',
-    content: 'Welcome to Mooliq. I monitor NSE/BSE quant data and latest financial news. How can I assist your market research today?',
+    content: 'Welcome to MooliqAI. Compare Indian mutual funds across returns, cost, Sharpe, risk, and NAV freshness with explainable research context.',
   },
 ];
 
