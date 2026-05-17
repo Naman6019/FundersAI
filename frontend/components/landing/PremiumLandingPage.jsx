@@ -164,7 +164,7 @@ function HeroPreview() {
       initial={{ opacity: 0, y: 42, scale: 0.96, rotateX: 7 }}
       animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
       transition={{ duration: 0.95, ease, delay: 0.25 }}
-      className="relative mx-auto mt-16 w-full max-w-5xl rounded-[2.25rem] border border-white/12 bg-white/[0.06] p-2 shadow-[0_50px_160px_rgba(0,0,0,0.45)] backdrop-blur-2xl"
+      className="relative mx-auto mt-16 w-full max-w-6xl rounded-[2.25rem] border border-white/12 bg-white/[0.06] p-2 shadow-[0_50px_160px_rgba(0,0,0,0.45)] backdrop-blur-2xl"
     >
       <div className="absolute inset-x-10 -top-px h-px bg-gradient-to-r from-transparent via-white/70 to-transparent" />
       <div className="overflow-hidden rounded-[1.9rem] border border-white/10 bg-[#07111f]">
@@ -566,7 +566,7 @@ export default function MooliqLandingPage() {
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease }}
-          className="sticky top-4 z-40 mx-auto w-full max-w-6xl px-5 py-5 sm:px-8 lg:px-12"
+          className="sticky top-4 z-40 mx-auto w-full max-w-7xl px-5 py-5 sm:px-8 lg:px-10"
         >
           <div className="flex items-center justify-between rounded-full border border-white/10 bg-[#090d18]/70 px-3 py-2 shadow-2xl shadow-black/25 backdrop-blur-2xl sm:px-4">
             <a href="#" className="flex items-center gap-3" aria-label="Mooliq home">
@@ -597,15 +597,15 @@ export default function MooliqLandingPage() {
           </div>
         </motion.nav>
 
-        <div className="mx-auto w-full max-w-7xl px-5 pb-24 pt-14 sm:px-8 sm:pt-24 lg:px-12 xl:px-16">
-          <motion.div variants={stagger} initial="hidden" animate="visible" style={{ y: heroTextY }} className="mx-auto max-w-4xl text-center">
+        <div className="mx-auto w-full max-w-7xl px-5 pb-24 pt-14 sm:px-8 sm:pt-24 lg:px-10">
+          <motion.div variants={stagger} initial="hidden" animate="visible" style={{ y: heroTextY }} className="mx-auto max-w-5xl text-center">
             <motion.div variants={fadeUp} className="mb-6 flex justify-center">
               <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm text-slate-300 shadow-sm backdrop-blur-xl">
                 <Star className="h-4 w-4 fill-emerald-300 text-emerald-300" />
                 Mutual fund comparison MVP
               </span>
             </motion.div>
-            <motion.h1 variants={fadeUp} className="text-balance text-4xl font-semibold tracking-[-0.045em] text-white sm:text-5xl lg:text-6xl xl:text-7xl">
+            <motion.h1 variants={fadeUp} className="text-balance text-5xl font-semibold tracking-[-0.055em] text-white sm:text-7xl lg:text-8xl">
               Compare Indian mutual funds with calm, explainable AI.
             </motion.h1>
             <motion.p variants={fadeUp} className="mx-auto mt-7 max-w-3xl text-pretty text-lg leading-8 text-slate-300 sm:text-xl">
@@ -641,7 +641,7 @@ export default function MooliqLandingPage() {
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-5 py-16 sm:px-8 lg:px-12 xl:px-16">
+      <section className="mx-auto w-full max-w-7xl px-5 py-16 sm:px-8 lg:px-10">
         <motion.div
           initial={{ opacity: 0, y: 28, filter: "blur(10px)" }}
           whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
@@ -683,7 +683,7 @@ export default function MooliqLandingPage() {
         </motion.div>
       </section>
 
-      <section id="compare" className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-12 xl:px-16">
+      <section id="compare" className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-10">
         <SectionHeading
           eyebrow="MVP focus"
           title="Make the page sell one thing first: fund comparison."
@@ -692,7 +692,7 @@ export default function MooliqLandingPage() {
         <FundPairCard />
       </section>
 
-      <section id="features" className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-12 xl:px-16">
+      <section id="features" className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-10">
         <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
           <SectionHeading
             align="left"
@@ -704,7 +704,7 @@ export default function MooliqLandingPage() {
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-12 xl:px-16">
+      <section className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-10">
         <motion.div
           initial={{ opacity: 0, y: 30, filter: "blur(10px)" }}
           whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
@@ -744,7 +744,7 @@ export default function MooliqLandingPage() {
         </motion.div>
       </section>
 
-      <section id="how" className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-12 xl:px-16">
+      <section id="how" className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-10">
         <SectionHeading
           eyebrow="Workflow"
           title="From fund factsheets to explainable comparison."
@@ -794,7 +794,7 @@ export default function MooliqLandingPage() {
         </motion.div>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-12 xl:px-16">
+      <section className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-10">
         <SectionHeading
           eyebrow="Research examples"
           title="Make the first action obvious."
@@ -803,7 +803,7 @@ export default function MooliqLandingPage() {
         <MarqueePrompts />
       </section>
 
-      <section id="trust" className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-12 xl:px-16">
+      <section id="trust" className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-10">
         <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
           <SectionHeading
             align="left"
@@ -828,7 +828,7 @@ export default function MooliqLandingPage() {
         </div>
       </section>
 
-      <section id="disclaimer" className="mx-auto w-full max-w-7xl px-5 py-12 sm:px-8 lg:px-12 xl:px-16">
+      <section id="disclaimer" className="mx-auto w-full max-w-7xl px-5 py-12 sm:px-8 lg:px-10">
         <div className="rounded-[2rem] border border-amber-300/20 bg-amber-300/[0.055] p-6 text-center sm:p-8">
           <h2 className="text-2xl font-semibold text-white">Research-only disclaimer</h2>
           <p className="mx-auto mt-4 max-w-4xl leading-8 text-amber-50/80">
@@ -837,7 +837,7 @@ export default function MooliqLandingPage() {
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-5 pb-24 pt-12 sm:px-8 lg:px-12 xl:px-16">
+      <section className="mx-auto w-full max-w-7xl px-5 pb-24 pt-12 sm:px-8 lg:px-10">
         <motion.div
           initial={{ opacity: 0, y: 28, filter: "blur(10px)" }}
           whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
