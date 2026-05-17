@@ -93,30 +93,32 @@
 }
 
 /* Base Styles */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
 
-html, body {
-  width: 100%;
-  min-width: 100%;
-  margin: 0;
-  padding: 0;
-  overflow-x: hidden;
-}
+  html, body {
+    width: 100%;
+    min-width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+  }
 
-body {
-  background: #05070f;
-  color: var(--text-primary);
-  min-height: 100vh;
-}
+  body {
+    background: #05070f;
+    color: var(--text-primary);
+    min-height: 100vh;
+  }
 
-#__next,
-#root {
-  width: 100%;
-  min-width: 100%;
+  #__next,
+  #root {
+    width: 100%;
+    min-width: 100%;
+  }
 }
 
 /* Material Symbols Rendering Fix */
