@@ -172,8 +172,8 @@ export default function DashboardLayout() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_6%,rgba(76,124,210,0.23),transparent_35%),radial-gradient(circle_at_90%_10%,rgba(89,236,195,0.15),transparent_30%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:42px_42px]" />
 
-      <div className="relative mx-auto max-w-[1600px] px-4 py-4 sm:px-6">
-        <div className="min-h-[calc(100vh-2rem)] overflow-hidden rounded-[1.8rem] border border-[#2b3e5f] bg-[linear-gradient(160deg,rgba(7,18,36,0.92),rgba(5,13,26,0.95))] shadow-[0_28px_80px_rgba(0,0,0,0.45)]">
+      <div className="relative w-full px-0 py-0">
+        <div className="min-h-screen overflow-hidden border border-[#2b3e5f] bg-[linear-gradient(160deg,rgba(7,18,36,0.92),rgba(5,13,26,0.95))] shadow-[0_28px_80px_rgba(0,0,0,0.45)]">
           <header className="flex items-center justify-between border-b border-[#2b3e5f] px-4 py-3 sm:px-5">
             <div className="flex items-center gap-2">
               <button
@@ -220,7 +220,7 @@ export default function DashboardLayout() {
             </div>
           </header>
 
-          <div className="flex min-h-[calc(100vh-8.5rem)] gap-4 p-4 sm:p-5">
+          <div className="flex min-h-[calc(100vh-4.5rem)] gap-4 p-4 sm:p-5">
             {!isMobile && !isSidebarCollapsed && (
               <aside className="w-[276px] shrink-0">
                 <SidebarContent />
@@ -228,7 +228,7 @@ export default function DashboardLayout() {
             )}
 
             <div className="flex min-w-0 flex-1 flex-col gap-4">
-              <div className="mx-auto flex h-full min-h-[620px] w-full max-w-[860px] min-w-0">
+              <div className="flex h-full min-h-[620px] w-full min-w-0">
                 <ChatWindow />
               </div>
 
