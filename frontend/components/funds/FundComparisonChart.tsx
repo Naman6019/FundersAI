@@ -70,6 +70,31 @@ export default function FundComparisonChart({ schemeCodeA, schemeCodeB, nameA, n
       return d1 - d2;
     });
 
+    // Fill small date mismatches between fund calendars so lines do not disappear on non-overlapping days.
+    let lastA: number | undefined;
+    let lastB: number | undefined;
+    let lastActualA: number | undefined;
+    let lastActualB: number | undefined;
+    merged = merged.map((row) => {
+      const next: ChartDatum = { ...row };
+      if (typeof next.assetA === 'number') {
+        lastA = next.assetA;
+        lastActualA = next.actualA;
+      } else if (typeof lastA === 'number') {
+        next.assetA = lastA;
+        next.actualA = lastActualA;
+      }
+
+      if (typeof next.assetB === 'number') {
+        lastB = next.assetB;
+        lastActualB = next.actualB;
+      } else if (typeof lastB === 'number') {
+        next.assetB = lastB;
+        next.actualB = lastActualB;
+      }
+      return next;
+    });
+
     if (period === '3Y' || period === '5Y') {
       merged = downsample(merged, 300);
     }
@@ -138,12 +163,12 @@ export default function FundComparisonChart({ schemeCodeA, schemeCodeB, nameA, n
   };
 
   return (
-    <div className="mb-4 mt-2 sm:mb-6 sm:mt-4">
+    <div className="w-full">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-medium text-[#d7e4fb] sm:text-base">Normalized Performance (Rebased to 100)</h3>
       </div>
       
-      <div className="relative h-[260px] w-full rounded-xl border border-[#2f4260] bg-[#111d32] p-2 sm:h-[320px] sm:p-4">
+      <div className="relative h-[340px] w-full rounded-xl border border-[#2f4260] bg-[#111d32] p-2 sm:h-[460px] sm:p-4">
         {period === '1D' && oneDayStats ? (
           <div className="flex h-full items-center justify-center gap-12">
             <div className="text-center">

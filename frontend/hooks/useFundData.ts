@@ -75,7 +75,9 @@ export function useFundData(schemeCode: string | null) {
             status: 'ok',
             details: json.details,
             returns: json.returns,
-            riskMetrics: json.riskMetrics
+            riskMetrics: json.riskMetrics,
+            coverage: json.historyCoverage,
+            freshness: json.freshness
           };
           globalCache.set(schemeCode, formatted);
           return formatted;
@@ -111,6 +113,8 @@ export function useFundData(schemeCode: string | null) {
     details: data?.details || null,
     returns: data?.returns || null,
     riskMetrics: data?.riskMetrics || null,
+    coverage: data?.coverage || null,
+    freshness: data?.freshness || null,
     loading, 
     error 
   };

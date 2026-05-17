@@ -19,31 +19,30 @@ export function useBenchmarkData() {
     if (cachedData) return;
 
     if (!pendingRequest) {
-      pendingRequest = fetch('https://query1.finance.yahoo.com/v8/finance/chart/^NSEI?interval=1d&range=5y')
+      pendingRequest = fetch('/api/quant/stocks/NIFTY/price-history?days=2200')
         .then(res => {
           if (!res.ok) throw new Error('Failed to fetch benchmark data');
           return res.json();
         })
         .then(json => {
-          const result = json.chart.result[0];
-          const timestamps = result.timestamp;
-          const closes = result.indicators.quote[0].close;
-
+          const rows = Array.isArray(json?.price_history) ? json.price_history : [];
           const points: BenchmarkPoint[] = [];
-          for (let i = 0; i < timestamps.length; i++) {
-            if (closes[i] === null || closes[i] === undefined) continue;
-            
-            const date = new Date(timestamps[i] * 1000);
-            // Use UTC to avoid timezone shifts affecting the date string
-            const day = String(date.getUTCDate()).padStart(2, '0');
-            const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-            const year = date.getUTCFullYear();
-            
+
+          for (const row of rows) {
+            const close = Number(row?.close);
+            const isoDate = typeof row?.date === 'string' ? row.date : '';
+            if (!Number.isFinite(close) || !isoDate) continue;
+
+            const parts = isoDate.split('-');
+            if (parts.length !== 3) continue;
+            const date = `${parts[2]}-${parts[1]}-${parts[0]}`;
+
             points.push({
-              date: `${day}-${month}-${year}`,
-              close: closes[i]
+              date,
+              close
             });
           }
+
           cachedData = points;
           return points;
         });

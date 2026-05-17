@@ -116,6 +116,8 @@ QUANT_CACHE_TTL_SECONDS = int(os.getenv("QUANT_CACHE_TTL_SECONDS", "600"))
 INDIANAPI_CHAT_STOCK_ENABLED = os.getenv("INDIANAPI_CHAT_STOCK_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
 if "INDIANAPI_CHAT_STOCK_ENABLED" not in os.environ:
     INDIANAPI_CHAT_STOCK_ENABLED = os.getenv("INDIANAPI_ENABLE_LIVE_CALLS", "0").strip().lower() in {"1", "true", "yes", "on"}
+DEBUG_MF_RESOLUTION = os.getenv("DEBUG_MF_RESOLUTION", "0").strip().lower() in {"1", "true", "yes", "on"}
+MF_COMPARE_MIN_NAV_POINTS = max(int(os.getenv("MF_COMPARE_MIN_NAV_POINTS", "252")), 1)
 
 async def function_ollama_chat(messages, format="json", max_retries=2):
     groq_key = os.environ.get("GROQ_API_KEY")
@@ -1196,10 +1198,45 @@ async def get_mf_history_df(scheme_code: int, days: int = 1100):
     """Fetch MF history from Supabase and return as a DataFrame compatible with risk functions."""
     if not supabase:
         return pd.DataFrame()
+
+    def _fetch_rows_for_filter(code_filter: Any, max_rows: int) -> list[dict[str, Any]]:
+        batch_size = 1000
+        offset = 0
+        collected: list[dict[str, Any]] = []
+        while offset < max_rows:
+            chunk = (
+                supabase.table('mutual_fund_nav_history')
+                .select('nav, nav_date')
+                .eq('scheme_code', code_filter)
+                .order('nav_date', desc=True)
+                .range(offset, offset + batch_size - 1)
+                .execute()
+                .data
+                or []
+            )
+            if not chunk:
+                break
+            collected.extend(chunk)
+            if len(chunk) < batch_size:
+                break
+            offset += batch_size
+        return collected[:max_rows]
+
     try:
-        res = supabase.table('mutual_fund_nav_history').select('nav, nav_date').eq('scheme_code', str(scheme_code)).order('nav_date', desc=True).limit(days).execute()
-        if res.data:
-            df = pd.DataFrame(res.data)
+        candidate_filters = [str(scheme_code)]
+        try:
+            candidate_filters.append(int(scheme_code))
+        except Exception:
+            pass
+
+        best_rows: list[dict[str, Any]] = []
+        for code_filter in candidate_filters:
+            rows = _fetch_rows_for_filter(code_filter, days)
+            if len(rows) > len(best_rows):
+                best_rows = rows
+
+        if best_rows:
+            df = pd.DataFrame(best_rows)
             df['date'] = pd.to_datetime(df['nav_date'])
             df = df.sort_values('date')
             df.rename(columns={'nav': 'Close'}, inplace=True)
@@ -1236,14 +1273,112 @@ def _normalize_fund_text(text: str) -> str:
         .split()
     )
 
-def _pick_best_fund_match(entity: str, rows: list[dict]) -> dict | None:
+def _coerce_scheme_code_filter(scheme_code_value: Any):
+    if scheme_code_value in (None, ""):
+        return None
+    scheme_code_str = str(scheme_code_value).strip()
+    if not scheme_code_str:
+        return None
+    return int(scheme_code_str) if scheme_code_str.isdigit() else scheme_code_str
+
+def _nav_history_summary_for_scheme(scheme_code_value: Any, cache: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
+    key = str(scheme_code_value or "").strip()
+    default_summary = {
+        "count": 0,
+        "first_nav_date": None,
+        "last_nav_date": None,
+    }
+    if not key:
+        return default_summary
+    if cache is not None and key in cache:
+        return cache[key]
+
+    code_filter = _coerce_scheme_code_filter(scheme_code_value)
+    if code_filter is None or not supabase:
+        if cache is not None:
+            cache[key] = default_summary
+        return default_summary
+
+    summary = dict(default_summary)
+    try:
+        count_res = (
+            supabase.table("mutual_fund_nav_history")
+            .select("nav_date", count="exact")
+            .eq("scheme_code", code_filter)
+            .execute()
+        )
+        summary["count"] = int(count_res.count or 0)
+
+        first_res = (
+            supabase.table("mutual_fund_nav_history")
+            .select("nav_date")
+            .eq("scheme_code", code_filter)
+            .order("nav_date", desc=False)
+            .limit(1)
+            .execute()
+        )
+        last_res = (
+            supabase.table("mutual_fund_nav_history")
+            .select("nav_date")
+            .eq("scheme_code", code_filter)
+            .order("nav_date", desc=True)
+            .limit(1)
+            .execute()
+        )
+        first_row = (first_res.data or [None])[0]
+        last_row = (last_res.data or [None])[0]
+        summary["first_nav_date"] = first_row.get("nav_date") if isinstance(first_row, dict) else None
+        summary["last_nav_date"] = last_row.get("nav_date") if isinstance(last_row, dict) else None
+    except Exception as exc:
+        if DEBUG_MF_RESOLUTION:
+            logger.warning("MF nav history summary lookup failed for %s: %s", key, exc)
+
+    if cache is not None:
+        cache[key] = summary
+    return summary
+
+def _history_coverage_from_df(df: pd.DataFrame) -> dict[str, Any]:
+    if df.empty:
+        return {
+            "history_points": 0,
+            "first_nav_date": None,
+            "last_nav_date": None,
+            "supports": {"1Y": False, "3Y": False, "5Y": False},
+        }
+    ordered = df.sort_index()
+    first_dt = ordered.index[0]
+    last_dt = ordered.index[-1]
+    span_days = max(int((last_dt - first_dt).days), 0)
+    return {
+        "history_points": int(len(ordered)),
+        "first_nav_date": first_dt.strftime("%Y-%m-%d"),
+        "last_nav_date": last_dt.strftime("%Y-%m-%d"),
+        "supports": {
+            "1Y": span_days >= 365,
+            "3Y": span_days >= 365 * 3,
+            "5Y": span_days >= 365 * 5,
+        },
+    }
+
+def _pick_best_fund_match(
+    entity: str,
+    rows: list[dict],
+    nav_history_cache: dict[str, dict[str, Any]] | None = None,
+    min_history_points: int = 0,
+) -> dict | None:
     if not rows:
         return None
 
     entity_norm = _normalize_fund_text(entity.replace(" fund", "").replace(" growth", ""))
     entity_words = [w for w in entity_norm.split() if len(w) > 2]
+    wants_passive = "passive" in entity_norm
+    wants_fof = "fund of funds" in entity_norm or "fof" in entity_norm
+    wants_multi_asset = "multi asset" in entity_norm
+    wants_direct = "direct" in entity_norm
+    wants_regular = "regular" in entity_norm
 
-    def score(row: dict) -> int:
+    scored_rows: list[dict[str, Any]] = []
+    for row in rows:
         name_norm = _normalize_fund_text(row.get("scheme_name", ""))
         value = 0
         if entity_norm and entity_norm in name_norm:
@@ -1264,9 +1399,55 @@ def _pick_best_fund_match(entity: str, rows: list[dict]) -> dict | None:
             value -= 35
         if "etf" in name_norm and "etf" not in entity_norm:
             value -= 35
-        return value
+        if "institutional" in name_norm and "institutional" not in entity_norm:
+            value -= 20
+        if "passive" in name_norm and not wants_passive:
+            value -= 80
+        if "fund of funds" in name_norm and not wants_fof:
+            value -= 70
+        if wants_direct and "regular" in name_norm:
+            value -= 60
+        if wants_regular and "direct" in name_norm:
+            value -= 60
+        if wants_multi_asset and "multi asset" in name_norm:
+            value += 20
+        if wants_multi_asset and "fund of funds" in name_norm and not wants_fof:
+            value -= 30
 
-    return max(rows, key=score)
+        history = _nav_history_summary_for_scheme(row.get("scheme_code"), nav_history_cache)
+        history_points = int(history.get("count") or 0)
+        if history_points == 0:
+            value -= 30
+        else:
+            value += min(history_points // 200, 30)
+        if min_history_points > 0 and history_points < min_history_points:
+            value -= 120
+
+        scored_rows.append(
+            {
+                "score": value,
+                "history_points": history_points,
+                "row": row,
+            }
+        )
+
+    scored_rows.sort(key=lambda item: item["score"], reverse=True)
+    if DEBUG_MF_RESOLUTION:
+        logger.info(
+            "MF resolver entity='%s' min_history=%s top_candidates=%s",
+            entity,
+            min_history_points,
+            [
+                {
+                    "scheme_code": str(item["row"].get("scheme_code")),
+                    "scheme_name": item["row"].get("scheme_name"),
+                    "score": item["score"],
+                    "history_points": item["history_points"],
+                }
+                for item in scored_rows[:5]
+            ],
+        )
+    return scored_rows[0]["row"] if scored_rows else None
 
 def _compute_cagr_from_close(close_series: pd.Series, years: int) -> float | None:
     if close_series.empty:
@@ -1412,14 +1593,25 @@ async def get_mutual_fund_details(scheme_code: int):
                 for idx, val in hist_df.sort_index(ascending=False)["Close"].items()
             ]
 
+        history_coverage = _history_coverage_from_df(hist_df)
         nav_ref = details.get("nav_date") or details.get("last_updated")
         stale = not cache_policy.is_fresh(nav_ref, "mutual_fund_nav")
+        if DEBUG_MF_RESOLUTION:
+            logger.info(
+                "MF /api/mf scheme_code=%s points=%s first=%s last=%s stale=%s",
+                scheme_code,
+                history_coverage.get("history_points"),
+                history_coverage.get("first_nav_date"),
+                history_coverage.get("last_nav_date"),
+                stale,
+            )
         return {
             "details": details,
             "returns": returns,
             "riskMetrics": risk_metrics,
             "chartData": chart_data,
             "fullData": full_data,
+            "historyCoverage": history_coverage,
             "freshness": {
                 "stale": stale,
                 "warning": "NAV data may be stale." if stale else None,
@@ -1493,6 +1685,7 @@ async def chat_endpoint(req: ChatRequest):
                 intent_info["compare_entities"] = entities
             else:
                 comparison_results = {}
+                nav_history_cache: dict[str, dict[str, Any]] = {}
                 # Pre-fetch Nifty history once for all comparisons
                 n_hist_local = await get_nifty_history_df()
 
@@ -1570,9 +1763,15 @@ async def chat_endpoint(req: ChatRequest):
                             if not res.data:
                                 res = supabase.table('mutual_funds').select('*').ilike('scheme_name', search_pattern).limit(25).execute()
                             if res.data:
-                                best_match = _pick_best_fund_match(search_term, res.data)
+                                best_match = _pick_best_fund_match(
+                                    search_term,
+                                    res.data,
+                                    nav_history_cache=nav_history_cache,
+                                    min_history_points=MF_COMPARE_MIN_NAV_POINTS,
+                                )
                                 best_match_row = best_match
                                 scheme_code = best_match['scheme_code']
+                                nav_history_summary = _nav_history_summary_for_scheme(scheme_code, nav_history_cache)
                                 provider_payload = best_match.get("provider_payload") if isinstance(best_match.get("provider_payload"), dict) else {}
                                 amc_trace = provider_payload.get("amc_trace") if isinstance(provider_payload.get("amc_trace"), dict) else {}
 
@@ -1599,6 +1798,10 @@ async def chat_endpoint(req: ChatRequest):
                                 db_data = {
                                     "scheme_code": str(scheme_code) if scheme_code is not None else None,
                                     "name": best_match['scheme_name'],
+                                    "resolved_scheme_name": best_match['scheme_name'],
+                                    "history_points": nav_history_summary.get("count"),
+                                    "first_nav_date": nav_history_summary.get("first_nav_date"),
+                                    "last_nav_date": nav_history_summary.get("last_nav_date"),
                                     "nav": best_match['nav'],
                                     "nav_date": best_match['nav_date'],
                                     "category": best_match.get('category') or ((legacy_row or {}).get("category") if isinstance(legacy_row, dict) else None),
@@ -1616,6 +1819,13 @@ async def chat_endpoint(req: ChatRequest):
                                     "beta": best_match.get("beta"),
                                     "source": "Mooliq DB"
                                 }
+                                if DEBUG_MF_RESOLUTION:
+                                    logger.info(
+                                        "MF compare resolved entity='%s' -> scheme_code=%s history_points=%s",
+                                        entity,
+                                        str(scheme_code),
+                                        nav_history_summary.get("count"),
+                                    )
                         except Exception as e:
                             logger.error(f"Supabase compare error: {e}")
 
@@ -1667,6 +1877,11 @@ async def chat_endpoint(req: ChatRequest):
                             "coverage_status": "incomplete" if missing_fields else "complete",
                         }
                         db_data["source_summary"] = source_summary
+                        db_data["history_coverage"] = {
+                            "history_points": db_data.get("history_points"),
+                            "first_nav_date": db_data.get("first_nav_date"),
+                            "last_nav_date": db_data.get("last_nav_date"),
+                        }
                         db_data["holdings"] = holdings_rows
                         db_data["sector_allocation"] = sector_rows
                         comparison_results[entity] = db_data
@@ -1716,7 +1931,12 @@ async def chat_endpoint(req: ChatRequest):
                 if not res.data:
                     res = supabase.table('mutual_funds').select('*').ilike('scheme_name', search_pattern).limit(25).execute()
                 if res.data:
-                    fund = _pick_best_fund_match(search_term, res.data)
+                    fund = _pick_best_fund_match(
+                        search_term,
+                        res.data,
+                        nav_history_cache={},
+                        min_history_points=MF_COMPARE_MIN_NAV_POINTS if intent == "compare" else 0,
+                    )
                     scheme_code = fund['scheme_code']
                     quant_data = {
                         "name": fund['scheme_name'],
@@ -1776,6 +1996,8 @@ async def chat_endpoint(req: ChatRequest):
         entities = intent_info.get("compare_entities", [])
         if len(entities) >= 2:
             resolved_ids = []
+            seen_ids = set()
+            nav_history_cache_for_ids: dict[str, dict[str, Any]] = {}
             comparison_payload = quant_data.get("comparison", {}) if isinstance(quant_data, dict) else {}
             fallback_map = {
                 "hdfc flexi cap": "118955",
@@ -1783,7 +2005,11 @@ async def chat_endpoint(req: ChatRequest):
                 "quant small cap": "120847",
                 "nippon india small cap": "119332"
             }
-            
+            def _append_resolved_id(value: str) -> None:
+                if value not in seen_ids:
+                    seen_ids.add(value)
+                    resolved_ids.append(value)
+             
             for entity in entities:
                 if comparison_payload and _is_unavailable_entity(comparison_payload.get(entity)):
                     continue
@@ -1792,14 +2018,33 @@ async def chat_endpoint(req: ChatRequest):
                     if isinstance(payload_row, dict):
                         payload_code = payload_row.get("scheme_code")
                         if payload_code not in (None, "", "N/A"):
-                            resolved_ids.append(str(payload_code))
-                            continue
+                            payload_code_str = str(payload_code)
+                            if asset_type != "stock":
+                                payload_hist = _nav_history_summary_for_scheme(payload_code_str, nav_history_cache_for_ids)
+                                if payload_hist.get("count", 0) < MF_COMPARE_MIN_NAV_POINTS:
+                                    if DEBUG_MF_RESOLUTION:
+                                        logger.info(
+                                            "Skipping scheme_code=%s for entity='%s' due to low history_points=%s",
+                                            payload_code_str,
+                                            entity,
+                                            payload_hist.get("count"),
+                                        )
+                                else:
+                                    _append_resolved_id(payload_code_str)
+                                    continue
+                            else:
+                                _append_resolved_id(payload_code_str)
+                                continue
                 ent_lower = entity.lower()
                 resolved = False
                 if asset_type != "stock":
                     for key, code in fallback_map.items():
                         if key in ent_lower:
-                            resolved_ids.append(code); resolved = True; break
+                            fallback_hist = _nav_history_summary_for_scheme(code, nav_history_cache_for_ids)
+                            if fallback_hist.get("count", 0) >= MF_COMPARE_MIN_NAV_POINTS:
+                                _append_resolved_id(code)
+                                resolved = True
+                                break
                 if resolved: continue
                 if supabase and asset_type != "stock":
                     try:
@@ -1809,15 +2054,20 @@ async def chat_endpoint(req: ChatRequest):
                         if not res.data:
                             res = supabase.table('mutual_funds').select('scheme_code,scheme_name').ilike('scheme_name', search_pattern).limit(25).execute()
                         if res.data and len(res.data) > 0:
-                            best_match = _pick_best_fund_match(search_term, res.data)
-                            resolved_ids.append(str(best_match['scheme_code']))
+                            best_match = _pick_best_fund_match(
+                                search_term,
+                                res.data,
+                                nav_history_cache=nav_history_cache_for_ids,
+                                min_history_points=MF_COMPARE_MIN_NAV_POINTS,
+                            )
+                            _append_resolved_id(str(best_match['scheme_code']))
                             resolved = True
                     except: pass
                 if resolved: continue
                 if asset_type != "mutual_fund":
                     stock_symbol = resolve_stock_symbol(entity)
                     ticker_clean = stock_symbol or entity.split()[0].upper()
-                    resolved_ids.append(ticker_clean); resolved = True
+                    _append_resolved_id(ticker_clean); resolved = True
             
             if len(resolved_ids) >= 2:
                 response_json["system_action"] = {"type": "COMPARE", "ids": resolved_ids[:2]}

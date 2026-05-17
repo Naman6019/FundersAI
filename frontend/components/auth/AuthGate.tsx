@@ -9,13 +9,21 @@ type AuthGateProps = {
   children: ReactNode;
 };
 
+const bypassAuth =
+  process.env.NODE_ENV === 'development' ||
+  process.env.NEXT_PUBLIC_DISABLE_AUTH === '1';
+
 export default function AuthGate({ children }: AuthGateProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!bypassAuth);
 
   useEffect(() => {
+    if (bypassAuth) {
+      return;
+    }
+
     if (!hasSupabaseBrowserEnv) {
       router.replace(`/auth?next=${encodeURIComponent(pathname)}`);
       return;
@@ -45,7 +53,7 @@ export default function AuthGate({ children }: AuthGateProps) {
     };
   }, [pathname, router]);
 
-  if (isLoading || !user) {
+  if (!bypassAuth && (isLoading || !user)) {
     return (
       <div className="auth-loading">
         <span>Loading workspace...</span>

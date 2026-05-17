@@ -5,12 +5,23 @@ import { calculateCAGR, calculateRiskMetrics } from '@/lib/mf/returns';
 export const dynamic = 'force-dynamic';
 
 type MfPoint = { date: string; value: number };
+type HistoryCoverage = {
+  historyPoints: number;
+  firstNavDate: string | null;
+  lastNavDate: string | null;
+  supports: {
+    '1Y': boolean;
+    '3Y': boolean;
+    '5Y': boolean;
+  };
+};
 type MfPayload = {
   details: Record<string, unknown>;
   chartData: MfPoint[];
   fullData?: MfPoint[];
   returns?: Record<string, number | null>;
   riskMetrics?: Record<string, number | null>;
+  historyCoverage?: HistoryCoverage;
   [key: string]: unknown;
 };
 
@@ -53,6 +64,82 @@ function buildMetricsFromFullData(fullData: MfPoint[]) {
   };
 }
 
+function parseDdMmYyyy(dateLabel: string): Date | null {
+  const parts = dateLabel.split('-');
+  if (parts.length !== 3) return null;
+  const day = Number(parts[0]);
+  const month = Number(parts[1]);
+  const year = Number(parts[2]);
+  if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) return null;
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function buildHistoryCoverage(fullData: MfPoint[]): HistoryCoverage {
+  if (!fullData.length) {
+    return {
+      historyPoints: 0,
+      firstNavDate: null,
+      lastNavDate: null,
+      supports: { '1Y': false, '3Y': false, '5Y': false },
+    };
+  }
+
+  const sorted = [...fullData].sort((a, b) => {
+    const da = parseDdMmYyyy(a.date)?.getTime() || 0;
+    const db = parseDdMmYyyy(b.date)?.getTime() || 0;
+    return da - db;
+  });
+  const first = sorted[0]?.date ?? null;
+  const last = sorted[sorted.length - 1]?.date ?? null;
+  const firstDate = first ? parseDdMmYyyy(first) : null;
+  const lastDate = last ? parseDdMmYyyy(last) : null;
+  const spanDays = firstDate && lastDate ? Math.max(Math.floor((lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24)), 0) : 0;
+
+  return {
+    historyPoints: sorted.length,
+    firstNavDate: first,
+    lastNavDate: last,
+    supports: {
+      '1Y': spanDays >= 365,
+      '3Y': spanDays >= 365 * 3,
+      '5Y': spanDays >= 365 * 5,
+    },
+  };
+}
+
+async function fetchLocalNavHistory(schemeCode: string): Promise<HistoryRow[]> {
+  const fetchRowsForFilter = async (codeFilter: string | number, maxRows = 3000): Promise<HistoryRow[]> => {
+    const batchSize = 1000;
+    let offset = 0;
+    const collected: HistoryRow[] = [];
+
+    while (offset < maxRows) {
+      const { data, error } = await supabase
+        .from('mutual_fund_nav_history')
+        .select('nav, nav_date')
+        .eq('scheme_code', codeFilter)
+        .order('nav_date', { ascending: false })
+        .range(offset, offset + batchSize - 1);
+      if (error || !data?.length) break;
+      collected.push(...(data as HistoryRow[]));
+      if (data.length < batchSize) break;
+      offset += batchSize;
+    }
+
+    return collected.slice(0, maxRows);
+  };
+
+  const stringRows = await fetchRowsForFilter(schemeCode);
+
+  const numericSchemeCode = Number.parseInt(schemeCode, 10);
+  if (!Number.isFinite(numericSchemeCode)) return stringRows;
+
+  const numberRows = await fetchRowsForFilter(numericSchemeCode);
+
+  return numberRows.length > stringRows.length ? numberRows : stringRows;
+}
+
 async function fetchFromBackend(schemeCode: string) {
   const target = process.env.NODE_ENV === 'development'
     ? `http://127.0.0.1:8000/api/mf/${schemeCode}`
@@ -71,6 +158,7 @@ async function fetchFromBackend(schemeCode: string) {
 
 export async function GET(_request: Request, context: { params: Promise<{ schemeCode: string }>}) {
   const { schemeCode } = await context.params;
+  const debugNavPipeline = process.env.NODE_ENV === 'development' && process.env.DEBUG_MF_NAV_PIPELINE === '1';
   if (!/^\d+$/.test(schemeCode)) {
     return NextResponse.json({ error: 'Invalid scheme code' }, { status: 400 });
   }
@@ -80,20 +168,22 @@ export async function GET(_request: Request, context: { params: Promise<{ scheme
     const backendJson = await fetchFromBackend(schemeCode);
     if (backendJson) {
       // Enrich backend payload with local full history when backend fullData is short/missing.
-      const historyQuery = await supabase
-        .from('mutual_fund_nav_history')
-        .select('nav, nav_date')
-        .eq('scheme_code', schemeCode)
-        .order('nav_date', { ascending: false });
-      const localHistory = (historyQuery.data || []) as HistoryRow[];
+      const localHistory = await fetchLocalNavHistory(schemeCode);
       const localFullData = toFullData(localHistory);
       const backendFullData = Array.isArray(backendJson.fullData) ? backendJson.fullData : [];
+      const localCoverage = buildHistoryCoverage(localFullData);
+      if (debugNavPipeline) {
+        console.log(
+          `[mf-pipeline] scheme=${schemeCode} backendPoints=${backendFullData.length} localPoints=${localFullData.length} localFirst=${localCoverage.firstNavDate} localLast=${localCoverage.lastNavDate}`
+        );
+      }
 
       if (localFullData.length > backendFullData.length) {
         const merged: MfPayload = {
           ...backendJson,
           fullData: localFullData,
           chartData: localFullData.slice(0, 250).reverse(),
+          historyCoverage: localCoverage,
         };
         const computed = buildMetricsFromFullData(localFullData);
         if (!merged.returns) merged.returns = computed.returns;
@@ -101,6 +191,14 @@ export async function GET(_request: Request, context: { params: Promise<{ scheme
           merged.riskMetrics = computed.riskMetrics as Record<string, number | null>;
         }
         return NextResponse.json(merged);
+      }
+
+      if (!backendJson.historyCoverage) {
+        const backendCoverage = buildHistoryCoverage(backendFullData);
+        return NextResponse.json({
+          ...backendJson,
+          historyCoverage: backendCoverage,
+        });
       }
 
       return NextResponse.json(backendJson);
@@ -128,14 +226,8 @@ export async function GET(_request: Request, context: { params: Promise<{ scheme
       return NextResponse.json({ error: 'Mutual fund not found' }, { status: 404 });
     }
 
-    const historyQuery = await supabase
-      .from('mutual_fund_nav_history')
-      .select('nav, nav_date')
-      .eq('scheme_code', schemeCode)
-      .order('nav_date', { ascending: false });
-    const localHistory = historyQuery.data;
-
-    const fullData = toFullData((localHistory || []) as HistoryRow[]);
+    const localHistory = await fetchLocalNavHistory(schemeCode);
+    const fullData = toFullData(localHistory);
     const history = fullData.map((h) => ({
       date: h.date,
       nav: h.value.toString(),
@@ -148,9 +240,15 @@ export async function GET(_request: Request, context: { params: Promise<{ scheme
 
     // Calculate risk metrics from full NAV history
     const riskMetrics = calculateRiskMetrics(history);
+    const historyCoverage = buildHistoryCoverage(fullData);
 
     // Filter last 365 days of NAV history for charting
     const recentHistory = fullData.slice(0, 250).reverse();
+    if (debugNavPipeline) {
+      console.log(
+        `[mf-pipeline] local-only scheme=${schemeCode} points=${historyCoverage.historyPoints} first=${historyCoverage.firstNavDate} last=${historyCoverage.lastNavDate}`
+      );
+    }
 
     // --- FALLBACK FOR AUM/EXPENSE RATIO ---
     // If they are null in Supabase, we could theoretically fetch them from yfinance here.
@@ -166,7 +264,8 @@ export async function GET(_request: Request, context: { params: Promise<{ scheme
       },
       riskMetrics,
       chartData: recentHistory,
-      fullData
+      fullData,
+      historyCoverage
     });
 
   } catch (error) {

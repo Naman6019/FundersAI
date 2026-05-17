@@ -61,6 +61,8 @@ export interface FundDataResponse {
   details?: FundDetails;
   returns?: Partial<FundReturns>;
   riskMetrics?: FundRiskMetrics | null;
+  coverage?: Record<string, unknown>;
+  freshness?: Record<string, unknown>;
 }
 
 export interface MFDetailApiResponse {
@@ -69,6 +71,8 @@ export interface MFDetailApiResponse {
   riskMetrics?: FundRiskMetrics | null;
   chartData?: MFChartPoint[];
   fullData?: MFChartPoint[];
+  historyCoverage?: Record<string, unknown>;
+  freshness?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
