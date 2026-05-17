@@ -129,6 +129,13 @@ export default function DashboardLayout() {
   const [isMobile, setIsMobile] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [canvasWidth, setCanvasWidth] = useState(640);
+  const [isResizingCanvas, setIsResizingCanvas] = useState(false);
+  const getCanvasBounds = () => {
+    const min = 420;
+    const max = Math.min(Math.max(window.innerWidth - 520, 560), 980);
+    return { min, max };
+  };
 
   useEffect(() => {
     fetch('/api/keepalive').catch(() => {});
@@ -147,6 +154,44 @@ export default function DashboardLayout() {
     query.addEventListener('change', update);
     return () => query.removeEventListener('change', update);
   }, []);
+
+  useEffect(() => {
+    const onResize = () => {
+      setCanvasWidth((prev) => {
+        const { min, max } = getCanvasBounds();
+        return Math.min(Math.max(prev, min), max);
+      });
+    };
+
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    if (!isResizingCanvas) return;
+
+    const onMouseMove = (event: MouseEvent) => {
+      const { min, max } = getCanvasBounds();
+      const rightGap = 22;
+      const next = window.innerWidth - event.clientX - rightGap;
+      setCanvasWidth(Math.min(Math.max(next, min), max));
+    };
+
+    const onMouseUp = () => setIsResizingCanvas(false);
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+
+    return () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [isResizingCanvas]);
 
   const renderCanvasContent = () => {
     switch (activeView) {
@@ -240,9 +285,27 @@ export default function DashboardLayout() {
             </div>
 
             {!isMobile && isCanvasOpen && (
-              <section className="w-[min(42vw,620px)] min-w-[420px] rounded-[1.2rem] border border-[#2b3e5f] bg-[linear-gradient(180deg,#0f1a2d,#0c1524)] p-3">
-                {renderCanvasContent()}
-              </section>
+              <>
+                <div
+                  className="group relative flex w-3 shrink-0 cursor-col-resize items-center justify-center"
+                  onMouseDown={() => setIsResizingCanvas(true)}
+                  role="separator"
+                  aria-label="Resize canvas"
+                  aria-orientation="vertical"
+                >
+                  <div
+                    className={`h-24 w-[5px] rounded-full border border-[#355079] bg-[linear-gradient(180deg,#36598f,#263e66)] shadow-[0_10px_24px_rgba(0,0,0,0.45)] transition-all ${
+                      isResizingCanvas ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                    }`}
+                  />
+                </div>
+                <section
+                  style={{ width: `${canvasWidth}px` }}
+                  className="shrink-0 rounded-[1.2rem] border border-[#2b3e5f] bg-[linear-gradient(180deg,#0f1a2d,#0c1524)] p-3"
+                >
+                  {renderCanvasContent()}
+                </section>
+              </>
             )}
           </div>
         </div>

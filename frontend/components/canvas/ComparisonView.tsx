@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useFundData } from '../../hooks/useFundData';
+import { useBenchmarkData } from '../../hooks/useBenchmarkData';
 import FundComparisonChart, { Period } from '../funds/FundComparisonChart';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { CanvasPayload, MetricValue as SharedMetricValue } from '@/types/funds';
+import type { NavPoint } from '@/types/funds';
+import { calculateAlpha, calculateBeta } from '@/lib/quantUtils';
 
 type MetricValue = SharedMetricValue;
 type FundamentalMetric = Record<string, MetricValue>;
@@ -248,6 +251,71 @@ const getWhyBetter = (data: unknown): WhyBetterPayload | null => {
   return why as WhyBetterPayload;
 };
 
+const computeAlphaBetaFromNav = (
+  navData: NavPoint[] | null,
+  benchmarkData: Array<{ date: string; close: number }> | null,
+) => {
+  if (!navData || navData.length < 20 || !benchmarkData || benchmarkData.length < 20) {
+    return { alpha: null as number | null, beta: null as number | null };
+  }
+
+  const chronologicalFund = [...navData].reverse();
+  const benchMap = new Map<string, number>();
+  benchmarkData.forEach((row) => benchMap.set(row.date, row.close));
+
+  const getBenchClose = (dateStr: string): number | null => {
+    const direct = benchMap.get(dateStr);
+    if (typeof direct === 'number') return direct;
+
+    const [d, m, y] = dateStr.split('-').map(Number);
+    const anchor = new Date(Date.UTC(y, m - 1, d));
+    for (let offset = -1; offset >= -3; offset--) {
+      const adj = new Date(anchor);
+      adj.setUTCDate(anchor.getUTCDate() + offset);
+      const adjStr = `${String(adj.getUTCDate()).padStart(2, '0')}-${String(adj.getUTCMonth() + 1).padStart(2, '0')}-${adj.getUTCFullYear()}`;
+      const value = benchMap.get(adjStr);
+      if (typeof value === 'number') return value;
+    }
+    return null;
+  };
+
+  const fundReturns: number[] = [];
+  const benchReturns: number[] = [];
+  for (let index = 1; index < chronologicalFund.length; index++) {
+    const currentBench = getBenchClose(chronologicalFund[index].date);
+    const previousBench = getBenchClose(chronologicalFund[index - 1].date);
+    if (currentBench === null || previousBench === null) continue;
+
+    const currentNav = Number(chronologicalFund[index].nav);
+    const previousNav = Number(chronologicalFund[index - 1].nav);
+    if (!Number.isFinite(currentNav) || !Number.isFinite(previousNav) || previousNav <= 0 || previousBench <= 0) continue;
+
+    fundReturns.push((currentNav / previousNav) - 1);
+    benchReturns.push((currentBench / previousBench) - 1);
+  }
+
+  if (fundReturns.length < 10 || fundReturns.length !== benchReturns.length) {
+    return { alpha: null as number | null, beta: null as number | null };
+  }
+
+  const beta = calculateBeta(fundReturns, benchReturns);
+  const totalFundReturn = fundReturns.reduce((acc, value) => acc * (1 + value), 1);
+  const totalBenchReturn = benchReturns.reduce((acc, value) => acc * (1 + value), 1);
+  const years = fundReturns.length / 252;
+  if (!Number.isFinite(beta) || years <= 0.05) {
+    return { alpha: null as number | null, beta: Number.isFinite(beta) ? beta : null };
+  }
+
+  const fundCagr = Math.pow(totalFundReturn, 1 / years) - 1;
+  const benchCagr = Math.pow(totalBenchReturn, 1 / years) - 1;
+  const alpha = calculateAlpha(fundCagr, benchCagr, beta) * 100;
+
+  return {
+    alpha: Number.isFinite(alpha) ? alpha : null,
+    beta: Number.isFinite(beta) ? beta : null,
+  };
+};
+
 const toNumber = (value: unknown): number | null => {
   if (value === null || value === undefined || value === '' || value === 'N/A') return null;
   const parsed = Number(value);
@@ -386,6 +454,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
 
   const fundA = useFundData(isMF ? idA : null);
   const fundB = useFundData(isMF ? idB : null);
+  const benchmark = useBenchmarkData();
   const [fetchedComparison, setFetchedComparison] = useState<Record<string, StockComparisonMetric>>({});
   const [fetchedWhyBetter, setFetchedWhyBetter] = useState<WhyBetterPayload | null>(null);
   const [stockError, setStockError] = useState<string | null>(null);
@@ -634,10 +703,20 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
             const bVol = normalizePercent(bRecord?.volatility_1y ?? fundB.riskMetrics?.stdDev);
             const aSharpe = toNumber(aRecord?.sharpe_ratio ?? fundA.riskMetrics?.sharpeRatio);
             const bSharpe = toNumber(bRecord?.sharpe_ratio ?? fundB.riskMetrics?.sharpeRatio);
-            const aAlpha = toNumber(aRecord?.alpha_vs_nifty ?? aRecord?.alpha ?? fundA.riskMetrics?.alpha_vs_nifty ?? fundA.riskMetrics?.alpha);
-            const bAlpha = toNumber(bRecord?.alpha_vs_nifty ?? bRecord?.alpha ?? fundB.riskMetrics?.alpha_vs_nifty ?? fundB.riskMetrics?.alpha);
-            const aBeta = toNumber(aRecord?.beta ?? fundA.riskMetrics?.beta);
-            const bBeta = toNumber(bRecord?.beta ?? fundB.riskMetrics?.beta);
+            const aAlphaRaw = toNumber(aRecord?.alpha_vs_nifty ?? aRecord?.alpha ?? fundA.riskMetrics?.alpha_vs_nifty ?? fundA.riskMetrics?.alpha);
+            const bAlphaRaw = toNumber(bRecord?.alpha_vs_nifty ?? bRecord?.alpha ?? fundB.riskMetrics?.alpha_vs_nifty ?? fundB.riskMetrics?.alpha);
+            const aBetaRaw = toNumber(aRecord?.beta ?? fundA.riskMetrics?.beta);
+            const bBetaRaw = toNumber(bRecord?.beta ?? fundB.riskMetrics?.beta);
+            const aFallback = (aAlphaRaw === null || aBetaRaw === null)
+              ? computeAlphaBetaFromNav(fundA.navData, benchmark.data)
+              : { alpha: null as number | null, beta: null as number | null };
+            const bFallback = (bAlphaRaw === null || bBetaRaw === null)
+              ? computeAlphaBetaFromNav(fundB.navData, benchmark.data)
+              : { alpha: null as number | null, beta: null as number | null };
+            const aAlpha = aAlphaRaw ?? aFallback.alpha;
+            const bAlpha = bAlphaRaw ?? bFallback.alpha;
+            const aBeta = aBetaRaw ?? aFallback.beta;
+            const bBeta = bBetaRaw ?? bFallback.beta;
             const aDrawdown = normalizePercent(aRecord?.max_drawdown_1y ?? fundA.riskMetrics?.maxDrawdown);
             const bDrawdown = normalizePercent(bRecord?.max_drawdown_1y ?? fundB.riskMetrics?.maxDrawdown);
 
