@@ -117,15 +117,15 @@ export default function PremiumLandingPage({ tickerItems }: Props) {
   const topLosers = [...sortedByMove].reverse().slice(0, 4);
   const latestTimestamp = tickerItems.find((item) => item.date)?.date ?? null;
   const snapshotFallback = tickerItems.length === 0;
-  const shellClass = 'mx-auto w-full max-w-screen-2xl px-4 sm:px-6 lg:px-10';
 
   return (
     <div className="relative min-h-screen overflow-x-clip bg-[#050a14] text-[#eaf0ff]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_8%,rgba(70,123,224,0.24),transparent_35%),radial-gradient(circle_at_84%_4%,rgba(50,196,152,0.16),transparent_30%),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_right,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[length:auto,auto,42px_42px,42px_42px]" />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(5,10,20,0.12),rgba(5,10,20,0.86))]" />
 
-      <header className="sticky top-0 z-50 px-4 py-3 sm:px-6">
-        <div className={`${shellClass} flex h-16 items-center justify-between rounded-2xl border border-white/10 bg-[#081122]/75 px-4 shadow-[0_14px_40px_rgba(0,0,0,0.36)] backdrop-blur-xl sm:px-6`}>
+      <header className="sticky top-0 z-50 py-3">
+        <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
+          <div className="flex h-16 items-center justify-between rounded-2xl border border-white/10 bg-[#081122]/75 px-4 shadow-[0_14px_40px_rgba(0,0,0,0.36)] backdrop-blur-xl sm:px-6">
           <Link href="/" className="flex items-center gap-2.5 text-sm font-semibold text-white" aria-label="Mooliq home">
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#72a9ff,#3f70d2)] font-bold text-white shadow-[0_10px_20px_rgba(49,109,216,0.5)]">M</span>
             <span className="text-lg leading-none">Mooliq</span>
@@ -139,10 +139,11 @@ export default function PremiumLandingPage({ tickerItems }: Props) {
           <Link href="/dashboard" className="rounded-lg border border-[#3c5c90] bg-[#152845] px-4 py-2 text-sm font-semibold text-[#deebff] transition hover:bg-[#1c3153]">
             Open Dashboard
           </Link>
+          </div>
         </div>
       </header>
 
-      <main className={`${shellClass} relative z-10 pb-16 pt-6 sm:pb-24`}>
+      <main className="relative z-10 mx-auto max-w-7xl px-5 pt-6 pb-16 sm:px-8 sm:pb-24 lg:px-10">
         <section className="grid items-center gap-12 pb-16 pt-8 xl:grid-cols-[1.04fr_0.96fr] xl:pb-22 xl:pt-14">
           <motion.div initial="hidden" animate="show" variants={fadeUp} transition={{ duration: 0.5 }}>
             <span className="inline-flex items-center gap-2 rounded-full border border-[#38588a] bg-[#12213c]/85 px-3 py-1 text-xs font-semibold text-[#d8e6ff]">
