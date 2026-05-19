@@ -128,7 +128,10 @@ def _factor_scores_stock(comparison: dict[str, dict[str, Any]]) -> tuple[list[di
     return factors, totals, weights_used
 
 
-def _factor_scores_mf(comparison: dict[str, dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, float], dict[str, float], dict[str, Any]]:
+def _factor_scores_mf(
+    comparison: dict[str, dict[str, Any]],
+    downside_focus: bool = False,
+) -> tuple[list[dict[str, Any]], dict[str, float], dict[str, float], dict[str, Any]]:
     factors: list[dict[str, Any]] = []
     totals: dict[str, float] = {name: 0.0 for name in comparison}
     weights_used: dict[str, float] = {name: 0.0 for name in comparison}
@@ -138,12 +141,22 @@ def _factor_scores_mf(comparison: dict[str, dict[str, Any]]) -> tuple[list[dict[
     if not has_holdings:
         holdings_reasoning["reason"] = "Holdings-based reasoning unavailable. Holdings sync pending."
 
-    specs = [
-        ("Returns (3Y)", "return_3y", 0.3, True),
-        ("Risk (Volatility 1Y)", "volatility_1y", 0.25, False),
-        ("Cost (Expense Ratio)", "expense_ratio", 0.2, False),
-        ("Freshness", "stale", 0.25, False),
-    ]
+    if downside_focus:
+        specs = [
+            ("Downside (Max Drawdown 1Y)", "max_drawdown_1y", 0.4, False),
+            ("Risk (Volatility 1Y)", "volatility_1y", 0.2, False),
+            ("Returns (3Y)", "return_3y", 0.2, True),
+            ("Cost (Expense Ratio)", "expense_ratio", 0.15, False),
+            ("Freshness", "stale", 0.05, False),
+        ]
+    else:
+        specs = [
+            ("Returns (3Y)", "return_3y", 0.3, True),
+            ("Risk (Volatility 1Y)", "volatility_1y", 0.2, False),
+            ("Downside (Max Drawdown 1Y)", "max_drawdown_1y", 0.2, False),
+            ("Cost (Expense Ratio)", "expense_ratio", 0.15, False),
+            ("Freshness", "stale", 0.15, False),
+        ]
 
     for label, field, weight, higher_is_better in specs:
         raw: dict[str, float] = {}
@@ -259,9 +272,9 @@ def build_stock_why_better(comparison: dict[str, dict[str, Any]]) -> dict[str, A
     }
 
 
-def build_mf_why_better(comparison: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def build_mf_why_better(comparison: dict[str, dict[str, Any]], downside_focus: bool = False) -> dict[str, Any]:
     entities = list(comparison.keys())
-    factors, totals, weights_used, holdings_reasoning = _factor_scores_mf(comparison)
+    factors, totals, weights_used, holdings_reasoning = _factor_scores_mf(comparison, downside_focus=downside_focus)
     normalized_scores = {
         entity: (totals[entity] / weights_used[entity]) if weights_used[entity] > 0 else 0.0
         for entity in entities
@@ -308,6 +321,7 @@ def build_mf_why_better(comparison: dict[str, dict[str, Any]]) -> dict[str, Any]
         "winner": winner,
         "confidence": {"score": round(confidence_score, 4), "label": label},
         "summary": summary,
+        "query_focus": {"downside_focus": downside_focus},
         "factor_results": factors,
         "strengths": strengths,
         "tradeoffs": tradeoffs,

@@ -168,7 +168,7 @@ def data_health():
     try:
         core_rows = (
             supabase.table("mutual_fund_core_snapshot")
-            .select("scheme_code,nav_date,last_updated,aum,expense_ratio,alpha,beta,sharpe_ratio,max_drawdown_1y")
+            .select("scheme_code,nav_date,last_updated,aum,expense_ratio,alpha,beta,sharpe_ratio,volatility_1y,max_drawdown_1y")
             .order("last_updated", desc=True)
             .limit(300)
             .execute()
@@ -219,7 +219,15 @@ def data_health():
             metrics[1].update(status="Stale", note=f"Latest AUM/TER age {_fmt_age(aum_ter_age_days)}.", last_updated=latest_aum_ter_dt.isoformat())
 
     def _risk_row_ready(row: dict[str, Any]) -> bool:
-        values = [row.get("sharpe_ratio"), row.get("max_drawdown_1y"), row.get("alpha"), row.get("beta")]
+        # Treat NAV-derived risk signals as valid coverage even when
+        # alpha/beta are not persisted yet for every scheme.
+        values = [
+            row.get("volatility_1y"),
+            row.get("max_drawdown_1y"),
+            row.get("sharpe_ratio"),
+            row.get("alpha"),
+            row.get("beta"),
+        ]
         present = sum(1 for value in values if value not in (None, ""))
         return present >= 2
 
@@ -735,6 +743,21 @@ async def function_ollama_chat(messages, format="json", max_retries=2):
 
 async def route_query(query: str, asset_type: str = "auto") -> dict:
     """Agent 1: Router"""
+    def _has_downside_focus(text: str) -> bool:
+        q = str(text or "").lower()
+        triggers = [
+            "market falls",
+            "when market falls",
+            "falling market",
+            "bear market",
+            "downside",
+            "drawdown",
+            "capital protection",
+            "market crash",
+            "during correction",
+        ]
+        return any(token in q for token in triggers)
+
     asset_instruction = ""
     if asset_type == "mutual_fund":
         asset_instruction = """
@@ -762,6 +785,7 @@ Output strict JSON only format:
   "ticker": "TICKER.NS",
   "historical_period": "1mo|1y|5y|max", 
   "sentiment_flag": true/false,
+  "downside_focus": true/false,
   "screen_filters": {
     "min_pe": 0,
     "max_pe": 100,
@@ -771,6 +795,7 @@ Output strict JSON only format:
   "compare_entities": ["Asset 1 Name", "Asset 2 Name"]
 }
 If a filter is not mentioned, exclude it from screen_filters. Default historical_period to "1mo" if not mentioned. Default sentiment_flag to false unless news sentiment is requested.
+Default downside_focus to false unless user explicitly asks downside/fall/crash/bear behavior.
     """ + asset_instruction
     messages = [
         {"role": "system", "content": system_prompt},
@@ -780,10 +805,14 @@ If a filter is not mentioned, exclude it from screen_filters. Default historical
     result = await function_ollama_chat(messages, format="json")
     if result:
         try:
-            return json.loads(result)
+            payload = json.loads(result)
+            if not isinstance(payload, dict):
+                payload = {"intent": "general", "ticker": None}
+            payload["downside_focus"] = bool(payload.get("downside_focus")) or _has_downside_focus(query)
+            return payload
         except Exception as e:
             logger.error(f"Router parsing error: {e}")
-    return {"intent": "general", "ticker": None}
+    return {"intent": "general", "ticker": None, "downside_focus": _has_downside_focus(query)}
 
 def calculate_beta(stock_returns, nifty_returns):
     if len(stock_returns) < 10 or len(stock_returns) != len(nifty_returns):
@@ -1398,6 +1427,10 @@ def _fund_metric_rows(data: dict) -> list[tuple[str, str]]:
         ("NAV Date", _safe_value(nav_date)),
         ("Fund House", _safe_value(fund_house)),
         ("Category", _safe_value(category)),
+        ("Return (3Y)", _format_percent(data.get("return_3y"))),
+        ("Volatility (1Y)", _format_percent(data.get("volatility_1y"))),
+        ("Max Drawdown (1Y)", _format_percent(data.get("max_drawdown_1y"))),
+        ("Sharpe Ratio", _safe_value(data.get("sharpe_ratio"))),
         ("Expense Ratio", _safe_value(expense_ratio)),
         ("AUM", _format_inr_market_cap(aum)),
         (f"Beta ({period})", _safe_value(data.get("beta"))),
@@ -2412,6 +2445,7 @@ To experience Mooliq's advanced research capabilities, please try:
                 nav_history_cache: dict[str, dict[str, Any]] = {}
                 # Pre-fetch Nifty history once for all comparisons
                 n_hist_local = await get_nifty_history_df()
+                downside_focus = bool(intent_info.get("downside_focus"))
 
                 def _load_amc_holdings_and_sectors(scheme_code_value: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str | None]:
                     if not supabase or scheme_code_value in (None, ""):
@@ -2539,6 +2573,7 @@ To experience Mooliq's advanced research capabilities, please try:
                                     "return_5y": best_match.get("return_5y"),
                                     "volatility_1y": best_match.get("volatility_1y"),
                                     "max_drawdown_1y": best_match.get("max_drawdown_1y"),
+                                    "sharpe_ratio": best_match.get("sharpe_ratio"),
                                     "alpha": best_match.get("alpha"),
                                     "beta": best_match.get("beta"),
                                     "source": "Mooliq DB"
@@ -2626,7 +2661,7 @@ To experience Mooliq's advanced research capabilities, please try:
                             "holdings": [],
                         }
                         
-                why_better = build_mf_why_better(comparison_results)
+                why_better = build_mf_why_better(comparison_results, downside_focus=downside_focus)
                 quant_data = {
                     "comparison": comparison_results,
                     "why_better": why_better,
