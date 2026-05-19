@@ -124,6 +124,14 @@ class ParsingService:
             self._mark_document(document_id, "parsed", ["already_parsed_for_document"])
             return {"source_document_id": document_id, "status": "skipped", "reason": "already_parsed"}
 
+        if supabase:
+            try:
+                supabase.table("mf_scheme_holdings").delete().eq("source_document_id", document_id).execute()
+                supabase.table("mf_scheme_monthly_metrics").delete().eq("source_document_id", document_id).execute()
+                supabase.table("mf_parse_review_queue").delete().eq("source_document_id", document_id).execute()
+            except Exception as e:
+                logger.warning("event=cleanup_failed source_document_id=%s reason=%s", document_id, e)
+
         parser = HoldingsParser(adapter)
         try:
             parsed_documents = parser.parse_many(

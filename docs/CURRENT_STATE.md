@@ -1,46 +1,60 @@
 # Current State
 
-**Last Updated**: 2026-05-17
+**Last Updated**: 2026-05-20
 
 ## Project Summary
-MarketMind is a research-only Indian equities and mutual fund platform.
+MarketMind is a research-first Indian stocks + mutual funds app with deterministic comparison outputs, Supabase-first runtime reads, and workflow-driven data ingestion.
 
 ## Stack Snapshot
-- Frontend: Next.js `16.2.4`, React `19.2.4`, TypeScript, Zustand, Recharts
-- Backend: FastAPI + provider/service/repository layers
+- Frontend: Next.js `16.2.4`, React `19.2.4`, Tailwind CSS 4, Zustand, Recharts
+- Backend: FastAPI + repository/service layers
 - Database: Supabase (PostgreSQL)
+- Storage: Cloudflare R2 (raw MF docs + cold archives)
 - Automation: GitHub Actions workflows
 
 ## Implemented
-- Supabase-auth-gated dashboard (`/dashboard`) with sign-in/sign-up flow under `/auth`.
-- Frontend API proxy boundary for chat and quant endpoints.
-- Deterministic stock comparison payload with:
-  - `why_better`
-  - structured winner object
-  - `verdict_context`
-  - source freshness and data limitation fields
-- Source-neutral stock data architecture with repository + provider adapters.
-- Stock EOD and price history jobs using NSE bhavcopy.
-- Mutual-fund sync chain (AMFI + MFapi NAV/history + MFdata enrichment + local metrics write path).
-- Provider usage endpoint support (`/api/v1/providers/usage`) behind feature flag.
+- Supabase-auth dashboard (`/dashboard`) with `/auth` sign-in/sign-up.
+- Research-oriented landing page at `/`.
+- Deterministic compare responses with `why_better`, structured winner context, and data limitation/freshness metadata.
+- Source-neutral stock data model and scheduled stock workflows.
+- Mutual-fund NAV sync and metadata pipelines.
+- AMC disclosure ingestion pipeline for `ppfas`, `icici`, `hdfc`, `sbi`:
+  - raw document ingestion
+  - parsing
+  - validation / review queue
+  - R2-first storage
+- MF storage controls:
+  - `migrate-mf-raw-to-r2.yml`
+  - `compact-mf-storage.yml`
+- Admin dashboard Phase 1 at `/admin`:
+  - Overview
+  - Users (read-only actions in Phase 1)
+  - AI Usage
+  - Data Coverage
+  - NAV Sync
+  - Resolver Debug
+- Admin security foundation:
+  - `user_profiles` roles (`user|admin|tester`) and tiers (`free|pro`)
+  - RLS policies for profile reads/updates
+  - server-side admin checks for `/api/admin/*`
+  - compatibility redirect `/dashboard/admin -> /admin`
 
 ## In Progress
-- Frontend route-level rate limiting for `/api/chat` and `/api/quant/*` proxies.
-- Broader stock coverage tuning (`NIFTY500` / `NIFTYTOTALMARKET` / enrichment limits).
-- Mutual-fund holdings completeness via monthly MFdata enrichment.
+- Increase mutual-fund field coverage depth for PPFAS, ICICI, HDFC, SBI (especially holdings/sector/ratios completeness).
+- Reduce `needs_review` backlog in `mf_raw_documents` and `mf_parse_review_queue`.
+- Improve admin Data Coverage status interpretation for historical parser failures vs latest-run health.
 
 ## Known Gaps
-- `backend/render.yaml` references `uvicorn api.index:app`, but `backend/api/index.py` is not in this repo; deployment command source-of-truth needs alignment.
-- `ENABLE_SHAREHOLDING_SYNC=false` in scheduled fundamentals workflow keeps shareholding coverage sparse unless targeted manually.
-- YFinance remains fallback and may rate-limit on hosted environments.
-- News ingestion is RSS-based and can be slow.
-- Frontend proxy error messages are mostly generic and can be improved.
+- `backend/render.yaml` references `uvicorn api.index:app`; repo runtime entry is `uvicorn app.main:app`.
+- Scheduled fundamentals keep shareholding sparse when `ENABLE_SHAREHOLDING_SYNC=false`.
+- Some admin metrics rely on fallback sources when canonical tables are incomplete.
+- Data Coverage “fully covered” is strict and currently under-reports AMCs that only have partial field depth.
 
 ## Data Architecture Notes
-- Source-neutral migrations and tables are active under `backend/migrations/` and Supabase.
-- `mutual_fund_history`, `stock_history`, and `stock_fundamentals` were removed to keep Supabase storage within the free tier.
-- `nifty_stocks` remains as a small search/fallback table until stock search is fully moved to `stocks`.
-- Stock comparison/chat flows are expected to return partial results with explicit limitations instead of blocking on missing fields.
+- Runtime query-critical data remains in Supabase.
+- Raw MF documents and archival payloads are stored in R2.
+- Legacy heavy tables were dropped/compacted to protect Supabase free-tier storage limits.
+- MF parse pipeline uses explicit states (`pending`, `downloaded`, `needs_reparse`, `parsed`, `needs_review`, `failed`) to support reliability triage.
 
 ## Workflows In Use
 - `sync-stock-universe.yml`
@@ -49,6 +63,9 @@ MarketMind is a research-only Indian equities and mutual fund platform.
 - `sync-fundamentals-weekly.yml`
 - `sync-corporate-events.yml`
 - `backfill-stock-core-snapshot.yml`
-- `sync-mf-enrichment.yml`
 - `mf-sync.yml`
+- `sync-mf-enrichment.yml` (optional fallback/manual)
+- `sync-mf-disclosures.yml`
+- `migrate-mf-raw-to-r2.yml`
+- `compact-mf-storage.yml`
 - `keepalive.yml`

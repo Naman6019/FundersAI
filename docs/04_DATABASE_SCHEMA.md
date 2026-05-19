@@ -1,27 +1,51 @@
 # Database Schema
 
-MarketMind uses Supabase (PostgreSQL) as its primary data store. 
-*(Note: Writes are kept server-side only via backend scripts or service-role environments).*
+MarketMind uses Supabase (PostgreSQL) as its primary structured data store.  
+Writes are server-side only (backend jobs, backend APIs, or trusted service-role environments).
 
-## Known Tables
-- `nifty_stocks`: Universe of supported Nifty Large/Mid/Small cap and Total Market stocks.
-- `stocks`: Source-neutral stock metadata.
-- `stock_prices_daily`: Source-neutral OHLCV price history.
-- `financial_statements`: Quarterly and annual fundamentals.
-- `ratios_snapshot`: Provider or MarketMind-calculated ratio snapshots.
-- `shareholding_pattern`: Promoter, FII, DII, public holding rows.
-- `corporate_events`: Corporate action/event rows.
-- `data_provider_runs`: Provider job run audit log.
-- `data_quality_issues`: Optional provider sync issue log.
-- `mutual_funds`: Metadata for mutual funds (scheme codes, names, categories, TER, AUM).
-- `stock_core_snapshot`: Bare-minimum stock snapshot for Supabase-first comparison/read paths.
-- `mutual_fund_core_snapshot`: Bare-minimum mutual fund snapshot with computed returns/risk metrics.
-- `mutual_fund_nav_history`: Normalized NAV history for local metric computation.
-- `mutual_fund_holdings`: MFdata portfolio holdings used for overlap and exposure analysis.
-- `mutual_fund_sectors`: MFdata sector allocations used for MF exposure summaries.
-- `provider_usage_logs`: Provider usage, cache-hit, failure, and quota-skip tracking.
+## Core Stock Tables
+- `stocks`
+- `stock_prices_daily`
+- `financial_statements`
+- `ratios_snapshot`
+- `shareholding_pattern`
+- `corporate_events`
+- `stock_core_snapshot`
 
-## TODOs
-- **Holdings/Overlap**: Schema details for portfolio overlap features are incomplete or rely on partial AMFI disclosures.
+## Core Mutual Fund Tables
+- `mutual_funds` (compatibility/source table)
+- `mutual_fund_core_snapshot`
+- `mutual_fund_nav_history`
+- `mutual_fund_holdings`
+- `mutual_fund_sectors`
 
-See `docs/database-schema.md` for migration details.
+## MF AMC Disclosure Pipeline Tables
+- `mf_amc_sources`
+- `mf_raw_documents`
+- `mf_schemes`
+- `mf_scheme_holdings`
+- `mf_scheme_monthly_metrics`
+- `mf_parse_review_queue`
+
+## R2 / Compaction Support
+- `mf_r2_archive_manifests`
+- `mf_raw_documents.storage_backend/storage_bucket/storage_key/storage_metadata`
+
+## Admin / Access Control
+- `user_profiles`
+  - `role`: `user | admin | tester`
+  - `tier`: `free | pro`
+  - `last_active_at`, `created_at`, `updated_at`
+- RLS policies enforce:
+  - user can read own profile
+  - admin can read all profiles
+  - only admin can perform role/tier updates
+
+## Observability / Job Telemetry
+- `data_provider_runs`
+- `provider_usage_logs`
+- `data_quality_issues`
+
+## Legacy / Compatibility Notes
+- `nifty_stocks` remains as a small fallback/search helper table.
+- Legacy heavy tables (`mutual_fund_history`, `stock_history`, `stock_fundamentals`) were dropped to stay within storage limits.

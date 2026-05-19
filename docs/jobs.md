@@ -18,34 +18,45 @@ GitHub Actions runs stock and mutual-fund sync jobs from `.github/workflows/`.
 | Workflow file | Schedule (UTC) | Steps |
 |---|---|---|
 | `mf-sync.yml` | `30 13 * * 1-5` | `sync_mf.py` -> `sync_mf_history.py` -> `sync_mf_metadata.py` -> `python -m backend.app.jobs.sync_mf_nav` |
-| `sync-mf-enrichment.yml` | Manual only | `python -m backend.app.jobs.sync_mf_enrichment` (optional fallback) |
+| `sync-mf-enrichment.yml` | Manual only | `python -m backend.app.jobs.sync_mf_enrichment` (MFdata fallback path) |
 | `sync-mf-disclosures.yml` | `30 4 * * 1-5`, plus manual | `ingest_latest_amc_docs` + `parse_pending_documents` for `ppfas,icici,hdfc,sbi` (R2-first) |
-| `compact-mf-storage.yml` | `45 3 * * 0`, plus manual | `compact_mf_nav_5y` + `compact_mf_holdings_latest_only` |
 | `migrate-mf-raw-to-r2.yml` | Manual | `migrate_mf_raw_to_r2` |
+| `compact-mf-storage.yml` | `45 3 * * 0`, plus manual | `compact_mf_nav_5y` + `compact_mf_holdings_latest_only` |
 | `keepalive.yml` | `*/10 * * * *` | Direct ping to Render `/health` |
 
 ## Runtime Expectations
 - Jobs should be rerunnable (idempotent upserts).
 - Stock EOD/history jobs are NSE bhavcopy-first and write `stock_prices_daily` with source `nse_bhavcopy`.
 - Stock universe and fundamentals jobs are FinEdge-first and write source-neutral `stocks`, `financial_statements`, `ratios_snapshot`, and optional `shareholding_pattern`.
-- Fundamentals cadence is quota-aware:
-  - Weekly watchlist scope (default cap 100)
-  - Monthly full scope (`NIFTY500`, default cap 500)
-  - Manual symbols scope for on-demand refresh
-- `ENABLE_SHAREHOLDING_SYNC=false` in scheduled fundamentals workflow, so shareholding rows may remain sparse.
-- Manual fundamentals dispatch now supports `enable_shareholding_sync=true` for targeted detail backfills.
-- Fundamentals workflow can trigger full `stock_core_snapshot` refresh after ratios with `refresh_stock_core_snapshot=true`.
-- Corporate events are FinEdge-first. IndianAPI corporate-event fallback is disabled unless explicitly enabled.
+- MF disclosures workflow is strict by design (`--strict --fail-on-needs-review`), so `needs_review` rows can fail the run.
+- MF disclosure ingestion is configured for R2-first storage (`MF_REQUIRE_R2_FOR_RAW_STORAGE=true`), while Supabase stores structured/query-critical rows and manifests.
+
+## MF Storage Reduction Runbook
+Run in this order when Supabase storage is high:
+1. `migrate-mf-raw-to-r2.yml` with `dry_run=true` then `dry_run=false`.
+2. `compact-mf-storage.yml` with `dry_run=true` then `dry_run=false`.
+3. Re-run compaction weekly (already scheduled Sundays).
+
+Recommended manual values:
+- `migrate-mf-raw-to-r2.yml`: start `limit=300`, then scale up if stable.
+- `compact-mf-storage.yml`: `nav_scheme_limit=400`, `holdings_group_limit=1500`.
+
+## Compact Job Notes
+- `compact-mf-storage.yml` has `timeout-minutes: 15` at workflow job level.
+- Dry-run for NAV compaction is safe after the loop fix in `compact_mf_nav_5y.py` (dry-run now exits per scheme instead of re-reading the same batch forever).
 
 ## Required Workflow Secrets
 - `SUPABASE_URL`
-- `SUPABASE_KEY`
-- `FINEDGE_API_KEY` (for stock universe, fundamentals, and corporate events)
-- `INDIAN_API_KEY` (only for explicitly enabled IndianAPI fallback/research workflows)
+- `SUPABASE_KEY` (or service-role equivalent in runtime env)
+- `R2_ENDPOINT`
+- `R2_ACCESS_KEY_ID`
+- `R2_SECRET_ACCESS_KEY`
+- `R2_RAW_BUCKET`
+- `R2_COLD_BUCKET`
+- `FINEDGE_API_KEY` (stock universe/fundamentals/corporate events)
+- `INDIAN_API_KEY` (only for explicitly enabled IndianAPI fallback/research flows)
 
 ## Notes
 - Deprecated CSV scripts under `backend/scripts/deprecated/` are not scheduled.
 - Keepalive workflow pings backend directly; frontend `/api/keepalive` is a separate client-side warm-up route.
-- MF sync jobs now write normalized history to `mutual_fund_nav_history` (and `mutual_fund_core_snapshot`), not legacy `mutual_fund_history`.
-- MF enrichment writes MFdata fields into `mutual_fund_core_snapshot` and optional holdings/sectors into `mutual_fund_holdings` and `mutual_fund_sectors`.
-- MF disclosure ingestion is configured for R2-first storage (`MF_REQUIRE_R2_FOR_RAW_STORAGE=true` in workflow env), while Supabase stores query-critical structured rows and manifest metadata.
+- MF sync writes normalized history to `mutual_fund_nav_history` and snapshot data to `mutual_fund_core_snapshot`.

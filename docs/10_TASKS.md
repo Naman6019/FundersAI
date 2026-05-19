@@ -3,6 +3,8 @@
 ## Todo
 - [x] Add a dedicated `/api/quant` backend endpoint to separate stock lookup from chat synthesis.
 - [ ] Add rate limiting for frontend proxy routes (`/api/chat`, `/api/cron/sync-mf`).
+- [ ] Improve Data Coverage parser status logic to distinguish latest-run failures from historical failures.
+- [ ] Add admin action flow for parse-review triage (`needs_review` -> approved/reparse) from UI.
 
 ## Future Features
 - [ ] Advanced charting: add richer stock/fund chart controls, date ranges, indicators, and mobile-friendly comparison views before considering WebGL.
@@ -165,9 +167,16 @@
 - [ ] Expanding stock coverage beyond the current Nifty-focused list.
 - [ ] Testing `NIFTY500` vs `NIFTYTOTALMARKET`.
 - [ ] Tuning `STOCK_INFO_ENRICH_LIMIT` and `STOCK_YFINANCE_FALLBACK_LIMIT`.
-- [ ] Fill mutual fund missing data gaps after stock historical backfill.
+- [ ] Fill mutual fund missing data gaps for PPFAS, ICICI, HDFC, SBI (AUM/TER/holdings/sector/ratios).
+- [ ] Reduce `mf_raw_documents` + `mf_parse_review_queue` backlog (`needs_review` and failed rows).
 
 ## Done
+- [x] Admin dashboard Phase 1 at `/admin` with server-side role enforcement (`user_profiles.role=admin`).
+- [x] Added admin APIs: session, overview, users, AI usage, data coverage, NAV sync, resolver debug.
+- [x] Added `/dashboard/admin` compatibility redirect to `/admin`.
+- [x] Added R2-first MF raw document ingestion path and optional SBI portfolio URL dispatch input.
+- [x] Added MF raw migration and MF storage compaction workflows.
+- [x] Added Data Coverage "Needs Review Entries" section for parser triage visibility.
 - [x] Quota-aware fundamentals cadence: monthly NIFTY500, weekly watched stocks, and on-demand compared symbols.
 - [x] AI chat with asset mode toggle: `Auto`, `Stocks`, `Mutual Funds`.
 - [x] Mutual fund comparison canvas with NAV charts, returns, alpha, beta, Sharpe.

@@ -161,6 +161,15 @@ def _detect_report_month_from_rows(rows: list[list[object]]) -> date | None:
     return None
 
 
+def _scale_percent_aum_if_necessary(holdings: list[dict]) -> list[dict]:
+    raw_total = sum(float(row.get("percent_aum") or 0.0) for row in holdings)
+    if 0.0 < raw_total < 2.0:
+        for row in holdings:
+            if row.get("percent_aum") is not None:
+                row["percent_aum"] = round(float(row["percent_aum"]) * 100.0, 6)
+    return holdings
+
+
 def _extract_holdings_from_rows(rows: list[list[object]], headers: list[str]) -> list[dict]:
     holdings: list[dict] = []
     for row in rows:
@@ -198,7 +207,7 @@ def _extract_holdings_from_rows(rows: list[list[object]], headers: list[str]) ->
         existing = deduped.get(key)
         if not existing or float(row.get("percent_aum") or 0.0) > float(existing.get("percent_aum") or 0.0):
             deduped[key] = row
-    return list(deduped.values())
+    return _scale_percent_aum_if_necessary(list(deduped.values()))
 
 
 def _get_row_cell(row: list[object], headers: list[str], key: str) -> object:
@@ -220,9 +229,8 @@ def _parse_percent(value: object) -> float | None:
     parsed = _parse_number(value)
     if parsed is None:
         return None
-    if 0 < parsed <= 1.5:
-        return round(parsed * 100.0, 6)
     return round(parsed, 6)
+
 
 
 def _parse_number(value: object) -> float | None:

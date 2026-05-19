@@ -2,54 +2,60 @@
 
 ## System Shape
 MarketMind is a split web architecture:
-- Next.js frontend for UI + server-side proxy routes.
-- FastAPI backend for analysis orchestration.
-- Supabase as persistent storage and primary read path.
-- GitHub Actions for recurring data sync jobs.
+- Next.js frontend for UI + server-side proxy/admin routes
+- FastAPI backend for analysis orchestration and internal admin diagnostics
+- Supabase as primary structured runtime store
+- Cloudflare R2 for raw MF documents and cold archives
+- GitHub Actions for recurring sync/ingestion/compaction jobs
 
 ## Component Boundaries
 
 ### Frontend (`frontend/`)
-- `app/dashboard/page.tsx` is protected by `AuthGate`.
-- Chat submits to `POST /api/chat` via `frontend/app/api/chat/route.ts`.
-- Quant panels fetch through `frontend/app/api/quant/*` proxies.
-- Canvas state and chat state are kept in Zustand stores (`store/useCanvasStore.ts`, `store/useChatStore.ts`).
+- `/dashboard` is auth-gated.
+- `/admin` is admin-gated with `AdminAccessGate` + server-side `/api/admin/*` role checks.
+- `/dashboard/admin` redirects to `/admin` for compatibility.
+- Chat submits to `POST /api/chat`.
+- Quant panels fetch through `frontend/app/api/quant/*`.
+- Admin pages fetch through `frontend/app/api/admin/*`.
+- Shared app state uses Zustand (`useCanvasStore`, `useChatStore`).
 
 ### Backend (`backend/app/`)
-- `main.py` hosts root, health, chat, quant compatibility endpoints, and provider-usage endpoint.
-- `routes/quant.py` exposes canonical `/api/quant/*` routes and provider status.
-- `routes/indianapi.py` exposes optional research endpoints under `/api/provider/indianapi/*`.
+- `main.py` hosts health, chat, quant compatibility endpoints, and internal admin endpoints.
+- `routes/quant.py` exposes canonical `/api/quant/*`.
+- `routes/indianapi.py` exposes optional `/api/provider/indianapi/*`.
 - `repositories/stock_repository.py` centralizes Supabase stock table access.
-- `services/quant_service.py` builds deterministic stock comparison/profile/financials/history payloads.
-- `services/comparison_reasoning.py` computes deterministic `why_better` and `verdict_context`.
+- `services/quant_service.py` and `services/comparison_reasoning.py` build deterministic compare payloads.
+- MF ingestion modules (`mf_ingestion/*`) handle AMC discovery, parsing, validation, review queue, and R2/archive writes.
 
 ## Data Paths
 
-### Chat Path
-1. Frontend posts user prompt to `/api/chat` proxy.
-2. Backend `/api/chat` resolves entity intent and data.
-3. Backend returns markdown summary + structured `quant_data` payload.
-4. Frontend renders markdown and opens comparison/detail canvas when `system_action` exists.
+### Runtime Chat/Quant Path
+1. Frontend calls `/api/chat` or `/api/quant/*`.
+2. Proxy forwards to backend.
+3. Backend reads Supabase-first tables.
+4. Response includes deterministic payloads and limitations where data is missing.
 
-### Quant Path
-1. Frontend GETs `/api/quant/*` proxy routes.
-2. Proxy forwards request to backend base URL.
-3. Backend reads local Supabase-first data; provider calls are optional/fallback and flag-driven.
-4. Response includes compatibility fields (`comparison`) and deterministic reasoning metadata.
+### Admin Path
+1. Frontend `/admin` checks `/api/admin/session`.
+2. Server validates bearer token and `user_profiles.role`.
+3. Admin route handlers query Supabase service-role clients.
+4. Resolver Debug proxies to backend `/api/admin/mf-resolver-debug` with `X-Admin-Key`.
 
-### Scheduled Sync Path
-1. GitHub Actions runs on cron/manual dispatch.
-2. Workflows call Python jobs/scripts.
-3. Jobs upsert into source-neutral tables and logs.
-4. Runtime API reads from these local tables.
+### MF Disclosure Ingestion Path
+1. Workflow runs `ingest_latest_amc_docs` for selected AMCs.
+2. Raw docs are stored in R2-first mode.
+3. `parse_pending_documents` extracts factsheet/holdings and writes normalized tables.
+4. Invalid/low-confidence parses are marked `needs_review` and queued for review.
+5. Compaction/migration workflows move stale or raw-heavy data out of hot Supabase tables.
 
 ## Provider Strategy
-- `STOCK_DATA_PROVIDER` picks active provider (`manual`, `nse`, `indianapi`, `finedge`, `yfinance`).
-- If selected provider is unavailable, code falls back to `manual` provider.
-- NSE bhavcopy is the default stock price history path for jobs.
-- IndianAPI endpoints are used in controlled, quota-aware flows.
+- Runtime reads are Supabase-first.
+- Stock prices are NSE bhavcopy-first in scheduled jobs.
+- FinEdge is the primary fundamentals/corporate-events job source.
+- MFdata enrichment remains optional/manual fallback.
+- IndianAPI endpoints are optional and quota-aware.
 
 ## Auth Model
-- Dashboard access is gated by Supabase auth in `AuthGate`.
-- Sign-in/sign-up flow lives at `/auth`.
-- Browser auth depends on `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+- User auth: Supabase auth session.
+- Admin auth: `user_profiles.role='admin'` + server-side checks.
+- Internal backend admin diagnostics: `X-Admin-Key` header.

@@ -1,15 +1,32 @@
 # Product Specification
 
-## Core Features
-1. **Chat & Intent Routing**:
-   - An AI chat interface that routes user queries to Quant, News, Stock Screening, or Comparison pipelines.
-2. **Interactive Canvas**:
-   - Deep-dive UI for side-by-side comparison.
-   - Head-to-Head Mutual Fund Comparison with normalized NAV charts (rebased to 100).
-   - Risk Analysis displaying Alpha, Beta, Sharpe Ratio, and Standard Deviation.
-3. **Data Automation Pipeline**:
-   - Daily automated stock fetch at 16:30 IST.
-   - Mutual fund metadata synchronization.
+## Positioning
+MarketMind is a research-only product for Indian stocks and mutual funds.  
+It does not provide investment advice.
 
-## Target Audience
-Retail investors looking for AI-summarized insights on Indian equities and mutual funds.
+## Core Features (Current)
+1. Chat + intent-aware research flow
+   - AI response plus deterministic data blocks.
+2. Stock and mutual-fund comparison canvas
+   - NAV/price charts
+   - return/risk/cost comparisons
+   - explicit data limitations when fields are missing
+3. Data automation
+   - scheduled stock and MF sync workflows
+   - AMC disclosure ingestion for `ppfas`, `icici`, `hdfc`, `sbi`
+4. Admin dashboard (Phase 1)
+   - overview, users, AI usage, data coverage, NAV sync, resolver debug
+   - admin-only access enforced server-side
+5. R2-first mutual-fund document storage
+   - raw factsheet/disclosure files in R2
+   - Supabase reserved for query-critical structured rows
+
+## Primary Users
+- Retail investors doing self-directed research
+- Internal operators/admin users monitoring data quality and workflow health
+
+## Out of Scope (Current Phase)
+- Payments/subscriptions operations UI
+- feature flags manager
+- full audit logs UI
+- full parser operations console with write actions

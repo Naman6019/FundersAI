@@ -28,6 +28,7 @@ MarketMind is an **AI-orchestrated financial research platform** for the Indian 
 - **Scheduling:** GitHub Actions (cron-based, NOT Vercel crons)
   - `fetch_stocks.yml` — EOD stock data at 16:30 IST (11:00 UTC)
   - `mf-sync.yml` — Mutual fund metadata sync
+  - `compact-mf-storage.yml` — AMC factsheet parsing and data ingestion
 
 ---
 
@@ -36,29 +37,32 @@ MarketMind is an **AI-orchestrated financial research platform** for the Indian 
 ```
 MarketMind/
 ├── .github/workflows/
-│   ├── fetch_stocks.yml      # Daily EOD stock data fetch (16:30 IST)
-│   └── mf-sync.yml           # MF metadata sync
+│   ├── fetch_stocks.yml         # Daily EOD stock data fetch (16:30 IST)
+│   ├── mf-sync.yml              # MF metadata sync
+│   └── compact-mf-storage.yml   # AMC factsheet parsing and metrics ingestion
 ├── backend/
 │   ├── app/
-│   │   ├── main.py           # FastAPI entry point + AI Agent Router
-│   │   ├── database.py       # Supabase client initialization
-│   │   └── fetcher.py        # On-demand YFinance logic for agents
+│   │   ├── main.py              # FastAPI entry point + AI Agent Router
+│   │   ├── database.py          # Supabase client initialization
+│   │   ├── fetcher.py           # On-demand YFinance logic for agents
+│   │   └── mf_ingestion/        # AMC PDF parsing and database ingestion services
 │   ├── scripts/
-│   │   ├── run_fetch.py      # Standalone EOD script (used by GitHub Actions)
-│   │   └── sync_mf.py        # Mutual Fund metadata sync script
+│   │   ├── run_fetch.py         # Standalone EOD script (used by GitHub Actions)
+│   │   └── sync_mf.py           # Mutual Fund metadata sync script
 │   └── requirements.txt
 ├── frontend/
 │   ├── app/
-│   │   ├── api/              # Next.js API Routes (proxy to backend/Supabase)
-│   │   └── page.tsx          # Main dashboard entry point
+│   │   ├── api/                 # Next.js API Routes (proxy to backend/Supabase)
+│   │   └── page.tsx             # Main dashboard entry point
 │   ├── components/
-│   │   ├── canvas/           # Deep-dive UI (Comparison, Stock/MF views)
-│   │   ├── chat/             # AI chat interaction window
-│   │   ├── funds/            # MF-specific charts and detail panels
-│   │   └── layout/           # Dashboard & Sidebar structure
-│   ├── hooks/                # Custom data-fetching hooks (SWR-like pattern)
-│   ├── lib/                  # Quant utilities (Alpha, Beta, Sharpe, CAGR, etc.)
-│   └── store/                # Zustand global state (canvas visibility, selections)
+│   │   ├── canvas/              # Deep-dive UI (Comparison, Stock/MF views)
+│   │   ├── chat/                # AI chat interaction window
+│   │   ├── funds/               # MF-specific charts and detail panels
+│   │   ├── landing/             # Landing page components (PremiumLandingPage)
+│   │   └── layout/              # Dashboard & Sidebar structure
+│   ├── hooks/                   # Custom data-fetching hooks (SWR-like pattern)
+│   ├── lib/                     # Quant utilities (Alpha, Beta, Sharpe, CAGR, etc.)
+│   └── store/                   # Zustand global state (canvas visibility, selections)
 └── README.md
 ```
 
@@ -83,6 +87,7 @@ The core of MarketMind — a multi-agent router in `backend/app/main.py`:
 ### C. Data Engine
 - **Stock Universe:** Nifty 50 (Large Cap), Nifty Midcap 100, Nifty Smallcap 250 (~110 tickers total).
 - **MF Engine:** mfapi.in for historical NAV; metadata synced to Supabase for fast searching.
+- **AMC Factsheet Ingestion:** Custom parsing pipeline to extract holdings and monthly metrics from PDF disclosures, managed via `ParsingService` in `backend/app/mf_ingestion/`.
 - **EOD Pipeline:** GitHub Actions runs `backend/scripts/run_fetch.py` daily at 16:30 IST.
 
 ---
@@ -199,6 +204,7 @@ Use the `include` filter to narrow scope:
 ### General
 - Never commit `.env` or `.env.local` — use `.env.example` for documentation
 - Do not add dependencies (pip or npm) without updating the relevant lockfile/requirements
+- Keep UI aesthetic consistent with the "Clean Minimalist AI + Data-driven Utilitarian" approach (e.g., familiar AI chat interface elements, solid dark slate backgrounds, `font-mono` for data).
 - GitHub Actions workflows in `.github/workflows/` are critical infrastructure — edit carefully and always verify cron times in UTC (IST = UTC+5:30)
 
 ---

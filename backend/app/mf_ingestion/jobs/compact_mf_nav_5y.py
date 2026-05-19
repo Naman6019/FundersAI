@@ -52,6 +52,7 @@ def main() -> None:
     for scheme_code in scheme_codes:
         try:
             scheme_archived_rows = 0
+            prev_first_row = None
             while True:
                 old_rows = (
                     supabase.table("mutual_fund_nav_history")
@@ -66,6 +67,13 @@ def main() -> None:
                 )
                 if not old_rows:
                     break
+                current_first_row = (old_rows[0].get("nav_date"), old_rows[0].get("nav"))
+                if prev_first_row == current_first_row:
+                    raise RuntimeError(
+                        f"Infinite loop detected: deletion of rows for scheme {scheme_code} "
+                        f"starting at date {current_first_row[0]} failed to progress."
+                    )
+                prev_first_row = current_first_row
                 by_year: dict[str, list[dict[str, Any]]] = defaultdict(list)
                 for row in old_rows:
                     nav_date = str(row.get("nav_date") or "")
@@ -158,7 +166,6 @@ def _load_target_scheme_codes(*, cutoff: str, limit: int, source: str) -> list[s
         supabase.table("mutual_fund_nav_history")
         .select("scheme_code,nav_date")
         .lt("nav_date", cutoff)
-        .order("nav_date", desc=False)
         .limit(max(limit * 100, 5000))
         .execute()
         .data

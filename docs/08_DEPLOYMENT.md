@@ -1,51 +1,67 @@
 # Deployment
 
 ## Current Topology
-- Frontend: Vercel project rooted at `frontend/`.
-- Backend: Render web service rooted at `backend/`.
-- Data store: Supabase project used by both runtime and jobs.
-- Scheduler: GitHub Actions workflows in `.github/workflows/`.
+- Frontend: Vercel project rooted at `frontend/`
+- Backend: Render web service rooted at `backend/`
+- Database: Supabase
+- Object Storage: Cloudflare R2 (raw docs + cold archives)
+- Scheduler: GitHub Actions workflows in `.github/workflows/`
 
 ## Frontend (Vercel)
-- Runtime: Next.js App Router.
-- API routes under `frontend/app/api/*` act as the browser-safe backend boundary.
+- Runtime: Next.js App Router
+- Browser-safe backend boundary: `frontend/app/api/*`
 - Required envs:
   - `NEXT_PUBLIC_API_URL`
   - `NEXT_PUBLIC_SUPABASE_URL`
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-  - `CRON_SECRET` (for protected sync trigger route)
+  - `CRON_SECRET` (protects `/api/cron/sync-mf`)
+  - `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_KEY` (server routes needing admin Supabase access)
+  - `MF_INTERNAL_ADMIN_KEY` (server-to-backend admin resolver debug proxy)
 
 ## Backend (Render)
-- App entry for local dev: `uvicorn app.main:app --reload --port 8000`.
-- Health endpoint: `GET /health`.
-- Provider usage endpoint: `GET /api/v1/providers/usage` (flag-gated).
-- Note: `backend/render.yaml` currently references `uvicorn api.index:app`, but `backend/api/index.py` is not present in this repo. Verify and align Render dashboard start command before relying on `render.yaml` as source of truth.
+- Local dev entry: `uvicorn app.main:app --reload --port 8000`
+- Health: `GET /health`
+- Internal admin endpoints:
+  - `GET /api/admin/ops-overview`
+  - `GET /api/admin/mf-resolver-debug`
+  - Require `X-Admin-Key` = `MF_INTERNAL_ADMIN_KEY`
+- Note: `backend/render.yaml` currently references `uvicorn api.index:app`, but repo code uses `app.main:app`. Align before relying on `render.yaml`.
 
-## Scheduled Workflows (GitHub Actions)
-
-| Workflow | Schedule (UTC) | Purpose |
-|---|---|---|
-| `sync-stock-universe.yml` | `0 1 1 * *` | Monthly stock universe sync |
-| `sync-prices-daily.yml` | `30 12 * * 1-5` | Weekday EOD price sync |
-| `sync-price-history.yml` | Manual | Historical EOD backfill |
-| `sync-fundamentals-weekly.yml` | `0 2 * * 6` + `0 2 1 * *` + manual | Fundamentals sync + ratio calc |
-| `sync-corporate-events.yml` | `0 3 * * *` | Corporate action sync |
-| `backfill-stock-core-snapshot.yml` | Manual | Backfill/refresh `stock_core_snapshot` |
-| `mf-sync.yml` | `30 13 * * 1-5` | MF NAV/history/metadata/snapshot pipeline |
-| `sync-mf-enrichment.yml` | `0 4 2 * *` | MFdata holdings/sector/enrichment pipeline |
-| `keepalive.yml` | `*/10 * * * *` | Direct Render `/health` ping |
-
-## Secrets and Variables
-- Repository secrets used by workflows:
+## Workflow Secrets (GitHub Actions)
+- Base:
   - `SUPABASE_URL`
   - `SUPABASE_KEY`
-  - `FINEDGE_API_KEY` (stock universe/fundamentals/corporate events)
-  - `INDIAN_API_KEY` (only for explicitly enabled IndianAPI fallback/research workflows)
-- Optional repo variable:
-  - `FUNDAMENTALS_WATCHLIST_SYMBOLS`
+- R2:
+  - `R2_ENDPOINT`
+  - `R2_ACCESS_KEY_ID`
+  - `R2_SECRET_ACCESS_KEY`
+  - `R2_RAW_BUCKET`
+  - `R2_COLD_BUCKET`
+- Providers:
+  - `FINEDGE_API_KEY`
+  - `INDIAN_API_KEY` (only for explicitly enabled fallback/research paths)
+- Optional MF source URL overrides:
+  - `MF_HDFC_FACTSHEET_PAGE_URL`
+  - `MF_HDFC_PORTFOLIO_PAGE_URL`
+  - `MF_SBI_FACTSHEET_PAGE_URL`
+  - `MF_SBI_PORTFOLIO_PAGE_URL`
+  - `MF_HDFC_FACTSHEET_DOCUMENT_URLS`
+  - `MF_HDFC_PORTFOLIO_DOCUMENT_URLS`
+  - `MF_SBI_FACTSHEET_DOCUMENT_URLS`
+  - `MF_SBI_PORTFOLIO_DOCUMENT_URLS`
+
+## Admin Access Provisioning
+Add/update a row in `user_profiles`:
+- `user_id` = `auth.users.id` (UUID, not email or text label)
+- `role` = `admin`
+- `tier` = `pro` (optional but recommended for admin accounts)
 
 ## Operational Checks
-- Verify frontend proxies can reach backend URL.
-- Verify backend `/health` and `/api/chat` latency after idle periods.
-- Verify cron workflow last-run status and row-write counts in Supabase.
-- Verify provider quotas/flags before enabling live enrichment paths.
+- Verify frontend proxy routes can reach backend URL.
+- Verify backend `/health` and `/api/chat`.
+- Verify latest workflow run status and row-write counts.
+- Verify R2 credentials before MF disclosure sync/compaction jobs.
+- Verify `/admin`:
+  - unauthenticated -> redirect to `/auth`
+  - non-admin -> access denied
+  - admin -> dashboard loads

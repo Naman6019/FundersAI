@@ -30,11 +30,8 @@ pytest-cache-files-*/
 .DS_Store
 .vscode/
 logs/
-# AMC Data folder (escaped space and standard)
-AMC\ Data/
-AMC Data/
-"AMC Data/"
-AMC Data/**
+# AMC Data folder
+/AMC Data/
 
 # AMC data artifacts (keep ingestion/parser code, ignore data only)
 backend/data/mf_raw_docs/

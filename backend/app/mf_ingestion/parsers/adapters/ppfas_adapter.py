@@ -620,6 +620,7 @@ def _parse_holdings_text(pdf_text: str, context: ParseContext) -> dict | None:
     if not holdings:
         return None
 
+    holdings = _scale_percent_aum_if_necessary(holdings)
     total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in holdings), 6)
     warnings: list[str] = []
     if not (90.0 <= total_percent <= 110.0):
@@ -644,6 +645,15 @@ def _find_header_row(rows: list[list[object]]) -> tuple[int | None, list[str]]:
         if "instrument_name" in headers and "percent_aum" in headers:
             return idx, headers
     return None, []
+
+
+def _scale_percent_aum_if_necessary(holdings: list[dict]) -> list[dict]:
+    raw_total = sum(float(row.get("percent_aum") or 0.0) for row in holdings)
+    if 0.0 < raw_total < 2.0:
+        for row in holdings:
+            if row.get("percent_aum") is not None:
+                row["percent_aum"] = round(float(row["percent_aum"]) * 100.0, 6)
+    return holdings
 
 
 def _extract_holdings_from_rows(rows: list[list[object]], headers: list[str]) -> list[dict]:
@@ -690,7 +700,7 @@ def _extract_holdings_from_rows(rows: list[list[object]], headers: list[str]) ->
         if not existing or float(row.get("percent_aum") or 0.0) > float(existing.get("percent_aum") or 0.0):
             deduped[key] = row
 
-    return list(deduped.values())
+    return _scale_percent_aum_if_necessary(list(deduped.values()))
 
 
 def _get_row_cell(row: list[object], headers: list[str], key: str) -> object:
@@ -745,14 +755,9 @@ def _detect_report_month_from_rows(rows: list[list[object]]) -> date | None:
 
 
 def _parse_percent(value: object) -> float | None:
-    raw_text = str(value or "").strip()
     parsed = _parse_number(value)
     if parsed is None:
         return None
-    if "%" in raw_text:
-        return round(parsed, 6)
-    if 0 < parsed <= 1.5:
-        return round(parsed * 100.0, 6)
     return round(parsed, 6)
 
 

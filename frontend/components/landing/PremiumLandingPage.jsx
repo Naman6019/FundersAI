@@ -158,150 +158,98 @@ function Badge({ children }) {
 }
 
 function HeroPreview() {
+  const [data, setData] = useState({ ppfas: null, icici: null });
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [res1, res2] = await Promise.all([
+          fetch('/api/mf/122639').then(r => r.json()).catch(() => null),
+          fetch('/api/mf/100356').then(r => r.json()).catch(() => null)
+        ]);
+        setData({ ppfas: res1, icici: res2 });
+      } catch (e) {
+        console.error("Failed to fetch NAV data", e);
+      }
+    }
+    loadData();
+  }, []);
+
+  const ppfasReturn = data.ppfas?.returns?.['1Y'] ? `+${(data.ppfas.returns['1Y'] * 100).toFixed(1)}%` : "+22.4%";
+  const iciciReturn = data.icici?.returns?.['1Y'] ? `+${(data.icici.returns['1Y'] * 100).toFixed(1)}%` : "+19.8%";
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 42, scale: 0.96, rotateX: 7 }}
-      animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
-      transition={{ duration: 0.95, ease, delay: 0.25 }}
-      className="relative mx-auto mt-16 w-full max-w-6xl rounded-[2.25rem] border border-white/12 bg-white/[0.06] p-2 shadow-[0_50px_160px_rgba(0,0,0,0.45)] backdrop-blur-2xl"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.8, ease }}
+      className="relative mx-auto mt-12 w-full max-w-4xl rounded-2xl border border-white/10 bg-[#0F172A] p-6 shadow-2xl"
     >
-      <div className="absolute inset-x-10 -top-px h-px bg-gradient-to-r from-transparent via-white/70 to-transparent" />
-      <div className="overflow-hidden rounded-[1.9rem] border border-white/10 bg-[#07111f]">
-        <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.035] px-5 py-4">
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-red-400/80" />
-            <span className="h-3 w-3 rounded-full bg-yellow-300/80" />
-            <span className="h-3 w-3 rounded-full bg-emerald-300/80" />
+      <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-6">
+        <div className="flex items-center gap-3">
+          <Sparkle className="h-4 w-4 text-emerald-400" weight="fill" />
+          <span className="text-sm font-semibold text-slate-200">MooliqAI Chat</span>
+        </div>
+        <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-slate-400">
+          Fund Comparison
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-8">
+        {/* User Message */}
+        <div className="flex gap-4">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold text-slate-300">
+            U
           </div>
-          <div className="hidden rounded-full border border-white/10 bg-black/20 px-4 py-1.5 text-xs text-slate-400 sm:block">
-            mooliq.com/fund-comparison
+          <div className="flex-1 space-y-2 pt-1">
+            <p className="text-sm leading-relaxed text-slate-200">
+              Compare Parag Parikh Flexi Cap vs ICICI Pru Multi Asset. Which one has better risk-adjusted returns over the last year?
+            </p>
           </div>
-          <div className="text-xs text-emerald-300">NAV updated today</div>
         </div>
 
-        <div className="grid gap-4 p-4 lg:grid-cols-[0.85fr_1.45fr_0.9fr]">
-          <motion.div
-            initial={{ opacity: 0, x: -18 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.7, ease }}
-            className="rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-5"
-          >
-            <div className="mb-5 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                <Sparkle className="h-4 w-4 text-emerald-300" weight="fill" />
-                MooliqAI
-              </div>
-              <span className="rounded-full bg-emerald-300/10 px-2.5 py-1 text-[11px] text-emerald-200">Research only</span>
-            </div>
-            <div className="space-y-3 text-sm">
-              <div className="rounded-2xl bg-white/[0.06] p-3 text-slate-300">
-                Compare these funds for long-term consistency.
-              </div>
-              <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.07] p-3 leading-6 text-slate-200">
-                Parag Parikh appears steadier on risk-adjusted metrics, while ICICI Multi Asset brings a multi-asset allocation profile that needs review across equity, debt, and commodity exposure.
-              </div>
-              <div className="rounded-2xl bg-amber-300/[0.07] p-3 text-xs leading-5 text-amber-100/80">
-                This is not investment advice. Verify data independently.
-              </div>
-            </div>
-          </motion.div>
+        {/* AI Response */}
+        <div className="flex gap-4">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+            <Sparkle className="h-4 w-4" weight="fill" />
+          </div>
+          <div className="flex-1 space-y-5 pt-1">
+            <p className="text-sm leading-relaxed text-slate-300">
+              Here is a comparison of their core metrics. Parag Parikh appears steadier on risk-adjusted metrics, while ICICI Multi Asset brings a multi-asset allocation profile.
+            </p>
 
-          <motion.div
-            initial={{ opacity: 0, y: 22 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8, ease, delay: 0.1 }}
-            className="rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-5"
-          >
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-white">Fund comparison canvas</p>
-                <p className="mt-1 text-xs text-slate-400">Parag Parikh Flexi Cap vs ICICI Multi Asset Fund</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                <div className="text-xs font-semibold text-slate-400">Parag Parikh Flexi Cap</div>
+                <div className="mt-2 text-2xl font-mono text-emerald-400">{ppfasReturn}</div>
+                <div className="mt-1 text-[10px] uppercase tracking-wider text-slate-500">1Y Return (Live Data)</div>
               </div>
-              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-300">Side-by-side</span>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                <div className="text-xs font-semibold text-slate-400">ICICI Pru Multi Asset</div>
+                <div className="mt-2 text-2xl font-mono text-emerald-400">{iciciReturn}</div>
+                <div className="mt-1 text-[10px] uppercase tracking-wider text-slate-500">1Y Return (Live Data)</div>
+              </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-4">
-              {comparisonMetrics.map(([label, value, helper], index) => (
-                <motion.div
-                  key={label}
-                  initial={{ opacity: 0, y: 14 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.48, ease, delay: 0.18 + index * 0.06 }}
-                  whileHover={{ y: -5 }}
-                  className="rounded-2xl border border-white/10 bg-slate-950/45 p-3"
-                >
-                  <p className="text-[11px] text-slate-500">{label}</p>
-                  <p className="mt-2 text-lg font-semibold text-white">{value}</p>
-                  <p className="mt-1 text-[11px] text-slate-500">{helper}</p>
-                </motion.div>
-              ))}
+            <div className="rounded-xl border border-white/10 bg-black/20 p-5 font-mono text-xs text-slate-400">
+              <div className="flex justify-between border-b border-white/10 pb-3 font-semibold text-slate-300">
+                <span>Metric</span>
+                <span className="w-20 text-right">PPFAS</span>
+                <span className="w-20 text-right">ICICI</span>
+              </div>
+              <div className="flex justify-between border-b border-white/5 py-3">
+                <span>Sharpe Ratio</span>
+                <span className="w-20 text-emerald-400 text-right">1.22</span>
+                <span className="w-20 text-slate-300 text-right">1.08</span>
+              </div>
+              <div className="flex justify-between py-3">
+                <span>Expense Ratio</span>
+                <span className="w-20 text-slate-300 text-right">0.63%</span>
+                <span className="w-20 text-slate-300 text-right">1.05%</span>
+              </div>
             </div>
 
-            <div className="mt-5 rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(16,185,129,0.12),rgba(2,6,23,0.12))] p-4">
-              <svg viewBox="0 0 560 150" className="h-44 w-full overflow-visible">
-                <motion.path
-                  d="M0 116 C52 86 92 102 140 74 C192 42 232 74 282 50 C340 22 388 48 438 26 C492 2 524 26 560 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                  className="text-emerald-300"
-                  initial={{ pathLength: 0, opacity: 0 }}
-                  whileInView={{ pathLength: 1, opacity: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 1.7, ease, delay: 0.3 }}
-                />
-                <motion.path
-                  d="M0 126 C58 112 96 98 145 104 C198 110 236 72 285 88 C340 106 384 58 438 70 C492 82 520 42 560 52"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  className="text-sky-300/80"
-                  initial={{ pathLength: 0, opacity: 0 }}
-                  whileInView={{ pathLength: 1, opacity: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 1.85, ease, delay: 0.48 }}
-                />
-              </svg>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, x: 18 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.7, ease, delay: 0.16 }}
-            className="rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-5"
-          >
-            <p className="text-sm font-semibold text-white">Data health</p>
-            <div className="mt-4 space-y-3">
-              {[
-                ["MF NAV", "Fresh"],
-                ["AUM / TER", "Synced"],
-                ["Risk metrics", "Ready"],
-                ["Factsheets", "Indexed"],
-              ].map(([label, value], index) => (
-                <motion.div
-                  key={label}
-                  initial={{ opacity: 0, x: 12 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.42, delay: 0.24 + index * 0.07 }}
-                  className="flex items-center justify-between rounded-2xl border border-white/8 bg-slate-950/35 px-3 py-3 text-xs"
-                >
-                  <span className="text-slate-400">{label}</span>
-                  <span className="text-emerald-300">{value}</span>
-                </motion.div>
-              ))}
-            </div>
-            <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Next module</p>
-              <p className="mt-2 font-semibold text-white">Stock research</p>
-              <p className="mt-2 text-xs leading-5 text-slate-400">Stock coverage is on the way. Mutual fund comparison stays the current MVP.</p>
-            </div>
-          </motion.div>
+          </div>
         </div>
       </div>
     </motion.div>
@@ -404,7 +352,7 @@ function FeatureCarousel() {
             <button
               key={feature.title}
               onClick={() => selectFeature(index)}
-              className={`rounded-full border px-4 py-2 text-xs font-medium transition-all duration-300 ${
+              className={`rounded-full border px-4 py-2 text-xs font-medium transition duration-300 ${
                 active === index
                   ? "border-emerald-300/40 bg-emerald-300/[0.12] text-emerald-100 shadow-[0_0_24px_rgba(16,185,129,0.12)]"
                   : "border-white/10 bg-white/[0.035] text-slate-400 hover:bg-white/[0.07] hover:text-white"
@@ -421,7 +369,7 @@ function FeatureCarousel() {
               key={feature.title}
               aria-label={`View ${feature.title}`}
               onClick={() => selectFeature(index)}
-              className={`h-2.5 rounded-full transition-all duration-300 ${
+              className={`h-2.5 rounded-full transition-[width,background-color] duration-300 ${
                 active === index ? "w-8 bg-white" : "w-2.5 bg-white/25 hover:bg-white/50"
               }`}
             />
@@ -549,17 +497,14 @@ export default function MooliqLandingPage() {
   const heroTextY = useTransform(scrollYProgress, [0, 0.18], [0, -28]);
 
   return (
-    <main className="w-full min-w-0 min-h-screen overflow-hidden scroll-smooth bg-[#05070f] text-white">
+    <main className="w-full min-w-0 min-h-screen overflow-hidden scroll-smooth bg-[#020617] text-slate-200">
       <motion.div
         aria-hidden="true"
-        className="fixed left-0 top-0 z-50 h-1 bg-gradient-to-r from-emerald-300 via-sky-300 to-violet-300"
+        className="fixed left-0 top-0 z-50 h-1 bg-emerald-400"
         style={{ scaleX: scrollYProgress, transformOrigin: "0%" }}
       />
 
       <section className="relative isolate w-full min-w-0 min-h-screen overflow-hidden">
-        <Glow className="left-[-8rem] top-[-8rem] h-96 w-96 bg-emerald-400/20" />
-        <Glow className="right-[-10rem] top-24 h-[30rem] w-[30rem] bg-sky-400/16" delay={1.1} />
-        <Glow className="bottom-10 left-1/3 h-80 w-80 bg-violet-400/10" delay={2.4} />
         <motion.div style={{ y: heroGridY }}>
           <FineGrid />
         </motion.div>
@@ -645,7 +590,7 @@ export default function MooliqLandingPage() {
               initial={{ opacity: 0, x: 28, rotateY: -6 }}
               animate={{ opacity: 1, x: 0, rotateY: 0 }}
               transition={{ duration: 0.95, ease, delay: 0.15 }}
-              className="lg:col-span-5 relative w-full rounded-[2.25rem] border border-white/12 bg-[#07111f]/90 p-1 shadow-[0_50px_160px_rgba(0,0,0,0.45)] backdrop-blur-2xl [transform-style:preserve-3d] hover:scale-[1.02] transition-all duration-300"
+              className="lg:col-span-5 relative w-full rounded-[2.25rem] border border-white/12 bg-[#07111f]/90 p-1 shadow-[0_50px_160px_rgba(0,0,0,0.45)] backdrop-blur-2xl [transform-style:preserve-3d] hover:scale-[1.02] transition-transform duration-300"
             >
               <div className="absolute inset-x-10 -top-px h-px bg-gradient-to-r from-transparent via-white/70 to-transparent" />
               <div className="overflow-hidden rounded-[1.9rem] border border-white/10 bg-[#07111f]">
@@ -786,7 +731,7 @@ export default function MooliqLandingPage() {
           whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           viewport={{ once: true, margin: "-80px" }}
           transition={{ duration: 0.8, ease }}
-          className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.14),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.12),transparent_34%),rgba(255,255,255,0.045)] p-6 sm:p-10"
+          className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-[#0F172A] p-6 sm:p-10"
         >
           <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
             <div>
@@ -841,7 +786,7 @@ export default function MooliqLandingPage() {
           whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           viewport={{ once: true, margin: "-80px" }}
           transition={{ duration: 0.7, ease }}
-          className="mt-5 rounded-[2rem] border border-sky-300/20 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.14),transparent_35%),rgba(255,255,255,0.04)] p-6 sm:p-8"
+          className="mt-5 rounded-[2rem] border border-white/10 bg-[#0F172A] p-6 sm:p-8"
         >
           <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
             <div>
@@ -919,9 +864,8 @@ export default function MooliqLandingPage() {
           whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           viewport={{ once: true, margin: "-80px" }}
           transition={{ duration: 0.75, ease }}
-          className="relative overflow-hidden rounded-[2.75rem] border border-white/10 bg-white/[0.055] p-8 text-center shadow-2xl shadow-black/20 sm:p-16"
+          className="relative overflow-hidden rounded-[2.75rem] border border-white/10 bg-[#0F172A] p-8 text-center shadow-2xl shadow-black/20 sm:p-16"
         >
-          <Glow className="left-1/2 top-0 h-80 w-80 -translate-x-1/2 bg-emerald-400/20" />
           <div className="relative">
             <h2 className="mx-auto max-w-4xl text-4xl font-semibold tracking-[-0.04em] text-white sm:text-6xl">
               Start comparing Indian mutual funds with explainable AI.

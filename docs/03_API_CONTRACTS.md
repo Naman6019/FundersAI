@@ -3,8 +3,8 @@
 ## Frontend Proxy Routes (`frontend/app/api/`)
 
 ### Chat and Health
-- `POST /api/chat` -> proxies to backend `POST /api/chat`.
-- `GET /api/keepalive` -> pings backend `/health`.
+- `POST /api/chat` -> backend `POST /api/chat`.
+- `GET /api/keepalive` -> backend `GET /health`.
 
 ### Quant Proxy Family
 - `GET /api/quant/stocks/compare?symbols=RELIANCE,TCS` -> `/api/quant/stocks/compare`.
@@ -15,16 +15,31 @@
 - `GET /api/quant/providers/status` -> `/api/quant/providers/status`.
 
 ### Frontend Server Routes With Direct Supabase Reads
-- `GET /api/mf/[schemeCode]`: reads MF snapshot + history from Supabase tables.
-- `GET /api/search`: search endpoint across stock/fund entities.
-- `GET /api/cron/sync-mf`: protected trigger route for AMFI sync helper.
+- `GET /api/mf/[schemeCode]`: MF snapshot + history.
+- `GET /api/search`: search across stock/fund entities.
+- `GET /api/cron/sync-mf`: protected trigger route.
+
+### Admin Routes (`/api/admin/*`, admin-role enforced server-side)
+- `GET /api/admin/session`
+- `GET /api/admin/overview`
+- `GET /api/admin/users`
+- `GET /api/admin/ai-usage`
+- `GET /api/admin/data-coverage`
+- `GET /api/admin/nav-sync`
+- `GET /api/admin/resolver-debug`
+- `GET /api/admin/ops-overview` (proxy to backend admin ops endpoint)
+
+Auth behavior:
+- Missing bearer token -> `401`
+- Authenticated but non-admin -> `403`
+- Admin check uses `user_profiles.role='admin'`
 
 ## Backend FastAPI Routes
 
 ### Core
-- `GET /`: basic API status message.
-- `GET /health`: backend health probe.
-- `GET /api/v1/providers/usage`: provider usage logs (flag-gated by `ENABLE_PROVIDER_USAGE_ENDPOINT`).
+- `GET /`: status message.
+- `GET /health`: health probe.
+- `GET /api/v1/providers/usage`: provider usage logs (feature-flag gated).
 
 ### Quant
 - `GET /api/quant/stocks/compare`
@@ -35,15 +50,19 @@
 - `GET /api/quant/providers/status`
 
 ### Chat
-- `POST /api/chat`: returns synthesized markdown plus structured `quant_data` and optional `system_action`.
+- `POST /api/chat`: synthesized markdown plus structured `quant_data` / optional `system_action`.
+
+### Admin Internal Backend Endpoints (X-Admin-Key required)
+- `GET /api/admin/ops-overview`
+- `GET /api/admin/mf-resolver-debug?query=...&horizon=1Y|3Y|5Y`
 
 ### Optional IndianAPI Helper Endpoints
 Prefix: `/api/provider/indianapi`
-- Stock search/profile/fundamentals/corporate-actions/recent-announcements/historical-data.
-- Analyst target/forecast endpoints.
-- Mutual fund search/list/details endpoints.
+- Stock search/profile/fundamentals/corporate-actions/recent-announcements/historical-data
+- Analyst target/forecast endpoints
+- Mutual fund search/list/details endpoints
 
 ## Contract Notes
 - Compare responses keep additive fields (`metrics`, `fundamentals`, `ratios`, `data_quality`, `source_summary`, `why_better`, `verdict_context`, `comparison`).
-- If local data is missing, endpoints return partial payloads with explicit limitations instead of hard failing whenever possible.
-- Route-level rate limiting for frontend proxy endpoints is still pending.
+- If local data is missing, endpoints return partial payloads with explicit limitations where possible.
+- Admin resolver debug frontend route calls backend admin endpoint using `MF_INTERNAL_ADMIN_KEY` so internal secrets are not exposed to the browser.
