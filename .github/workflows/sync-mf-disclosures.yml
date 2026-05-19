@@ -37,12 +37,22 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_RAW_BUCKET: ${{ secrets.R2_RAW_BUCKET }}
+          R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
+          MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
           DISPATCH_AMCS: ${{ inputs.amcs }}
           DISPATCH_MAX_DOCS: ${{ inputs.max_documents }}
           DISPATCH_PARSE_LIMIT: ${{ inputs.parse_limit }}
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
             echo "Error: Missing SUPABASE_URL or SUPABASE_KEY"
+            exit 1
+          fi
+          if [ -z "$R2_ENDPOINT" ] || [ -z "$R2_ACCESS_KEY_ID" ] || [ -z "$R2_SECRET_ACCESS_KEY" ] || [ -z "$R2_RAW_BUCKET" ] || [ -z "$R2_COLD_BUCKET" ]; then
+            echo "Error: Missing R2 secrets for R2-first ingestion"
             exit 1
           fi
 

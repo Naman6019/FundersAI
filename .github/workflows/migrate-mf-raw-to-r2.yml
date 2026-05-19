@@ -1,0 +1,56 @@
+name: Migrate MF Raw Docs To R2
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Max rows to migrate in this run'
+        required: false
+        default: '300'
+      dry_run:
+        description: 'Dry run only (true/false)'
+        required: false
+        default: 'true'
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run migration
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_RAW_BUCKET: ${{ secrets.R2_RAW_BUCKET }}
+          R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
+          DISPATCH_LIMIT: ${{ inputs.limit }}
+          DISPATCH_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "Error: Missing SUPABASE_URL or SUPABASE_KEY"
+            exit 1
+          fi
+          if [ -z "$R2_ENDPOINT" ] || [ -z "$R2_ACCESS_KEY_ID" ] || [ -z "$R2_SECRET_ACCESS_KEY" ] || [ -z "$R2_RAW_BUCKET" ] || [ -z "$R2_COLD_BUCKET" ]; then
+            echo "Error: Missing R2 secrets"
+            exit 1
+          fi
+
+          args=(--limit "${DISPATCH_LIMIT:-300}")
+          if [ "${DISPATCH_DRY_RUN:-true}" = "true" ]; then
+            args+=(--dry-run)
+          fi
+
+          python -m backend.app.mf_ingestion.jobs.migrate_mf_raw_to_r2 "${args[@]}"

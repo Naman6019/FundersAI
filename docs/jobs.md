@@ -19,6 +19,9 @@ GitHub Actions runs stock and mutual-fund sync jobs from `.github/workflows/`.
 |---|---|---|
 | `mf-sync.yml` | `30 13 * * 1-5` | `sync_mf.py` -> `sync_mf_history.py` -> `sync_mf_metadata.py` -> `python -m backend.app.jobs.sync_mf_nav` |
 | `sync-mf-enrichment.yml` | `0 4 2 * *`, plus manual | `python -m backend.app.jobs.sync_mf_enrichment` |
+| `sync-mf-disclosures.yml` | `30 4 * * 1-5`, plus manual | `ingest_latest_amc_docs` + `parse_pending_documents` for `ppfas,icici,hdfc,sbi` (R2-first) |
+| `compact-mf-storage.yml` | `45 3 * * 0`, plus manual | `compact_mf_nav_5y` + `compact_mf_holdings_latest_only` |
+| `migrate-mf-raw-to-r2.yml` | Manual | `migrate_mf_raw_to_r2` |
 | `keepalive.yml` | `*/10 * * * *` | Direct ping to Render `/health` |
 
 ## Runtime Expectations
@@ -45,3 +48,4 @@ GitHub Actions runs stock and mutual-fund sync jobs from `.github/workflows/`.
 - Keepalive workflow pings backend directly; frontend `/api/keepalive` is a separate client-side warm-up route.
 - MF sync jobs now write normalized history to `mutual_fund_nav_history` (and `mutual_fund_core_snapshot`), not legacy `mutual_fund_history`.
 - MF enrichment writes MFdata fields into `mutual_fund_core_snapshot` and optional holdings/sectors into `mutual_fund_holdings` and `mutual_fund_sectors`.
+- MF disclosure ingestion is configured for R2-first storage (`MF_REQUIRE_R2_FOR_RAW_STORAGE=true` in workflow env), while Supabase stores query-critical structured rows and manifest metadata.

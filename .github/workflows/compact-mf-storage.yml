@@ -1,0 +1,70 @@
+name: Compact MF Storage
+
+on:
+  schedule:
+    - cron: '45 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      nav_scheme_limit:
+        description: 'Max schemes for NAV compaction'
+        required: false
+        default: '400'
+      holdings_group_limit:
+        description: 'Max holdings groups for compaction'
+        required: false
+        default: '1500'
+      dry_run:
+        description: 'Dry run only (true/false)'
+        required: false
+        default: 'false'
+
+jobs:
+  compact:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run NAV + holdings compaction
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_RAW_BUCKET: ${{ secrets.R2_RAW_BUCKET }}
+          R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
+          DISPATCH_NAV_SCHEME_LIMIT: ${{ inputs.nav_scheme_limit }}
+          DISPATCH_HOLDINGS_GROUP_LIMIT: ${{ inputs.holdings_group_limit }}
+          DISPATCH_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "Error: Missing SUPABASE_URL or SUPABASE_KEY"
+            exit 1
+          fi
+          if [ -z "$R2_ENDPOINT" ] || [ -z "$R2_ACCESS_KEY_ID" ] || [ -z "$R2_SECRET_ACCESS_KEY" ] || [ -z "$R2_RAW_BUCKET" ] || [ -z "$R2_COLD_BUCKET" ]; then
+            echo "Error: Missing R2 secrets"
+            exit 1
+          fi
+
+          NAV_LIMIT="${DISPATCH_NAV_SCHEME_LIMIT:-400}"
+          HOLDINGS_LIMIT="${DISPATCH_HOLDINGS_GROUP_LIMIT:-1500}"
+          DRY_RUN="${DISPATCH_DRY_RUN:-false}"
+
+          nav_args=(--limit-schemes "$NAV_LIMIT")
+          holdings_args=(--limit-groups "$HOLDINGS_LIMIT")
+          if [ "$DRY_RUN" = "true" ]; then
+            nav_args+=(--dry-run)
+            holdings_args+=(--dry-run)
+          fi
+
+          python -m backend.app.mf_ingestion.jobs.compact_mf_nav_5y "${nav_args[@]}"
+          python -m backend.app.mf_ingestion.jobs.compact_mf_holdings_latest_only "${holdings_args[@]}"

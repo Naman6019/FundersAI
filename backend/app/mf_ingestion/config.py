@@ -17,6 +17,7 @@ class IngestionConfig:
     r2_raw_bucket: str
     r2_cold_bucket: str
     r2_signed_url_ttl_seconds: int
+    require_r2_for_raw_storage: bool
 
 
 
@@ -36,4 +37,5 @@ def get_config() -> IngestionConfig:
         r2_raw_bucket=os.getenv("R2_RAW_BUCKET", "").strip(),
         r2_cold_bucket=os.getenv("R2_COLD_BUCKET", "").strip(),
         r2_signed_url_ttl_seconds=int(os.getenv("R2_SIGNED_URL_TTL_SECONDS", "300")),
+        require_r2_for_raw_storage=os.getenv("MF_REQUIRE_R2_FOR_RAW_STORAGE", "false").strip().lower() in {"1", "true", "yes", "on"},
     )

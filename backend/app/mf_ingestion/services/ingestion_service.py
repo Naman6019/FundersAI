@@ -44,6 +44,8 @@ class IngestionService:
             return {"status": "skipped", "reason": f"{amc}_source_not_enabled"}
         if not supabase:
             return {"status": "error", "reason": "supabase_not_configured"}
+        if self.config.require_r2_for_raw_storage and not self.r2_store.enabled:
+            return {"status": "error", "reason": "r2_required_for_raw_storage"}
 
         self._upsert_source_row(source)
 
@@ -225,6 +227,9 @@ class IngestionService:
             )
             storage_path = f"r2://{uploaded['bucket']}/{uploaded['key']}"
             return storage_path, "r2", uploaded["bucket"], uploaded["key"], metadata
+
+        if self.config.require_r2_for_raw_storage:
+            raise RuntimeError("r2_required_for_raw_storage")
 
         local_path = self.raw_store.save(downloaded, checksum)
         return str(Path(local_path).resolve()), "local", None, None, metadata
