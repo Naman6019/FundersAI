@@ -59,6 +59,8 @@ GENERIC_EXCLUDE_KEYWORDS = (
     "addendum",
     "notice",
     "voting policy",
+    "aspxerrorpath=",
+    "/error?",
 )
 RETRYABLE_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524}
 HTTP_MAX_RETRIES = max(int(os.getenv("MF_DISCOVERY_MAX_RETRIES", "3")), 0)
@@ -348,6 +350,8 @@ def _discover_generic_anchor_documents(
                 except Exception:
                     continue
                 final_url = probe.url or url
+                if not _sbi_guessed_portfolio_probe_is_valid(probe, final_url):
+                    continue
                 seen_urls.add(final_url)
                 title = _human_title_from_url(final_url)
                 combined = f"{title} {final_url}".lower()
@@ -377,6 +381,34 @@ def _discover_generic_anchor_documents(
 
     docs.sort(key=lambda item: item.priority_score, reverse=True)
     return docs
+
+
+def _sbi_guessed_portfolio_probe_is_valid(response: requests.Response, final_url: str) -> bool:
+    low_url = str(final_url or "").lower()
+    if "aspxerrorpath=" in low_url:
+        return False
+
+    parsed = urlsplit(final_url or "")
+    low_path = (parsed.path or "").lower()
+    if low_path.rstrip("/").endswith("/error") or "/error/" in low_path:
+        return False
+
+    content_type = str(response.headers.get("Content-Type") or "").lower()
+    if "text/html" in content_type:
+        return False
+
+    ext = Path(low_path).suffix.lower()
+    prefix = bytes(response.content[:8] or b"")
+    if ext in {".xlsx", ".xlsm"}:
+        if not prefix.startswith(b"PK\x03\x04"):
+            return False
+    if ext == ".xls":
+        is_legacy_excel = prefix.startswith(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1")
+        is_zip_excel = prefix.startswith(b"PK\x03\x04")
+        if not (is_legacy_excel or is_zip_excel):
+            return False
+
+    return True
 
 
 def _manual_discovered_documents_for_source(
