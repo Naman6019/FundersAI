@@ -1,8 +1,6 @@
 name: Sync MF Enrichment
 
 on:
-  schedule:
-    - cron: '0 4 2 * *'
   workflow_dispatch:
     inputs:
       scheme_codes:
@@ -34,6 +32,9 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           ENABLE_MF_ENRICHMENT_SYNC: "true"
+          MFDATA_TIMEOUT_SECONDS: "30"
+          MFDATA_MAX_RETRIES: "4"
+          MFDATA_RETRY_BACKOFF_SECONDS: "1.2"
           MFDATA_REQUEST_SLEEP_SECONDS: "6.5"
           DISPATCH_SCHEME_CODES: ${{ inputs.scheme_codes }}
           DISPATCH_LIMIT: ${{ inputs.limit }}

@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 PROVIDER = "mfdata"
 BASE_URL = os.getenv("MFDATA_BASE_URL", "https://mfdata.in/api/v1").rstrip("/")
 TIMEOUT_SECONDS = float(os.getenv("MFDATA_TIMEOUT_SECONDS", "20"))
-MAX_RETRIES = max(int(os.getenv("MFDATA_MAX_RETRIES", "1")), 0)
+MAX_RETRIES = max(int(os.getenv("MFDATA_MAX_RETRIES", "3")), 0)
+BACKOFF_BASE_SECONDS = max(float(os.getenv("MFDATA_RETRY_BACKOFF_SECONDS", "1.0")), 0.1)
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504, 520, 521, 522, 523, 524}
 
 
 def _request(path: str, params: dict[str, Any] | None = None, scheme_code: str | None = None) -> dict[str, Any]:
@@ -28,8 +30,8 @@ def _request(path: str, params: dict[str, Any] | None = None, scheme_code: str |
             status_code = response.status_code
             if response.status_code >= 400:
                 last_error = f"http_{response.status_code}"
-                if response.status_code in {429, 500, 502, 503, 504} and attempt < MAX_RETRIES:
-                    time.sleep(0.5 * (attempt + 1))
+                if response.status_code in RETRYABLE_STATUS_CODES and attempt < MAX_RETRIES:
+                    time.sleep(BACKOFF_BASE_SECONDS * (2 ** attempt))
                     continue
                 _log(endpoint, scheme_code, status_code, False, last_error)
                 return {"ok": False, "error": last_error, "status_code": status_code, "data": None}
@@ -39,7 +41,7 @@ def _request(path: str, params: dict[str, Any] | None = None, scheme_code: str |
         except Exception as exc:
             last_error = str(exc)
             if attempt < MAX_RETRIES:
-                time.sleep(0.5 * (attempt + 1))
+                time.sleep(BACKOFF_BASE_SECONDS * (2 ** attempt))
                 continue
     _log(endpoint, scheme_code, status_code, False, last_error or "request_error")
     return {"ok": False, "error": last_error or "request_error", "status_code": status_code, "data": None}

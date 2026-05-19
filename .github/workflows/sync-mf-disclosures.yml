@@ -60,6 +60,7 @@ jobs:
           MAX_DOCS="${DISPATCH_MAX_DOCS:-2}"
           PARSE_LIMIT="${DISPATCH_PARSE_LIMIT:-200}"
 
+          failed_amcs=()
           IFS=',' read -ra AMC_LIST <<< "$AMCS"
           for amc in "${AMC_LIST[@]}"; do
             amc="$(echo "$amc" | xargs)"
@@ -67,6 +68,23 @@ jobs:
               continue
             fi
             echo "Processing AMC=$amc"
-            python -m backend.app.mf_ingestion.jobs.ingest_latest_amc_docs --amc "$amc" --all-document-types --max-documents "$MAX_DOCS"
-            python -m backend.app.mf_ingestion.jobs.parse_pending_documents --amc "$amc" --limit "$PARSE_LIMIT"
+            ok=false
+            for attempt in 1 2; do
+              echo "AMC=$amc attempt=$attempt"
+              if python -m backend.app.mf_ingestion.jobs.ingest_latest_amc_docs --amc "$amc" --all-document-types --max-documents "$MAX_DOCS" && \
+                 python -m backend.app.mf_ingestion.jobs.parse_pending_documents --amc "$amc" --limit "$PARSE_LIMIT"; then
+                ok=true
+                break
+              fi
+              sleep $((attempt * 20))
+            done
+            if [ "$ok" != "true" ]; then
+              failed_amcs+=("$amc")
+              echo "AMC failed after retries: $amc"
+            fi
           done
+
+          if [ "${#failed_amcs[@]}" -gt 0 ]; then
+            echo "Disclosures sync completed with failures: ${failed_amcs[*]}"
+            exit 1
+          fi

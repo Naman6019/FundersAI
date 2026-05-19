@@ -18,7 +18,7 @@ GitHub Actions runs stock and mutual-fund sync jobs from `.github/workflows/`.
 | Workflow file | Schedule (UTC) | Steps |
 |---|---|---|
 | `mf-sync.yml` | `30 13 * * 1-5` | `sync_mf.py` -> `sync_mf_history.py` -> `sync_mf_metadata.py` -> `python -m backend.app.jobs.sync_mf_nav` |
-| `sync-mf-enrichment.yml` | `0 4 2 * *`, plus manual | `python -m backend.app.jobs.sync_mf_enrichment` |
+| `sync-mf-enrichment.yml` | Manual only | `python -m backend.app.jobs.sync_mf_enrichment` (optional fallback) |
 | `sync-mf-disclosures.yml` | `30 4 * * 1-5`, plus manual | `ingest_latest_amc_docs` + `parse_pending_documents` for `ppfas,icici,hdfc,sbi` (R2-first) |
 | `compact-mf-storage.yml` | `45 3 * * 0`, plus manual | `compact_mf_nav_5y` + `compact_mf_holdings_latest_only` |
 | `migrate-mf-raw-to-r2.yml` | Manual | `migrate_mf_raw_to_r2` |

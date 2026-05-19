@@ -13,6 +13,7 @@ class _FakeResponse:
         self.text = text
         self.content = content
         self.headers = headers or {}
+        self.status_code = 200
 
     def raise_for_status(self) -> None:
         return None
@@ -26,7 +27,7 @@ def test_hdfc_generic_discovery_parses_anchor_documents(monkeypatch):
     </body></html>
     """
 
-    def fake_get(url, timeout=None, headers=None):  # noqa: ANN001
+    def fake_get(url, timeout=None, headers=None, **kwargs):  # noqa: ANN001
         return _FakeResponse(url="https://www.hdfcfund.com/downloads", text=html, headers={"Content-Type": "text/html"})
 
     monkeypatch.setattr("app.mf_ingestion.downloaders.amc_downloader.requests.get", fake_get)
@@ -54,7 +55,7 @@ def test_hdfc_generic_discovery_parses_anchor_documents(monkeypatch):
 def test_sbi_generic_download_returns_file_bytes(monkeypatch):
     payload = b"dummy-pdf-bytes"
 
-    def fake_get(url, timeout=None, headers=None):  # noqa: ANN001
+    def fake_get(url, timeout=None, headers=None, **kwargs):  # noqa: ANN001
         return _FakeResponse(url=url, content=payload, headers={"Content-Type": "application/pdf"})
 
     monkeypatch.setattr("app.mf_ingestion.downloaders.amc_downloader.requests.get", fake_get)

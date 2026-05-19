@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
+import time
 import uuid
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -35,6 +37,9 @@ GENERIC_KEYWORDS = {
     "factsheet": ("factsheet", "fact sheet", "fund sheet", "monthly factsheet"),
     "portfolio_disclosure": ("portfolio", "disclosure", "holdings", "statutory", "monthly portfolio"),
 }
+RETRYABLE_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524}
+HTTP_MAX_RETRIES = max(int(os.getenv("MF_DISCOVERY_MAX_RETRIES", "3")), 0)
+HTTP_BACKOFF_SECONDS = max(float(os.getenv("MF_DISCOVERY_BACKOFF_SECONDS", "1.2")), 0.1)
 
 
 class AMCDownloader(BaseDownloader):
@@ -97,15 +102,15 @@ class AMCDownloader(BaseDownloader):
             for candidate_url in _icici_download_url_candidates(discovered.url):
                 attempted_urls.append(candidate_url)
                 try:
-                    response = requests.get(
+                    response = _request_with_retry(
+                        "GET",
                         candidate_url,
-                        timeout=self.timeout_seconds,
+                        timeout_seconds=self.timeout_seconds,
                         headers={
                             "User-Agent": self.user_agent,
                             "Referer": ICICI_SITE_BASE_URL + "/",
                         },
                     )
-                    response.raise_for_status()
                     break
                 except Exception:
                     response = None
@@ -131,15 +136,15 @@ class AMCDownloader(BaseDownloader):
 
         if adapter_key in {"hdfc", "sbi"}:
             referer = discovered.discovery_page_url or _base_site_url(discovered.url)
-            response = requests.get(
+            response = _request_with_retry(
+                "GET",
                 discovered.url,
-                timeout=self.timeout_seconds,
+                timeout_seconds=self.timeout_seconds,
                 headers={
                     "User-Agent": self.user_agent,
                     "Referer": referer,
                 },
             )
-            response.raise_for_status()
             source_url = response.url or discovered.url
             file_name = _derive_file_name(source_url, discovered.title)
             return DownloadedDocument(
@@ -201,12 +206,12 @@ def _discover_generic_anchor_documents(
         return []
 
     try:
-        response = requests.get(
+        response = _request_with_retry(
+            "GET",
             listing_url,
-            timeout=timeout_seconds,
+            timeout_seconds=timeout_seconds,
             headers={"User-Agent": user_agent, "Referer": _base_site_url(listing_url)},
         )
-        response.raise_for_status()
     except Exception as exc:
         logger.exception(
             "event=generic_discovery_failed amc_code=%s document_type=%s reason=%s",
@@ -342,12 +347,13 @@ def _discover_icici_documents(
 
 
 def _fetch_icici_categories(session: requests.Session, timeout_seconds: float) -> list[dict]:
-    response = session.get(
+    response = _request_with_retry(
+        "GET",
         ICICI_CATEGORIES_ENDPOINT,
+        timeout_seconds=timeout_seconds,
+        session=session,
         params={"userType": ICICI_USER_TYPE},
-        timeout=timeout_seconds,
     )
-    response.raise_for_status()
     payload = response.json()
     data = payload.get("success", {}).get("data", [])
     return data if isinstance(data, list) else []
@@ -386,8 +392,13 @@ def _fetch_icici_files_page(
         "filter": [],
         "categoryName": category_code,
     }
-    response = session.post(ICICI_FILES_ENDPOINT, json=payload, timeout=timeout_seconds)
-    response.raise_for_status()
+    response = _request_with_retry(
+        "POST",
+        ICICI_FILES_ENDPOINT,
+        timeout_seconds=timeout_seconds,
+        session=session,
+        json_payload=payload,
+    )
     body = response.json()
     data = body.get("success", {}).get("data", {})
     files = data.get("files", []) if isinstance(data, dict) else []
@@ -518,3 +529,64 @@ def _base_site_url(url: str) -> str:
     if parsed.scheme and parsed.netloc:
         return f"{parsed.scheme}://{parsed.netloc}/"
     return url
+
+
+def _request_with_retry(
+    method: str,
+    url: str,
+    *,
+    timeout_seconds: float,
+    headers: dict[str, str] | None = None,
+    session: requests.Session | None = None,
+    params: dict[str, object] | None = None,
+    json_payload: dict[str, object] | None = None,
+) -> requests.Response:
+    method_upper = method.upper()
+    last_exc: Exception | None = None
+    for attempt in range(HTTP_MAX_RETRIES + 1):
+        try:
+            if session is not None:
+                response = session.request(
+                    method=method_upper,
+                    url=url,
+                    timeout=timeout_seconds,
+                    headers=headers,
+                    params=params,
+                    json=json_payload,
+                )
+            elif method_upper == "GET":
+                response = requests.get(
+                    url,
+                    timeout=timeout_seconds,
+                    headers=headers,
+                    params=params,
+                )
+            elif method_upper == "POST":
+                response = requests.post(
+                    url,
+                    timeout=timeout_seconds,
+                    headers=headers,
+                    params=params,
+                    json=json_payload,
+                )
+            else:
+                response = requests.request(
+                    method=method_upper,
+                    url=url,
+                    timeout=timeout_seconds,
+                    headers=headers,
+                    params=params,
+                    json=json_payload,
+                )
+            if response.status_code in RETRYABLE_STATUS_CODES and attempt < HTTP_MAX_RETRIES:
+                time.sleep(HTTP_BACKOFF_SECONDS * (2 ** attempt))
+                continue
+            response.raise_for_status()
+            return response
+        except Exception as exc:
+            last_exc = exc
+            if attempt < HTTP_MAX_RETRIES:
+                time.sleep(HTTP_BACKOFF_SECONDS * (2 ** attempt))
+                continue
+            break
+    raise RuntimeError(f"http_request_failed method={method_upper} url={url} reason={last_exc}")
