@@ -10,33 +10,33 @@ import { AssetType, ComparisonViewMode, Message, ResearchDepth, useChatStore } f
 
 const markdownComponents = {
   h1: (props: React.ComponentProps<'h1'>) => <h1 className="mb-3 mt-1 text-lg font-bold text-white" {...props} />,
-  h2: (props: React.ComponentProps<'h2'>) => <h2 className="mb-2 mt-4 text-base font-semibold text-[#d7e6ff]" {...props} />,
-  h3: (props: React.ComponentProps<'h3'>) => <h3 className="mb-2 mt-3 text-sm font-semibold text-[#c5dcff]" {...props} />,
-  p: (props: React.ComponentProps<'p'>) => <p className="mb-2 leading-7 text-[#d9e8ff]" {...props} />,
+  h2: (props: React.ComponentProps<'h2'>) => <h2 className="mb-2 mt-4 text-base font-semibold text-slate-100" {...props} />,
+  h3: (props: React.ComponentProps<'h3'>) => <h3 className="mb-2 mt-3 text-sm font-semibold text-slate-200" {...props} />,
+  p: (props: React.ComponentProps<'p'>) => <p className="mb-2 leading-7 text-slate-100" {...props} />,
   ul: (props: React.ComponentProps<'ul'>) => <ul className="mb-3 list-disc space-y-1 pl-5" {...props} />,
   ol: (props: React.ComponentProps<'ol'>) => <ol className="mb-3 list-decimal space-y-1 pl-5" {...props} />,
-  li: (props: React.ComponentProps<'li'>) => <li className="leading-7 text-[#d9e8ff]" {...props} />,
-  blockquote: (props: React.ComponentProps<'blockquote'>) => <blockquote className="mb-3 border-l-2 border-[#4f8ff7]/60 pl-3 text-[#c4d9fb]" {...props} />,
+  li: (props: React.ComponentProps<'li'>) => <li className="leading-7 text-slate-100" {...props} />,
+  blockquote: (props: React.ComponentProps<'blockquote'>) => <blockquote className="mb-3 border-l-2 border-sky-300/60 pl-3 text-slate-200" {...props} />,
   a: (props: React.ComponentProps<'a'>) => (
     <a
-      className="text-[#8fc0ff] underline underline-offset-2 hover:text-[#b6d7ff]"
+      className="text-sky-300 underline underline-offset-2 hover:text-sky-200"
       target="_blank"
       rel="noreferrer"
       {...props}
     />
   ),
   table: (props: React.ComponentProps<'table'>) => (
-    <div className="mb-3 overflow-x-auto rounded-lg border border-[#30486c]">
+    <div className="mb-3 overflow-x-auto rounded-lg border border-white/10">
       <table className="min-w-full border-collapse text-xs sm:text-sm" {...props} />
     </div>
   ),
-  thead: (props: React.ComponentProps<'thead'>) => <thead className="bg-[#1a2b45] text-[#d7e6ff]" {...props} />,
-  tbody: (props: React.ComponentProps<'tbody'>) => <tbody className="bg-[#0f1d33]" {...props} />,
-  tr: (props: React.ComponentProps<'tr'>) => <tr className="border-t border-[#2d4468]" {...props} />,
+  thead: (props: React.ComponentProps<'thead'>) => <thead className="bg-white/[0.06] text-slate-100" {...props} />,
+  tbody: (props: React.ComponentProps<'tbody'>) => <tbody className="bg-[#0b1325]/65" {...props} />,
+  tr: (props: React.ComponentProps<'tr'>) => <tr className="border-t border-white/10" {...props} />,
   th: (props: React.ComponentProps<'th'>) => <th className="px-3 py-2 text-left font-semibold" {...props} />,
-  td: (props: React.ComponentProps<'td'>) => <td className="px-3 py-2 align-top text-[#d9e8ff]" {...props} />,
-  code: (props: React.ComponentProps<'code'>) => <code className="rounded bg-[#0a1528] px-1.5 py-0.5 text-[#9fcbff]" {...props} />,
-  hr: (props: React.ComponentProps<'hr'>) => <hr className="my-3 border-[#2d4468]" {...props} />,
+  td: (props: React.ComponentProps<'td'>) => <td className="px-3 py-2 align-top text-slate-100" {...props} />,
+  code: (props: React.ComponentProps<'code'>) => <code className="rounded bg-white/[0.08] px-1.5 py-0.5 text-sky-200" {...props} />,
+  hr: (props: React.ComponentProps<'hr'>) => <hr className="my-3 border-white/10" {...props} />,
 };
 
 export default function ChatWindow() {
@@ -147,18 +147,18 @@ export default function ChatWindow() {
   };
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col rounded-[1.3rem] border border-[#2b3e5f] bg-[linear-gradient(180deg,#101b2f,#0c1627_70%)] shadow-[0_18px_40px_rgba(0,0,0,0.32)]">
-      <header className="flex items-center justify-between border-b border-[#2d4468] px-4 py-3 sm:px-5">
+    <section className="flex h-full min-h-0 w-full flex-col rounded-[1.3rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.92),rgba(2,8,24,0.95))] shadow-[0_18px_40px_rgba(0,0,0,0.38)] backdrop-blur-xl">
+      <header className="flex items-center justify-between border-b border-white/10 px-4 py-3 sm:px-5">
         <div className="flex items-center gap-2.5">
-          <div className="grid h-7 w-7 place-items-center rounded-md bg-[linear-gradient(135deg,#74b7ff,#3f79e2)] text-white shadow-[0_8px_16px_rgba(64,121,226,0.35)]">
+          <div className="grid h-7 w-7 place-items-center rounded-md bg-[linear-gradient(135deg,#67b2ff,#3b82f6)] text-white shadow-[0_8px_16px_rgba(59,130,246,0.35)]">
             <Sparkles className="h-3.5 w-3.5" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold tracking-tight text-[#eaf2ff]">MooliqAI</h2>
-            <p className="text-[11px] text-[#91a9cc]">Ask, compare, and inspect source-backed metrics</p>
+            <h2 className="text-sm font-semibold tracking-tight text-white">MooliqAI</h2>
+            <p className="text-[11px] text-slate-400">Ask, compare, and inspect source-backed metrics</p>
           </div>
         </div>
-        <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-200">
+        <span className="rounded-full border border-emerald-300/30 bg-emerald-300/12 px-2.5 py-1 text-[11px] font-semibold text-emerald-200">
           Research only
         </span>
       </header>
@@ -169,8 +169,8 @@ export default function ChatWindow() {
             key={msg.id}
             className={
               msg.role === 'user'
-                ? 'ml-auto w-fit max-w-[85%] rounded-2xl border border-[#3c5f90] bg-[linear-gradient(140deg,#2f5ea8,#3a74cb)] px-4 py-3 text-sm text-[#f3f8ff]'
-                : 'mr-auto max-w-[92%] rounded-2xl border border-[#30486c] bg-[#13223a] px-4 py-3 text-sm leading-relaxed text-[#d9e8ff]'
+                ? 'ml-auto w-fit max-w-[85%] rounded-2xl border border-sky-300/40 bg-[linear-gradient(140deg,#1d4f91,#2563eb)] px-4 py-3 text-sm text-[#f3f8ff]'
+                : 'mr-auto max-w-[92%] rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-relaxed text-slate-100'
             }
           >
             {msg.role === 'system' ? (
@@ -184,22 +184,22 @@ export default function ChatWindow() {
             )}
             {msg.id === '1' && (
               <div className="mt-3 flex flex-wrap gap-2">
-                <button className="rounded-full border border-[#36537f] bg-[#10203a] px-2.5 py-1 text-xs text-[#bed0ee] transition hover:border-[#4f8ff7] hover:text-white" onClick={() => applySuggestion('Compare Parag Parikh Flexi Cap and ICICI Multi Asset Fund for long-term consistency.')}>Fund consistency</button>
-                <button className="rounded-full border border-[#36537f] bg-[#10203a] px-2.5 py-1 text-xs text-[#bed0ee] transition hover:border-[#4f8ff7] hover:text-white" onClick={() => applySuggestion('Which of these two funds has lower expense ratio and better Sharpe?')}>Sharpe + cost</button>
-                <button className="rounded-full border border-[#36537f] bg-[#10203a] px-2.5 py-1 text-xs text-[#bed0ee] transition hover:border-[#4f8ff7] hover:text-white" onClick={() => applySuggestion('Show NAV trend differences between Parag Parikh Flexi Cap and ICICI Multi Asset Fund.')}>NAV trend</button>
+                <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-sky-300/45 hover:text-white" onClick={() => applySuggestion('Compare Parag Parikh Flexi Cap and ICICI Multi Asset Fund for long-term consistency.')}>Fund consistency</button>
+                <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-sky-300/45 hover:text-white" onClick={() => applySuggestion('Which of these two funds has lower expense ratio and better Sharpe?')}>Sharpe + cost</button>
+                <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-sky-300/45 hover:text-white" onClick={() => applySuggestion('Show NAV trend differences between Parag Parikh Flexi Cap and ICICI Multi Asset Fund.')}>NAV trend</button>
               </div>
             )}
           </div>
         ))}
 
-        <div className="rounded-xl border border-amber-300/25 bg-amber-100/10 px-3 py-2 text-xs text-amber-100/90">
+        <div className="rounded-xl border border-amber-300/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-100/90">
           This is not investment advice. Verify data independently.
         </div>
       </div>
 
-      <div className="space-y-2 border-t border-[#2d4468] bg-[linear-gradient(180deg,#0d1728,#0a1322)] px-3 py-3 sm:px-4">
+      <div className="space-y-2 border-t border-white/10 bg-[linear-gradient(180deg,rgba(2,8,24,0.95),rgba(2,6,18,0.98))] px-3 py-3 sm:px-4">
         {isProcessing && (
-          <div className="rounded-lg border border-sky-300/20 bg-sky-300/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-200">
+          <div className="rounded-lg border border-sky-300/25 bg-sky-300/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-200">
             Pipeline thinking...
           </div>
         )}
@@ -216,7 +216,7 @@ export default function ChatWindow() {
               className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
                 assetType === option.value
                   ? 'border-[#4f8ff7] bg-[#4f8ff7]/25 text-[#e2eeff]'
-                  : 'border-[#31496d] bg-[#0f1d34] text-[#9eb7df] hover:border-[#4f8ff7] hover:text-white'
+                  : 'border-white/15 bg-white/[0.04] text-slate-300 hover:border-sky-300/45 hover:text-white'
               }`}
               onClick={() => setAssetType(option.value as AssetType)}
               disabled={isProcessing}
@@ -237,7 +237,7 @@ export default function ChatWindow() {
               className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
                 comparisonViewMode === option.value
                   ? 'border-emerald-300/40 bg-emerald-300/15 text-emerald-100'
-                  : 'border-[#31496d] bg-[#0f1d34] text-[#9eb7df] hover:border-[#4f8ff7] hover:text-white'
+                  : 'border-white/15 bg-white/[0.04] text-slate-300 hover:border-sky-300/45 hover:text-white'
               }`}
               onClick={() => setComparisonViewMode(option.value as ComparisonViewMode)}
               disabled={isProcessing}
@@ -247,7 +247,7 @@ export default function ChatWindow() {
           ))}
         </div>
 
-        <div className="flex items-end gap-2 rounded-xl border border-[#30486b] bg-[#0f1d33]/95 p-2">
+        <div className="flex items-end gap-2 rounded-xl border border-white/10 bg-white/[0.04] p-2">
           <textarea
             ref={textareaRef}
             value={input}
@@ -260,9 +260,9 @@ export default function ChatWindow() {
             }}
             placeholder={assetType === 'mutual_fund' ? 'Compare PPFAS and ICICI funds for long-term consistency...' : assetType === 'stock' ? 'Stock research is in progress. Try fund comparison prompts.' : 'Ask for PPFAS vs ICICI comparison, risk, cost, or NAV view...'}
             rows={1}
-            className="max-h-28 min-h-[2.5rem] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-[#e7f0ff] placeholder:text-[#7f98c2] focus:outline-none"
+            className="max-h-28 min-h-[2.5rem] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none"
           />
-          <button className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#4f8ff7] bg-[#2f5fae] text-white transition hover:bg-[#3b70c7] disabled:cursor-not-allowed disabled:opacity-50" onClick={handleSend} aria-label="Send Message" disabled={isProcessing}>
+          <button className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-sky-300/45 bg-[linear-gradient(140deg,#1d4f91,#2563eb)] text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50" onClick={handleSend} aria-label="Send Message" disabled={isProcessing}>
             <Send size={18} />
           </button>
         </div>
