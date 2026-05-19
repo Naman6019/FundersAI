@@ -26,6 +26,11 @@ def main() -> int:
     parser.add_argument("--amc", default=None)
     parser.add_argument("--report-month", default=None, help="YYYY-MM-01")
     parser.add_argument("--strict", action="store_true", help="Exit non-zero when parse failures occur.")
+    parser.add_argument(
+        "--fail-on-needs-review",
+        action="store_true",
+        help="When used with --strict, treat needs_review as a failure.",
+    )
     args = parser.parse_args()
 
     service = ParsingService()
@@ -41,6 +46,8 @@ def main() -> int:
                     continue
                 status = str(item.get("status") or "").strip().lower()
                 if status == "failed":
+                    return 1
+                if args.fail_on_needs_review and status == "needs_review":
                     return 1
     return 0
 

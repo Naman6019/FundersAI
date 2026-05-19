@@ -46,6 +46,10 @@ jobs:
           MF_HDFC_PORTFOLIO_PAGE_URL: ${{ secrets.MF_HDFC_PORTFOLIO_PAGE_URL }}
           MF_SBI_FACTSHEET_PAGE_URL: ${{ secrets.MF_SBI_FACTSHEET_PAGE_URL }}
           MF_SBI_PORTFOLIO_PAGE_URL: ${{ secrets.MF_SBI_PORTFOLIO_PAGE_URL }}
+          MF_HDFC_FACTSHEET_DOCUMENT_URLS: ${{ secrets.MF_HDFC_FACTSHEET_DOCUMENT_URLS }}
+          MF_HDFC_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_HDFC_PORTFOLIO_DOCUMENT_URLS }}
+          MF_SBI_FACTSHEET_DOCUMENT_URLS: ${{ secrets.MF_SBI_FACTSHEET_DOCUMENT_URLS }}
+          MF_SBI_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_SBI_PORTFOLIO_DOCUMENT_URLS }}
           MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
           DISPATCH_AMCS: ${{ inputs.amcs }}
           DISPATCH_MAX_DOCS: ${{ inputs.max_documents }}
@@ -65,6 +69,9 @@ jobs:
           export MF_HDFC_PORTFOLIO_PAGE_URL="${MF_HDFC_PORTFOLIO_PAGE_URL:-https://www.hdfcfund.com/statutory-disclosure/portfolio/monthly-portfolio}"
           export MF_SBI_FACTSHEET_PAGE_URL="${MF_SBI_FACTSHEET_PAGE_URL:-https://www.sbimf.com/factsheets}"
           export MF_SBI_PORTFOLIO_PAGE_URL="${MF_SBI_PORTFOLIO_PAGE_URL:-https://www.sbimf.com/portfolios}"
+          export MF_HDFC_FACTSHEET_DOCUMENT_URLS="${MF_HDFC_FACTSHEET_DOCUMENT_URLS:-https://files.hdfcfund.com/s3fs-public/2026-05/HDFC%20MF%20Factsheet%20-%20April%202026.pdf,https://files.hdfcfund.com/s3fs-public/2026-05/HDFC%20MF%20Index%20Solutions%20Factsheet%20-%20April%202026.pdf}"
+          export MF_SBI_FACTSHEET_DOCUMENT_URLS="${MF_SBI_FACTSHEET_DOCUMENT_URLS:-https://www.sbimf.com/docs/default-source/scheme-factsheets/all-sbimf-schemes-factsheet-april-2026.pdf?sfvrsn=2b0639d8_4}"
+          export MF_SBI_PORTFOLIO_DOCUMENT_URLS="${MF_SBI_PORTFOLIO_DOCUMENT_URLS:-https://www.sbimf.com/docs/default-source/scheme-portfolios/all-schemes-monthly-portfolio---as-on-30th-april-2026.xlsx?sfvrsn=fbc4d18a_2}"
 
           AMCS="${DISPATCH_AMCS:-ppfas,icici,hdfc,sbi}"
           MAX_DOCS="${DISPATCH_MAX_DOCS:-2}"
@@ -82,7 +89,7 @@ jobs:
             for attempt in 1 2; do
               echo "AMC=$amc attempt=$attempt"
               if python -m backend.app.mf_ingestion.jobs.ingest_latest_amc_docs --amc "$amc" --all-document-types --max-documents "$MAX_DOCS" --strict && \
-                 python -m backend.app.mf_ingestion.jobs.parse_pending_documents --amc "$amc" --limit "$PARSE_LIMIT" --strict; then
+                 python -m backend.app.mf_ingestion.jobs.parse_pending_documents --amc "$amc" --limit "$PARSE_LIMIT" --strict --fail-on-needs-review; then
                 ok=true
                 break
               fi

@@ -7,7 +7,7 @@ import time
 import uuid
 from datetime import UTC, date, datetime
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit, unquote
 
 import requests
 from bs4 import BeautifulSoup
@@ -37,6 +37,27 @@ GENERIC_KEYWORDS = {
     "factsheet": ("factsheet", "fact sheet", "fund sheet", "monthly factsheet"),
     "portfolio_disclosure": ("portfolio", "disclosure", "holdings", "statutory", "monthly portfolio"),
 }
+GENERIC_REQUIRED_KEYWORDS: dict[str, dict[str, tuple[str, ...]]] = {
+    "hdfc": {
+        "factsheet": ("factsheet", "fact sheet", "fund fact"),
+        "portfolio_disclosure": ("portfolio", "holding", "monthly portfolio"),
+    },
+    "sbi": {
+        "factsheet": ("factsheet", "fact sheet", "fund fact"),
+        "portfolio_disclosure": ("portfolio", "holding", "monthly portfolio"),
+    },
+}
+GENERIC_EXCLUDE_KEYWORDS = (
+    "moa",
+    "aoa",
+    "statement of additional information",
+    "sai",
+    "update on valuation",
+    "valuation of",
+    "addendum",
+    "notice",
+    "voting policy",
+)
 RETRYABLE_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524}
 HTTP_MAX_RETRIES = max(int(os.getenv("MF_DISCOVERY_MAX_RETRIES", "3")), 0)
 HTTP_BACKOFF_SECONDS = max(float(os.getenv("MF_DISCOVERY_BACKOFF_SECONDS", "1.2")), 0.1)
@@ -225,6 +246,14 @@ def _discover_generic_anchor_documents(
     docs: list[DiscoveredDocument] = []
     seen_urls: set[str] = set()
     keywords = GENERIC_KEYWORDS.get(doc_type, ())
+    required_keywords = _required_keywords_for_generic_source(source, doc_type)
+
+    # Manual override URLs (if provided) should be considered first.
+    manual_docs = _manual_discovered_documents_for_source(source, doc_type, listing_url)
+    for item in manual_docs:
+        docs.append(item)
+        seen_urls.add(item.url)
+
     for anchor in soup.find_all("a"):
         href = str(anchor.get("href") or "").strip()
         if not href or href.startswith("#") or href.lower().startswith("javascript:") or href.lower().startswith("mailto:"):
@@ -239,6 +268,8 @@ def _discover_generic_anchor_documents(
         combined = f"{title} {url}".lower()
         ext = Path(urlsplit(url).path).suffix.lower() or _infer_file_ext_from_text(combined)
         if ext not in SUPPORTED_FILE_EXTENSIONS:
+            continue
+        if not _generic_candidate_allowed(source, combined, doc_type, ext, required_keywords):
             continue
 
         report_month = _detect_report_month_from_text(combined)
@@ -270,6 +301,107 @@ def _discover_generic_anchor_documents(
 
     docs.sort(key=lambda item: item.priority_score, reverse=True)
     return docs
+
+
+def _manual_discovered_documents_for_source(
+    source: AMCDocumentSource,
+    document_type: str,
+    listing_url: str,
+) -> list[DiscoveredDocument]:
+    urls = _manual_document_urls(source, document_type)
+    if not urls:
+        return []
+
+    docs: list[DiscoveredDocument] = []
+    for url in urls:
+        absolute_url = urljoin(listing_url, url)
+        ext = Path(urlsplit(absolute_url).path).suffix.lower() or _infer_file_ext_from_text(absolute_url)
+        if ext not in SUPPORTED_FILE_EXTENSIONS:
+            continue
+        title = _human_title_from_url(absolute_url)
+        combined = f"{title} {absolute_url}".lower()
+        report_month = _detect_report_month_from_text(combined)
+        docs.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type=document_type,
+                title=title,
+                url=absolute_url,
+                discovery_page_url=listing_url,
+                file_ext=ext,
+                report_month=report_month,
+                priority_score=9_000_000,  # Force manual URLs to be attempted first.
+            )
+        )
+    return docs
+
+
+def _manual_document_urls(source: AMCDocumentSource, document_type: str) -> list[str]:
+    amc = str(source.amc_code or "").strip().upper()
+    if not amc:
+        return []
+    suffix = "FACTSHEET_DOCUMENT_URLS" if document_type == "factsheet" else "PORTFOLIO_DOCUMENT_URLS"
+    env_name = f"MF_{amc}_{suffix}"
+    raw = str(os.getenv(env_name, "") or "")
+    if not raw.strip():
+        return []
+    urls: list[str] = []
+    seen: set[str] = set()
+    for token in raw.split(","):
+        value = token.strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        urls.append(value)
+    return urls
+
+
+def _human_title_from_url(url: str) -> str:
+    path_name = Path(urlsplit(url).path).name
+    decoded = unquote(path_name).replace("+", " ")
+    return decoded or "document"
+
+
+def _required_keywords_for_generic_source(source: AMCDocumentSource, document_type: str) -> tuple[str, ...]:
+    adapter_key = (source.adapter_key or "").strip().lower()
+    per_source = GENERIC_REQUIRED_KEYWORDS.get(adapter_key) or {}
+    keywords = per_source.get(document_type)
+    if keywords:
+        return keywords
+    return GENERIC_KEYWORDS.get(document_type, ())
+
+
+def _generic_candidate_allowed(
+    source: AMCDocumentSource,
+    combined_text: str,
+    document_type: str,
+    file_ext: str,
+    required_keywords: tuple[str, ...],
+) -> bool:
+    low = str(combined_text or "").lower()
+    adapter_key = (source.adapter_key or "").strip().lower()
+    if any(blocked in low for blocked in GENERIC_EXCLUDE_KEYWORDS):
+        return False
+
+    # Require direct signal to avoid picking random legal/compliance PDFs.
+    if required_keywords and not any(token in low for token in required_keywords):
+        return False
+
+    # Portfolio ingestion should avoid non-portfolio disclosures.
+    if document_type == "portfolio_disclosure" and "portfolio" not in low and "holding" not in low:
+        return False
+
+    # SBI portfolio disclosures are expected as spreadsheet payloads.
+    if adapter_key == "sbi" and document_type == "portfolio_disclosure":
+        if file_ext not in {".xlsx", ".xls", ".xlsm", ".csv", ".zip"}:
+            return False
+
+    # SBI factsheets should come from scheme-factsheets docs path.
+    if adapter_key == "sbi" and document_type == "factsheet":
+        if "scheme-factsheets" not in low and "factsheet" not in low:
+            return False
+    return True
 
 
 def _discover_icici_documents(
