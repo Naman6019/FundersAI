@@ -7,6 +7,7 @@ import time
 import uuid
 from html import unescape
 from datetime import UTC, date, datetime
+from calendar import monthrange
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit, urlunsplit, unquote
 
@@ -332,6 +333,47 @@ def _discover_generic_anchor_documents(
                     priority_score=base_score + recency_score + 30,
                 )
             )
+        if not any(doc.document_type == doc_type for doc in docs):
+            guessed_urls = _guess_sbi_portfolio_urls(now_utc=datetime.now(UTC))
+            for url in guessed_urls:
+                if url in seen_urls:
+                    continue
+                try:
+                    probe = _request_with_retry(
+                        "GET",
+                        url,
+                        timeout_seconds=timeout_seconds,
+                        headers={"User-Agent": user_agent, "Referer": _base_site_url(listing_url)},
+                    )
+                except Exception:
+                    continue
+                final_url = probe.url or url
+                seen_urls.add(final_url)
+                title = _human_title_from_url(final_url)
+                combined = f"{title} {final_url}".lower()
+                ext = Path(urlsplit(final_url).path).suffix.lower() or _infer_file_ext_from_text(combined)
+                if ext not in SUPPORTED_FILE_EXTENSIONS:
+                    continue
+                if not _generic_candidate_allowed(source, combined, doc_type, ext, required_keywords):
+                    continue
+                report_month = _detect_report_month_from_text(combined)
+                base_score = _generic_base_score(ext=ext, document_type=doc_type)
+                recency_score = 0
+                if report_month:
+                    recency_score = (report_month.year * 12 + report_month.month) * 10
+                docs.append(
+                    DiscoveredDocument(
+                        amc_name=source.amc_name,
+                        amc_code=source.amc_code,
+                        document_type=doc_type,
+                        title=title,
+                        url=final_url,
+                        discovery_page_url=response.url or listing_url,
+                        file_ext=ext,
+                        report_month=report_month,
+                        priority_score=base_score + recency_score + 25,
+                    )
+                )
 
     docs.sort(key=lambda item: item.priority_score, reverse=True)
     return docs
@@ -423,6 +465,56 @@ def _extract_embedded_file_urls(html: str, base_url: str, extensions: tuple[str,
             seen.add(absolute)
             urls.append(absolute)
     return urls
+
+
+def _guess_sbi_portfolio_urls(*, now_utc: datetime) -> list[str]:
+    # SBI naming pattern:
+    # /docs/default-source/scheme-portfolios/all-schemes-monthly-portfolio---as-on-30th-april-2026.xlsx
+    months = _recent_months_for_portfolio_guess(now_utc.date(), count=3)
+    urls: list[str] = []
+    for year, month in months:
+        last_day = monthrange(year, month)[1]
+        for day in (last_day, 30, 31, 29, 28):
+            if day < 1 or day > last_day:
+                continue
+            suffix = _ordinal_suffix(day)
+            month_name = datetime(year, month, 1, tzinfo=UTC).strftime("%B").lower()
+            urls.append(
+                f"https://www.sbimf.com/docs/default-source/scheme-portfolios/"
+                f"all-schemes-monthly-portfolio---as-on-{day}{suffix}-{month_name}-{year}.xlsx"
+            )
+    # Preserve order and uniqueness.
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for url in urls:
+        if url in seen:
+            continue
+        seen.add(url)
+        deduped.append(url)
+    return deduped
+
+
+def _recent_months_for_portfolio_guess(today: date, count: int = 3) -> list[tuple[int, int]]:
+    # start from previous month (most likely published portfolio)
+    year = today.year
+    month = today.month - 1
+    if month == 0:
+        month = 12
+        year -= 1
+    pairs: list[tuple[int, int]] = []
+    for _ in range(max(count, 1)):
+        pairs.append((year, month))
+        month -= 1
+        if month == 0:
+            month = 12
+            year -= 1
+    return pairs
+
+
+def _ordinal_suffix(day: int) -> str:
+    if 10 <= (day % 100) <= 20:
+        return "th"
+    return {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
 
 
 def _required_keywords_for_generic_source(source: AMCDocumentSource, document_type: str) -> tuple[str, ...]:
