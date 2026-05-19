@@ -344,6 +344,12 @@ def _manual_document_urls(source: AMCDocumentSource, document_type: str) -> list
     suffix = "FACTSHEET_DOCUMENT_URLS" if document_type == "factsheet" else "PORTFOLIO_DOCUMENT_URLS"
     env_name = f"MF_{amc}_{suffix}"
     raw = str(os.getenv(env_name, "") or "")
+
+    # HDFC publishes combined scheme factsheet PDFs that include portfolio tables.
+    # Reuse factsheet URLs for portfolio extraction when a separate portfolio URL is unavailable.
+    if document_type == "portfolio_disclosure" and amc == "HDFC" and not raw.strip():
+        raw = str(os.getenv("MF_HDFC_FACTSHEET_DOCUMENT_URLS", "") or "")
+
     if not raw.strip():
         return []
     urls: list[str] = []

@@ -9,7 +9,7 @@ from app.mf_ingestion.parsers.base_parser import ParseContext
 from app.mf_ingestion.parsers.pdf_text_parser import PDFTextParser
 
 SCHEME_NAME_PATTERN = re.compile(
-    r"(?m)^(?:\((?:Formerly|Erstwhile)[^\n]*\)\s*)?(?P<name>(?:ICICI Prudential|Parag Parikh)[^\n]{3,120}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{1,60}\))?\s*$"
+    r"(?m)^(?:\((?:Formerly|Erstwhile)[^\n]*\)\s*)?(?P<name>(?:ICICI Prudential|Parag Parikh|HDFC|SBI)[^\n]{3,140}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{1,60}\))?\s*$"
 )
 MANAGER_NAME_PATTERN = re.compile(r"\b(?:Mr|Ms|Mrs)\.?\s+[A-Z][A-Za-z' -]{1,80}")
 

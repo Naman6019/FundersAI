@@ -95,7 +95,14 @@ class ParsingService:
 
         try:
             if document_type in FACTSHEET_SUPPORTED_DOCUMENT_TYPES:
-                return self._parse_factsheet_document(document, resolved_path)
+                factsheet_result = self._parse_factsheet_document(document, resolved_path)
+                # HDFC combined factsheets also contain portfolio tables.
+                if amc_code.lower() == "hdfc":
+                    adapter = self.adapters.get("hdfc")
+                    if adapter:
+                        holdings_result = self._parse_holdings_document(document, adapter, resolved_path)
+                        return _merge_parse_outcomes(factsheet_result, holdings_result)
+                return factsheet_result
 
             adapter = self.adapters.get(amc_code.lower())
             if not adapter:
@@ -922,6 +929,26 @@ def _merge_sources(*values: object) -> str:
             if clean and clean not in ordered:
                 ordered.append(clean)
     return "+".join(ordered)
+
+
+def _merge_parse_outcomes(primary: dict[str, Any], secondary: dict[str, Any]) -> dict[str, Any]:
+    severity = {
+        "failed": 5,
+        "error": 5,
+        "needs_review": 4,
+        "partial": 3,
+        "parsed": 2,
+        "ok": 2,
+        "skipped": 1,
+    }
+    s1 = str(primary.get("status") or "").strip().lower()
+    s2 = str(secondary.get("status") or "").strip().lower()
+    selected = primary if severity.get(s1, 0) >= severity.get(s2, 0) else secondary
+
+    merged = dict(selected)
+    merged["factsheet"] = primary
+    merged["holdings"] = secondary
+    return merged
 
 
 def _encode_archive_payload(rows: list[dict[str, Any]]) -> tuple[bytes, str]:

@@ -17,6 +17,10 @@ on:
         description: 'Max pending docs parsed per AMC'
         required: false
         default: '200'
+      sbi_portfolio_url:
+        description: 'Optional exact SBI monthly portfolio URL (leave empty for auto-discovery)'
+        required: false
+        default: ''
 
 jobs:
   sync:
@@ -54,6 +58,7 @@ jobs:
           DISPATCH_AMCS: ${{ inputs.amcs }}
           DISPATCH_MAX_DOCS: ${{ inputs.max_documents }}
           DISPATCH_PARSE_LIMIT: ${{ inputs.parse_limit }}
+          DISPATCH_SBI_PORTFOLIO_URL: ${{ inputs.sbi_portfolio_url }}
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
             echo "Error: Missing SUPABASE_URL or SUPABASE_KEY"
@@ -71,7 +76,9 @@ jobs:
           export MF_SBI_PORTFOLIO_PAGE_URL="${MF_SBI_PORTFOLIO_PAGE_URL:-https://www.sbimf.com/portfolios}"
           export MF_HDFC_FACTSHEET_DOCUMENT_URLS="${MF_HDFC_FACTSHEET_DOCUMENT_URLS:-https://files.hdfcfund.com/s3fs-public/2026-05/HDFC%20MF%20Factsheet%20-%20April%202026.pdf,https://files.hdfcfund.com/s3fs-public/2026-05/HDFC%20MF%20Index%20Solutions%20Factsheet%20-%20April%202026.pdf}"
           export MF_SBI_FACTSHEET_DOCUMENT_URLS="${MF_SBI_FACTSHEET_DOCUMENT_URLS:-https://www.sbimf.com/docs/default-source/scheme-factsheets/all-sbimf-schemes-factsheet-april-2026.pdf?sfvrsn=2b0639d8_4}"
-          export MF_SBI_PORTFOLIO_DOCUMENT_URLS="${MF_SBI_PORTFOLIO_DOCUMENT_URLS:-https://www.sbimf.com/docs/default-source/scheme-portfolios/all-schemes-monthly-portfolio---as-on-30th-april-2026.xlsx?sfvrsn=fbc4d18a_2}"
+          if [ -n "${DISPATCH_SBI_PORTFOLIO_URL:-}" ]; then
+            export MF_SBI_PORTFOLIO_DOCUMENT_URLS="$DISPATCH_SBI_PORTFOLIO_URL"
+          fi
 
           AMCS="${DISPATCH_AMCS:-ppfas,icici,hdfc,sbi}"
           MAX_DOCS="${DISPATCH_MAX_DOCS:-2}"
