@@ -128,6 +128,9 @@ def _extract_expense_ratio(chunk: str) -> float | None:
         r"Base\s+Expense\s+Ratio[\s\S]{0,220}?Direct(?:\s+Plan)?\s*[:\-]\s*([0-9]+(?:\.[0-9]+)?)\s*%",
         r"Base\s+Expense\s+Ratio[\s\S]{0,220}?Direct\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*%",
         r"Expense\s+Ratio[\s\S]{0,100}?Direct(?:\s+Plan)?\s*[:\-]\s*([0-9]+(?:\.[0-9]+)?)\s*%",
+        r"Expense\s+Ratio[\s\S]{0,200}?Direct[\sA-Za-z()\/-]{0,40}[:\-]?\s*([0-9]+(?:\.[0-9]+)?)\s*%",
+        r"TER[\s\S]{0,160}?Direct(?:\s+Plan)?\s*[:\-]?\s*([0-9]+(?:\.[0-9]+)?)\s*%",
+        r"Direct(?:\s+Plan)?[\s\S]{0,50}?Expense\s+Ratio[\s:=-]*([0-9]+(?:\.[0-9]+)?)\s*%",
     )
     for pattern in patterns:
         match = re.search(pattern, chunk, flags=re.IGNORECASE)
@@ -137,6 +140,21 @@ def _extract_expense_ratio(chunk: str) -> float | None:
             return float(match.group(1))
         except ValueError:
             continue
+    # Fallback: look for the nearest percentage around the word "Direct" in expense-ratio-like sections.
+    direct_hits = list(re.finditer(r"direct(?:\s+plan)?", chunk, flags=re.IGNORECASE))
+    for hit in direct_hits[:6]:
+        window = chunk[max(0, hit.start() - 160): min(len(chunk), hit.end() + 220)]
+        if not re.search(r"expense\s+ratio|base\s+expense|ter", window, flags=re.IGNORECASE):
+            continue
+        pct = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*%", window)
+        if not pct:
+            continue
+        try:
+            value = float(pct.group(1))
+        except ValueError:
+            continue
+        if 0 < value < 8:
+            return value
     return None
 
 

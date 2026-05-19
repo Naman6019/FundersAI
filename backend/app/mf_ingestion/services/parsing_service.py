@@ -455,21 +455,29 @@ class ParsingService:
         )
 
     def _resolve_scheme_code_for_scheme(self, scheme_name: str) -> str | None:
-        pattern = _build_ilike_pattern(scheme_name)
         candidates: list[dict[str, Any]] = []
-        for table in ("mutual_fund_core_snapshot", "mutual_funds"):
-            try:
-                result = (
-                    supabase.table(table)
-                    .select("scheme_code,scheme_name")
-                    .ilike("scheme_name", pattern)
-                    .limit(250)
-                    .execute()
-                )
-                candidates.extend(result.data or [])
-            except Exception:
-                logger.exception("event=scheme_code_lookup_failed table=%s scheme_name=%s", table, scheme_name)
-                continue
+        patterns = [
+            _build_ilike_pattern(scheme_name),
+            _build_relaxed_ilike_pattern(scheme_name),
+        ]
+        seen_patterns = {pattern for pattern in patterns if pattern and pattern != "%"}
+        if not seen_patterns:
+            seen_patterns = {"%"}
+
+        for pattern in seen_patterns:
+            for table in ("mutual_fund_core_snapshot", "mutual_funds"):
+                try:
+                    result = (
+                        supabase.table(table)
+                        .select("scheme_code,scheme_name")
+                        .ilike("scheme_name", pattern)
+                        .limit(350)
+                        .execute()
+                    )
+                    candidates.extend(result.data or [])
+                except Exception:
+                    logger.exception("event=scheme_code_lookup_failed table=%s scheme_name=%s", table, scheme_name)
+                    continue
 
         if not candidates:
             return None
@@ -863,14 +871,56 @@ def _normalize_scheme_text(text: str) -> str:
     return " ".join(str(text or "").lower().replace(".", " ").replace(",", " ").split())
 
 
-def _pick_best_scheme_candidate(target_name: str, candidates: list[dict[str, Any]]) -> dict[str, Any]:
-    target_tokens = set(_normalize_scheme_text(target_name).split())
+def _build_relaxed_ilike_pattern(text: str) -> str:
+    tokens = [token for token in _normalize_scheme_text(text).split() if token]
+    removable = {
+        "fund",
+        "plan",
+        "option",
+        "direct",
+        "regular",
+        "growth",
+        "idcw",
+        "dividend",
+        "cumulative",
+        "daily",
+        "weekly",
+        "monthly",
+        "quarterly",
+        "half",
+        "yearly",
+        "annual",
+    }
+    filtered = [token for token in tokens if token not in removable]
+    base = filtered if filtered else tokens
+    return f"%{'%'.join(base)}%" if base else "%"
 
-    def score(candidate: dict[str, Any]) -> tuple[int, int]:
+
+def _pick_best_scheme_candidate(target_name: str, candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    target_text = _normalize_scheme_text(target_name)
+    target_tokens = set(target_text.split())
+    wants_direct = "direct" in target_tokens
+    wants_regular = "regular" in target_tokens
+    wants_growth = "growth" in target_tokens or "cumulative" in target_tokens
+    wants_idcw = "idcw" in target_tokens or "dividend" in target_tokens
+
+    def score(candidate: dict[str, Any]) -> tuple[int, int, int]:
         candidate_name = str(candidate.get("scheme_name") or "")
-        candidate_tokens = set(_normalize_scheme_text(candidate_name).split())
+        candidate_text = _normalize_scheme_text(candidate_name)
+        candidate_tokens = set(candidate_text.split())
         overlap = len(target_tokens & candidate_tokens)
-        return overlap, len(candidate_tokens)
+        value = overlap * 20
+        if target_text and target_text in candidate_text:
+            value += 60
+        if "direct" in candidate_tokens:
+            value += 12 if wants_direct else 8
+        if "regular" in candidate_tokens:
+            value += 10 if wants_regular else -8
+        if ("growth" in candidate_tokens or "cumulative" in candidate_tokens):
+            value += 8 if wants_growth else 5
+        if ("idcw" in candidate_tokens or "dividend" in candidate_tokens):
+            value += 8 if wants_idcw else -12
+        return value, overlap, -len(candidate_tokens)
 
     ordered = sorted(candidates, key=score, reverse=True)
     return ordered[0]
@@ -893,7 +943,7 @@ def _select_best_scheme_candidate(target_name: str, candidates: list[dict[str, A
 
     has_variant_candidates = any(_has_plan_or_option_marker(candidate.get("scheme_name")) for candidate in unique_candidates)
     if has_variant_candidates:
-        return None
+        return _pick_best_scheme_candidate(target_name, unique_candidates)
     return _pick_best_scheme_candidate(target_name, unique_candidates)
 
 
