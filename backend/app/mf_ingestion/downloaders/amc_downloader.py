@@ -5,6 +5,7 @@ import os
 import re
 import time
 import uuid
+from html import unescape
 from datetime import UTC, date, datetime
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit, urlunsplit, unquote
@@ -299,6 +300,39 @@ def _discover_generic_anchor_documents(
             )
         )
 
+    # SBI portfolios page often exposes XLSX links inside scripts/JSON, not plain anchors.
+    if (source.adapter_key or "").strip().lower() == "sbi" and doc_type == "portfolio_disclosure":
+        embedded_urls = _extract_embedded_file_urls(response.text or "", response.url or listing_url, extensions=(".xlsx", ".xls", ".xlsm", ".csv", ".zip"))
+        for url in embedded_urls:
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+            title = _human_title_from_url(url)
+            combined = f"{title} {url}".lower()
+            ext = Path(urlsplit(url).path).suffix.lower() or _infer_file_ext_from_text(combined)
+            if ext not in SUPPORTED_FILE_EXTENSIONS:
+                continue
+            if not _generic_candidate_allowed(source, combined, doc_type, ext, required_keywords):
+                continue
+            report_month = _detect_report_month_from_text(combined)
+            base_score = _generic_base_score(ext=ext, document_type=doc_type)
+            recency_score = 0
+            if report_month:
+                recency_score = (report_month.year * 12 + report_month.month) * 10
+            docs.append(
+                DiscoveredDocument(
+                    amc_name=source.amc_name,
+                    amc_code=source.amc_code,
+                    document_type=doc_type,
+                    title=title,
+                    url=url,
+                    discovery_page_url=response.url or listing_url,
+                    file_ext=ext,
+                    report_month=report_month,
+                    priority_score=base_score + recency_score + 30,
+                )
+            )
+
     docs.sort(key=lambda item: item.priority_score, reverse=True)
     return docs
 
@@ -367,6 +401,28 @@ def _human_title_from_url(url: str) -> str:
     path_name = Path(urlsplit(url).path).name
     decoded = unquote(path_name).replace("+", " ")
     return decoded or "document"
+
+
+def _extract_embedded_file_urls(html: str, base_url: str, extensions: tuple[str, ...]) -> list[str]:
+    raw = unescape(str(html or ""))
+    if not raw.strip():
+        return []
+    extension_pattern = "|".join(re.escape(ext.lstrip(".")) for ext in extensions)
+    patterns = [
+        re.compile(rf"https?://[^\s\"'<>]+\.({extension_pattern})(?:\?[^\s\"'<>]*)?", re.IGNORECASE),
+        re.compile(rf"/[^\s\"'<>]+\.({extension_pattern})(?:\?[^\s\"'<>]*)?", re.IGNORECASE),
+    ]
+    urls: list[str] = []
+    seen: set[str] = set()
+    for pattern in patterns:
+        for match in pattern.finditer(raw):
+            value = match.group(0).strip()
+            absolute = urljoin(base_url, value)
+            if absolute in seen:
+                continue
+            seen.add(absolute)
+            urls.append(absolute)
+    return urls
 
 
 def _required_keywords_for_generic_source(source: AMCDocumentSource, document_type: str) -> tuple[str, ...]:
