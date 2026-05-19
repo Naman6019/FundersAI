@@ -68,12 +68,12 @@
   --spacing-s-sm: 8px;
 
   --font-headline-lg: "Space Grotesk", sans-serif;
-  --font-label-sm: "Inter", sans-serif;
+  --font-label-sm: "Outfit", sans-serif;
   --font-display-xl: "Space Grotesk", sans-serif;
   --font-headline-md: "Space Grotesk", sans-serif;
-  --font-body-md: "Inter", sans-serif;
-  --font-body-lg: "Inter", sans-serif;
-  --font-data-mono: "Space Grotesk", monospace;
+  --font-body-md: "Outfit", sans-serif;
+  --font-body-lg: "Outfit", sans-serif;
+  --font-data-mono: "JetBrains Mono", monospace;
 }
 
 :root {

@@ -4,21 +4,20 @@ import React, { useEffect, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import {
   ArrowRight,
-  BarChart3,
-  BrainCircuit,
-  CheckCircle2,
-  ChevronRight,
-  Clock3,
+  ChartBar,
+  Cpu,
+  CheckCircle,
+  CaretRight,
+  Clock,
   Database,
-  LineChart,
+  TrendUp,
   Lock,
-  Search,
+  MagnifyingGlass,
   ShieldCheck,
-  Sparkles,
+  Sparkle,
   Star,
-  TrendingUp,
-  WalletCards,
-} from "lucide-react";
+  Cards
+} from "@phosphor-icons/react";
 
 const ease = [0.22, 1, 0.36, 1];
 
@@ -46,14 +45,14 @@ const comparisonMetrics = [
 
 const features = [
   {
-    icon: WalletCards,
+    icon: Cards,
     title: "Fund-to-fund comparison",
     eyebrow: "Compare",
     body: "Compare supported Indian mutual funds across returns, NAV movement, AUM, expense ratio, risk metrics, and consistency. Coverage is expanding across major AMCs.",
-    proof: "Current pipeline: Parag Parikh + ICICI",
+    proof: "Live: Parag Parikh + ICICI",
   },
   {
-    icon: BrainCircuit,
+    icon: Cpu,
     title: "Explainable AI summaries",
     eyebrow: "Understand",
     body: "Turn dense fund metrics into clear research notes without hiding the underlying numbers.",
@@ -63,11 +62,11 @@ const features = [
     icon: Database,
     title: "Coverage expansion",
     eyebrow: "Expanding",
-    body: "The current focus is expanding fund coverage across major AMCs before the broader public launch.",
-    proof: "Major AMC coverage is the priority now",
+    body: "We ingest factsheets and portfolio holdings directly. Parag Parikh and ICICI Prudent pipelines are fully live, with more AMCs synced daily.",
+    proof: "Direct daily data sync",
   },
   {
-    icon: LineChart,
+    icon: TrendUp,
     title: "NAV and risk canvas",
     eyebrow: "Visualize",
     body: "Review NAV movement, return trends, volatility signals, and risk-adjusted metrics in a cleaner comparison workspace.",
@@ -81,7 +80,7 @@ const features = [
     proof: "No investment recommendations",
   },
   {
-    icon: BarChart3,
+    icon: ChartBar,
     title: "Stock coverage on the way",
     eyebrow: "Next module",
     body: "Indian stock research and comparison will follow after the mutual fund comparison and coverage layer is stronger.",
@@ -152,7 +151,7 @@ function Badge({ children }) {
       variants={fadeUp}
       className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.055] px-3 py-1.5 text-xs font-medium text-slate-300 shadow-sm backdrop-blur-xl"
     >
-      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
+      <CheckCircle className="h-3.5 w-3.5 text-emerald-300" weight="fill" />
       {children}
     </motion.span>
   );
@@ -190,7 +189,7 @@ function HeroPreview() {
           >
             <div className="mb-5 flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                <Sparkles className="h-4 w-4 text-emerald-300" />
+                <Sparkle className="h-4 w-4 text-emerald-300" weight="fill" />
                 MooliqAI
               </div>
               <span className="rounded-full bg-emerald-300/10 px-2.5 py-1 text-[11px] text-emerald-200">Research only</span>
@@ -518,23 +517,26 @@ function FundPairCard() {
             <p className="mt-1 text-xs text-slate-500">Formatted as a table so long fund names do not break the card layout.</p>
           </div>
           <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-slate-300">
-            <Sparkles className="h-3.5 w-3.5 text-emerald-300" />
+            <Sparkle className="h-3.5 w-3.5 text-emerald-300" weight="fill" />
             MooliqAI explains the difference
           </div>
         </div>
 
         <div className="overflow-hidden rounded-[1.5rem] border border-white/10">
-          {rows.map(([metric, ppfas, icici], index) => (
-            <motion.div
-              key={metric}
-              variants={fadeUp}
-              className={`grid gap-0 text-sm sm:grid-cols-[0.8fr_1fr_1fr] ${index !== rows.length - 1 ? "border-b border-white/10" : ""}`}
-            >
-              <div className="bg-white/[0.035] px-4 py-3 font-medium text-slate-300">{metric}</div>
-              <div className="border-t border-white/10 px-4 py-3 text-slate-200 sm:border-l sm:border-t-0">{ppfas}</div>
-              <div className="border-t border-white/10 px-4 py-3 text-slate-200 sm:border-l sm:border-t-0">{icici}</div>
-            </motion.div>
-          ))}
+          {rows.map(([metric, ppfas, icici], index) => {
+            const isValNumeric = (str) => /^[\d%.+-]+$/.test(str.replace(/\s+/g, ''));
+            return (
+              <motion.div
+                key={metric}
+                variants={fadeUp}
+                className={`grid gap-0 text-sm sm:grid-cols-[0.8fr_1fr_1fr] ${index !== rows.length - 1 ? "border-b border-white/10" : ""}`}
+              >
+                <div className="bg-white/[0.035] px-4 py-3 font-medium text-slate-300">{metric}</div>
+                <div className={`border-t border-white/10 px-4 py-3 text-slate-200 sm:border-l sm:border-t-0 ${isValNumeric(ppfas) ? "font-mono text-emerald-300 font-medium" : ""}`}>{ppfas}</div>
+                <div className={`border-t border-white/10 px-4 py-3 text-slate-200 sm:border-l sm:border-t-0 ${isValNumeric(icici) ? "font-mono text-emerald-300 font-medium" : ""}`}>{icici}</div>
+              </motion.div>
+            );
+          })}
         </div>
       </div>
     </motion.div>
@@ -574,7 +576,7 @@ export default function MooliqLandingPage() {
                 whileHover={{ rotate: -8, scale: 1.08 }}
                 className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white text-slate-950"
               >
-                <TrendingUp className="h-5 w-5" />
+                <TrendUp className="h-5 w-5" />
               </motion.div>
               <span className="text-lg font-semibold tracking-tight">Mooliq</span>
             </a>
@@ -598,33 +600,107 @@ export default function MooliqLandingPage() {
         </motion.nav>
 
         <div className="mx-auto w-full max-w-7xl px-5 pb-24 pt-14 sm:px-8 sm:pt-24 lg:px-10">
-          <motion.div variants={stagger} initial="hidden" animate="visible" style={{ y: heroTextY }} className="mx-auto max-w-5xl text-center">
-            <motion.div variants={fadeUp} className="mb-6 flex justify-center">
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm text-slate-300 shadow-sm backdrop-blur-xl">
-                <Star className="h-4 w-4 fill-emerald-300 text-emerald-300" />
-                Mutual fund comparison MVP
-              </span>
+          <div className="grid gap-12 lg:grid-cols-12 lg:items-center">
+            <motion.div
+              variants={stagger}
+              initial="hidden"
+              animate="visible"
+              style={{ y: heroTextY }}
+              className="lg:col-span-7 text-left"
+            >
+              <motion.div variants={fadeUp} className="mb-6 flex justify-start">
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm text-slate-300 shadow-sm backdrop-blur-xl">
+                  <Star className="h-4 w-4 text-emerald-300" weight="fill" />
+                  Mutual fund comparison workspace
+                </span>
+              </motion.div>
+              <motion.h1
+                variants={fadeUp}
+                className="text-balance text-5xl font-semibold tracking-[-0.055em] text-white sm:text-7xl lg:text-8xl"
+              >
+                Mutual fund research, simplified.
+              </motion.h1>
+              <motion.p
+                variants={fadeUp}
+                className="mt-7 max-w-2xl text-pretty text-lg leading-8 text-slate-300 sm:text-xl"
+              >
+                Mooliq centralizes scattered Indian mutual fund factsheets, risk metrics, and NAV history into a clean workspace. Engineered for working professionals who demand quick, data-backed insights.
+              </motion.p>
+              <motion.div
+                variants={fadeUp}
+                className="mt-9 flex flex-col items-start justify-start gap-3 sm:flex-row"
+              >
+                <PremiumButton href="/dashboard">Try MooliqAI</PremiumButton>
+                <PremiumButton href="/login" variant="secondary">Login</PremiumButton>
+              </motion.div>
+              <motion.div variants={stagger} className="mt-8 flex flex-wrap gap-2">
+                <Badge>Factsheet consolidation</Badge>
+                <Badge>Alpha / Beta / Sharpe</Badge>
+                <Badge>Clean side-by-side comparison</Badge>
+                <Badge>Explainable AI research</Badge>
+              </motion.div>
             </motion.div>
-            <motion.h1 variants={fadeUp} className="text-balance text-5xl font-semibold tracking-[-0.055em] text-white sm:text-7xl lg:text-8xl">
-              Compare Indian mutual funds with calm, explainable AI.
-            </motion.h1>
-            <motion.p variants={fadeUp} className="mx-auto mt-7 max-w-3xl text-pretty text-lg leading-8 text-slate-300 sm:text-xl">
-              Mooliq helps you compare funds across NAV, returns, expense ratio, AUM, alpha, beta, Sharpe ratio, and risk signals. The live pipeline starts with Parag Parikh and ICICI funds, with major AMC coverage planned before full launch.
-            </motion.p>
-            <motion.div variants={fadeUp} className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <PremiumButton href="/dashboard">Try MooliqAI</PremiumButton>
-              <PremiumButton href="/login" variant="secondary">Login</PremiumButton>
-            </motion.div>
-            <motion.div variants={stagger} className="mt-8 flex flex-wrap justify-center gap-2">
-              <Badge>NAV + returns</Badge>
-              <Badge>Expense ratio + AUM</Badge>
-              <Badge>Alpha / Beta / Sharpe</Badge>
-              <Badge>Research-only</Badge>
-              <Badge>Stock coverage on the way</Badge>
-            </motion.div>
-          </motion.div>
 
-          <HeroPreview />
+            <motion.div
+              initial={{ opacity: 0, x: 28, rotateY: -6 }}
+              animate={{ opacity: 1, x: 0, rotateY: 0 }}
+              transition={{ duration: 0.95, ease, delay: 0.15 }}
+              className="lg:col-span-5 relative w-full rounded-[2.25rem] border border-white/12 bg-[#07111f]/90 p-1 shadow-[0_50px_160px_rgba(0,0,0,0.45)] backdrop-blur-2xl [transform-style:preserve-3d] hover:scale-[1.02] transition-all duration-300"
+            >
+              <div className="absolute inset-x-10 -top-px h-px bg-gradient-to-r from-transparent via-white/70 to-transparent" />
+              <div className="overflow-hidden rounded-[1.9rem] border border-white/10 bg-[#07111f]">
+                <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.035] px-5 py-4">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-red-400/80" />
+                    <span className="h-3 w-3 rounded-full bg-yellow-300/80" />
+                    <span className="h-3 w-3 rounded-full bg-emerald-300/80" />
+                  </div>
+                  <div className="text-xs text-emerald-300 font-semibold tracking-wide">Live Workspace</div>
+                </div>
+
+                <div className="p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                    <div>
+                      <h4 className="text-sm font-semibold text-white">Parag Parikh Flexi Cap</h4>
+                      <p className="text-xs text-slate-400">Direct Plan - Growth</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono text-sm font-semibold text-emerald-300">+22.4%</p>
+                      <p className="text-[10px] text-slate-500">1Y Return</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                    <div>
+                      <h4 className="text-sm font-semibold text-white">ICICI Pru Multi Asset</h4>
+                      <p className="text-xs text-slate-400">Direct Plan - Growth</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono text-sm font-semibold text-emerald-300">+19.8%</p>
+                      <p className="text-[10px] text-slate-500">1Y Return</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.05] p-3 text-xs leading-relaxed text-slate-200">
+                    <div className="flex items-center gap-1.5 font-semibold text-emerald-300 mb-1">
+                      <Sparkle className="h-3.5 w-3.5" weight="fill" />
+                      MooliqAI Synthesis
+                    </div>
+                    Parag Parikh Flexi Cap demonstrates superior risk-adjusted performance with a Sharpe Ratio of 1.22.
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+
+          <div className="mt-24 border-t border-white/10 pt-16">
+            <div className="mb-8 text-center">
+              <span className="text-xs uppercase tracking-[0.22em] text-emerald-300 font-semibold">Workspace Walkthrough</span>
+              <h3 className="mt-3 text-3xl font-semibold text-white">Factsheet Comparison Engine</h3>
+            </div>
+            <HeroPreview />
+          </div>
+          
           <LogoCloud />
 
           <motion.div
@@ -634,7 +710,7 @@ export default function MooliqLandingPage() {
             className="mx-auto mt-10 max-w-3xl rounded-full border border-sky-300/20 bg-sky-300/[0.07] px-5 py-3 text-center text-sm text-sky-100/90 backdrop-blur-xl"
           >
             <span className="inline-flex items-center justify-center gap-2">
-              <Clock3 className="h-4 w-4 text-sky-300" />
+              <Clock className="h-4 w-4 text-sky-300" />
               Stock coverage is on the way. Mooliq currently focuses on mutual fund comparison first, starting with the live Parag Parikh and ICICI pipeline.
             </span>
           </motion.div>
@@ -685,9 +761,9 @@ export default function MooliqLandingPage() {
 
       <section id="compare" className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-10">
         <SectionHeading
-          eyebrow="MVP focus"
-          title="Make the page sell one thing first: fund comparison."
-          body="The page should feel intentionally focused. Every major section should guide the visitor toward comparing mutual funds, while clearly stating that major AMC coverage and stock coverage are on the way."
+          eyebrow="Deep Screening"
+          title="Unbiased research. Zero noise."
+          body="Compare funds side-by-side on performance consistency, risk indicators, and costs. Mooliq standardizes scattered disclosures into one unified dashboard."
         />
         <FundPairCard />
       </section>
@@ -696,9 +772,9 @@ export default function MooliqLandingPage() {
         <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
           <SectionHeading
             align="left"
-            eyebrow="Capabilities"
-            title="A guided capability showcase, not a wall of cards."
-            body="The cards auto-advance in a defined order when the user reaches this section. Users can also select a dot or card label to view a specific capability."
+            eyebrow="Intelligence"
+            title="Explore mutual fund DNA & risk signals."
+            body="From instant risk-adjusted metrics to natural language explanations, Mooliq gives you the tools to screen and compare Indian mutual funds with speed."
           />
           <FeatureCarousel />
         </div>
@@ -710,13 +786,13 @@ export default function MooliqLandingPage() {
           whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           viewport={{ once: true, margin: "-80px" }}
           transition={{ duration: 0.8, ease }}
-          className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.14),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.12),transparent_34%),rgba(255,255,255,0.045)] p-6 sm:p-10"
+          className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.14),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.12),transparent_34%),rgba(255,255,255,0.045)] p-6 sm:p-10"
         >
           <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">Fund snapshot</p>
-              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.035em] text-white sm:text-5xl">Fund data should feel comparable, not scattered.</h2>
-              <p className="mt-5 text-lg leading-8 text-slate-400">Show the user what matters first: NAV freshness, expense ratio, AUM, returns, and risk flags. Avoid stock-first content until that module is ready.</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">Data integrity</p>
+              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.035em] text-white sm:text-5xl">Unified snapshots for deep screening.</h2>
+              <p className="mt-5 text-lg leading-8 text-slate-400">Instantly view essential metrics: NAV freshness, rolling returns, portfolio turnover, and expense ratios. No more digging through confusing PDF disclosures.</p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               {[
@@ -748,7 +824,7 @@ export default function MooliqLandingPage() {
         <SectionHeading
           eyebrow="Workflow"
           title="From fund factsheets to explainable comparison."
-          body="A premium landing page should make the workflow obvious before users click anything."
+          body="Discover how Mooliq parses and updates fund details to keep your research workflow seamless."
         />
         <motion.div variants={stagger} initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-80px" }} className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {steps.slice(0, 4).map(([number, title, body]) => (
@@ -796,9 +872,9 @@ export default function MooliqLandingPage() {
 
       <section className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-10">
         <SectionHeading
-          eyebrow="Research examples"
-          title="Make the first action obvious."
-          body="Use polished prompt chips to show the actual use cases your MVP supports."
+          eyebrow="Use cases"
+          title="Ask anything. Research instantly."
+          body="Discover how working professionals and advanced investors query Mooliq to extract key comparison points."
         />
         <MarqueePrompts />
       </section>
@@ -807,14 +883,14 @@ export default function MooliqLandingPage() {
         <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
           <SectionHeading
             align="left"
-            eyebrow="Trust layer"
-            title="Research-only by design."
-            body="Finance products need a stronger trust layer than normal SaaS pages. Keep the guardrails visible but elegant."
+            eyebrow="Safety first"
+            title="Unbiased intelligence. No advisory conflicts."
+            body="Mooliq is engineered strictly for self-directed research and education. We never recommend products, take commissions, or make buy/sell calls."
           />
           <motion.div variants={stagger} initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-80px" }} className="grid gap-4 sm:grid-cols-2">
             {[
               [Lock, "No advisory language", "Avoids buy/sell calls, portfolio advice, and recommendation phrasing."],
-              [Search, "Metric visibility", "Keeps source metrics visible beside the AI explanation."],
+              [MagnifyingGlass, "Metric visibility", "Keeps source metrics visible beside the AI explanation."],
               [Database, "Freshness signals", "Makes update status part of the product experience."],
               [ShieldCheck, "User protection", "Frames output as education and research only."],
             ].map(([Icon, title, body]) => (
