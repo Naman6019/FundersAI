@@ -16,15 +16,24 @@ on:
       parse_limit:
         description: 'Max pending docs parsed per AMC'
         required: false
-        default: '200'
+        default: '800'
+      parse_rounds:
+        description: 'How many parse rounds per AMC (each round uses parse_limit)'
+        required: false
+        default: '2'
       sbi_portfolio_url:
         description: 'Optional exact SBI monthly portfolio URL (leave empty for auto-discovery)'
         required: false
         default: ''
 
+concurrency:
+  group: sync-mf-disclosures-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 330
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -58,8 +67,11 @@ jobs:
           DISPATCH_AMCS: ${{ inputs.amcs }}
           DISPATCH_MAX_DOCS: ${{ inputs.max_documents }}
           DISPATCH_PARSE_LIMIT: ${{ inputs.parse_limit }}
+          DISPATCH_PARSE_ROUNDS: ${{ inputs.parse_rounds }}
           DISPATCH_SBI_PORTFOLIO_URL: ${{ inputs.sbi_portfolio_url }}
         run: |
+          set -euo pipefail
+
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
             echo "Error: Missing SUPABASE_URL or SUPABASE_KEY"
             exit 1
@@ -80,9 +92,11 @@ jobs:
             export MF_SBI_PORTFOLIO_DOCUMENT_URLS="$DISPATCH_SBI_PORTFOLIO_URL"
           fi
 
+          EVENT_NAME="${GITHUB_EVENT_NAME:-workflow_dispatch}"
           AMCS="${DISPATCH_AMCS:-ppfas,icici,hdfc,sbi}"
-          MAX_DOCS="${DISPATCH_MAX_DOCS:-2}"
-          PARSE_LIMIT="${DISPATCH_PARSE_LIMIT:-200}"
+          GLOBAL_MAX_DOCS="${DISPATCH_MAX_DOCS:-1}"
+          GLOBAL_PARSE_LIMIT="${DISPATCH_PARSE_LIMIT:-800}"
+          PARSE_ROUNDS="${DISPATCH_PARSE_ROUNDS:-2}"
 
           failed_amcs=()
           IFS=',' read -ra AMC_LIST <<< "$AMCS"
@@ -91,20 +105,42 @@ jobs:
             if [ -z "$amc" ]; then
               continue
             fi
-            echo "Processing AMC=$amc"
-            ok=false
-            for attempt in 1 2; do
-              echo "AMC=$amc attempt=$attempt"
-              if python -m backend.app.mf_ingestion.jobs.ingest_latest_amc_docs --amc "$amc" --all-document-types --max-documents "$MAX_DOCS" --strict && \
-                 python -m backend.app.mf_ingestion.jobs.parse_pending_documents --amc "$amc" --limit "$PARSE_LIMIT" --strict --fail-on-needs-review; then
-                ok=true
+
+            # Safer scheduled defaults to stay well below GitHub-hosted 6h limit.
+            max_docs="$GLOBAL_MAX_DOCS"
+            parse_limit="$GLOBAL_PARSE_LIMIT"
+            if [ "$EVENT_NAME" = "schedule" ]; then
+              case "$amc" in
+                ppfas) max_docs=1; parse_limit=500 ;;
+                hdfc)  max_docs=1; parse_limit=700 ;;
+                sbi)   max_docs=1; parse_limit=900 ;;
+                icici) max_docs=1; parse_limit=900 ;;
+                *)     max_docs=1; parse_limit=600 ;;
+              esac
+            fi
+
+            echo "Processing AMC=$amc max_docs=$max_docs parse_limit=$parse_limit parse_rounds=$PARSE_ROUNDS event=$EVENT_NAME"
+
+            if ! timeout 40m python -m backend.app.mf_ingestion.jobs.ingest_latest_amc_docs --amc "$amc" --all-document-types --max-documents "$max_docs" --strict; then
+              failed_amcs+=("$amc")
+              echo "AMC ingest failed/timed out: $amc"
+              continue
+            fi
+
+            amc_failed=false
+            round=1
+            while [ "$round" -le "$PARSE_ROUNDS" ]; do
+              echo "AMC=$amc parse_round=$round/$PARSE_ROUNDS"
+              if ! timeout 85m python -m backend.app.mf_ingestion.jobs.parse_pending_documents --amc "$amc" --limit "$parse_limit" --strict --fail-on-needs-review; then
+                amc_failed=true
+                echo "AMC parse failed/timed out: $amc round=$round"
                 break
               fi
-              sleep $((attempt * 20))
+              round=$((round + 1))
             done
-            if [ "$ok" != "true" ]; then
+
+            if [ "$amc_failed" = "true" ]; then
               failed_amcs+=("$amc")
-              echo "AMC failed after retries: $amc"
             fi
           done
 
