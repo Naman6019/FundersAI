@@ -30,7 +30,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit-schemes", type=int, default=int(os.getenv("MF_NAV_COMPACT_SCHEME_LIMIT", "300")))
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--scheme-source", choices=("core_snapshot", "old_nav_rows"), default="old_nav_rows")
+    parser.add_argument("--scheme-source", choices=("core_snapshot", "old_nav_rows"), default="core_snapshot")
     args = parser.parse_args()
 
     if not supabase:
@@ -162,25 +162,38 @@ def _load_target_scheme_codes(*, cutoff: str, limit: int, source: str) -> list[s
         )
         return [str(row.get("scheme_code")) for row in rows if row.get("scheme_code")]
 
-    rows = (
-        supabase.table("mutual_fund_nav_history")
-        .select("scheme_code,nav_date")
-        .lt("nav_date", cutoff)
-        .limit(max(limit * 100, 5000))
-        .execute()
-        .data
-        or []
-    )
+    # Old-row source fallback: paginate through old NAV rows ordered by scheme_code
+    # so we collect many unique schemes instead of only the first few.
     seen: set[str] = set()
     ordered: list[str] = []
-    for row in rows:
-        scheme_code = str(row.get("scheme_code") or "").strip()
-        if not scheme_code or scheme_code in seen:
-            continue
-        seen.add(scheme_code)
-        ordered.append(scheme_code)
-        if len(ordered) >= limit:
+    page_size = min(max(limit * 20, 2000), 10000)
+    max_scan_rows = max(limit * 400, 200000)
+    offset = 0
+
+    while offset < max_scan_rows and len(ordered) < limit:
+        page = (
+            supabase.table("mutual_fund_nav_history")
+            .select("scheme_code")
+            .lt("nav_date", cutoff)
+            .order("scheme_code", desc=False)
+            .range(offset, offset + page_size - 1)
+            .execute()
+            .data
+            or []
+        )
+        if not page:
             break
+
+        for row in page:
+            scheme_code = str(row.get("scheme_code") or "").strip()
+            if not scheme_code or scheme_code in seen:
+                continue
+            seen.add(scheme_code)
+            ordered.append(scheme_code)
+            if len(ordered) >= limit:
+                break
+        offset += page_size
+
     return ordered
 
 
