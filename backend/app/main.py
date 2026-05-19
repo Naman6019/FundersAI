@@ -113,6 +113,30 @@ def _fmt_age(age_days: float | None) -> str | None:
     return f"{age_days:.1f}d"
 
 
+def _count_mf_raw_documents(*, status: str | None = None) -> int:
+    if not supabase:
+        return 0
+    query = supabase.table("mf_raw_documents").select("id", count="exact")
+    if status:
+        query = query.eq("parse_status", status)
+    response = query.execute()
+    return int(response.count or 0)
+
+
+def _latest_mf_doc_timestamp(*, status: str | None, field: str) -> datetime | None:
+    if not supabase:
+        return None
+    query = supabase.table("mf_raw_documents").select(field).order(field, desc=True).limit(5)
+    if status:
+        query = query.eq("parse_status", status)
+    rows = query.execute().data or []
+    for row in rows:
+        dt = _to_utc_datetime(row.get(field))
+        if dt:
+            return dt
+    return None
+
+
 @app.get("/api/data-health")
 def data_health():
     now_utc = datetime.now(timezone.utc)
@@ -203,44 +227,99 @@ def data_health():
         else:
             metrics[2].update(status="Stale", note=f"Risk rows stale ({_fmt_age(risk_age_days)}).", last_updated=latest_risk_dt.isoformat())
 
+    pipeline = {
+        "source_table": "mf_raw_documents",
+        "total_documents": 0,
+        "parsed_count": 0,
+        "pending_count": 0,
+        "failed_count": 0,
+        "needs_review_count": 0,
+        "last_downloaded_at": None,
+        "last_parse_attempt_at": None,
+        "last_success_at": None,
+        "last_failure_at": None,
+    }
     try:
-        parsed_docs = (
-            supabase.table("mf_raw_documents")
-            .select("parsed_at,downloaded_at")
-            .in_("document_type", ["factsheet", "portfolio_disclosure"])
-            .eq("parse_status", "parsed")
-            .order("parsed_at", desc=True)
-            .limit(1)
-            .execute()
-            .data
-            or []
+        pending_count = (
+            _count_mf_raw_documents(status="pending")
+            + _count_mf_raw_documents(status="downloaded")
+            + _count_mf_raw_documents(status="needs_reparse")
         )
-        pending_docs = (
-            supabase.table("mf_raw_documents")
-            .select("id")
-            .in_("document_type", ["factsheet", "portfolio_disclosure"])
-            .in_("parse_status", ["pending", "downloaded", "needs_reparse"])
-            .limit(1)
-            .execute()
-            .data
-            or []
+        parsed_count = _count_mf_raw_documents(status="parsed")
+        failed_count = _count_mf_raw_documents(status="failed")
+        needs_review_count = _count_mf_raw_documents(status="needs_review")
+        total_documents = _count_mf_raw_documents()
+        last_downloaded_dt = _latest_mf_doc_timestamp(status=None, field="downloaded_at")
+        last_parse_attempt_dt = _latest_mf_doc_timestamp(status=None, field="parsed_at")
+        last_success_dt = _latest_mf_doc_timestamp(status="parsed", field="parsed_at")
+        last_failure_dt = _latest_mf_doc_timestamp(status="failed", field="parsed_at")
+
+        pipeline.update(
+            total_documents=total_documents,
+            parsed_count=parsed_count,
+            pending_count=pending_count,
+            failed_count=failed_count,
+            needs_review_count=needs_review_count,
+            last_downloaded_at=last_downloaded_dt.isoformat() if last_downloaded_dt else None,
+            last_parse_attempt_at=last_parse_attempt_dt.isoformat() if last_parse_attempt_dt else None,
+            last_success_at=last_success_dt.isoformat() if last_success_dt else None,
+            last_failure_at=last_failure_dt.isoformat() if last_failure_dt else None,
         )
+
+        if total_documents == 0:
+            metrics[3].update(
+                status="Missing",
+                note="No AMC factsheet/disclosure docs ingested yet.",
+                last_updated=None,
+            )
+        else:
+            success_age_days = _age_days(last_success_dt, now_utc)
+            success_age = _fmt_age(success_age_days) or "n/a"
+            note = (
+                f"parsed={parsed_count}, pending={pending_count}, failed={failed_count}, "
+                f"review={needs_review_count}, total={total_documents}"
+            )
+
+            if failed_count > 0 and not last_success_dt:
+                metrics[3].update(
+                    status="Error",
+                    note=f"{note}. Failed parses exist and no successful parse yet.",
+                    last_updated=last_failure_dt.isoformat() if last_failure_dt else None,
+                )
+            elif pending_count > 0:
+                metrics[3].update(
+                    status="Processing",
+                    note=f"{note}. Last successful parse age {success_age}.",
+                    last_updated=last_parse_attempt_dt.isoformat() if last_parse_attempt_dt else (last_success_dt.isoformat() if last_success_dt else None),
+                )
+            elif last_success_dt and success_age_days is not None and success_age_days <= 45:
+                if failed_count > 0 or needs_review_count > 0:
+                    metrics[3].update(
+                        status="Partial",
+                        note=f"{note}. Last successful parse age {success_age}.",
+                        last_updated=last_success_dt.isoformat(),
+                    )
+                else:
+                    metrics[3].update(
+                        status="Indexed",
+                        note=f"{note}. Last successful parse age {success_age}.",
+                        last_updated=last_success_dt.isoformat(),
+                    )
+            elif last_success_dt:
+                metrics[3].update(
+                    status="Stale",
+                    note=f"{note}. Last successful parse age {success_age}.",
+                    last_updated=last_success_dt.isoformat(),
+                )
+            else:
+                metrics[3].update(
+                    status="Missing",
+                    note=f"{note}. No successful parse found yet.",
+                    last_updated=last_parse_attempt_dt.isoformat() if last_parse_attempt_dt else None,
+                )
     except Exception as exc:
         logger.warning("Data health factsheet read failed: %s", exc)
-        parsed_docs = []
-        pending_docs = []
         metrics[3].update(status="Error", note="Factsheet pipeline tables not readable.", last_updated=None)
-
-    if metrics[3]["status"] != "Error":
-        parsed_row = parsed_docs[0] if parsed_docs else {}
-        latest_doc_dt = _to_utc_datetime(parsed_row.get("parsed_at")) or _to_utc_datetime(parsed_row.get("downloaded_at"))
-        doc_age_days = _age_days(latest_doc_dt, now_utc)
-        if latest_doc_dt and doc_age_days is not None and doc_age_days <= 45:
-            metrics[3].update(status="Indexed", note=f"Latest parsed doc age {_fmt_age(doc_age_days)}.", last_updated=latest_doc_dt.isoformat())
-        elif pending_docs:
-            metrics[3].update(status="Processing", note="Pending or downloaded docs are waiting to parse.", last_updated=latest_doc_dt.isoformat() if latest_doc_dt else None)
-        elif latest_doc_dt:
-            metrics[3].update(status="Stale", note=f"Latest parsed doc age {_fmt_age(doc_age_days)}.", last_updated=latest_doc_dt.isoformat())
 
     bad_statuses = {"Stale", "Missing", "Error"}
     overall = "ok" if all(metric["status"] not in bad_statuses for metric in metrics) else "degraded"
@@ -249,6 +328,7 @@ def data_health():
         "source": "supabase_snapshot",
         "checked_at": now_utc.isoformat(),
         "metrics": metrics,
+        "pipeline": pipeline,
     }
 
 

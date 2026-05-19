@@ -17,6 +17,14 @@ class AMCDocumentSource:
     enabled: bool = True
 
 
+def _env_url(name: str, default: str) -> str:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    value = value.strip()
+    return value or default
+
+
 SOURCES: dict[str, AMCDocumentSource] = {
     "ppfas": AMCDocumentSource(
         amc_name="Parag Parikh Mutual Fund",
@@ -46,8 +54,8 @@ SOURCES: dict[str, AMCDocumentSource] = {
         amc_name="HDFC Mutual Fund",
         amc_code="HDFC",
         adapter_key="hdfc",
-        factsheet_page_url=os.getenv("MF_HDFC_FACTSHEET_PAGE_URL", "https://www.hdfcfund.com/downloads").strip() or None,
-        portfolio_disclosure_page_url=os.getenv("MF_HDFC_PORTFOLIO_PAGE_URL", "https://www.hdfcfund.com/statutory-disclosure").strip() or None,
+        factsheet_page_url=_env_url("MF_HDFC_FACTSHEET_PAGE_URL", "https://www.hdfcfund.com/mutual-funds/factsheets"),
+        portfolio_disclosure_page_url=_env_url("MF_HDFC_PORTFOLIO_PAGE_URL", "https://www.hdfcfund.com/statutory-disclosure/portfolio/monthly-portfolio"),
         requires_confirmation=False,
         confirmation_type=None,
         confirmation_notes=None,
@@ -68,8 +76,8 @@ SOURCES: dict[str, AMCDocumentSource] = {
         amc_name="SBI Mutual Fund",
         amc_code="SBI",
         adapter_key="sbi",
-        factsheet_page_url=os.getenv("MF_SBI_FACTSHEET_PAGE_URL", "https://www.sbimf.com/en-us/downloads").strip() or None,
-        portfolio_disclosure_page_url=os.getenv("MF_SBI_PORTFOLIO_PAGE_URL", "https://www.sbimf.com/en-us/disclosures").strip() or None,
+        factsheet_page_url=_env_url("MF_SBI_FACTSHEET_PAGE_URL", "https://www.sbimf.com/factsheets"),
+        portfolio_disclosure_page_url=_env_url("MF_SBI_PORTFOLIO_PAGE_URL", "https://www.sbimf.com/portfolios"),
         requires_confirmation=False,
         confirmation_type=None,
         confirmation_notes=None,

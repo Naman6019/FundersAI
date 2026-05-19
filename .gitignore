@@ -30,6 +30,7 @@ pytest-cache-files-*/
 .DS_Store
 .vscode/
 AMC Data/
+logs/
 
 # AMC data artifacts (keep ingestion/parser code, ignore data only)
 AMC Data/**
