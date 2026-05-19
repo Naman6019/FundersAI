@@ -93,6 +93,9 @@ def main() -> None:
                             content_type=content_type,
                             payload={"cutoff": cutoff, "year": year},
                         )
+                scheme_archived_rows += len(old_rows)
+                archived_rows += len(old_rows)
+
                 if not args.dry_run:
                     min_date = str(old_rows[0].get("nav_date") or "")
                     max_date = str(old_rows[-1].get("nav_date") or "")
@@ -105,8 +108,9 @@ def main() -> None:
                         .lt("nav_date", cutoff)
                         .execute()
                     )
-                scheme_archived_rows += len(old_rows)
-                archived_rows += len(old_rows)
+                else:
+                    # Dry-run does not delete rows; break to avoid re-reading the same batch forever.
+                    break
 
             if scheme_archived_rows > 0:
                 processed += 1

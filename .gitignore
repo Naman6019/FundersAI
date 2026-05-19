@@ -29,17 +29,28 @@ pytest-cache-files-*/
 # Misc
 .DS_Store
 .vscode/
-AMC Data/
 logs/
+# AMC Data folder (escaped space and standard)
+AMC\ Data/
+AMC Data/
+"AMC Data/"
+AMC Data/**
 
 # AMC data artifacts (keep ingestion/parser code, ignore data only)
-AMC Data/**
 backend/data/mf_raw_docs/
 backend/data/mf_raw_docs/**
 data/mf_raw_docs/
 data/mf_raw_docs/**
 
-# Test Envs
+# Ignore all binary/generated document files
+*.pdf
+*.zip
+*.xlsx
+*.xls
+
+# Test output directories
+.pytest_tmp/
+backend/tests/tmp/
 test_env/
 
 # Explicit Docs & Configs to Keep

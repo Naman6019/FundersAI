@@ -66,7 +66,7 @@ export async function GET(request: Request) {
 
   const docsRes = await supabase
     .from('mf_raw_documents')
-    .select('amc_code,source_document_type,parse_status,downloaded_at,parsed_at')
+    .select('id,amc_code,source_document_type,source_url,parse_status,validation_issues,downloaded_at,parsed_at')
     .limit(30000);
   const docsRows = docsRes.data || [];
 
@@ -192,11 +192,31 @@ export async function GET(request: Request) {
     return true;
   });
 
+  const needsReviewEntries = docsRows
+    .filter((doc) => String(doc.parse_status || '').toLowerCase() === 'needs_review')
+    .map((doc) => {
+      const parsedAt = String(doc.parsed_at || '');
+      const downloadedAt = String(doc.downloaded_at || '');
+      return {
+        id: String(doc.id || ''),
+        amc: normalizeAmcCode(doc.amc_code || ''),
+        source_document_type: String(doc.source_document_type || ''),
+        source_url: String(doc.source_url || ''),
+        validation_issues: Array.isArray(doc.validation_issues) ? doc.validation_issues : [],
+        parsed_at: parsedAt || null,
+        downloaded_at: downloadedAt || null,
+        latest_at: parsedAt || downloadedAt || null,
+      };
+    })
+    .sort((a, b) => String(b.latest_at || '').localeCompare(String(a.latest_at || '')))
+    .slice(0, 200);
+
   return NextResponse.json({
     status: 'ok',
     checked_at: new Date().toISOString(),
     filter,
     rows: filtered.sort((a, b) => a.amc.localeCompare(b.amc)),
+    needs_review_entries: needsReviewEntries,
     pipeline_focus: {
       active_current: ['PPFAS', 'ICICI'],
       note: 'Current MVP pipeline is strongest on PPFAS and ICICI while broader AMC coverage is being expanded.',
@@ -206,4 +226,3 @@ export async function GET(request: Request) {
     ],
   });
 }
-

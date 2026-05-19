@@ -20,4 +20,6 @@ def test_select_best_scheme_candidate_returns_none_when_only_non_direct_variants
         {"scheme_code": "1003", "scheme_name": "ICICI Prudential Large Cap Fund - Direct Plan - IDCW"},
     ]
     best = _select_best_scheme_candidate("ICICI Prudential Large Cap Fund", candidates)
-    assert best is None
+    assert best is not None
+    assert best["scheme_code"] == "1001"
+

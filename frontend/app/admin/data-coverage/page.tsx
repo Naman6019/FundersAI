@@ -21,10 +21,22 @@ type CoverageRow = {
   missing_ter_count: number;
 };
 
+type NeedsReviewEntry = {
+  id: string;
+  amc: string;
+  source_document_type: string;
+  source_url: string;
+  validation_issues: string[];
+  parsed_at: string | null;
+  downloaded_at: string | null;
+  latest_at: string | null;
+};
+
 const FILTERS = ['all', 'fully-covered', 'partial', 'stale', 'missing-ter', 'missing-holdings', 'missing-ratios', 'parser-failing'] as const;
 
 type Payload = {
   rows: CoverageRow[];
+  needs_review_entries: NeedsReviewEntry[];
   pipeline_focus: { active_current: string[]; note: string };
   todo_notes: string[];
 };
@@ -59,7 +71,7 @@ export default function AdminDataCoveragePage() {
 
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} />;
-  if (!data || !data.rows?.length) return <EmptyState message="No coverage rows available." />;
+  if (!data || (!data.rows?.length && !data.needs_review_entries?.length)) return <EmptyState message="No coverage rows available." />;
 
   return (
     <div className="space-y-4">
@@ -121,6 +133,63 @@ export default function AdminDataCoveragePage() {
             </tbody>
           </table>
         </div>
+      </Panel>
+
+      <Panel>
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-[#d6e6ff]">Needs Review Entries</h3>
+          <span className="rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-300">
+            {data.needs_review_entries?.length || 0}
+          </span>
+        </div>
+        {!data.needs_review_entries?.length ? (
+          <p className="text-xs text-[#8ea6cb]">No documents currently marked as needs_review.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs">
+              <thead className="sticky top-0 bg-[#0d172a] text-[#95afd5]">
+                <tr>
+                  <th className="px-2 py-2 text-left">AMC</th>
+                  <th className="px-2 py-2 text-left">Document Type</th>
+                  <th className="px-2 py-2 text-left">Issues</th>
+                  <th className="px-2 py-2 text-left">Latest</th>
+                  <th className="px-2 py-2 text-left">Document</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.needs_review_entries.map((entry) => (
+                  <tr key={entry.id} className="border-t border-white/10">
+                    <td className="px-2 py-2 font-medium">{entry.amc}</td>
+                    <td className="px-2 py-2">{entry.source_document_type || '-'}</td>
+                    <td className="px-2 py-2">
+                      <div className="flex flex-wrap gap-1">
+                        {(entry.validation_issues || []).length ? (
+                          entry.validation_issues.map((issue, idx) => (
+                            <span key={`${entry.id}-${idx}`} className="rounded-full border border-amber-400/35 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-300">
+                              {issue}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[#8ea6cb]">-</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-2 py-2 text-[#b7c9e6]">{entry.latest_at ? new Date(entry.latest_at).toLocaleString() : '-'}</td>
+                    <td className="px-2 py-2">
+                      {entry.source_url ? (
+                        <a href={entry.source_url} target="_blank" rel="noreferrer" className="text-[#68a7ff] hover:underline">
+                          Open
+                        </a>
+                      ) : (
+                        <span className="text-[#8ea6cb]">-</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Panel>
 
       {data.todo_notes?.length ? (

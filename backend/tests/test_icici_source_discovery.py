@@ -25,6 +25,21 @@ class _FakeSession:
         self.headers: dict[str, str] = {}
         self.files_requests: list[dict] = []
 
+    def request(
+        self,
+        method: str,
+        url: str,
+        timeout: float | None = None,
+        headers: dict | None = None,
+        params: dict | None = None,
+        json: dict | None = None,
+    ) -> _FakeResponse:
+        if method.upper() == "GET":
+            return self.get(url, params=params, timeout=timeout)
+        elif method.upper() == "POST":
+            return self.post(url, json=json, timeout=timeout)
+        raise ValueError(f"Unsupported method: {method}")
+
     def get(self, url: str, params: dict | None = None, timeout: float | None = None) -> _FakeResponse:
         assert url == amc_downloader.ICICI_CATEGORIES_ENDPOINT
         assert params == {"userType": "Investor"}
@@ -95,6 +110,7 @@ class _FakeSession:
                 }
             }
         )
+
 
 
 def _icici_source() -> AMCDocumentSource:

@@ -203,11 +203,11 @@ def test_chat_mf_compare_does_not_call_live_clients(monkeypatch):
         "mutual_fund_core_snapshot": [
             {
                 "scheme_code": "1001",
-                "scheme_name": "Alpha Fund",
+                "scheme_name": "ICICI Alpha Fund",
                 "nav": 120.5,
                 "nav_date": "2026-05-10",
                 "category": "Flexi Cap",
-                "amc_name": "AMC A",
+                "amc_name": "ICICI Prudential Mutual Fund",
                 "expense_ratio": 1.2,
                 "aum": 10000,
                 "return_3y": 12.3,
@@ -215,11 +215,11 @@ def test_chat_mf_compare_does_not_call_live_clients(monkeypatch):
             },
             {
                 "scheme_code": "1002",
-                "scheme_name": "Beta Fund",
+                "scheme_name": "PPFAS Beta Fund",
                 "nav": 98.7,
                 "nav_date": "2026-05-10",
                 "category": "Flexi Cap",
-                "amc_name": "AMC B",
+                "amc_name": "PPFAS Mutual Fund",
                 "expense_ratio": 1.0,
                 "aum": 8000,
                 "return_3y": 10.4,
@@ -239,7 +239,7 @@ def test_chat_mf_compare_does_not_call_live_clients(monkeypatch):
     }
 
     async def fake_route_query(_query, _asset_type="auto"):
-        return {"intent": "compare", "compare_entities": ["Alpha Fund", "Beta Fund"], "ticker": None, "historical_period": "1mo", "sentiment_flag": False}
+        return {"intent": "compare", "compare_entities": ["ICICI Alpha Fund", "PPFAS Beta Fund"], "ticker": None, "historical_period": "1mo", "sentiment_flag": False}
 
     async def fake_synthesis_response(*_args, **_kwargs):
         return "ok"
@@ -258,7 +258,7 @@ def test_chat_mf_compare_does_not_call_live_clients(monkeypatch):
 
     monkeypatch.setattr(main.yf, "Ticker", FailTicker)
 
-    req = main.ChatRequest(query="Compare Alpha Fund and Beta Fund", asset_type="mutual_fund", research_depth="standard")
+    req = main.ChatRequest(query="Compare ICICI Alpha Fund and PPFAS Beta Fund", asset_type="mutual_fund", research_depth="standard")
     response = asyncio.run(main.chat_endpoint(req))
 
     assert "quant_data" in response
