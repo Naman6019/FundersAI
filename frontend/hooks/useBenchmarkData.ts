@@ -10,6 +10,16 @@ export interface BenchmarkPoint {
 let cachedData: BenchmarkPoint[] | null = null;
 let pendingRequest: Promise<BenchmarkPoint[]> | null = null;
 
+function normalizeToDdMmYyyy(raw: string): string | null {
+  if (!raw) return null;
+  if (/^\d{2}-\d{2}-\d{4}$/.test(raw)) return raw;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [year, month, day] = raw.split('-');
+    return `${day}-${month}-${year}`;
+  }
+  return null;
+}
+
 export function useBenchmarkData() {
   const [data, setData] = useState<BenchmarkPoint[] | null>(cachedData);
   const [loading, setLoading] = useState<boolean>(!cachedData);
@@ -30,12 +40,9 @@ export function useBenchmarkData() {
 
           for (const row of rows) {
             const close = Number(row?.close);
-            const isoDate = typeof row?.date === 'string' ? row.date : '';
-            if (!Number.isFinite(close) || !isoDate) continue;
-
-            const parts = isoDate.split('-');
-            if (parts.length !== 3) continue;
-            const date = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            const rawDate = typeof row?.date === 'string' ? row.date : '';
+            const date = normalizeToDdMmYyyy(rawDate);
+            if (!Number.isFinite(close) || !date) continue;
 
             points.push({
               date,

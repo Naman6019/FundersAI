@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 
@@ -45,12 +46,12 @@ SOURCES: dict[str, AMCDocumentSource] = {
         amc_name="HDFC Mutual Fund",
         amc_code="HDFC",
         adapter_key="hdfc",
-        factsheet_page_url=None,
-        portfolio_disclosure_page_url=None,
+        factsheet_page_url=os.getenv("MF_HDFC_FACTSHEET_PAGE_URL", "https://www.hdfcfund.com/downloads").strip() or None,
+        portfolio_disclosure_page_url=os.getenv("MF_HDFC_PORTFOLIO_PAGE_URL", "https://www.hdfcfund.com/statutory-disclosure").strip() or None,
         requires_confirmation=False,
         confirmation_type=None,
         confirmation_notes=None,
-        enabled=False,
+        enabled=True,
     ),
     "icici": AMCDocumentSource(
         amc_name="ICICI Prudential Mutual Fund",
@@ -67,12 +68,12 @@ SOURCES: dict[str, AMCDocumentSource] = {
         amc_name="SBI Mutual Fund",
         amc_code="SBI",
         adapter_key="sbi",
-        factsheet_page_url=None,
-        portfolio_disclosure_page_url=None,
+        factsheet_page_url=os.getenv("MF_SBI_FACTSHEET_PAGE_URL", "https://www.sbimf.com/en-us/downloads").strip() or None,
+        portfolio_disclosure_page_url=os.getenv("MF_SBI_PORTFOLIO_PAGE_URL", "https://www.sbimf.com/en-us/disclosures").strip() or None,
         requires_confirmation=False,
         confirmation_type=None,
         confirmation_notes=None,
-        enabled=False,
+        enabled=True,
     ),
 }
 

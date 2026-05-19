@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import requests
+from bs4 import BeautifulSoup
 from app.mf_ingestion.downloaders.base_downloader import BaseDownloader, DiscoveredDocument, DownloadedDocument
 from app.mf_ingestion.parsers.adapters.ppfas_adapter import PPFASAdapter
 from app.mf_ingestion.sources.registry import AMCDocumentSource
@@ -29,6 +30,11 @@ MONTH_PATTERN = re.compile(
     r"(?P<month>jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:[\s\-_]+(?P<day>\d{1,2}))?[\s\-_\,]+(?P<year>20\d{2})",
     re.IGNORECASE,
 )
+SUPPORTED_FILE_EXTENSIONS = {".pdf", ".xls", ".xlsx", ".xlsm", ".csv", ".zip"}
+GENERIC_KEYWORDS = {
+    "factsheet": ("factsheet", "fact sheet", "fund sheet", "monthly factsheet"),
+    "portfolio_disclosure": ("portfolio", "disclosure", "holdings", "statutory", "monthly portfolio"),
+}
 
 
 class AMCDownloader(BaseDownloader):
@@ -52,6 +58,21 @@ class AMCDownloader(BaseDownloader):
             return docs
         if adapter_key == "icici":
             docs = _discover_icici_documents(
+                self.source,
+                document_type=document_type,
+                timeout_seconds=self.timeout_seconds,
+                user_agent=self.user_agent,
+            )
+            logger.info(
+                "event=amc_discovery_complete amc_code=%s adapter=%s document_type=%s count=%s",
+                self.source.amc_code,
+                adapter_key,
+                document_type,
+                len(docs),
+            )
+            return docs
+        if adapter_key in {"hdfc", "sbi"}:
+            docs = _discover_generic_anchor_documents(
                 self.source,
                 document_type=document_type,
                 timeout_seconds=self.timeout_seconds,
@@ -108,6 +129,33 @@ class AMCDownloader(BaseDownloader):
                 file_bytes=response.content,
             )
 
+        if adapter_key in {"hdfc", "sbi"}:
+            referer = discovered.discovery_page_url or _base_site_url(discovered.url)
+            response = requests.get(
+                discovered.url,
+                timeout=self.timeout_seconds,
+                headers={
+                    "User-Agent": self.user_agent,
+                    "Referer": referer,
+                },
+            )
+            response.raise_for_status()
+            source_url = response.url or discovered.url
+            file_name = _derive_file_name(source_url, discovered.title)
+            return DownloadedDocument(
+                amc_name=discovered.amc_name,
+                amc_code=discovered.amc_code,
+                document_type=discovered.document_type,
+                source_url=source_url,
+                discovery_page_url=discovered.discovery_page_url,
+                file_name=file_name,
+                file_ext=discovered.file_ext,
+                report_month=discovered.report_month,
+                content_type=response.headers.get("Content-Type"),
+                file_size_bytes=len(response.content),
+                file_bytes=response.content,
+            )
+
         if adapter_key != "ppfas":
             raise NotImplementedError(f"No downloader configured for adapter_key={adapter_key}")
 
@@ -137,6 +185,86 @@ def _derive_file_name(url: str, fallback_title: str) -> str:
 
     safe = "_".join((fallback_title or "document").split())
     return safe or "document"
+
+
+def _discover_generic_anchor_documents(
+    source: AMCDocumentSource,
+    document_type: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    doc_type = (document_type or "").strip().lower()
+    listing_url = source.factsheet_page_url if doc_type == "factsheet" else source.portfolio_disclosure_page_url
+    if not listing_url:
+        listing_url = source.factsheet_page_url or source.portfolio_disclosure_page_url
+    if not listing_url:
+        return []
+
+    try:
+        response = requests.get(
+            listing_url,
+            timeout=timeout_seconds,
+            headers={"User-Agent": user_agent, "Referer": _base_site_url(listing_url)},
+        )
+        response.raise_for_status()
+    except Exception as exc:
+        logger.exception(
+            "event=generic_discovery_failed amc_code=%s document_type=%s reason=%s",
+            source.amc_code,
+            doc_type,
+            exc,
+        )
+        return []
+
+    soup = BeautifulSoup(response.text or "", "html.parser")
+    docs: list[DiscoveredDocument] = []
+    seen_urls: set[str] = set()
+    keywords = GENERIC_KEYWORDS.get(doc_type, ())
+    for anchor in soup.find_all("a"):
+        href = str(anchor.get("href") or "").strip()
+        if not href or href.startswith("#") or href.lower().startswith("javascript:") or href.lower().startswith("mailto:"):
+            continue
+
+        url = urljoin(response.url or listing_url, href)
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+
+        title = " ".join(anchor.get_text(" ", strip=True).split()) or Path(url.split("?", 1)[0]).name
+        combined = f"{title} {url}".lower()
+        ext = Path(urlsplit(url).path).suffix.lower() or _infer_file_ext_from_text(combined)
+        if ext not in SUPPORTED_FILE_EXTENSIONS:
+            continue
+
+        report_month = _detect_report_month_from_text(combined)
+        keyword_hits = sum(1 for keyword in keywords if keyword in combined)
+        if keywords and keyword_hits == 0:
+            # Keep weak matches for coverage, but with a lower ranking.
+            score_boost = -35
+        else:
+            score_boost = keyword_hits * 20
+
+        base_score = _generic_base_score(ext=ext, document_type=doc_type)
+        recency_score = 0
+        if report_month:
+            recency_score = (report_month.year * 12 + report_month.month) * 10
+
+        docs.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type=doc_type,
+                title=title,
+                url=url,
+                discovery_page_url=response.url or listing_url,
+                file_ext=ext,
+                report_month=report_month,
+                priority_score=base_score + recency_score + score_boost,
+            )
+        )
+
+    docs.sort(key=lambda item: item.priority_score, reverse=True)
+    return docs
 
 
 def _discover_icici_documents(
@@ -319,6 +447,26 @@ def _icici_base_score(ext: str, document_type: str) -> int:
     }.get(ext, 80)
 
 
+def _generic_base_score(ext: str, document_type: str) -> int:
+    if document_type == "portfolio_disclosure":
+        return {
+            ".xlsx": 220,
+            ".xls": 210,
+            ".xlsm": 205,
+            ".csv": 190,
+            ".zip": 180,
+            ".pdf": 120,
+        }.get(ext, 90)
+    return {
+        ".pdf": 220,
+        ".xlsx": 140,
+        ".xls": 130,
+        ".xlsm": 125,
+        ".csv": 110,
+        ".zip": 90,
+    }.get(ext, 80)
+
+
 def _detect_report_month_from_text(text: str) -> date | None:
     match = MONTH_PATTERN.search(text or "")
     if not match:
@@ -363,3 +511,10 @@ def _icici_blob_url(url: str) -> str:
         return url
     blob_path = "/blob" + path
     return urlunsplit((parsed.scheme, parsed.netloc, blob_path, parsed.query, parsed.fragment))
+
+
+def _base_site_url(url: str) -> str:
+    parsed = urlsplit(url)
+    if parsed.scheme and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}/"
+    return url

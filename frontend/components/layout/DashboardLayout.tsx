@@ -20,6 +20,28 @@ import StockDetailView from '@/components/canvas/StockDetailView';
 import MFDetailView from '@/components/canvas/MFDetailView';
 import ComparisonView from '@/components/canvas/ComparisonView';
 
+type DataHealthItem = {
+  label: string;
+  status: string;
+  note?: string | null;
+  last_updated?: string | null;
+};
+
+const DEFAULT_DATA_HEALTH: DataHealthItem[] = [
+  { label: 'MF NAV', status: 'Checking' },
+  { label: 'AUM / TER', status: 'Checking' },
+  { label: 'Risk metrics', status: 'Checking' },
+  { label: 'Factsheets', status: 'Checking' },
+];
+
+function statusColorClass(status: string): string {
+  const normalized = (status || '').toLowerCase();
+  if (['fresh', 'synced', 'ready', 'indexed'].includes(normalized)) return 'text-[#5be2c0]';
+  if (['lagging', 'partial', 'processing', 'checking'].includes(normalized)) return 'text-[#f7d37a]';
+  if (['stale', 'missing', 'error'].includes(normalized)) return 'text-[#ff9c9c]';
+  return 'text-[#b9cceb]';
+}
+
 function CanvasPlaceholder() {
   return (
     <div className="flex h-full flex-col rounded-[1.3rem] border border-[#2b3e5e] bg-[linear-gradient(160deg,rgba(12,26,47,0.95),rgba(8,19,36,0.95))] p-5 shadow-[0_18px_36px_rgba(0,0,0,0.3)]">
@@ -56,7 +78,7 @@ function CanvasPlaceholder() {
   );
 }
 
-function SidebarContent() {
+function SidebarContent({ dataHealth, healthCheckedAt }: { dataHealth: DataHealthItem[]; healthCheckedAt: string | null }) {
   return (
     <div className="flex h-full flex-col rounded-[1.2rem] border border-[#2b3e5f] bg-[linear-gradient(180deg,#111d31,#0d1728_60%,#0b1423)] p-4 shadow-[0_20px_40px_rgba(0,0,0,0.36)]">
       <div>
@@ -92,18 +114,18 @@ function SidebarContent() {
       <div className="mt-4 rounded-xl border border-[#314766] bg-[#122038] p-3">
         <p className="text-[11px] uppercase tracking-[0.16em] text-[#90a8ca]">Data health</p>
         <div className="mt-3 space-y-2">
-          {[
-            ['MF NAV', 'Fresh'],
-            ['AUM / TER', 'Synced'],
-            ['Risk metrics', 'Ready'],
-            ['Factsheets', 'Indexed'],
-          ].map(([label, status]) => (
+          {dataHealth.map(({ label, status, note }) => (
             <div key={label} className="flex items-center justify-between rounded-lg border border-[#2e4466] bg-[#0f1b30] px-3 py-2 text-xs">
-              <span className="text-[#9fb4d6]">{label}</span>
-              <span className="font-semibold text-[#5be2c0]">{status}</span>
+              <span className="text-[#9fb4d6]" title={note || ''}>{label}</span>
+              <span className={`font-semibold ${statusColorClass(status)}`} title={note || ''}>{status}</span>
             </div>
           ))}
         </div>
+        <p className="mt-2 text-[10px] text-[#7f97bc]">
+          {healthCheckedAt
+            ? `Checked ${new Date(healthCheckedAt).toLocaleString('en-IN', { hour12: false })}`
+            : 'Waiting for health snapshot'}
+        </p>
       </div>
 
       <div className="mt-4 rounded-xl border border-[#314766] bg-[#122038] p-3">
@@ -131,6 +153,9 @@ export default function DashboardLayout() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [canvasWidth, setCanvasWidth] = useState(640);
   const [isResizingCanvas, setIsResizingCanvas] = useState(false);
+  const [dataHealth, setDataHealth] = useState<DataHealthItem[]>(DEFAULT_DATA_HEALTH);
+  const [healthCheckedAt, setHealthCheckedAt] = useState<string | null>(null);
+  const navStatus = dataHealth.find((item) => item.label === 'MF NAV')?.status || 'Checking';
   const getCanvasBounds = () => {
     const min = 420;
     const max = Math.min(Math.max(window.innerWidth - 520, 560), 980);
@@ -139,6 +164,47 @@ export default function DashboardLayout() {
 
   useEffect(() => {
     fetch('/api/keepalive').catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadDataHealth = async () => {
+      try {
+        const res = await fetch('/api/data-health', { cache: 'no-store' });
+        if (!res.ok) {
+          if (!ignore) {
+            setDataHealth((current) => current.map((item) => ({ ...item, status: 'Error', note: 'Data health request failed.' })));
+          }
+          return;
+        }
+
+        const payload = await res.json();
+        const incoming = Array.isArray(payload?.metrics) ? payload.metrics : [];
+        const byLabel = new Map(incoming.map((item: DataHealthItem) => [item.label, item]));
+        if (!ignore) {
+          setDataHealth(
+            DEFAULT_DATA_HEALTH.map((item) => {
+              const next = byLabel.get(item.label);
+              return next ? { ...item, ...next } : item;
+            }),
+          );
+          setHealthCheckedAt(typeof payload?.checked_at === 'string' ? payload.checked_at : new Date().toISOString());
+        }
+      } catch {
+        if (!ignore) {
+          setDataHealth((current) => current.map((item) => ({ ...item, status: 'Error', note: 'Data health request failed.' })));
+        }
+      }
+    };
+
+    loadDataHealth();
+    const timer = window.setInterval(loadDataHealth, 120000);
+
+    return () => {
+      ignore = true;
+      window.clearInterval(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -259,7 +325,7 @@ export default function DashboardLayout() {
             </button>
             <div className="hidden items-center gap-1.5 text-xs font-medium text-[#61eac8] sm:flex">
               <Clock3 className="h-3.5 w-3.5" />
-              <span>NAV updated today</span>
+              <span className={statusColorClass(navStatus)}>MF NAV {navStatus}</span>
             </div>
           </div>
         </header>
@@ -267,7 +333,7 @@ export default function DashboardLayout() {
         <div className="flex h-[calc(100vh-64px)] overflow-hidden relative z-10 w-full">
           {!isMobile && !isSidebarCollapsed && (
             <aside className="w-[276px] shrink-0 border-r border-[#2b3e5f] bg-[#0c1626]/80 p-4 min-h-0 h-full overflow-y-auto">
-              <SidebarContent />
+              <SidebarContent dataHealth={dataHealth} healthCheckedAt={healthCheckedAt} />
             </aside>
           )}
 
@@ -309,7 +375,7 @@ export default function DashboardLayout() {
             className="h-full w-[290px] border-r border-[#2b3e5f] bg-[linear-gradient(180deg,#111d31,#0d1728_60%,#0b1423)] p-4"
             onClick={(event) => event.stopPropagation()}
           >
-            <SidebarContent />
+            <SidebarContent dataHealth={dataHealth} healthCheckedAt={healthCheckedAt} />
           </aside>
         </div>
       )}

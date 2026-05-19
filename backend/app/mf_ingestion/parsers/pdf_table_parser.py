@@ -9,6 +9,8 @@ class PDFTableParser:
         frames: list[pd.DataFrame] = []
         with pdfplumber.open(file_path) as pdf:
             for page in pdf.pages:
+                page_text = page.extract_text() or ""
+                page_text_head = "\n".join(page_text.splitlines()[:35])
                 tables = page.extract_tables() or []
                 for table in tables:
                     if not table:
@@ -18,5 +20,8 @@ class PDFTableParser:
                     df = pd.DataFrame(rows, columns=header)
                     df = df.dropna(how="all")
                     if not df.empty:
+                        df.attrs["page_number"] = page.page_number
+                        df.attrs["page_text_head"] = page_text_head
+                        df.attrs["page_text_full"] = page_text
                         frames.append(df)
         return frames

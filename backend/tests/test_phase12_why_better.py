@@ -356,3 +356,23 @@ def test_compare_synthesis_canvas_mode_hides_data_table(monkeypatch):
     assert "Detailed comparison metrics are visible in the canvas panel." in response
     assert "### Data Table" not in response
     assert "### How They Differ" not in response
+
+
+def test_news_markdown_has_takeaway_quote_and_source_link():
+    from app import main
+
+    news = [
+        {
+            "title": "Two funds receive over Rs 1,000 crore inflow in November",
+            "source": "The Economic Times",
+            "published": "Sat, 13 Dec 2025 08:00:00 GMT",
+            "url": "https://example.com/news-1",
+            "sentiment": "NEUTRAL",
+        }
+    ]
+
+    formatted = main._news_markdown(news)
+
+    assert "Takeaway:" in formatted
+    assert "Quoted headline:" in formatted
+    assert "([The Economic Times](https://example.com/news-1))" in formatted

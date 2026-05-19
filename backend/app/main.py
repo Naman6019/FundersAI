@@ -14,7 +14,7 @@ from pydantic import BaseModel
 import httpx
 import yfinance as yf
 import feedparser
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pytz
 import numpy as np
 import pandas as pd
@@ -77,6 +77,179 @@ def read_root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+def _to_utc_datetime(value: Any) -> datetime | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        raw = str(value).strip()
+        if not raw:
+            return None
+        if len(raw) == 10 and raw[4] == "-" and raw[7] == "-":
+            raw = f"{raw}T00:00:00+00:00"
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        try:
+            dt = datetime.fromisoformat(raw)
+        except ValueError:
+            return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _age_days(dt: datetime | None, now_utc: datetime) -> float | None:
+    if not dt:
+        return None
+    return max((now_utc - dt).total_seconds() / 86400.0, 0.0)
+
+
+def _fmt_age(age_days: float | None) -> str | None:
+    if age_days is None:
+        return None
+    return f"{age_days:.1f}d"
+
+
+@app.get("/api/data-health")
+def data_health():
+    now_utc = datetime.now(timezone.utc)
+    metrics = [
+        {"label": "MF NAV", "status": "Missing", "note": "No NAV snapshot rows found.", "last_updated": None},
+        {"label": "AUM / TER", "status": "Missing", "note": "No AUM+TER rows found.", "last_updated": None},
+        {"label": "Risk metrics", "status": "Missing", "note": "No risk metric rows found.", "last_updated": None},
+        {"label": "Factsheets", "status": "Missing", "note": "No parsed factsheet/disclosure docs found.", "last_updated": None},
+    ]
+
+    if not supabase:
+        return {
+            "status": "degraded",
+            "source": "supabase_unavailable",
+            "checked_at": now_utc.isoformat(),
+            "metrics": metrics,
+        }
+
+    try:
+        core_rows = (
+            supabase.table("mutual_fund_core_snapshot")
+            .select("scheme_code,nav_date,last_updated,aum,expense_ratio,alpha,beta,sharpe_ratio,max_drawdown_1y")
+            .order("last_updated", desc=True)
+            .limit(300)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:
+        logger.warning("Data health core snapshot read failed: %s", exc)
+        return {
+            "status": "degraded",
+            "source": "read_error",
+            "checked_at": now_utc.isoformat(),
+            "metrics": [
+                {"label": "MF NAV", "status": "Error", "note": "Core snapshot read failed.", "last_updated": None},
+                {"label": "AUM / TER", "status": "Error", "note": "Core snapshot read failed.", "last_updated": None},
+                {"label": "Risk metrics", "status": "Error", "note": "Core snapshot read failed.", "last_updated": None},
+                {"label": "Factsheets", "status": "Missing", "note": "Not checked due core snapshot read failure.", "last_updated": None},
+            ],
+        }
+
+    latest_nav_dt = max(
+        [dt for dt in (_to_utc_datetime(row.get("nav_date")) for row in core_rows) if dt is not None],
+        default=None,
+    )
+    nav_age_days = _age_days(latest_nav_dt, now_utc)
+    if latest_nav_dt:
+        nav_is_fresh = cache_policy.is_fresh(latest_nav_dt.isoformat(), "mutual_fund_nav", now=now_utc)
+        if nav_is_fresh:
+            metrics[0].update(status="Fresh", note=f"Latest NAV age {_fmt_age(nav_age_days)}.", last_updated=latest_nav_dt.isoformat())
+        elif nav_age_days is not None and nav_age_days <= 7:
+            metrics[0].update(status="Lagging", note=f"Latest NAV age {_fmt_age(nav_age_days)}.", last_updated=latest_nav_dt.isoformat())
+        else:
+            metrics[0].update(status="Stale", note=f"Latest NAV age {_fmt_age(nav_age_days)}.", last_updated=latest_nav_dt.isoformat())
+
+    aum_ter_rows = [row for row in core_rows if row.get("aum") not in (None, "") and row.get("expense_ratio") not in (None, "")]
+    latest_aum_ter_dt = max(
+        [dt for dt in (_to_utc_datetime(row.get("last_updated")) for row in aum_ter_rows) if dt is not None],
+        default=None,
+    )
+    aum_ter_age_days = _age_days(latest_aum_ter_dt, now_utc)
+    if latest_aum_ter_dt:
+        enrich_is_fresh = cache_policy.is_fresh(latest_aum_ter_dt.isoformat(), "mutual_fund_enrichment", now=now_utc)
+        if enrich_is_fresh:
+            metrics[1].update(status="Synced", note=f"Latest AUM/TER age {_fmt_age(aum_ter_age_days)}.", last_updated=latest_aum_ter_dt.isoformat())
+        elif aum_ter_age_days is not None and aum_ter_age_days <= 60:
+            metrics[1].update(status="Lagging", note=f"Latest AUM/TER age {_fmt_age(aum_ter_age_days)}.", last_updated=latest_aum_ter_dt.isoformat())
+        else:
+            metrics[1].update(status="Stale", note=f"Latest AUM/TER age {_fmt_age(aum_ter_age_days)}.", last_updated=latest_aum_ter_dt.isoformat())
+
+    def _risk_row_ready(row: dict[str, Any]) -> bool:
+        values = [row.get("sharpe_ratio"), row.get("max_drawdown_1y"), row.get("alpha"), row.get("beta")]
+        present = sum(1 for value in values if value not in (None, ""))
+        return present >= 2
+
+    risk_rows = [row for row in core_rows if _risk_row_ready(row)]
+    latest_risk_dt = max(
+        [dt for dt in (_to_utc_datetime(row.get("last_updated")) for row in risk_rows) if dt is not None],
+        default=None,
+    )
+    risk_age_days = _age_days(latest_risk_dt, now_utc)
+    if latest_risk_dt:
+        if latest_nav_dt and nav_age_days is not None and nav_age_days <= 7:
+            metrics[2].update(status="Ready", note=f"Risk rows present. Latest age {_fmt_age(risk_age_days)}.", last_updated=latest_risk_dt.isoformat())
+        elif risk_age_days is not None and risk_age_days <= 35:
+            metrics[2].update(status="Partial", note=f"Risk rows present, NAV freshness lagging ({_fmt_age(nav_age_days)}).", last_updated=latest_risk_dt.isoformat())
+        else:
+            metrics[2].update(status="Stale", note=f"Risk rows stale ({_fmt_age(risk_age_days)}).", last_updated=latest_risk_dt.isoformat())
+
+    try:
+        parsed_docs = (
+            supabase.table("mf_raw_documents")
+            .select("parsed_at,downloaded_at")
+            .in_("document_type", ["factsheet", "portfolio_disclosure"])
+            .eq("parse_status", "parsed")
+            .order("parsed_at", desc=True)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        pending_docs = (
+            supabase.table("mf_raw_documents")
+            .select("id")
+            .in_("document_type", ["factsheet", "portfolio_disclosure"])
+            .in_("parse_status", ["pending", "downloaded", "needs_reparse"])
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:
+        logger.warning("Data health factsheet read failed: %s", exc)
+        parsed_docs = []
+        pending_docs = []
+        metrics[3].update(status="Error", note="Factsheet pipeline tables not readable.", last_updated=None)
+
+    if metrics[3]["status"] != "Error":
+        parsed_row = parsed_docs[0] if parsed_docs else {}
+        latest_doc_dt = _to_utc_datetime(parsed_row.get("parsed_at")) or _to_utc_datetime(parsed_row.get("downloaded_at"))
+        doc_age_days = _age_days(latest_doc_dt, now_utc)
+        if latest_doc_dt and doc_age_days is not None and doc_age_days <= 45:
+            metrics[3].update(status="Indexed", note=f"Latest parsed doc age {_fmt_age(doc_age_days)}.", last_updated=latest_doc_dt.isoformat())
+        elif pending_docs:
+            metrics[3].update(status="Processing", note="Pending or downloaded docs are waiting to parse.", last_updated=latest_doc_dt.isoformat() if latest_doc_dt else None)
+        elif latest_doc_dt:
+            metrics[3].update(status="Stale", note=f"Latest parsed doc age {_fmt_age(doc_age_days)}.", last_updated=latest_doc_dt.isoformat())
+
+    bad_statuses = {"Stale", "Missing", "Error"}
+    overall = "ok" if all(metric["status"] not in bad_statuses for metric in metrics) else "degraded"
+    return {
+        "status": overall,
+        "source": "supabase_snapshot",
+        "checked_at": now_utc.isoformat(),
+        "metrics": metrics,
+    }
 
 
 @app.get("/api/v1/providers/usage")
@@ -619,7 +792,8 @@ def fetch_news(query: str, ticker: str, sentiment_flag: bool = False) -> list:
             news_items.append({
                 "title": entry.title,
                 "source": entry.source.title if hasattr(entry, 'source') else "News Source",
-                "published": entry.published
+                "published": entry.published,
+                "url": getattr(entry, "link", None),
             })
         return news_items
     except Exception as e:
@@ -923,13 +1097,38 @@ def _news_markdown(news_data: list) -> str:
     if not news_data:
         return "- No recent news found from configured sources."
 
+    def _safe_http_url(value: Any) -> str | None:
+        if _is_missing(value):
+            return None
+        text = str(value).strip()
+        if text.lower().startswith("http://") or text.lower().startswith("https://"):
+            return text
+        return None
+
+    def _headline_takeaway(title: str) -> str:
+        headline = (title or "").lower()
+        if any(token in headline for token in ["inflow", "aum", "corpus", "assets"]):
+            return "Takeaway: This reflects fund size and recent money movement, not guaranteed future return."
+        if any(token in headline for token in ["vs", "compare", "really the same", "same?"]):
+            return "Takeaway: Use this to compare portfolio style and risk profile before judging returns."
+        if any(token in headline for token in ["stocks held", "holdings", "portfolio"]):
+            return "Takeaway: Common holdings can increase overlap risk; diversify if both funds own similar top positions."
+        if any(token in headline for token in ["best mutual funds", "top", "rank"]):
+            return "Takeaway: Rankings are opinion-led; validate with 3Y/5Y returns, drawdown, expense ratio, and AUM trend."
+        return "Takeaway: Treat this as context only and cross-check with current NAV trend and risk metrics."
+
     rows = []
     for item in news_data[:6]:
         sentiment = f"**[{item.get('sentiment')}]** " if item.get("sentiment") else ""
         published = _safe_value(item.get("published"))
         source = _safe_value(item.get("source"))
         title = _safe_value(item.get("title"))
-        rows.append(f"- {sentiment}{published} {source}: {title}")
+        takeaway = _headline_takeaway(title)
+        url = _safe_http_url(item.get("url"))
+        source_label = source if source != "N/A" else "Source"
+        quoted = f"Quoted headline: \"{title}\"."
+        source_line = f"([{source_label}]({url}))" if url else f"(Source: {source_label})"
+        rows.append(f"- {sentiment}{published} {takeaway} {quoted} {source_line}")
     return "\n".join(rows) if rows else "- No recent news found from configured sources."
 
 def _sanitize_research_text(text: str) -> str:
@@ -1634,16 +1833,17 @@ async def chat_endpoint(req: ChatRequest):
     period = intent_info.get("historical_period", "1mo")
     sentiment = intent_info.get("sentiment_flag", False)
     
-    # Restrict mutual fund queries to PPFAS and ICICI Prudential
+    # Restrict mutual fund queries to AMCs with active ingestion pipelines
     is_unsupported_mf = False
     query_lower = req.query.lower()
+    supported_mf_keywords = ["parag", "ppfas", "icici", "hdfc", "sbi"]
     
     is_mf_context = (asset_type == "mutual_fund" or 
                      any(k in query_lower for k in ["fund", "mutual fund", "flexi cap", "small cap", "mid cap", "large cap", "elss", "nav", "amc", "sip", "portfolio"]))
     
     if is_mf_context and intent in ["compare", "quant", "both"]:
         unsupported_amc_keywords = [
-            "hdfc", "quant", "nippon", "sbi", "axis", "kotak", "mirae", "uti", "dsp", "tata", "motilal", 
+            "quant", "nippon", "axis", "kotak", "mirae", "uti", "dsp", "tata", "motilal", 
             "canara", "groww", "zerodha", "bandhan", "idfc", "franklin", "edelweiss", "sundaram", "lic", 
             "pgim", "invesco", "hsbc", "union", "baroda", "bnp", "mahindra", "shriram", "whiteoak", 
             "samco", "helios", "navi", "quantum", "taurus", "360 one", "iifl", "jm financial"
@@ -1659,14 +1859,14 @@ async def chat_endpoint(req: ChatRequest):
             if entities:
                 for ent in entities:
                     ent_lower = str(ent).lower()
-                    if not any(k in ent_lower for k in ["parag", "ppfas", "icici"]):
+                    if not any(k in ent_lower for k in supported_mf_keywords):
                         is_unsupported_mf = True
                         break
             else:
                 is_unsupported_mf = True
         elif intent in ["quant", "both"]:
             search_term = (ticker or req.query).lower()
-            if not any(k in search_term for k in ["parag", "ppfas", "icici"]):
+            if not any(k in search_term for k in supported_mf_keywords):
                 is_unsupported_mf = True
 
     if is_unsupported_mf:
@@ -1674,12 +1874,13 @@ async def chat_endpoint(req: ChatRequest):
 
 Mooliq currently only has active data pipelines set up for **PPFAS (Parag Parikh)** and **ICICI Prudential** mutual funds. 
 
-Live ingestion, portfolio holdings tracking, and historical return pipelines for other AMCs (such as **HDFC**, **Nippon India**, **Quant**, **SBI**, etc.) are currently being configured and are not yet active in this workspace.
+Live ingestion, portfolio holdings tracking, and historical return pipelines are currently active for **PPFAS**, **ICICI Prudential**, **HDFC**, and **SBI**.
+Other AMCs (such as **Nippon India**, **Quant**, **Axis**, etc.) are still being configured.
 
 To experience Mooliq's advanced research capabilities, please try:
-- Comparing **Parag Parikh Flexi Cap** and **ICICI Multi Asset Fund** (or other ICICI funds)
+- Comparing **Parag Parikh**, **ICICI**, **HDFC**, or **SBI** funds
 - Inspecting sector allocations, risk metrics, or portfolio holdings for these supported funds
-- Asking about NAV trends, expense ratios, or Sharpe/Alpha comparisons between PPFAS and ICICI Prudential."""
+- Asking about NAV trends, expense ratios, or Sharpe/Alpha comparisons across these supported AMCs."""
         
         return {
             "answer": advisory_message,

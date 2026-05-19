@@ -1,0 +1,62 @@
+name: Sync MF Disclosures
+
+on:
+  schedule:
+    - cron: '30 4 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      amcs:
+        description: 'Comma-separated AMCs (ppfas,icici,hdfc,sbi)'
+        required: false
+        default: 'ppfas,icici,hdfc,sbi'
+      max_documents:
+        description: 'Max documents per AMC per document type'
+        required: false
+        default: '2'
+      parse_limit:
+        description: 'Max pending docs parsed per AMC'
+        required: false
+        default: '200'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Ingest + parse disclosures
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          DISPATCH_AMCS: ${{ inputs.amcs }}
+          DISPATCH_MAX_DOCS: ${{ inputs.max_documents }}
+          DISPATCH_PARSE_LIMIT: ${{ inputs.parse_limit }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "Error: Missing SUPABASE_URL or SUPABASE_KEY"
+            exit 1
+          fi
+
+          AMCS="${DISPATCH_AMCS:-ppfas,icici,hdfc,sbi}"
+          MAX_DOCS="${DISPATCH_MAX_DOCS:-2}"
+          PARSE_LIMIT="${DISPATCH_PARSE_LIMIT:-200}"
+
+          IFS=',' read -ra AMC_LIST <<< "$AMCS"
+          for amc in "${AMC_LIST[@]}"; do
+            amc="$(echo "$amc" | xargs)"
+            if [ -z "$amc" ]; then
+              continue
+            fi
+            echo "Processing AMC=$amc"
+            python -m backend.app.mf_ingestion.jobs.ingest_latest_amc_docs --amc "$amc" --all-document-types --max-documents "$MAX_DOCS"
+            python -m backend.app.mf_ingestion.jobs.parse_pending_documents --amc "$amc" --limit "$PARSE_LIMIT"
+          done

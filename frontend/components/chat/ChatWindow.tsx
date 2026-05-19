@@ -8,6 +8,37 @@ import { Send, Sparkles } from 'lucide-react';
 import { useCanvasStore } from '@/store/useCanvasStore';
 import { AssetType, ComparisonViewMode, Message, ResearchDepth, useChatStore } from '@/store/useChatStore';
 
+const markdownComponents = {
+  h1: (props: React.ComponentProps<'h1'>) => <h1 className="mb-3 mt-1 text-lg font-bold text-white" {...props} />,
+  h2: (props: React.ComponentProps<'h2'>) => <h2 className="mb-2 mt-4 text-base font-semibold text-[#d7e6ff]" {...props} />,
+  h3: (props: React.ComponentProps<'h3'>) => <h3 className="mb-2 mt-3 text-sm font-semibold text-[#c5dcff]" {...props} />,
+  p: (props: React.ComponentProps<'p'>) => <p className="mb-2 leading-7 text-[#d9e8ff]" {...props} />,
+  ul: (props: React.ComponentProps<'ul'>) => <ul className="mb-3 list-disc space-y-1 pl-5" {...props} />,
+  ol: (props: React.ComponentProps<'ol'>) => <ol className="mb-3 list-decimal space-y-1 pl-5" {...props} />,
+  li: (props: React.ComponentProps<'li'>) => <li className="leading-7 text-[#d9e8ff]" {...props} />,
+  blockquote: (props: React.ComponentProps<'blockquote'>) => <blockquote className="mb-3 border-l-2 border-[#4f8ff7]/60 pl-3 text-[#c4d9fb]" {...props} />,
+  a: (props: React.ComponentProps<'a'>) => (
+    <a
+      className="text-[#8fc0ff] underline underline-offset-2 hover:text-[#b6d7ff]"
+      target="_blank"
+      rel="noreferrer"
+      {...props}
+    />
+  ),
+  table: (props: React.ComponentProps<'table'>) => (
+    <div className="mb-3 overflow-x-auto rounded-lg border border-[#30486c]">
+      <table className="min-w-full border-collapse text-xs sm:text-sm" {...props} />
+    </div>
+  ),
+  thead: (props: React.ComponentProps<'thead'>) => <thead className="bg-[#1a2b45] text-[#d7e6ff]" {...props} />,
+  tbody: (props: React.ComponentProps<'tbody'>) => <tbody className="bg-[#0f1d33]" {...props} />,
+  tr: (props: React.ComponentProps<'tr'>) => <tr className="border-t border-[#2d4468]" {...props} />,
+  th: (props: React.ComponentProps<'th'>) => <th className="px-3 py-2 text-left font-semibold" {...props} />,
+  td: (props: React.ComponentProps<'td'>) => <td className="px-3 py-2 align-top text-[#d9e8ff]" {...props} />,
+  code: (props: React.ComponentProps<'code'>) => <code className="rounded bg-[#0a1528] px-1.5 py-0.5 text-[#9fcbff]" {...props} />,
+  hr: (props: React.ComponentProps<'hr'>) => <hr className="my-3 border-[#2d4468]" {...props} />,
+};
+
 export default function ChatWindow() {
   const searchParams = useSearchParams();
   const { setView, setIds, openCanvas, closeCanvas } = useCanvasStore();
@@ -143,7 +174,11 @@ export default function ChatWindow() {
             }
           >
             {msg.role === 'system' ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+              <div className="chat-markdown text-sm">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                  {msg.content}
+                </ReactMarkdown>
+              </div>
             ) : (
               msg.content
             )}
