@@ -8,7 +8,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, List, Literal
 from dotenv import load_dotenv
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Query
+from fastapi import FastAPI, BackgroundTasks, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import httpx
@@ -135,6 +135,16 @@ def _latest_mf_doc_timestamp(*, status: str | None, field: str) -> datetime | No
         if dt:
             return dt
     return None
+
+
+def _require_admin_key(x_admin_key: str | None) -> None:
+    expected_admin_key = os.getenv("MF_INTERNAL_ADMIN_KEY", "").strip()
+    if not expected_admin_key or x_admin_key != expected_admin_key:
+        raise HTTPException(status_code=403, detail="admin_auth_required")
+
+
+def _iso_or_none(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None
 
 
 @app.get("/api/data-health")
@@ -329,6 +339,324 @@ def data_health():
         "checked_at": now_utc.isoformat(),
         "metrics": metrics,
         "pipeline": pipeline,
+    }
+
+
+@app.get("/api/admin/ops-overview")
+def admin_ops_overview(x_admin_key: str | None = Header(default=None, alias="X-Admin-Key")):
+    _require_admin_key(x_admin_key)
+    now_utc = datetime.now(timezone.utc)
+    if not supabase:
+        raise HTTPException(status_code=503, detail="supabase_unavailable")
+
+    workflow_runs: list[dict[str, Any]] = []
+    workflow_source_table = "data_provider_runs"
+    try:
+        rows = (
+            supabase.table("data_provider_runs")
+            .select("provider,job_name,status,started_at,finished_at,symbols_attempted,symbols_succeeded,symbols_failed,error_summary,metadata")
+            .order("started_at", desc=True)
+            .limit(120)
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        rows = []
+
+    if not rows:
+        workflow_source_table = "provider_runs"
+        try:
+            rows = (
+                supabase.table("provider_runs")
+                .select("provider,job_name,status,started_at,finished_at,symbols_attempted,symbols_succeeded,symbols_failed,error_summary,metadata")
+                .order("started_at", desc=True)
+                .limit(120)
+                .execute()
+                .data
+                or []
+            )
+        except Exception:
+            rows = []
+
+    for row in rows:
+        started_at = _to_utc_datetime(row.get("started_at"))
+        finished_at = _to_utc_datetime(row.get("finished_at"))
+        duration_seconds = None
+        if started_at and finished_at:
+            duration_seconds = max(int((finished_at - started_at).total_seconds()), 0)
+        workflow_runs.append(
+            {
+                "provider": row.get("provider"),
+                "job_name": row.get("job_name"),
+                "status": row.get("status"),
+                "started_at": _iso_or_none(started_at),
+                "finished_at": _iso_or_none(finished_at),
+                "duration_seconds": duration_seconds,
+                "symbols_attempted": int(row.get("symbols_attempted") or 0),
+                "symbols_succeeded": int(row.get("symbols_succeeded") or 0),
+                "symbols_failed": int(row.get("symbols_failed") or 0),
+                "error_summary": row.get("error_summary"),
+                "metadata": row.get("metadata") if isinstance(row.get("metadata"), dict) else {},
+            }
+        )
+
+    status_summary: dict[str, int] = {}
+    failures_24h = 0
+    successes_24h = 0
+    window_24h = now_utc - timedelta(hours=24)
+    for run in workflow_runs:
+        status = str(run.get("status") or "unknown").strip().lower()
+        status_summary[status] = status_summary.get(status, 0) + 1
+        started_at = _to_utc_datetime(run.get("started_at"))
+        if not started_at or started_at < window_24h:
+            continue
+        if status in {"success", "ok", "completed", "done"}:
+            successes_24h += 1
+        elif status in {"failed", "error", "partial_failed", "timeout"}:
+            failures_24h += 1
+
+    mf_pipeline_rows: list[dict[str, Any]] = []
+    try:
+        raw_rows = (
+            supabase.table("mf_raw_documents")
+            .select("amc_code,source_document_type,parse_status,downloaded_at,parsed_at,updated_at")
+            .order("downloaded_at", desc=True)
+            .limit(12000)
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        raw_rows = []
+
+    pipeline_map: dict[tuple[str, str], dict[str, Any]] = {}
+    pending_statuses = {"pending", "downloaded", "needs_reparse"}
+    for row in raw_rows:
+        amc_code = str(row.get("amc_code") or "UNKNOWN").strip().upper() or "UNKNOWN"
+        doc_type = str(row.get("source_document_type") or "unknown").strip().lower() or "unknown"
+        parse_status = str(row.get("parse_status") or "").strip().lower()
+        key = (amc_code, doc_type)
+        bucket = pipeline_map.setdefault(
+            key,
+            {
+                "amc_code": amc_code,
+                "document_type": doc_type,
+                "total_documents": 0,
+                "parsed_count": 0,
+                "pending_count": 0,
+                "failed_count": 0,
+                "needs_review_count": 0,
+                "last_downloaded_at": None,
+                "last_parse_attempt_at": None,
+                "last_success_at": None,
+                "last_failure_at": None,
+            },
+        )
+        bucket["total_documents"] += 1
+        if parse_status == "parsed":
+            bucket["parsed_count"] += 1
+        if parse_status in pending_statuses:
+            bucket["pending_count"] += 1
+        if parse_status == "failed":
+            bucket["failed_count"] += 1
+        if parse_status == "needs_review":
+            bucket["needs_review_count"] += 1
+
+        downloaded_at = _to_utc_datetime(row.get("downloaded_at"))
+        parsed_at = _to_utc_datetime(row.get("parsed_at"))
+        updated_at = _to_utc_datetime(row.get("updated_at"))
+
+        last_downloaded_at = _to_utc_datetime(bucket.get("last_downloaded_at"))
+        if downloaded_at and (not last_downloaded_at or downloaded_at > last_downloaded_at):
+            bucket["last_downloaded_at"] = downloaded_at.isoformat()
+
+        parse_attempt = parsed_at or updated_at
+        last_parse_attempt_at = _to_utc_datetime(bucket.get("last_parse_attempt_at"))
+        if parse_attempt and (not last_parse_attempt_at or parse_attempt > last_parse_attempt_at):
+            bucket["last_parse_attempt_at"] = parse_attempt.isoformat()
+
+        if parse_status == "parsed" and parse_attempt:
+            last_success_at = _to_utc_datetime(bucket.get("last_success_at"))
+            if not last_success_at or parse_attempt > last_success_at:
+                bucket["last_success_at"] = parse_attempt.isoformat()
+
+        if parse_status == "failed" and parse_attempt:
+            last_failure_at = _to_utc_datetime(bucket.get("last_failure_at"))
+            if not last_failure_at or parse_attempt > last_failure_at:
+                bucket["last_failure_at"] = parse_attempt.isoformat()
+
+    mf_pipeline_rows = sorted(
+        pipeline_map.values(),
+        key=lambda row: (str(row.get("amc_code") or ""), str(row.get("document_type") or "")),
+    )
+
+    try:
+        dq_rows = (
+            supabase.table("data_quality_issues")
+            .select("id,symbol,table_name,field_name,issue_type,issue_message,source,detected_at")
+            .order("detected_at", desc=True)
+            .limit(120)
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        dq_rows = []
+
+    dq_last_24h = 0
+    dq_last_7d = 0
+    dq_24h_window = now_utc - timedelta(hours=24)
+    dq_7d_window = now_utc - timedelta(days=7)
+    for row in dq_rows:
+        detected_at = _to_utc_datetime(row.get("detected_at"))
+        if detected_at and detected_at >= dq_24h_window:
+            dq_last_24h += 1
+        if detected_at and detected_at >= dq_7d_window:
+            dq_last_7d += 1
+
+    try:
+        mf_failed_docs = int(
+            (
+                supabase.table("mf_raw_documents")
+                .select("id", count="exact")
+                .eq("parse_status", "failed")
+                .execute()
+                .count
+            )
+            or 0
+        )
+    except Exception:
+        mf_failed_docs = 0
+
+    try:
+        mf_review_queue = int(
+            (
+                supabase.table("mf_parse_review_queue")
+                .select("id", count="exact")
+                .eq("status", "pending_review")
+                .execute()
+                .count
+            )
+            or 0
+        )
+    except Exception:
+        mf_review_queue = 0
+
+    return {
+        "status": "ok",
+        "checked_at": now_utc.isoformat(),
+        "workflow_source_table": workflow_source_table,
+        "workflow_runs": workflow_runs,
+        "workflow_summary": {
+            "recent_run_count": len(workflow_runs),
+            "status_counts": status_summary,
+            "successes_24h": successes_24h,
+            "failures_24h": failures_24h,
+        },
+        "mf_pipeline": mf_pipeline_rows,
+        "data_quality": {
+            "recent_issues": dq_rows,
+            "issue_count_24h": dq_last_24h,
+            "issue_count_7d": dq_last_7d,
+            "mf_failed_documents": mf_failed_docs,
+            "mf_pending_review": mf_review_queue,
+        },
+    }
+
+
+@app.get("/api/admin/mf-resolver-debug")
+def admin_mf_resolver_debug(
+    query: str = Query(..., min_length=2),
+    horizon: str = Query("3Y", pattern="^(1Y|3Y|5Y)$"),
+    limit: int = Query(20, ge=5, le=50),
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+):
+    _require_admin_key(x_admin_key)
+    if not supabase:
+        raise HTTPException(status_code=503, detail="supabase_unavailable")
+
+    query_text = str(query or "").strip()
+    normalized_query = _normalize_fund_text(query_text)
+    if not normalized_query:
+        return {
+            "input_query": query_text,
+            "normalized_query": normalized_query,
+            "selected_candidate": None,
+            "top_candidates": [],
+            "scoring_breakdown": {
+                "horizon": horizon,
+                "min_history_points": _resolver_horizon_to_min_points(horizon),
+            },
+        }
+
+    words = [word for word in normalized_query.split() if word]
+    search_pattern = f"%{'%'.join(words)}%"
+
+    rows = (
+        supabase.table("mutual_fund_core_snapshot")
+        .select("scheme_code,scheme_name,amc_name,category,sub_category,plan_type,option_type")
+        .ilike("scheme_name", search_pattern)
+        .limit(150)
+        .execute()
+        .data
+        or []
+    )
+
+    min_history_points = _resolver_horizon_to_min_points(horizon)
+    nav_history_cache: dict[str, dict[str, Any]] = {}
+    scored = _score_fund_candidates(
+        query_text,
+        rows,
+        nav_history_cache=nav_history_cache,
+        min_history_points=min_history_points,
+    )
+
+    top_candidates: list[dict[str, Any]] = []
+    for index, item in enumerate(scored[:limit]):
+        row = item.get("row") or {}
+        history_summary = item.get("history_summary") or {}
+        top_candidates.append(
+            {
+                "rank": index + 1,
+                "selected": index == 0,
+                "scheme_code": str(row.get("scheme_code") or ""),
+                "scheme_name": row.get("scheme_name"),
+                "amc_name": row.get("amc_name"),
+                "category": row.get("category"),
+                "sub_category": row.get("sub_category"),
+                "plan_type": row.get("plan_type"),
+                "option_type": row.get("option_type"),
+                "match_score": int(item.get("score") or 0),
+                "nav_history_points": int(item.get("history_points") or 0),
+                "first_nav_date": history_summary.get("first_nav_date"),
+                "last_nav_date": history_summary.get("last_nav_date"),
+                "supports": _supports_from_history_summary(history_summary),
+                "penalty_notes": item.get("notes") or [],
+            }
+        )
+
+    selected_candidate = top_candidates[0] if top_candidates else None
+    if selected_candidate:
+        selected_candidate = {
+            **selected_candidate,
+            "resolver_confidence": {
+                "label": "high" if len(top_candidates) == 1 else ("high" if selected_candidate["match_score"] - top_candidates[1]["match_score"] >= 40 else "medium"),
+                "score_gap_vs_next": 0 if len(top_candidates) == 1 else selected_candidate["match_score"] - top_candidates[1]["match_score"],
+            },
+            "resolver_notes": selected_candidate.get("penalty_notes", []),
+        }
+
+    return {
+        "input_query": query_text,
+        "normalized_query": normalized_query,
+        "selected_candidate": selected_candidate,
+        "top_candidates": top_candidates,
+        "scoring_breakdown": {
+            "horizon": horizon,
+            "min_history_points": min_history_points,
+            "candidate_count": len(scored),
+        },
     }
 
 
@@ -1645,8 +1973,23 @@ def _pick_best_fund_match(
     nav_history_cache: dict[str, dict[str, Any]] | None = None,
     min_history_points: int = 0,
 ) -> dict | None:
+    scored_rows = _score_fund_candidates(
+        entity,
+        rows,
+        nav_history_cache=nav_history_cache,
+        min_history_points=min_history_points,
+    )
+    return scored_rows[0]["row"] if scored_rows else None
+
+
+def _score_fund_candidates(
+    entity: str,
+    rows: list[dict],
+    nav_history_cache: dict[str, dict[str, Any]] | None = None,
+    min_history_points: int = 0,
+) -> list[dict[str, Any]]:
     if not rows:
-        return None
+        return []
 
     entity_norm = _normalize_fund_text(entity.replace(" fund", "").replace(" growth", ""))
     entity_words = [w for w in entity_norm.split() if len(w) > 2]
@@ -1658,55 +2001,80 @@ def _pick_best_fund_match(
 
     scored_rows: list[dict[str, Any]] = []
     for row in rows:
+        notes: list[str] = []
         name_norm = _normalize_fund_text(row.get("scheme_name", ""))
         value = 0
         if entity_norm and entity_norm in name_norm:
             value += 100
+            notes.append("name_contains_full_query:+100")
         value += sum(10 for word in entity_words if word in name_norm)
+        overlap_hits = sum(1 for word in entity_words if word in name_norm)
+        if overlap_hits:
+            notes.append(f"token_overlap:+{overlap_hits * 10}")
         # Always prefer Direct Growth siblings for AMC-derived fields.
         if "direct" in name_norm:
             value += 30
+            notes.append("direct_bonus:+30")
         else:
             value -= 20
+            notes.append("direct_missing_penalty:-20")
         if "growth" in name_norm:
             value += 20
+            notes.append("growth_bonus:+20")
         if "regular" in name_norm:
             value -= 35
+            notes.append("regular_penalty:-35")
         if "idcw" in name_norm or "dividend" in name_norm:
             value -= 25
+            notes.append("idcw_dividend_penalty:-25")
         if "index" in name_norm and "index" not in entity_norm:
             value -= 35
+            notes.append("index_mismatch_penalty:-35")
         if "etf" in name_norm and "etf" not in entity_norm:
             value -= 35
+            notes.append("etf_mismatch_penalty:-35")
         if "institutional" in name_norm and "institutional" not in entity_norm:
             value -= 20
+            notes.append("institutional_penalty:-20")
         if "passive" in name_norm and not wants_passive:
             value -= 80
+            notes.append("passive_mismatch_penalty:-80")
         if "fund of funds" in name_norm and not wants_fof:
             value -= 70
+            notes.append("fof_mismatch_penalty:-70")
         if wants_direct and "regular" in name_norm:
             value -= 60
+            notes.append("direct_requested_regular_penalty:-60")
         if wants_regular and "direct" in name_norm:
             value -= 60
+            notes.append("regular_requested_direct_penalty:-60")
         if wants_multi_asset and "multi asset" in name_norm:
             value += 20
+            notes.append("multi_asset_match_bonus:+20")
         if wants_multi_asset and "fund of funds" in name_norm and not wants_fof:
             value -= 30
+            notes.append("multi_asset_fof_penalty:-30")
 
         history = _nav_history_summary_for_scheme(row.get("scheme_code"), nav_history_cache)
         history_points = int(history.get("count") or 0)
         if history_points == 0:
             value -= 30
+            notes.append("no_nav_history_penalty:-30")
         else:
-            value += min(history_points // 200, 30)
+            history_bonus = min(history_points // 200, 30)
+            value += history_bonus
+            notes.append(f"history_bonus:+{history_bonus}")
         if min_history_points > 0 and history_points < min_history_points:
             value -= 120
+            notes.append(f"min_history_penalty:-120(required={min_history_points})")
 
         scored_rows.append(
             {
                 "score": value,
                 "history_points": history_points,
                 "row": row,
+                "notes": notes,
+                "history_summary": history,
             }
         )
 
@@ -1726,7 +2094,29 @@ def _pick_best_fund_match(
                 for item in scored_rows[:5]
             ],
         )
-    return scored_rows[0]["row"] if scored_rows else None
+    return scored_rows
+
+
+def _supports_from_history_summary(summary: dict[str, Any]) -> dict[str, bool]:
+    first_nav = _to_utc_datetime(summary.get("first_nav_date"))
+    last_nav = _to_utc_datetime(summary.get("last_nav_date"))
+    if not first_nav or not last_nav:
+        return {"1Y": False, "3Y": False, "5Y": False}
+    span_days = max(int((last_nav - first_nav).days), 0)
+    return {
+        "1Y": span_days >= 365,
+        "3Y": span_days >= 365 * 3,
+        "5Y": span_days >= 365 * 5,
+    }
+
+
+def _resolver_horizon_to_min_points(horizon: str) -> int:
+    lookup = {
+        "1Y": 252,
+        "3Y": 252 * 3,
+        "5Y": 252 * 5,
+    }
+    return lookup.get(str(horizon or "").upper(), MF_COMPARE_MIN_NAV_POINTS)
 
 def _compute_cagr_from_close(close_series: pd.Series, years: int) -> float | None:
     if close_series.empty:

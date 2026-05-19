@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
   Bolt,
   ChartSpline,
@@ -139,6 +140,12 @@ function SidebarContent({ dataHealth, healthCheckedAt }: { dataHealth: DataHealt
         <p className="mt-2 text-xs leading-relaxed text-[#91a9cc]">
           Stock research follows after mutual fund coverage is broadened.
         </p>
+        <Link
+          href="/admin"
+          className="mt-3 inline-flex rounded-md border border-[#3a547b] bg-[#0f1b30] px-2.5 py-1.5 text-xs font-medium text-[#c8d9f3] hover:border-[#62a0ff] hover:text-white"
+        >
+          Open admin ops dashboard
+        </Link>
       </div>
 
       <div className="mt-auto pt-4">
