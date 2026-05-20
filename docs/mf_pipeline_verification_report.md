@@ -120,8 +120,8 @@ We successfully executed a real-time verification of the split-pane research ter
 ### Verification Screenshot:
 Below is the high-resolution E2E snapshot verifying the beautiful split-pane layout and comparison canvas under live server testing:
 
-![Mooliq Supported Mutual Fund Comparison Canvas](file:///c:/Users/naman/OneDrive/Desktop/MarketMind/docs/supported_mf_comparison.png)
+![FundersAI Supported Mutual Fund Comparison Canvas](file:///c:/Users/naman/OneDrive/Desktop/MarketMind/docs/supported_mf_comparison.png)
 
 > [!NOTE]
-> The Mooliq financial research terminal, independent scroll areas, data health monitors, and user credentials authentication flow are fully verified and integrated under real-world runtime environments.
+> The FundersAI financial research terminal, independent scroll areas, data health monitors, and user credentials authentication flow are fully verified and integrated under real-world runtime environments.
 

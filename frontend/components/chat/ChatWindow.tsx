@@ -119,7 +119,7 @@ export default function ChatWindow() {
 
       addMessage({ id: Date.now().toString(), role: 'system', content: data.answer });
     } catch {
-      addMessage({ id: Date.now().toString(), role: 'system', content: 'Error: Unable to reach Mooliq core. Make sure the server is running.' });
+      addMessage({ id: Date.now().toString(), role: 'system', content: 'Error: Unable to reach FundersAI core. Make sure the server is running.' });
     } finally {
       setIsProcessing(false);
     }
@@ -154,7 +154,7 @@ export default function ChatWindow() {
             <Sparkles className="h-3.5 w-3.5" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold tracking-tight text-white">MooliqAI</h2>
+            <h2 className="text-sm font-semibold tracking-tight text-white">FundersAI</h2>
             <p className="text-[11px] text-slate-400">Ask, compare, and inspect source-backed metrics</p>
           </div>
         </div>

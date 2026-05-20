@@ -38,7 +38,7 @@ export default function AdminLayoutShell({ children }: Props) {
     <div className="min-h-screen bg-[#060d1a] text-[#e8f0ff]">
       <div className="mx-auto flex max-w-[1500px] gap-4 px-3 py-3 md:px-5">
         <aside className="hidden w-[250px] shrink-0 rounded-3xl border border-white/10 bg-slate-950/40 p-4 md:block">
-          <p className="text-xs uppercase tracking-[0.14em] text-[#8fa9cf]">Mooliq Admin</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-[#8fa9cf]">FundersAI Admin</p>
           <nav className="mt-4 space-y-1">
             {NAV_ITEMS.map((item) => {
               const active = pathname === item.href;

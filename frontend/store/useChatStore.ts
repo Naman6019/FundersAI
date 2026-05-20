@@ -14,7 +14,7 @@ const initialMessages: Message[] = [
   {
     id: '1',
     role: 'system',
-    content: 'Welcome to MooliqAI. Compare Indian mutual funds across returns, cost, Sharpe, risk, and NAV freshness with explainable research context.',
+    content: 'Welcome to FundersAI. Compare Indian mutual funds across returns, cost, Sharpe, risk, and NAV freshness with explainable research context.',
   },
 ];
 

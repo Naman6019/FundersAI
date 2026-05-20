@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Mooliq | AI-Orchestrated Financial Research',
-  description: 'Mooliq fuses real-time quantitative metrics with AI-driven news sentiment to provide institutional-grade insights for the Indian markets.',
+  title: 'FundersAI | AI-Orchestrated Financial Research',
+  description: 'FundersAI fuses real-time quantitative metrics with AI-driven news sentiment to provide institutional-grade insights for the Indian markets.',
 };
 
 export default function RootLayout({

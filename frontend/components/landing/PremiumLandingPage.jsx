@@ -100,7 +100,7 @@ const promptChips = [
 const steps = [
   ["01", "Pick funds", "Select two or more funds from the comparison workspace."],
   ["02", "Compare metrics", "Review returns, NAV, AUM, TER, alpha, beta, Sharpe, volatility, and drawdowns."],
-  ["03", "Ask MooliqAI", "Get a research-only explanation of what the numbers suggest."],
+  ["03", "Ask FundersAI", "Get a research-only explanation of what the numbers suggest."],
   ["04", "Review clearly", "Save the comparison and continue deeper research without treating it as advice."],
   ["Focus", "Coverage expansion", "The primary focus now is adding more AMCs and improving supported mutual fund coverage before stock research becomes a main module."],
 ];
@@ -188,7 +188,7 @@ function HeroPreview() {
       <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-6">
         <div className="flex items-center gap-3">
           <Sparkle className="h-4 w-4 text-emerald-400" weight="fill" />
-          <span className="text-sm font-semibold text-slate-200">MooliqAI Chat</span>
+          <span className="text-sm font-semibold text-slate-200">FundersAI Chat</span>
         </div>
         <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-slate-400">
           Fund Comparison
@@ -466,7 +466,7 @@ function FundPairCard() {
           </div>
           <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-slate-300">
             <Sparkle className="h-3.5 w-3.5 text-emerald-300" weight="fill" />
-            MooliqAI explains the difference
+            FundersAI explains the difference
           </div>
         </div>
 
@@ -491,7 +491,7 @@ function FundPairCard() {
   );
 }
 
-export default function MooliqLandingPage() {
+export default function FundersAILandingPage() {
   const { scrollYProgress } = useScroll();
   const heroGridY = useTransform(scrollYProgress, [0, 0.25], [0, 120]);
   const heroTextY = useTransform(scrollYProgress, [0, 0.18], [0, -28]);
@@ -516,14 +516,14 @@ export default function MooliqLandingPage() {
           className="sticky top-4 z-40 mx-auto w-full max-w-7xl px-5 py-5 sm:px-8 lg:px-10"
         >
           <div className="flex items-center justify-between rounded-full border border-white/10 bg-[#090d18]/70 px-3 py-2 shadow-2xl shadow-black/25 backdrop-blur-2xl sm:px-4">
-            <a href="#" className="flex items-center gap-3" aria-label="Mooliq home">
+            <a href="#" className="flex items-center gap-3" aria-label="FundersAI home">
               <motion.div
                 whileHover={{ rotate: -8, scale: 1.08 }}
                 className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white text-slate-950"
               >
                 <TrendUp className="h-5 w-5" />
               </motion.div>
-              <span className="text-lg font-semibold tracking-tight">Mooliq</span>
+              <span className="text-lg font-semibold tracking-tight">FundersAI</span>
             </a>
 
             <div className="hidden items-center gap-7 text-sm text-slate-400 md:flex">
@@ -538,7 +538,7 @@ export default function MooliqLandingPage() {
                 Login
               </a>
               <a href="/dashboard" className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-100">
-                Try MooliqAI
+                Try FundersAI
               </a>
             </div>
           </div>
@@ -569,13 +569,13 @@ export default function MooliqLandingPage() {
                 variants={fadeUp}
                 className="mt-7 max-w-2xl text-pretty text-lg leading-8 text-slate-300 sm:text-xl"
               >
-                Mooliq centralizes scattered Indian mutual fund factsheets, risk metrics, and NAV history into a clean workspace. Engineered for working professionals who demand quick, data-backed insights.
+                FundersAI centralizes scattered Indian mutual fund factsheets, risk metrics, and NAV history into a clean workspace. Engineered for working professionals who demand quick, data-backed insights.
               </motion.p>
               <motion.div
                 variants={fadeUp}
                 className="mt-9 flex flex-col items-start justify-start gap-3 sm:flex-row"
               >
-                <PremiumButton href="/dashboard">Try MooliqAI</PremiumButton>
+                <PremiumButton href="/dashboard">Try FundersAI</PremiumButton>
                 <PremiumButton href="/login" variant="secondary">Login</PremiumButton>
               </motion.div>
               <motion.div variants={stagger} className="mt-8 flex flex-wrap gap-2">
@@ -629,7 +629,7 @@ export default function MooliqLandingPage() {
                   <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.05] p-3 text-xs leading-relaxed text-slate-200">
                     <div className="flex items-center gap-1.5 font-semibold text-emerald-300 mb-1">
                       <Sparkle className="h-3.5 w-3.5" weight="fill" />
-                      MooliqAI Synthesis
+                      FundersAI Synthesis
                     </div>
                     Parag Parikh Flexi Cap demonstrates superior risk-adjusted performance with a Sharpe Ratio of 1.22.
                   </div>
@@ -656,7 +656,7 @@ export default function MooliqLandingPage() {
           >
             <span className="inline-flex items-center justify-center gap-2">
               <Clock className="h-4 w-4 text-sky-300" />
-              Stock coverage is on the way. Mooliq currently focuses on mutual fund comparison first, starting with the live Parag Parikh and ICICI pipeline.
+              Stock coverage is on the way. FundersAI currently focuses on mutual fund comparison first, starting with the live Parag Parikh and ICICI pipeline.
             </span>
           </motion.div>
         </div>
@@ -677,7 +677,7 @@ export default function MooliqLandingPage() {
                 Stock coverage is on the way.
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-400">
-                Mooliq is starting with mutual fund comparison as the MVP. The current pipeline is set up for Parag Parikh and ICICI funds first. Broader AMC coverage, Indian stock research, stock comparison, and valuation metrics are planned before the full public launch.
+                FundersAI is starting with mutual fund comparison as the MVP. The current pipeline is set up for Parag Parikh and ICICI funds first. Broader AMC coverage, Indian stock research, stock comparison, and valuation metrics are planned before the full public launch.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -708,7 +708,7 @@ export default function MooliqLandingPage() {
         <SectionHeading
           eyebrow="Deep Screening"
           title="Unbiased research. Zero noise."
-          body="Compare funds side-by-side on performance consistency, risk indicators, and costs. Mooliq standardizes scattered disclosures into one unified dashboard."
+          body="Compare funds side-by-side on performance consistency, risk indicators, and costs. FundersAI standardizes scattered disclosures into one unified dashboard."
         />
         <FundPairCard />
       </section>
@@ -719,7 +719,7 @@ export default function MooliqLandingPage() {
             align="left"
             eyebrow="Intelligence"
             title="Explore mutual fund DNA & risk signals."
-            body="From instant risk-adjusted metrics to natural language explanations, Mooliq gives you the tools to screen and compare Indian mutual funds with speed."
+            body="From instant risk-adjusted metrics to natural language explanations, FundersAI gives you the tools to screen and compare Indian mutual funds with speed."
           />
           <FeatureCarousel />
         </div>
@@ -769,7 +769,7 @@ export default function MooliqLandingPage() {
         <SectionHeading
           eyebrow="Workflow"
           title="From fund factsheets to explainable comparison."
-          body="Discover how Mooliq parses and updates fund details to keep your research workflow seamless."
+          body="Discover how FundersAI parses and updates fund details to keep your research workflow seamless."
         />
         <motion.div variants={stagger} initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-80px" }} className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {steps.slice(0, 4).map(([number, title, body]) => (
@@ -795,7 +795,7 @@ export default function MooliqLandingPage() {
                 Coverage expansion comes before the full stock module.
               </h3>
               <p className="mt-4 text-sm leading-7 text-slate-400">
-                Mooliq is currently focused on strengthening mutual fund coverage across major AMCs. Stock coverage is planned, but the immediate priority is making the fund comparison dataset broader and more reliable.
+                FundersAI is currently focused on strengthening mutual fund coverage across major AMCs. Stock coverage is planned, but the immediate priority is making the fund comparison dataset broader and more reliable.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -819,7 +819,7 @@ export default function MooliqLandingPage() {
         <SectionHeading
           eyebrow="Use cases"
           title="Ask anything. Research instantly."
-          body="Discover how working professionals and advanced investors query Mooliq to extract key comparison points."
+          body="Discover how working professionals and advanced investors query FundersAI to extract key comparison points."
         />
         <MarqueePrompts />
       </section>
@@ -830,7 +830,7 @@ export default function MooliqLandingPage() {
             align="left"
             eyebrow="Safety first"
             title="Unbiased intelligence. No advisory conflicts."
-            body="Mooliq is engineered strictly for self-directed research and education. We never recommend products, take commissions, or make buy/sell calls."
+            body="FundersAI is engineered strictly for self-directed research and education. We never recommend products, take commissions, or make buy/sell calls."
           />
           <motion.div variants={stagger} initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-80px" }} className="grid gap-4 sm:grid-cols-2">
             {[
@@ -853,7 +853,7 @@ export default function MooliqLandingPage() {
         <div className="rounded-[2rem] border border-amber-300/20 bg-amber-300/[0.055] p-6 text-center sm:p-8">
           <h2 className="text-2xl font-semibold text-white">Research-only disclaimer</h2>
           <p className="mx-auto mt-4 max-w-4xl leading-8 text-amber-50/80">
-            Mooliq is for research and education only. It does not provide financial advice, investment recommendations, portfolio management, or buy/sell calls. Current coverage is limited while the pipeline expands across major AMCs. Always verify data independently before making financial decisions.
+            FundersAI is for research and education only. It does not provide financial advice, investment recommendations, portfolio management, or buy/sell calls. Current coverage is limited while the pipeline expands across major AMCs. Always verify data independently before making financial decisions.
           </p>
         </div>
       </section>
@@ -871,10 +871,10 @@ export default function MooliqLandingPage() {
               Start comparing Indian mutual funds with explainable AI.
             </h2>
             <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-slate-400">
-              Try MooliqAI, compare funds side by side, and turn scattered fund data into a clean research workflow. Major AMC coverage and stock coverage are on the way before full launch.
+              Try FundersAI, compare funds side by side, and turn scattered fund data into a clean research workflow. Major AMC coverage and stock coverage are on the way before full launch.
             </p>
             <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
-              <PremiumButton href="/dashboard">Try MooliqAI</PremiumButton>
+              <PremiumButton href="/dashboard">Try FundersAI</PremiumButton>
               <PremiumButton href="/login" variant="secondary">Login</PremiumButton>
             </div>
           </div>

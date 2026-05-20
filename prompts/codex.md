@@ -1,4 +1,4 @@
-# MarketMind / Mooliq Codex Guide
+# MarketMind / FundersAI Codex Guide
 
 This file is the working guide for agents in this repo.
 Keep changes scoped, additive, and backward-compatible.

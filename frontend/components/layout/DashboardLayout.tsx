@@ -88,7 +88,7 @@ function SidebarContent({ dataHealth, healthCheckedAt }: { dataHealth: DataHealt
             <Sparkles className="h-4 w-4" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-white">MooliqAI</h1>
+            <h1 className="text-lg font-semibold text-white">FundersAI</h1>
             <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Research terminal</p>
           </div>
         </div>
@@ -311,13 +311,13 @@ export default function DashboardLayout() {
               {isMobile || isSidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
             </button>
             <div className="hidden sm:block">
-              <p className="text-sm font-semibold text-white">Mooliq Research</p>
+              <p className="text-sm font-semibold text-white">FundersAI Research</p>
               <p className="text-xs text-slate-400">Centered chat + optional canvas</p>
             </div>
           </div>
 
           <div className="hidden rounded-full border border-white/15 bg-white/[0.04] px-4 py-1.5 text-xs text-slate-300 sm:block">
-            mooliq.com/fund-comparison
+            fundersai.com/fund-comparison
           </div>
 
           <div className="flex items-center gap-2">
