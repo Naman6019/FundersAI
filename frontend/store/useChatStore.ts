@@ -10,7 +10,7 @@ export type Message = {
   content: string;
 };
 
-const initialMessages: Message[] = [
+export const initialMessages: Message[] = [
   {
     id: '1',
     role: 'system',
@@ -30,7 +30,9 @@ interface ChatState {
   setAssetType: (assetType: AssetType) => void;
   setResearchDepth: (researchDepth: ResearchDepth) => void;
   setComparisonViewMode: (comparisonViewMode: ComparisonViewMode) => void;
+  setMessages: (messages: Message[]) => void;
   addMessage: (message: Message) => void;
+  resetMessages: () => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -45,5 +47,7 @@ export const useChatStore = create<ChatState>((set) => ({
   setAssetType: (assetType) => set({ assetType }),
   setResearchDepth: (researchDepth) => set({ researchDepth }),
   setComparisonViewMode: (comparisonViewMode) => set({ comparisonViewMode }),
+  setMessages: (messages) => set({ messages }),
   addMessage: (message) => set((state) => ({ messages: [...state.messages, message] })),
+  resetMessages: () => set({ messages: initialMessages }),
 }));

@@ -129,7 +129,7 @@ def _parse_hdfc_frame(frame: pd.DataFrame, context: ParseContext, fallback_schem
     if not holdings:
         blob = _frame_blob_text(rows)
         holdings = _extract_holdings_from_blob(blob)
-    if page_text_full:
+    if page_text_full and _page_text_scoped_to_scheme(page_text_full, scheme_name):
         holdings.extend(_extract_holdings_from_page_text(page_text_full))
         holdings = _dedupe_holdings(holdings)
     if not holdings:
@@ -155,11 +155,6 @@ def _parse_hdfc_frame(frame: pd.DataFrame, context: ParseContext, fallback_schem
 
 
 def _extract_scheme_name(frame: pd.DataFrame, rows: list[list[object]], page_text_full: str = "") -> str:
-    if page_text_full:
-        match = SCHEME_PATTERN.search(page_text_full)
-        if match:
-            return " ".join(match.group(1).split())
-
     page_head = str(frame.attrs.get("page_text_head") or "")
     if page_head:
         match = SCHEME_PATTERN.search(page_head)
@@ -174,7 +169,22 @@ def _extract_scheme_name(frame: pd.DataFrame, rows: list[list[object]], page_tex
             match = SCHEME_PATTERN.search(text)
             if match:
                 return " ".join(match.group(1).split())
+    if page_text_full:
+        match = SCHEME_PATTERN.search(page_text_full)
+        if match:
+            return " ".join(match.group(1).split())
     return ""
+
+
+def _page_text_scoped_to_scheme(page_text: str, scheme_name: str) -> bool:
+    mentions = {
+        " ".join(match.group(1).lower().split())
+        for match in SCHEME_PATTERN.finditer(page_text or "")
+    }
+    if len(mentions) <= 1:
+        return True
+    normalized_scheme = " ".join(str(scheme_name or "").lower().split())
+    return bool(normalized_scheme and mentions == {normalized_scheme})
 
 
 def _locate_header_and_columns(rows: list[list[object]]) -> tuple[int | None, int | None, int | None, int | None]:

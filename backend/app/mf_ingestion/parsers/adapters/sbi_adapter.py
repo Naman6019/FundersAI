@@ -77,13 +77,30 @@ def _parse_sbi_frame(frame: pd.DataFrame, context: ParseContext) -> dict | None:
     if not raw_rows:
         return None
 
-    scheme_name = _extract_scheme_name(raw_rows)
-    report_month = _extract_report_month(raw_rows) or context.report_month
-    header_row_idx, headers = _find_header_row(raw_rows)
+    headers = _find_all_header_rows(raw_rows)
+    if len(headers) <= 1:
+        return _parse_sbi_segment(raw_rows, context)
+
+    candidates: list[dict] = []
+    for index, (header_row_idx, _header_values) in enumerate(headers):
+        next_header_idx = headers[index + 1][0] if index + 1 < len(headers) else len(raw_rows)
+        segment_start = _segment_start_for_header(raw_rows, header_row_idx)
+        parsed = _parse_sbi_segment(raw_rows[segment_start:next_header_idx], context)
+        if parsed:
+            candidates.append(parsed)
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item.get("selection_score", 0.0))
+
+
+def _parse_sbi_segment(rows: list[list[object]], context: ParseContext) -> dict | None:
+    scheme_name = _extract_scheme_name(rows)
+    report_month = _extract_report_month(rows) or context.report_month
+    header_row_idx, headers = _find_header_row(rows)
     if header_row_idx is None:
         return None
 
-    holdings = _extract_holdings(raw_rows[header_row_idx + 1 :], headers)
+    holdings = _extract_holdings(rows[header_row_idx + 1 :], headers)
     if not holdings:
         return None
 
@@ -117,6 +134,29 @@ def _parse_sbi_frame(frame: pd.DataFrame, context: ParseContext) -> dict | None:
         "confidence_score": _compute_confidence(holdings, report_month, total_percent, resolved_scheme),
         "selection_score": float(len(holdings)) + (20.0 if report_month else 0.0),
     }
+
+
+def _find_all_header_rows(rows: list[list[object]]) -> list[tuple[int, list[str]]]:
+    headers: list[tuple[int, list[str]]] = []
+    for idx, row in enumerate(rows):
+        normalized = [_normalize_sbi_header_cell(cell) for cell in row]
+        has_instrument = "instrument_name" in normalized or any("instrument" in str(cell).lower() for cell in row)
+        has_percent = "percent_aum" in normalized or any("% to aum" in str(cell).lower() for cell in row)
+        if has_instrument and has_percent:
+            headers.append((idx, normalized))
+    return headers
+
+
+def _segment_start_for_header(rows: list[list[object]], header_row_idx: int) -> int:
+    for idx in range(header_row_idx - 1, max(header_row_idx - 10, -1), -1):
+        row_text = " ".join(str(cell or "") for cell in rows[idx]).lower()
+        if "scheme name" in row_text:
+            return idx
+        if "portfolio statement as on" in row_text:
+            continue
+        if "sbi " in row_text and "fund" in row_text:
+            return idx
+    return max(header_row_idx - 8, 0)
 
 
 def _extract_scheme_name(rows: list[list[object]]) -> str:

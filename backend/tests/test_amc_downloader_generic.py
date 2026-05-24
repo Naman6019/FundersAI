@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
+
 from app.mf_ingestion.downloaders.amc_downloader import AMCDownloader
 from app.mf_ingestion.downloaders.base_downloader import DiscoveredDocument
 from app.mf_ingestion.sources.registry import AMCDocumentSource
@@ -89,3 +91,43 @@ def test_sbi_generic_download_returns_file_bytes(monkeypatch):
     assert downloaded.file_name == "sbi-factsheet-apr-2026.pdf"
     assert downloaded.file_size_bytes == len(payload)
     assert downloaded.file_bytes == payload
+
+
+def test_sbi_generic_download_rejects_error_page(monkeypatch):
+    payload = b"<html><body>error</body></html>"
+
+    def fake_get(url, timeout=None, headers=None, **kwargs):  # noqa: ANN001
+        return _FakeResponse(
+            url="https://www.sbimf.com/error?aspxerrorpath=/docs/default-source/scheme-portfolios/file.xlsx",
+            content=payload,
+            headers={"Content-Type": "text/html"},
+        )
+
+    monkeypatch.setattr("app.mf_ingestion.downloaders.amc_downloader.requests.get", fake_get)
+
+    source = AMCDocumentSource(
+        amc_name="SBI Mutual Fund",
+        amc_code="SBI",
+        adapter_key="sbi",
+        factsheet_page_url="https://www.sbimf.com/en-us/downloads",
+        portfolio_disclosure_page_url="https://www.sbimf.com/en-us/disclosures",
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+    )
+    downloader = AMCDownloader(source=source, timeout_seconds=10.0, user_agent="test-agent")
+    discovered = DiscoveredDocument(
+        amc_name="SBI Mutual Fund",
+        amc_code="SBI",
+        document_type="portfolio_disclosure",
+        title="SBI Portfolio Apr 2026",
+        url="https://www.sbimf.com/docs/default-source/scheme-portfolios/file.xlsx",
+        discovery_page_url="https://www.sbimf.com/en-us/disclosures",
+        file_ext=".xlsx",
+        report_month=date(2026, 4, 1),
+        priority_score=100,
+    )
+
+    with pytest.raises(RuntimeError, match="download_rejected_error_page"):
+        downloader.download(discovered)

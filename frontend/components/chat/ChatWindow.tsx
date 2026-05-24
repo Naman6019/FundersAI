@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, Sparkles } from 'lucide-react';
+import { Send, Sparkles, Trash2 } from 'lucide-react';
 import { useCanvasStore } from '@/store/useCanvasStore';
-import { AssetType, ComparisonViewMode, Message, ResearchDepth, useChatStore } from '@/store/useChatStore';
+import { AssetType, ComparisonViewMode, initialMessages, Message, ResearchDepth, useChatStore } from '@/store/useChatStore';
+import { hasSupabaseBrowserEnv, supabaseBrowser } from '@/lib/supabaseBrowser';
 
 const markdownComponents = {
   h1: (props: React.ComponentProps<'h1'>) => <h1 className="mb-3 mt-1 text-lg font-bold text-white" {...props} />,
@@ -53,10 +54,20 @@ export default function ChatWindow() {
   const setAssetType = useChatStore((state) => state.setAssetType);
   const setResearchDepth = useChatStore((state) => state.setResearchDepth);
   const setComparisonViewMode = useChatStore((state) => state.setComparisonViewMode);
+  const setMessages = useChatStore((state) => state.setMessages);
   const addMessage = useChatStore((state) => state.addMessage);
+  const resetMessages = useChatStore((state) => state.resetMessages);
+  const [isHistoryReady, setIsHistoryReady] = useState(!hasSupabaseBrowserEnv);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const initialQuerySentRef = useRef(false);
+
+  const getAccessToken = useCallback(async () => {
+    if (!hasSupabaseBrowserEnv) return null;
+    const { data } = await supabaseBrowser.auth.getSession();
+    return data.session?.access_token ?? null;
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -73,6 +84,55 @@ export default function ChatWindow() {
   const applySuggestion = (text: string) => {
     setInput(text);
   };
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadHistory = async () => {
+      const token = await getAccessToken();
+      if (!token) {
+        if (!ignore) setIsHistoryReady(true);
+        return;
+      }
+
+      setIsHistoryLoading(true);
+      try {
+        const res = await fetch('/api/chat/history', {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        });
+        if (!res.ok) return;
+
+        const payload = await res.json();
+        const savedMessages: Message[] = Array.isArray(payload?.messages)
+          ? payload.messages
+              .filter((message: Message) => message?.id && (message.role === 'user' || message.role === 'system') && message.content)
+              .map((message: Message) => ({
+                id: message.id,
+                role: message.role,
+                content: message.content,
+              }))
+          : [];
+
+        if (!ignore && savedMessages.length > 0) {
+          setMessages([...initialMessages, ...savedMessages]);
+        }
+      } catch (error) {
+        console.error('Chat history load failed:', error);
+      } finally {
+        if (!ignore) {
+          setIsHistoryLoading(false);
+          setIsHistoryReady(true);
+        }
+      }
+    };
+
+    void loadHistory();
+
+    return () => {
+      ignore = true;
+    };
+  }, [getAccessToken, setMessages]);
 
   const sendQuery = useCallback(async (
     queryText: string,
@@ -93,9 +153,13 @@ export default function ChatWindow() {
     setIsProcessing(true);
 
     try {
+      const token = await getAccessToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           query: text,
           asset_type: selectedAssetType,
@@ -123,9 +187,10 @@ export default function ChatWindow() {
     } finally {
       setIsProcessing(false);
     }
-  }, [addMessage, assetType, closeCanvas, comparisonViewMode, openCanvas, researchDepth, setIds, setInput, setIsProcessing, setView]);
+  }, [addMessage, assetType, closeCanvas, comparisonViewMode, getAccessToken, openCanvas, researchDepth, setIds, setInput, setIsProcessing, setView]);
 
   useEffect(() => {
+    if (!isHistoryReady) return;
     if (initialQuerySentRef.current) return;
     const query = searchParams.get('query')?.trim();
     if (!query) return;
@@ -140,10 +205,20 @@ export default function ChatWindow() {
     setAssetType(nextAssetType);
     setResearchDepth(nextResearchDepth);
     void sendQuery(query, nextAssetType, nextResearchDepth, comparisonViewMode);
-  }, [comparisonViewMode, searchParams, sendQuery, setAssetType, setResearchDepth]);
+  }, [comparisonViewMode, isHistoryReady, searchParams, sendQuery, setAssetType, setResearchDepth]);
 
   const handleSend = async () => {
     await sendQuery(input, assetType, researchDepth, comparisonViewMode);
+  };
+
+  const handleClearHistory = async () => {
+    resetMessages();
+    const token = await getAccessToken();
+    if (!token) return;
+    await fetch('/api/chat/history', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    }).catch((error) => console.error('Chat history clear failed:', error));
   };
 
   return (
@@ -158,9 +233,26 @@ export default function ChatWindow() {
             <p className="text-[11px] text-slate-400">Ask, compare, and inspect source-backed metrics</p>
           </div>
         </div>
-        <span className="rounded-full border border-emerald-300/30 bg-emerald-300/12 px-2.5 py-1 text-[11px] font-semibold text-emerald-200">
-          Research only
-        </span>
+        <div className="flex items-center gap-2">
+          {isHistoryLoading ? (
+            <span className="rounded-full border border-sky-300/30 bg-sky-300/10 px-2.5 py-1 text-[11px] font-semibold text-sky-200">
+              Loading
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-300 transition hover:border-rose-300/45 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={handleClearHistory}
+            disabled={isProcessing}
+            aria-label="Clear chat history"
+            title="Clear chat history"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+          <span className="rounded-full border border-emerald-300/30 bg-emerald-300/12 px-2.5 py-1 text-[11px] font-semibold text-emerald-200">
+            Research only
+          </span>
+        </div>
       </header>
 
       <div ref={scrollRef} className="custom-scroll flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-4 sm:px-5">

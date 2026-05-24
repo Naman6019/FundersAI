@@ -15,6 +15,7 @@ type CoverageRow = {
   funds_with_asset_allocation: number;
   funds_with_ratios: number;
   parser_status: string;
+  skipped_docs: number;
   freshness_status: string;
   coverage_percentage: number;
   status: string;
@@ -25,6 +26,7 @@ type NeedsReviewEntry = {
   id: string;
   amc: string;
   source_document_type: string;
+  parse_status: string;
   source_url: string;
   validation_issues: string[];
   parsed_at: string | null;
@@ -64,7 +66,7 @@ export default function AdminDataCoveragePage() {
     setLoading(false);
   }, [filter]);
 
-  const handleDocumentAction = useCallback(async (documentId: string, action: 'reparse' | 'resolve') => {
+  const handleDocumentAction = useCallback(async (documentId: string, action: 'reparse' | 'skip') => {
     setActionId(`${action}:${documentId}`);
     setActionMessage(null);
     const res = await adminFetch(`/api/admin/data-coverage/documents/${encodeURIComponent(documentId)}/${action}`, {
@@ -76,7 +78,7 @@ export default function AdminDataCoveragePage() {
       setActionId(null);
       return;
     }
-    setActionMessage(action === 'reparse' ? 'Reparse queued.' : 'Document resolved.');
+    setActionMessage(action === 'reparse' ? 'Reparse queued.' : 'Document skipped.');
     await load(filter);
     setActionId(null);
   }, [filter, load]);
@@ -156,14 +158,14 @@ export default function AdminDataCoveragePage() {
 
       <Panel>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-[#d6e6ff]">Needs Review Entries</h3>
+          <h3 className="text-sm font-semibold text-[#d6e6ff]">Parser Action Entries</h3>
           <span className="rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-300">
             {data.needs_review_entries?.length || 0}
           </span>
         </div>
         {actionMessage ? <p className="mb-2 text-xs text-[#9fb7dc]">{actionMessage}</p> : null}
         {!data.needs_review_entries?.length ? (
-          <p className="text-xs text-[#8ea6cb]">No documents currently marked as needs_review.</p>
+          <p className="text-xs text-[#8ea6cb]">No documents currently marked as needs_review or failed.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-xs">
@@ -171,6 +173,7 @@ export default function AdminDataCoveragePage() {
                 <tr>
                   <th className="px-2 py-2 text-left">AMC</th>
                   <th className="px-2 py-2 text-left">Document Type</th>
+                  <th className="px-2 py-2 text-left">Status</th>
                   <th className="px-2 py-2 text-left">Issues</th>
                   <th className="px-2 py-2 text-left">Latest</th>
                   <th className="px-2 py-2 text-left">Document</th>
@@ -182,6 +185,7 @@ export default function AdminDataCoveragePage() {
                   <tr key={entry.id} className="border-t border-white/10">
                     <td className="px-2 py-2 font-medium">{entry.amc}</td>
                     <td className="px-2 py-2">{entry.source_document_type || '-'}</td>
+                    <td className="px-2 py-2"><span className={`rounded-full border px-2 py-0.5 ${statusBadgeClass(entry.parse_status)}`}>{entry.parse_status || '-'}</span></td>
                     <td className="px-2 py-2">
                       <div className="flex flex-wrap gap-1">
                         {(entry.validation_issues || []).length ? (
@@ -218,10 +222,10 @@ export default function AdminDataCoveragePage() {
                         <button
                           type="button"
                           disabled={Boolean(actionId)}
-                          onClick={() => handleDocumentAction(entry.id, 'resolve')}
+                          onClick={() => handleDocumentAction(entry.id, 'skip')}
                           className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {actionId === `resolve:${entry.id}` ? 'Resolving...' : 'Resolve'}
+                          {actionId === `skip:${entry.id}` ? 'Skipping...' : 'Skip'}
                         </button>
                       </div>
                     </td>

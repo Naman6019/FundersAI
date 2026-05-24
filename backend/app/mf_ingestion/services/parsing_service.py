@@ -83,6 +83,10 @@ class ParsingService:
         document_id = str(document.get("id"))
         amc_code = str(document.get("amc_code") or "")
         document_type = str(document.get("document_type") or "").strip().lower()
+        irrelevant_issue = _irrelevant_document_issue(document)
+        if irrelevant_issue:
+            self._mark_document(document_id, "skipped_not_supported", [irrelevant_issue])
+            return {"source_document_id": document_id, "status": "skipped", "reason": irrelevant_issue}
         if document_type and document_type not in HOLDINGS_SUPPORTED_DOCUMENT_TYPES and document_type not in FACTSHEET_SUPPORTED_DOCUMENT_TYPES:
             issue = f"unsupported_document_type:{document_type}"
             self._mark_document(document_id, "skipped_not_supported", [issue])
@@ -1007,6 +1011,35 @@ def _merge_parse_outcomes(primary: dict[str, Any], secondary: dict[str, Any]) ->
     merged["factsheet"] = primary
     merged["holdings"] = secondary
     return merged
+
+
+def _irrelevant_document_issue(document: dict[str, Any]) -> str | None:
+    values = [
+        document.get("source_url"),
+        document.get("file_name"),
+        document.get("discovery_page_url"),
+    ]
+    text = " ".join(str(value or "").lower() for value in values)
+    blocked_markers = (
+        "aspxerrorpath=",
+        "/error?",
+        "/error/",
+        "statement-of-additional-information",
+        "statement of additional information",
+        "/moa-and-aoa/",
+        "moa-and-aoa",
+        "valuation-update",
+        "update on valuation",
+        "pms fee",
+        "fee illustration",
+        "voting policy",
+        "addendum",
+        "notice",
+    )
+    for marker in blocked_markers:
+        if marker in text:
+            return f"skipped_irrelevant_document:{marker}"
+    return None
 
 
 def _encode_archive_payload(rows: list[dict[str, Any]]) -> tuple[bytes, str]:

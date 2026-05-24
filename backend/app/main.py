@@ -259,8 +259,8 @@ def _mark_review_queue(document_id: str, status: str, reviewer_notes: str | None
 def _request_mf_document_reparse(document_id: str, reviewer_notes: str | None = None) -> dict[str, Any]:
     document = _load_mf_review_document(document_id)
     current_status = str(document.get("parse_status") or "").strip().lower()
-    if current_status != "needs_review":
-        raise HTTPException(status_code=409, detail="document_not_in_needs_review")
+    if current_status not in {"needs_review", "failed"}:
+        raise HTTPException(status_code=409, detail="document_not_actionable")
 
     supabase.table("mf_raw_documents").update(
         {
@@ -302,6 +302,35 @@ def _resolve_mf_document_review(document_id: str, reviewer_notes: str | None = N
     }
 
 
+def _skip_mf_document_review(document_id: str, reviewer_notes: str | None = None) -> dict[str, Any]:
+    document = _load_mf_review_document(document_id)
+    current_status = str(document.get("parse_status") or "").strip().lower()
+    if current_status not in {"needs_review", "failed", "needs_reparse"}:
+        raise HTTPException(status_code=409, detail="document_not_actionable")
+
+    issues = document.get("validation_issues") if isinstance(document.get("validation_issues"), list) else []
+    cleaned_issues = [str(issue) for issue in issues if str(issue or "").strip()]
+    if "skipped_irrelevant_document" not in cleaned_issues:
+        cleaned_issues.append("skipped_irrelevant_document")
+
+    now = datetime.now(timezone.utc).isoformat()
+    supabase.table("mf_raw_documents").update(
+        {
+            "parse_status": "skipped_not_supported",
+            "validation_issues": cleaned_issues,
+            "parsed_at": now,
+            "updated_at": now,
+        }
+    ).eq("id", document_id).execute()
+    _mark_review_queue(document_id, "skipped", reviewer_notes)
+    return {
+        "status": "ok",
+        "action": "skipped",
+        "source_document_id": document_id,
+        "parse_status": "skipped_not_supported",
+    }
+
+
 @app.get("/api/data-health")
 def data_health():
     now_utc = datetime.now(timezone.utc)
@@ -309,7 +338,7 @@ def data_health():
         {"label": "MF NAV", "status": "Missing", "note": "No NAV snapshot rows found.", "last_updated": None},
         {"label": "AUM / TER", "status": "Missing", "note": "No AUM+TER rows found.", "last_updated": None},
         {"label": "Risk metrics", "status": "Missing", "note": "No risk metric rows found.", "last_updated": None},
-        {"label": "Factsheets", "status": "Missing", "note": "No parsed factsheet/disclosure docs found.", "last_updated": None},
+        {"label": "AMC docs", "status": "Missing", "note": "No parsed AMC factsheet/disclosure docs found.", "last_updated": None},
     ]
 
     if not supabase:
@@ -340,7 +369,7 @@ def data_health():
                 {"label": "MF NAV", "status": "Error", "note": "Core snapshot read failed.", "last_updated": None},
                 {"label": "AUM / TER", "status": "Error", "note": "Core snapshot read failed.", "last_updated": None},
                 {"label": "Risk metrics", "status": "Error", "note": "Core snapshot read failed.", "last_updated": None},
-                {"label": "Factsheets", "status": "Missing", "note": "Not checked due core snapshot read failure.", "last_updated": None},
+                {"label": "AMC docs", "status": "Missing", "note": "Not checked due core snapshot read failure.", "last_updated": None},
             ],
         }
 
@@ -407,6 +436,7 @@ def data_health():
         "pending_count": 0,
         "failed_count": 0,
         "needs_review_count": 0,
+        "skipped_count": 0,
         "last_downloaded_at": None,
         "last_parse_attempt_at": None,
         "last_success_at": None,
@@ -421,6 +451,7 @@ def data_health():
         parsed_count = _count_mf_raw_documents(status="parsed")
         failed_count = _count_mf_raw_documents(status="failed")
         needs_review_count = _count_mf_raw_documents(status="needs_review")
+        skipped_count = _count_mf_raw_documents(status="skipped_not_supported")
         total_documents = _count_mf_raw_documents()
         last_downloaded_dt = _latest_mf_doc_timestamp(status=None, field="downloaded_at")
         last_parse_attempt_dt = _latest_mf_doc_timestamp(status=None, field="parsed_at")
@@ -433,6 +464,7 @@ def data_health():
             pending_count=pending_count,
             failed_count=failed_count,
             needs_review_count=needs_review_count,
+            skipped_count=skipped_count,
             last_downloaded_at=last_downloaded_dt.isoformat() if last_downloaded_dt else None,
             last_parse_attempt_at=last_parse_attempt_dt.isoformat() if last_parse_attempt_dt else None,
             last_success_at=last_success_dt.isoformat() if last_success_dt else None,
@@ -442,7 +474,7 @@ def data_health():
         if total_documents == 0:
             metrics[3].update(
                 status="Missing",
-                note="No AMC factsheet/disclosure docs ingested yet.",
+                note="No AMC docs ingested yet.",
                 last_updated=None,
             )
         else:
@@ -450,7 +482,7 @@ def data_health():
             success_age = _fmt_age(success_age_days) or "n/a"
             note = (
                 f"parsed={parsed_count}, pending={pending_count}, failed={failed_count}, "
-                f"review={needs_review_count}, total={total_documents}"
+                f"review={needs_review_count}, skipped={skipped_count}, total={total_documents}"
             )
 
             if failed_count > 0 and not last_success_dt:
@@ -491,8 +523,8 @@ def data_health():
                     last_updated=last_parse_attempt_dt.isoformat() if last_parse_attempt_dt else None,
                 )
     except Exception as exc:
-        logger.warning("Data health factsheet read failed: %s", exc)
-        metrics[3].update(status="Error", note="Factsheet pipeline tables not readable.", last_updated=None)
+        logger.warning("Data health AMC docs read failed: %s", exc)
+        metrics[3].update(status="Error", note="AMC docs pipeline tables not readable.", last_updated=None)
 
     bad_statuses = {"Stale", "Missing", "Error"}
     overall = "ok" if all(metric["status"] not in bad_statuses for metric in metrics) else "degraded"
@@ -746,6 +778,16 @@ def admin_resolve_mf_document_review(
 ):
     _require_admin_key(x_admin_key)
     return _resolve_mf_document_review(document_id, _review_action_notes(payload))
+
+
+@app.post("/api/admin/mf-documents/{document_id}/skip")
+def admin_skip_mf_document_review(
+    document_id: str,
+    payload: AdminDocumentReviewAction | None = None,
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+):
+    _require_admin_key(x_admin_key)
+    return _skip_mf_document_review(document_id, _review_action_notes(payload))
 
 
 @app.get("/api/admin/mf-resolver-debug")

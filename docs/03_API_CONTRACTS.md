@@ -4,6 +4,8 @@
 
 ### Chat and Health
 - `POST /api/chat` -> backend `POST /api/chat`.
+- `GET /api/chat/history` -> authenticated user's saved chat messages.
+- `DELETE /api/chat/history` -> clear authenticated user's saved chat messages.
 - `GET /api/keepalive` -> backend `GET /health`.
 
 ### Quant Proxy Family

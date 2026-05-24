@@ -31,7 +31,7 @@ export async function GET(request: Request) {
           { label: 'MF NAV', status: 'Error', note: 'Proxy request failed.', last_updated: null },
           { label: 'AUM / TER', status: 'Error', note: 'Proxy request failed.', last_updated: null },
           { label: 'Risk metrics', status: 'Error', note: 'Proxy request failed.', last_updated: null },
-          { label: 'Factsheets', status: 'Error', note: 'Proxy request failed.', last_updated: null },
+          { label: 'AMC docs', status: 'Error', note: 'Proxy request failed.', last_updated: null },
         ],
         checked_at: new Date().toISOString(),
       },

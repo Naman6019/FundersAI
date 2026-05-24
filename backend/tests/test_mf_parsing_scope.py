@@ -104,3 +104,25 @@ def test_parse_pending_documents_matches_amc_code_case_insensitively(monkeypatch
 
     assert result["count"] == 1
     assert result["processed"][0]["source_document_id"] == "doc-lower-amc-1"
+
+
+def test_parse_pending_documents_skips_irrelevant_disclosure_urls(monkeypatch):
+    fake_doc = {
+        "id": "doc-sai-1",
+        "amc_code": "SBI",
+        "document_type": "factsheet",
+        "source_url": "https://www.sbimf.com/docs/statement-of-additional-information.pdf",
+        "storage_path": "ignored",
+        "parse_status": "pending",
+    }
+    fake_supabase = _FakeSupabase([fake_doc])
+    monkeypatch.setattr(parsing_service, "supabase", fake_supabase)
+
+    service = ParsingService()
+    result = service.parse_pending_documents(limit=1, amc_code="SBI")
+
+    assert result["processed"][0]["status"] == "skipped"
+    _, eq_filters, update_payload = fake_supabase.updated_rows[0]
+    assert eq_filters["id"] == "doc-sai-1"
+    assert update_payload["parse_status"] == "skipped_not_supported"
+    assert update_payload["validation_issues"][0].startswith("skipped_irrelevant_document")

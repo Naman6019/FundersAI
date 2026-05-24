@@ -41,6 +41,16 @@ Writes are server-side only (backend jobs, backend APIs, or trusted service-role
   - admin can read all profiles
   - only admin can perform role/tier updates
 
+## User Chat History
+- `chat_messages`
+  - `user_id`: Supabase auth user id
+  - `role`: `user | system`
+  - `content`, `metadata`, `created_at`
+- RLS policies enforce:
+  - user can read own messages
+  - user can insert own messages
+  - user can delete own messages
+
 ## Observability / Job Telemetry
 - `data_provider_runs`
 - `provider_usage_logs`

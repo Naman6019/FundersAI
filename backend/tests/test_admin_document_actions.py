@@ -102,6 +102,31 @@ def test_resolve_review_marks_document_parsed_and_approves_queue(monkeypatch):
     assert review_item["reviewer_notes"] == "safe to clear"
 
 
+def test_skip_review_marks_document_skipped_and_clears_queue(monkeypatch):
+    from app import main as app_main
+
+    fake_supabase = _FakeSupabase({
+        "mf_raw_documents": [
+            {"id": "doc-1", "parse_status": "failed", "validation_issues": ["parse_exception:RuntimeError"]},
+        ],
+        "mf_parse_review_queue": [
+            {"source_document_id": "doc-1", "status": "pending_review"},
+        ],
+    })
+    monkeypatch.setattr(app_main, "supabase", fake_supabase)
+
+    payload = app_main._skip_mf_document_review("doc-1", "not a parseable disclosure")
+
+    document = fake_supabase.tables["mf_raw_documents"][0]
+    review_item = fake_supabase.tables["mf_parse_review_queue"][0]
+    assert payload["action"] == "skipped"
+    assert document["parse_status"] == "skipped_not_supported"
+    assert "skipped_irrelevant_document" in document["validation_issues"]
+    assert "parsed_at" in document
+    assert review_item["status"] == "skipped"
+    assert review_item["reviewer_notes"] == "not a parseable disclosure"
+
+
 def test_review_action_rejects_non_review_document(monkeypatch):
     from app import main as app_main
 
@@ -117,7 +142,7 @@ def test_review_action_rejects_non_review_document(monkeypatch):
         app_main._request_mf_document_reparse("doc-1")
 
     assert exc.value.status_code == 409
-    assert exc.value.detail == "document_not_in_needs_review"
+    assert exc.value.detail == "document_not_actionable"
 
 
 def test_admin_review_endpoint_requires_admin_key(monkeypatch):

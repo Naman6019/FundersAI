@@ -88,6 +88,7 @@ export async function GET(request: Request) {
     stale_nav_count: number;
     missing_ter_count: number;
     parser_failed_docs: number;
+    skipped_docs: number;
     factsheet_files: number;
     portfolio_disclosure_files: number;
     latest_parser_at: string | null;
@@ -112,6 +113,7 @@ export async function GET(request: Request) {
         stale_nav_count: 0,
         missing_ter_count: 0,
         parser_failed_docs: 0,
+        skipped_docs: 0,
         factsheet_files: 0,
         portfolio_disclosure_files: 0,
         latest_parser_at: null,
@@ -142,6 +144,7 @@ export async function GET(request: Request) {
     if (docType === 'factsheet') bucket.factsheet_files += 1;
     if (docType === 'portfolio_disclosure') bucket.portfolio_disclosure_files += 1;
     if (parseStatus === 'failed') bucket.parser_failed_docs += 1;
+    if (parseStatus.startsWith('skipped')) bucket.skipped_docs += 1;
     const parserAt = String(doc.parsed_at || doc.downloaded_at || '');
     if (parserAt && (!bucket.latest_parser_at || parserAt > bucket.latest_parser_at)) {
       bucket.latest_parser_at = parserAt;
@@ -193,7 +196,7 @@ export async function GET(request: Request) {
   });
 
   const needsReviewEntries = docsRows
-    .filter((doc) => String(doc.parse_status || '').toLowerCase() === 'needs_review')
+    .filter((doc) => ['needs_review', 'failed'].includes(String(doc.parse_status || '').toLowerCase()))
     .map((doc) => {
       const parsedAt = String(doc.parsed_at || '');
       const downloadedAt = String(doc.downloaded_at || '');
@@ -201,6 +204,7 @@ export async function GET(request: Request) {
         id: String(doc.id || ''),
         amc: normalizeAmcCode(doc.amc_code || ''),
         source_document_type: String(doc.source_document_type || ''),
+        parse_status: String(doc.parse_status || ''),
         source_url: String(doc.source_url || ''),
         validation_issues: Array.isArray(doc.validation_issues) ? doc.validation_issues : [],
         parsed_at: parsedAt || null,

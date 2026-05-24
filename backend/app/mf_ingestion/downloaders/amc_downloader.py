@@ -170,6 +170,7 @@ class AMCDownloader(BaseDownloader):
                     "Referer": referer,
                 },
             )
+            _validate_generic_download_response(self.source, discovered, response)
             source_url = response.url or discovered.url
             file_name = _derive_file_name(source_url, discovered.title)
             return DownloadedDocument(
@@ -409,6 +410,36 @@ def _sbi_guessed_portfolio_probe_is_valid(response: requests.Response, final_url
             return False
 
     return True
+
+
+def _validate_generic_download_response(
+    source: AMCDocumentSource,
+    discovered: DiscoveredDocument,
+    response: requests.Response,
+) -> None:
+    final_url = response.url or discovered.url
+    low_url = str(final_url or "").lower()
+    if any(blocked in low_url for blocked in ("aspxerrorpath=", "/error?", "/error/")):
+        raise RuntimeError(f"download_rejected_error_page url={final_url}")
+
+    content_type = str(response.headers.get("Content-Type") or "").lower()
+    prefix = bytes(response.content[:8] or b"").lstrip()
+    if "text/html" in content_type or prefix.startswith((b"<html", b"<!doc")):
+        raise RuntimeError(f"download_rejected_html_response url={final_url}")
+
+    ext = Path(urlsplit(final_url).path).suffix.lower() or discovered.file_ext.lower()
+    adapter_key = (source.adapter_key or "").strip().lower()
+    if adapter_key == "sbi" and discovered.document_type == "portfolio_disclosure":
+        if not _sbi_guessed_portfolio_probe_is_valid(response, final_url):
+            raise RuntimeError(f"download_rejected_invalid_sbi_portfolio url={final_url}")
+
+    if ext in {".xlsx", ".xlsm"} and not prefix.startswith(b"PK\x03\x04"):
+        raise RuntimeError(f"download_rejected_invalid_excel url={final_url}")
+    if ext == ".xls":
+        legacy_excel = prefix.startswith(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1")
+        zip_excel = prefix.startswith(b"PK\x03\x04")
+        if not (legacy_excel or zip_excel):
+            raise RuntimeError(f"download_rejected_invalid_excel url={final_url}")
 
 
 def _manual_discovered_documents_for_source(

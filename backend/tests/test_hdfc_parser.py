@@ -99,3 +99,32 @@ def test_hdfc_parse_holdings_splits_inline_name_percent_sequences_and_detects_mo
     assert len(parsed.holdings) >= 3
     assert any(row["instrument_name"] == "Prestige Estates Projects Ltd. Realty" for row in parsed.holdings)
     assert any(row["percent_aum"] == 0.82 for row in parsed.holdings)
+
+
+def test_hdfc_parse_holdings_ignores_full_text_when_multiple_schemes_present():
+    frame = pd.DataFrame(
+        [
+            ["HDFC First Fund", None, None, None],
+            ["PORTFOLIO", None, None, None],
+            ["Company/Instrument", "Industry+ /Rating", "% to NAV", None],
+            ["ICICI Bank Ltd.", "Banks", 100.0, None],
+        ],
+        columns=["c1", "c2", "c3", "c4"],
+    )
+    frame.attrs["page_text_full"] = (
+        "HDFC First Fund\nPORTFOLIO\nICICI Bank Ltd. Banks 100.00\n"
+        "HDFC Second Fund\nPORTFOLIO\nInfosys Ltd. IT - Software 100.00\n"
+    )
+
+    adapter = HDFCAdapter()
+    parsed = adapter.parse_holdings(
+        excel_frames=[],
+        pdf_table_frames=[frame],
+        pdf_text="",
+        context=SimpleNamespace(source_document_id="doc-4", source_url="local", report_month=date(2026, 4, 1)),
+    )
+
+    assert parsed.scheme_name == "HDFC First Fund"
+    assert len(parsed.holdings) == 1
+    assert parsed.holdings[0]["instrument_name"] == "ICICI Bank Ltd."
+    assert parsed.metrics["total_percent_aum"] == 100.0
