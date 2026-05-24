@@ -99,12 +99,17 @@ async def rate_limit_middleware(request: Request, call_next):
             result = await check_rate_limit(group, identity)
         except Exception as exc:
             logger.warning("event=rate_limit_check_failed path=%s reason=%s", request.url.path, exc)
+            if group == "data-health":
+                return await call_next(request)
             return JSONResponse(
                 {"error": "rate_limit_unavailable", "retry_after_seconds": 60},
                 status_code=503,
                 headers={"Retry-After": "60"},
             )
         if not result.allowed:
+            if group == "data-health" and not result.configured:
+                logger.warning("event=rate_limit_unconfigured_bypassed path=%s", request.url.path)
+                return await call_next(request)
             status_code = 429 if result.configured else 503
             error = "rate_limited" if result.configured else "rate_limit_unconfigured"
             return JSONResponse(

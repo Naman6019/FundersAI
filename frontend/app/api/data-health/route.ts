@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
 import { backendUrl } from '../quant/proxy';
-import { enforceRateLimit, getClientIp } from '@/lib/rateLimit';
+import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/rateLimit';
 
 export async function GET(request: Request) {
   try {
-    const limited = await enforceRateLimit(request, 'data-health');
-    if (limited) return limited;
+    const rateLimit = await checkRateLimit(request, 'data-health');
+    if (!rateLimit.allowed && rateLimit.configured) {
+      return rateLimitResponse(rateLimit);
+    }
+    if (!rateLimit.configured) {
+      console.warn('Data health rate limit storage is not configured; continuing without rate limit.');
+    }
 
     const res = await fetch(backendUrl('/api/data-health'), {
       method: 'GET',
