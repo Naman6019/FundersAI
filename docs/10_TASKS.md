@@ -2,7 +2,7 @@
 
 ## Todo
 - [x] Add a dedicated `/api/quant` backend endpoint to separate stock lookup from chat synthesis.
-- [ ] Add rate limiting for frontend proxy routes (`/api/chat`, `/api/cron/sync-mf`).
+- [x] Add rate limiting for frontend proxy routes (`/api/chat`, `/api/cron/sync-mf`).
 - [ ] Improve Data Coverage parser status logic to distinguish latest-run failures from historical failures.
 - [ ] Add admin action flow for parse-review triage (`needs_review` -> approved/reparse) from UI.
 

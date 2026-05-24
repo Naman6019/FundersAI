@@ -66,3 +66,4 @@ Prefix: `/api/provider/indianapi`
 - Compare responses keep additive fields (`metrics`, `fundamentals`, `ratios`, `data_quality`, `source_summary`, `why_better`, `verdict_context`, `comparison`).
 - If local data is missing, endpoints return partial payloads with explicit limitations where possible.
 - Admin resolver debug frontend route calls backend admin endpoint using `MF_INTERNAL_ADMIN_KEY` so internal secrets are not exposed to the browser.
+- Public/high-cost routes are rate-limited. Over-limit responses return `429` with `{ "error": "rate_limited", "retry_after_seconds": number }` and standard rate-limit headers. In production, protected routes return `503 rate_limit_unconfigured` if Upstash Redis env vars are missing.

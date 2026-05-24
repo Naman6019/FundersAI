@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
+import { enforceRateLimit, getClientIp } from '@/lib/rateLimit';
 
 export async function POST(req: Request) {
   try {
+    const limited = await enforceRateLimit(req, 'chat');
+    if (limited) return limited;
+
     const body = await req.json();
 
     const TARGET = process.env.NODE_ENV === 'development'
@@ -12,7 +16,10 @@ export async function POST(req: Request) {
 
     const proxyRes = await fetch(TARGET, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Forwarded-For': getClientIp(req),
+      },
       body: JSON.stringify(body),
     });
 

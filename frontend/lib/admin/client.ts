@@ -2,7 +2,7 @@
 
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 
-export async function adminFetch(path: string): Promise<Response> {
+export async function adminFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const { data } = await supabaseBrowser.auth.getSession();
   const accessToken = data.session?.access_token;
   if (!accessToken) {
@@ -11,11 +11,12 @@ export async function adminFetch(path: string): Promise<Response> {
       headers: { 'Content-Type': 'application/json' },
     });
   }
+  const headers = new Headers(init.headers);
+  headers.set('Authorization', `Bearer ${accessToken}`);
+
   return fetch(path, {
+    ...init,
     cache: 'no-store',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
+    headers,
   });
 }
-

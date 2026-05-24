@@ -17,10 +17,17 @@
   - `CRON_SECRET` (protects `/api/cron/sync-mf`)
   - `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_KEY` (server routes needing admin Supabase access)
   - `MF_INTERNAL_ADMIN_KEY` (server-to-backend admin resolver debug proxy)
+  - `RATE_LIMIT_ENABLED=true`
+  - `UPSTASH_REDIS_REST_URL`
+  - `UPSTASH_REDIS_REST_TOKEN`
 
 ## Backend (Render)
 - Local dev entry: `uvicorn app.main:app --reload --port 8000`
 - Health: `GET /health`
+- Required rate-limit envs in production:
+  - `RATE_LIMIT_ENABLED=true`
+  - `UPSTASH_REDIS_REST_URL`
+  - `UPSTASH_REDIS_REST_TOKEN`
 - Internal admin endpoints:
   - `GET /api/admin/ops-overview`
   - `GET /api/admin/mf-resolver-debug`
@@ -59,6 +66,7 @@ Add/update a row in `user_profiles`:
 ## Operational Checks
 - Verify frontend proxy routes can reach backend URL.
 - Verify backend `/health` and `/api/chat`.
+- Verify rate limits on `/api/chat`; production protected routes require Upstash Redis env vars.
 - Verify latest workflow run status and row-write counts.
 - Verify R2 credentials before MF disclosure sync/compaction jobs.
 - Verify `/admin`:

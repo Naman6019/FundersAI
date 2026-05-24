@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import type { SearchResultItem } from '@/types/funds';
+import { enforceRateLimit } from '@/lib/rateLimit';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -12,6 +13,9 @@ export async function GET(request: Request) {
   }
 
   try {
+    const limited = await enforceRateLimit(request, 'search');
+    if (limited) return limited;
+
     const results: SearchResultItem[] = [];
 
     if (type === 'all' || type === 'mf') {

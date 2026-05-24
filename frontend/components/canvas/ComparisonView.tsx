@@ -41,6 +41,8 @@ type StockComparisonMetric = ComparisonMetric & {
   source_summary?: { stale?: boolean };
   fundamentals?: FundamentalMetric;
   price_history?: QuantPriceRow[];
+  beta?: MetricValue;
+  alpha_vs_nifty?: MetricValue;
 };
 
 interface Props {
@@ -210,6 +212,8 @@ const mapQuantResponse = (data: unknown): Record<string, StockComparisonMetric> 
       price: latest_price,
       market_cap: ratios['market_cap'] as MetricValue,
       enterprise_value: ratios['enterprise_value'] as MetricValue,
+      beta: ratios['beta'] as MetricValue,
+      alpha_vs_nifty: ratios['alpha_vs_nifty'] as MetricValue,
       fundamentals: {
         industry: profile['industry'] as MetricValue,
         pe: ratios['pe'] as MetricValue,
@@ -508,6 +512,11 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
       ['Price', 'price', formatPrice],
       ['Market Cap', 'market_cap', formatMarketCap],
       ['Enterprise Value', 'enterprise_value', formatMarketCap],
+      ['Beta', 'beta', formatValue],
+      ['Alpha vs Nifty', 'alpha_vs_nifty', (val) => {
+        const num = toNumber(val);
+        return num !== null ? formatPercent(num) : 'Not available';
+      }],
       ['P/E', 'fundamentals.pe', formatValue],
       ['P/B', 'fundamentals.pb', formatValue],
       ['P/S', 'fundamentals.ps', formatValue],

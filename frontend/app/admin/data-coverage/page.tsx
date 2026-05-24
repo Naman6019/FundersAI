@@ -46,6 +46,8 @@ export default function AdminDataCoveragePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<Payload | null>(null);
+  const [actionId, setActionId] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const load = useCallback(async (nextFilter = filter) => {
     setLoading(true);
@@ -61,6 +63,23 @@ export default function AdminDataCoveragePage() {
     setData(payload as Payload);
     setLoading(false);
   }, [filter]);
+
+  const handleDocumentAction = useCallback(async (documentId: string, action: 'reparse' | 'resolve') => {
+    setActionId(`${action}:${documentId}`);
+    setActionMessage(null);
+    const res = await adminFetch(`/api/admin/data-coverage/documents/${encodeURIComponent(documentId)}/${action}`, {
+      method: 'POST',
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setActionMessage(String((payload as { error?: string; detail?: string }).error || (payload as { detail?: string }).detail || 'Action failed'));
+      setActionId(null);
+      return;
+    }
+    setActionMessage(action === 'reparse' ? 'Reparse queued.' : 'Document resolved.');
+    await load(filter);
+    setActionId(null);
+  }, [filter, load]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -142,6 +161,7 @@ export default function AdminDataCoveragePage() {
             {data.needs_review_entries?.length || 0}
           </span>
         </div>
+        {actionMessage ? <p className="mb-2 text-xs text-[#9fb7dc]">{actionMessage}</p> : null}
         {!data.needs_review_entries?.length ? (
           <p className="text-xs text-[#8ea6cb]">No documents currently marked as needs_review.</p>
         ) : (
@@ -154,6 +174,7 @@ export default function AdminDataCoveragePage() {
                   <th className="px-2 py-2 text-left">Issues</th>
                   <th className="px-2 py-2 text-left">Latest</th>
                   <th className="px-2 py-2 text-left">Document</th>
+                  <th className="px-2 py-2 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -183,6 +204,26 @@ export default function AdminDataCoveragePage() {
                       ) : (
                         <span className="text-[#8ea6cb]">-</span>
                       )}
+                    </td>
+                    <td className="px-2 py-2">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={Boolean(actionId)}
+                          onClick={() => handleDocumentAction(entry.id, 'reparse')}
+                          className="rounded-lg border border-[#68a7ff]/40 bg-[#17325a] px-2 py-1 text-[11px] text-[#d6e6ff] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {actionId === `reparse:${entry.id}` ? 'Queuing...' : 'Reparse'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={Boolean(actionId)}
+                          onClick={() => handleDocumentAction(entry.id, 'resolve')}
+                          className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {actionId === `resolve:${entry.id}` ? 'Resolving...' : 'Resolve'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

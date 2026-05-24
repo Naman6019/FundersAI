@@ -8,8 +8,9 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, List, Literal
 from dotenv import load_dotenv
-from fastapi import FastAPI, BackgroundTasks, Header, HTTPException, Query
+from fastapi import FastAPI, BackgroundTasks, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import httpx
 import yfinance as yf
@@ -44,6 +45,11 @@ from app.services.mfapi_service import get_latest_nav as mfapi_get_latest_nav, g
 from app.services.indianapi_quota_guard import evaluate as evaluate_indianapi_quota
 from app.services.provider_usage import build_usage_dashboard
 from app.services import cache_policy
+from app.services.rate_limit import (
+    check_rate_limit,
+    client_identifier_from_request,
+    rate_limit_headers,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -62,6 +68,52 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _rate_limit_group_for_request(path: str, method: str) -> str | None:
+    method = method.upper()
+    if path == "/api/chat" and method == "POST":
+        return "chat"
+    if path.startswith("/api/quant/"):
+        return "quant"
+    if path.startswith("/api/provider/indianapi/"):
+        return "quant"
+    if path.startswith("/api/mf/"):
+        return "mf-detail"
+    if path == "/api/data-health":
+        return "data-health"
+    if path == "/api/trigger-fetch":
+        return "cron-sync-mf"
+    if path.startswith("/api/admin/mf-documents/") and method == "POST":
+        return "admin-mutation"
+    return None
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    group = _rate_limit_group_for_request(request.url.path, request.method)
+    if group:
+        identity_override = request.headers.get("x-admin-key") if group == "admin-mutation" else None
+        identity = client_identifier_from_request(request, identity_override)
+        try:
+            result = await check_rate_limit(group, identity)
+        except Exception as exc:
+            logger.warning("event=rate_limit_check_failed path=%s reason=%s", request.url.path, exc)
+            return JSONResponse(
+                {"error": "rate_limit_unavailable", "retry_after_seconds": 60},
+                status_code=503,
+                headers={"Retry-After": "60"},
+            )
+        if not result.allowed:
+            status_code = 429 if result.configured else 503
+            error = "rate_limited" if result.configured else "rate_limit_unconfigured"
+            return JSONResponse(
+                {"error": error, "retry_after_seconds": result.retry_after_seconds},
+                status_code=status_code,
+                headers=rate_limit_headers(result),
+            )
+
+    return await call_next(request)
 
 from app.routes.quant import router as quant_router
 app.include_router(quant_router)
@@ -145,6 +197,104 @@ def _require_admin_key(x_admin_key: str | None) -> None:
 
 def _iso_or_none(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
+
+
+class AdminDocumentReviewAction(BaseModel):
+    reviewer_notes: str | None = None
+
+
+def _review_action_notes(payload: AdminDocumentReviewAction | None) -> str | None:
+    if not payload or payload.reviewer_notes is None:
+        return None
+    notes = payload.reviewer_notes.strip()
+    return notes or None
+
+
+def _load_mf_review_document(document_id: str) -> dict[str, Any]:
+    if not supabase:
+        raise HTTPException(status_code=503, detail="supabase_unavailable")
+
+    rows = (
+        supabase.table("mf_raw_documents")
+        .select("id,parse_status,validation_issues")
+        .eq("id", document_id)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="document_not_found")
+    return rows[0]
+
+
+def _mark_review_queue(document_id: str, status: str, reviewer_notes: str | None) -> None:
+    if not supabase:
+        return
+
+    payload: dict[str, Any] = {
+        "status": status,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if reviewer_notes:
+        payload["reviewer_notes"] = reviewer_notes
+
+    try:
+        (
+            supabase.table("mf_parse_review_queue")
+            .update(payload)
+            .eq("source_document_id", document_id)
+            .eq("status", "pending_review")
+            .execute()
+        )
+    except Exception as exc:
+        logger.warning("event=review_queue_update_failed source_document_id=%s reason=%s", document_id, exc)
+
+
+def _request_mf_document_reparse(document_id: str, reviewer_notes: str | None = None) -> dict[str, Any]:
+    document = _load_mf_review_document(document_id)
+    current_status = str(document.get("parse_status") or "").strip().lower()
+    if current_status != "needs_review":
+        raise HTTPException(status_code=409, detail="document_not_in_needs_review")
+
+    supabase.table("mf_raw_documents").update(
+        {
+            "parse_status": "needs_reparse",
+            "validation_issues": [],
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    ).eq("id", document_id).execute()
+    _mark_review_queue(document_id, "reparse_requested", reviewer_notes)
+    return {
+        "status": "ok",
+        "action": "reparse_requested",
+        "source_document_id": document_id,
+        "parse_status": "needs_reparse",
+    }
+
+
+def _resolve_mf_document_review(document_id: str, reviewer_notes: str | None = None) -> dict[str, Any]:
+    document = _load_mf_review_document(document_id)
+    current_status = str(document.get("parse_status") or "").strip().lower()
+    if current_status != "needs_review":
+        raise HTTPException(status_code=409, detail="document_not_in_needs_review")
+
+    now = datetime.now(timezone.utc).isoformat()
+    supabase.table("mf_raw_documents").update(
+        {
+            "parse_status": "parsed",
+            "validation_issues": [],
+            "parsed_at": now,
+            "updated_at": now,
+        }
+    ).eq("id", document_id).execute()
+    _mark_review_queue(document_id, "approved", reviewer_notes)
+    return {
+        "status": "ok",
+        "action": "resolved",
+        "source_document_id": document_id,
+        "parse_status": "parsed",
+    }
 
 
 @app.get("/api/data-health")
@@ -571,6 +721,26 @@ def admin_ops_overview(x_admin_key: str | None = Header(default=None, alias="X-A
             "mf_pending_review": mf_review_queue,
         },
     }
+
+
+@app.post("/api/admin/mf-documents/{document_id}/request-reparse")
+def admin_request_mf_document_reparse(
+    document_id: str,
+    payload: AdminDocumentReviewAction | None = None,
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+):
+    _require_admin_key(x_admin_key)
+    return _request_mf_document_reparse(document_id, _review_action_notes(payload))
+
+
+@app.post("/api/admin/mf-documents/{document_id}/resolve")
+def admin_resolve_mf_document_review(
+    document_id: str,
+    payload: AdminDocumentReviewAction | None = None,
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+):
+    _require_admin_key(x_admin_key)
+    return _resolve_mf_document_review(document_id, _review_action_notes(payload))
 
 
 @app.get("/api/admin/mf-resolver-debug")

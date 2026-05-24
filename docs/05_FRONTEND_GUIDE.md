@@ -43,5 +43,4 @@ npm run dev
 ```
 
 ## Known Frontend Gaps
-- Route-level rate limiting is still TODO in proxy helpers.
 - Error surfaces are mostly generic (502/500) and can be made more user-specific.

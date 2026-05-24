@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { calculateCAGR, calculateRiskMetrics } from '@/lib/mf/returns';
+import { enforceRateLimit, getClientIp } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -140,13 +141,18 @@ async function fetchLocalNavHistory(schemeCode: string): Promise<HistoryRow[]> {
   return numberRows.length > stringRows.length ? numberRows : stringRows;
 }
 
-async function fetchFromBackend(schemeCode: string) {
+async function fetchFromBackend(schemeCode: string, request: Request) {
   const target = process.env.NODE_ENV === 'development'
     ? `http://127.0.0.1:8000/api/mf/${schemeCode}`
     : `${process.env.NEXT_PUBLIC_API_URL}/api/mf/${schemeCode}`;
 
   try {
-    const res = await fetch(target, { cache: 'no-store' });
+    const res = await fetch(target, {
+      cache: 'no-store',
+      headers: {
+        'X-Forwarded-For': getClientIp(request),
+      },
+    });
     if (!res.ok) return null;
     const json = await res.json();
     if (!isMfPayload(json)) return null;
@@ -156,7 +162,7 @@ async function fetchFromBackend(schemeCode: string) {
   }
 }
 
-export async function GET(_request: Request, context: { params: Promise<{ schemeCode: string }>}) {
+export async function GET(request: Request, context: { params: Promise<{ schemeCode: string }>}) {
   const { schemeCode } = await context.params;
   const debugNavPipeline = process.env.NODE_ENV === 'development' && process.env.DEBUG_MF_NAV_PIPELINE === '1';
   if (!/^\d+$/.test(schemeCode)) {
@@ -164,8 +170,11 @@ export async function GET(_request: Request, context: { params: Promise<{ scheme
   }
 
   try {
+    const limited = await enforceRateLimit(request, 'mf-detail');
+    if (limited) return limited;
+
     // Primary source: backend API uses the same DB path as chat resolution.
-    const backendJson = await fetchFromBackend(schemeCode);
+    const backendJson = await fetchFromBackend(schemeCode, request);
     if (backendJson) {
       // Enrich backend payload with local full history when backend fullData is short/missing.
       const localHistory = await fetchLocalNavHistory(schemeCode);

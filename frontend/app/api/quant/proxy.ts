@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { enforceRateLimit, getClientIp } from '@/lib/rateLimit';
 
 export function backendUrl(path: string, search = '') {
   const base = process.env.NODE_ENV === 'development'
@@ -11,9 +12,16 @@ export function backendUrl(path: string, search = '') {
 
 export async function proxyGet(path: string, request: Request) {
   try {
-    // TODO: Add route-level rate limiting when auth/rate limits are implemented.
+    const limited = await enforceRateLimit(request, 'quant');
+    if (limited) return limited;
+
     const url = new URL(request.url);
-    const res = await fetch(backendUrl(path, url.search), { method: 'GET' });
+    const res = await fetch(backendUrl(path, url.search), {
+      method: 'GET',
+      headers: {
+        'X-Forwarded-For': getClientIp(request),
+      },
+    });
     const body = await res.json().catch(() => ({ error: 'Invalid backend response' }));
     return NextResponse.json(body, { status: res.status });
   } catch (error) {

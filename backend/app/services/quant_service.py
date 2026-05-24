@@ -405,6 +405,105 @@ def build_stock_profile(symbol: str) -> dict[str, Any]:
     }
 
 
+def _normalize_price_df_index(df: Any) -> Any:
+    if df.empty:
+        return df
+    import pandas as pd
+    normalized = df.copy()
+    normalized.index = pd.to_datetime(normalized.index, errors="coerce")
+    normalized = normalized[normalized.index.notna()]
+    if getattr(normalized.index, "tz", None) is not None:
+        normalized.index = normalized.index.tz_convert(None)
+    normalized.index = normalized.index.normalize()
+    return normalized
+
+
+def _calculate_beta(stock_returns: list[float], nifty_returns: list[float]) -> float:
+    if len(stock_returns) < 10 or len(stock_returns) != len(nifty_returns):
+        return 1.0
+    try:
+        import numpy as np
+        if np.var(nifty_returns) < 1e-9:
+            return 1.0
+        cov_matrix = np.cov(stock_returns, nifty_returns)
+        if cov_matrix.shape == (2, 2):
+            cov = cov_matrix[0][1]
+            var = np.var(nifty_returns)
+            beta = cov / var
+            if abs(beta) < 0.05:
+                return 1.0
+            return round(float(beta), 2)
+        return 1.0
+    except Exception:
+        return 1.0
+
+
+def _calculate_stock_alpha_beta(symbol: str) -> tuple[float | None, float | None]:
+    try:
+        stock_history_raw = get_stock_price_history(symbol, days=1100)
+        nifty_history_raw = get_stock_price_history("NIFTY", days=1100)
+        if not stock_history_raw or not nifty_history_raw or len(stock_history_raw) < 20 or len(nifty_history_raw) < 20:
+            return None, None
+            
+        import pandas as pd
+        import numpy as np
+
+        # Convert to DataFrames
+        stock_df = pd.DataFrame(stock_history_raw)
+        nifty_df = pd.DataFrame(nifty_history_raw)
+
+        # Format and set index
+        stock_df['date'] = pd.to_datetime(stock_df['date'])
+        stock_df = stock_df.sort_values('date')
+        stock_df.rename(columns={'close': 'Close'}, inplace=True)
+        stock_df.set_index('date', inplace=True)
+
+        nifty_df['date'] = pd.to_datetime(nifty_df['date'])
+        nifty_df = nifty_df.sort_values('date')
+        nifty_df.rename(columns={'close': 'Close'}, inplace=True)
+        nifty_df.set_index('date', inplace=True)
+
+        # Normalize indices (normalize dates to avoid tz mismatches)
+        stock_df = _normalize_price_df_index(stock_df)
+        nifty_df = _normalize_price_df_index(nifty_df)
+
+        s_close = stock_df['Close'].ffill().dropna()
+        n_close = nifty_df['Close'].ffill().dropna()
+
+        stock_returns = s_close.pct_change().dropna()
+        nifty_returns = n_close.pct_change().dropna()
+
+        aligned = stock_returns.to_frame('stock').join(nifty_returns.to_frame('nifty'), how='inner')
+
+        if len(aligned) < 10:
+            return None, None
+
+        # Calculate Beta
+        stock_ret_list = aligned['stock'].tolist()
+        nifty_ret_list = aligned['nifty'].tolist()
+        beta = _calculate_beta(stock_ret_list, nifty_ret_list)
+
+        # Calculate Alpha
+        stock_ret_total = (s_close.iloc[-1] - s_close.iloc[0]) / s_close.iloc[0]
+        nifty_ret_total = (n_close.iloc[-1] - n_close.iloc[0]) / n_close.iloc[0]
+
+        days = (s_close.index[-1] - s_close.index[0]).days
+        alpha_vs_nifty = None
+        if days > 0:
+            years = days / 365.25
+            stock_ann_ret = (1 + stock_ret_total) ** (1 / years) - 1
+            nifty_ann_ret = (1 + nifty_ret_total) ** (1 / years) - 1
+
+            rf = 0.065 # Risk free rate 6.5%
+            calc_alpha = (stock_ann_ret - (rf + beta * (nifty_ann_ret - rf))) * 100
+            alpha_vs_nifty = round(float(calc_alpha), 2)
+
+        return beta, alpha_vs_nifty
+    except Exception as e:
+        logger.error("Failed to calculate beta/alpha for stock %s: %s", symbol, e)
+        return None, None
+
+
 def _comparison_item(symbol: str) -> dict[str, Any]:
     clean = normalize_symbol(symbol)
     snapshot_context = get_stock_snapshot_with_freshness(clean)
@@ -425,6 +524,8 @@ def _comparison_item(symbol: str) -> dict[str, Any]:
     if prev_close in (None, 0):
         prev_close = _num(snapshot.get("previous_close"))
     change_pct = ((close - prev_close) / prev_close * 100) if close is not None and prev_close not in (None, 0) else None
+
+    beta, alpha_vs_nifty = _calculate_stock_alpha_beta(clean)
 
     fundamentals = {
         **_empty_fundamentals(),
@@ -475,8 +576,8 @@ def _comparison_item(symbol: str) -> dict[str, Any]:
         "pe_ratio": fundamentals.get("pe"),
         "market_cap": fundamentals.get("market_cap"),
         "enterprise_value": ratios.get("enterprise_value"),
-        "beta": None,
-        "alpha_vs_nifty": None,
+        "beta": beta,
+        "alpha_vs_nifty": alpha_vs_nifty,
         "historical_period": "1y",
         "rsi_14d": None,
         "tv_recommendation": None,
