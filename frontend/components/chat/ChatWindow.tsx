@@ -292,7 +292,7 @@ export default function ChatWindow() {
       <div className="space-y-2 border-t border-white/10 bg-[linear-gradient(180deg,rgba(2,8,24,0.95),rgba(2,6,18,0.98))] px-3 py-3 sm:px-4">
         {isProcessing && (
           <div className="rounded-lg border border-sky-300/25 bg-sky-300/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-200">
-            Pipeline thinking...
+            Pipeline thinking…
           </div>
         )}
 
@@ -339,7 +339,7 @@ export default function ChatWindow() {
           ))}
         </div>
 
-        <div className="flex items-end gap-2 rounded-xl border border-white/10 bg-white/[0.04] p-2">
+        <div className="flex items-end gap-2 rounded-xl border border-white/10 bg-white/[0.04] p-2 transition duration-200 focus-within:border-sky-500/50 focus-within:ring-2 focus-within:ring-sky-500/20">
           <textarea
             ref={textareaRef}
             value={input}
@@ -350,8 +350,11 @@ export default function ChatWindow() {
                 handleSend();
               }
             }}
-            placeholder={assetType === 'mutual_fund' ? 'Compare PPFAS and ICICI funds for long-term consistency...' : assetType === 'stock' ? 'Stock research is in progress. Try fund comparison prompts.' : 'Ask for PPFAS vs ICICI comparison, risk, cost, or NAV view...'}
+            placeholder={assetType === 'mutual_fund' ? 'Compare PPFAS and ICICI funds for long-term consistency…' : assetType === 'stock' ? 'Stock research is in progress. Try fund comparison prompts.' : 'Ask for PPFAS vs ICICI comparison, risk, cost, or NAV view…'}
             rows={1}
+            name="chat_message"
+            autoComplete="off"
+            aria-label="Type your message"
             className="max-h-28 min-h-[2.5rem] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none"
           />
           <button className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-sky-300/45 bg-[linear-gradient(140deg,#1d4f91,#2563eb)] text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50" onClick={handleSend} aria-label="Send Message" disabled={isProcessing}>

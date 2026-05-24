@@ -35,6 +35,33 @@ function normalizeAmcCode(name: string): string {
   return clean || 'UNKNOWN';
 }
 
+const ACTION_WORKFLOW_ORDER = [
+  {
+    order: 1,
+    label: 'Daily disclosure sync',
+    schedule: '10:00 IST, Monday-Friday',
+    action: 'Ingest latest AMC factsheet and portfolio documents.',
+  },
+  {
+    order: 2,
+    label: 'Pending parser pass',
+    schedule: 'After daily sync',
+    action: 'Parse pending and needs_reparse documents for PPFAS, ICICI, HDFC, SBI.',
+  },
+  {
+    order: 3,
+    label: 'Parser retry loop',
+    schedule: 'Every 6 hours',
+    action: 'Retry cooled-down needs_review and failed rows in order: SBI, HDFC, ICICI, PPFAS.',
+  },
+  {
+    order: 4,
+    label: 'Admin triage',
+    schedule: 'As needed',
+    action: 'Reparse real documents, skip irrelevant documents, and resolve only verified manual approvals.',
+  },
+];
+
 export async function GET(request: Request) {
   const auth = await requireAdminFromRequest(request);
   if (!auth.ok) return auth.response;
@@ -221,6 +248,7 @@ export async function GET(request: Request) {
     filter,
     rows: filtered.sort((a, b) => a.amc.localeCompare(b.amc)),
     needs_review_entries: needsReviewEntries,
+    action_workflow_order: ACTION_WORKFLOW_ORDER,
     pipeline_focus: {
       active_current: ['PPFAS', 'ICICI'],
       note: 'Current MVP pipeline is strongest on PPFAS and ICICI while broader AMC coverage is being expanded.',

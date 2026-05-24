@@ -20,6 +20,7 @@ GitHub Actions runs stock and mutual-fund sync jobs from `.github/workflows/`.
 | `mf-sync.yml` | `30 13 * * 1-5` | `sync_mf.py` -> `sync_mf_history.py` -> `sync_mf_metadata.py` -> `python -m backend.app.jobs.sync_mf_nav` |
 | `sync-mf-enrichment.yml` | Manual only | `python -m backend.app.jobs.sync_mf_enrichment` (MFdata fallback path) |
 | `sync-mf-disclosures.yml` | `30 4 * * 1-5`, plus manual | `ingest_latest_amc_docs` + `parse_pending_documents` for `ppfas,icici,hdfc,sbi` (R2-first) |
+| `retry-mf-parser-actions.yml` | `15 */6 * * *`, plus manual | `reparse_needs_review` for cooled-down `needs_review` / `failed` docs, default order `sbi,hdfc,icici,ppfas` |
 | `migrate-mf-raw-to-r2.yml` | Manual | `migrate_mf_raw_to_r2` |
 | `compact-mf-storage.yml` | `45 3 * * 0`, plus manual | `compact_mf_nav_5y` + `compact_mf_holdings_latest_only` |
 | `keepalive.yml` | `*/10 * * * *` | Direct ping to Render `/health` |
@@ -29,6 +30,7 @@ GitHub Actions runs stock and mutual-fund sync jobs from `.github/workflows/`.
 - Stock EOD/history jobs are NSE bhavcopy-first and write `stock_prices_daily` with source `nse_bhavcopy`.
 - Stock universe and fundamentals jobs are FinEdge-first and write source-neutral `stocks`, `financial_statements`, `ratios_snapshot`, and optional `shareholding_pattern`.
 - MF disclosures workflow is strict by design (`--strict --fail-on-needs-review`), so `needs_review` rows can fail the run.
+- MF parser retry is cooldown-based (`--min-age-hours`, default 6) and non-blocking for rows that still need review; true parser/classification issues still need code fixes or admin skip.
 - MF disclosure ingestion is configured for R2-first storage (`MF_REQUIRE_R2_FOR_RAW_STORAGE=true`), while Supabase stores structured/query-critical rows and manifests.
 
 ## MF Storage Reduction Runbook

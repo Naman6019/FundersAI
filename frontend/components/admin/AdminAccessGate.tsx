@@ -40,7 +40,7 @@ export default function AdminAccessGate({ children }: Props) {
   if (state === 'checking') {
     return (
       <div className="grid min-h-screen place-items-center bg-[#060d1a] text-[#d9e8ff]">
-        <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-5 py-4 text-sm">Checking admin access...</div>
+        <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-5 py-4 text-sm">Checking admin access…</div>
       </div>
     );
   }

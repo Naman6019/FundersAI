@@ -119,7 +119,7 @@ export default function FundComparisonChart({ schemeCodeA, schemeCodeB, nameA, n
   if (loading) {
     return (
       <div className="flex h-[320px] w-full items-center justify-center rounded-xl border border-[#2f4260] bg-[#111d32] animate-pulse">
-        <div className="text-sm text-[#8cb3f8]">Loading chart data...</div>
+        <div className="text-sm text-[#8cb3f8]">Loading chart data…</div>
       </div>
     );
   }

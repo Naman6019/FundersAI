@@ -703,7 +703,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                 onClick={() => isSupported && setPeriod(p)}
                 disabled={!isSupported}
                 title={!isSupported ? "Not enough NAV history for this period" : ""}
-                className={`shrink-0 rounded-md px-3 py-2 text-xs font-semibold transition-all duration-200 sm:px-4 ${
+                className={`shrink-0 rounded-md px-3 py-2 text-xs font-semibold transition-colors duration-200 sm:px-4 ${
                   !isSupported ? 'opacity-40 cursor-not-allowed bg-transparent text-[#6e85a6]' :
                   period === p ? 'bg-[#4f8ff7] text-white shadow-lg' : 'text-[#9eb5d8] hover:text-white hover:bg-white/5'}`}
               >
@@ -717,7 +717,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
       {loading && (
         <div className="flex-1 flex flex-col items-center justify-center space-y-4">
           <div className="w-12 h-12 border-4 border-[#4f8ff7] border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-[#4f8ff7] font-medium">Fetching real-time NAV data...</p>
+          <p className="text-[#4f8ff7] font-medium">Fetching real-time NAV data…</p>
         </div>
       )}
 

@@ -42,7 +42,7 @@ type ComparisonFundData = {
 
 function MetricCard({ label, value, tooltip, icon: Icon, subValue }: { label: string, value: string | null, tooltip: string, icon?: LucideIcon, subValue?: string }) {
   return (
-    <div className="group relative cursor-help rounded-xl border border-[#324562] bg-[#12203a] p-4 shadow-lg transition-all duration-200 hover:border-[#5f8ed6] sm:rounded-2xl sm:p-5">
+    <div className="group relative cursor-help rounded-xl border border-[#324562] bg-[#12203a] p-4 shadow-lg transition-[border-color] duration-200 hover:border-[#5f8ed6] sm:rounded-2xl sm:p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           {Icon && <Icon size={16} className="text-[#7cadff]" />}
@@ -53,7 +53,7 @@ function MetricCard({ label, value, tooltip, icon: Icon, subValue }: { label: st
         <div className="text-xl font-black tracking-tight text-white sm:text-2xl">{value ?? '—'}</div>
         {subValue && <div className="text-[10px] font-medium text-[#7d94b7]">{subValue}</div>}
       </div>
-      <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-3 invisible w-64 -translate-x-1/2 rounded-xl border border-[#3b4f70] bg-[#0e182a] p-3 text-xs leading-relaxed text-[#c5d7f2] opacity-0 shadow-2xl transition-all group-hover:visible group-hover:opacity-100">
+      <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-3 invisible w-64 -translate-x-1/2 rounded-xl border border-[#3b4f70] bg-[#0e182a] p-3 text-xs leading-relaxed text-[#c5d7f2] opacity-0 shadow-2xl transition-[opacity,transform] duration-200 group-hover:visible group-hover:opacity-100">
         {tooltip}
         <div className="absolute left-1/2 top-full -translate-x-1/2 border-8 border-transparent border-t-[#0e182a]"></div>
       </div>
@@ -271,7 +271,7 @@ function FundColumn({ schemeCode, colorHex }: { schemeCode: string, colorHex: st
             <div className="absolute inset-0 rounded-full border-4 border-white/5"></div>
             <div className="absolute inset-0 animate-spin rounded-full border-4 border-t-[#4f8ff7]"></div>
         </div>
-        <p className="animate-pulse font-medium text-white">Preparing fund comparison signals...</p>
+        <p className="animate-pulse font-medium text-white">Preparing fund comparison signals…</p>
       </div>
     );
   }
@@ -282,7 +282,7 @@ function FundColumn({ schemeCode, colorHex }: { schemeCode: string, colorHex: st
   const expenseRatio = details?.expense_ratio ?? extraMeta?.expense_ratio;
 
   const returnRow = (label: string, val: number | null, isCAGR = false) => (
-    <div className="group/row flex items-center justify-between rounded-xl border-b border-white/5 px-3 py-3.5 text-sm transition-all hover:bg-white/5">
+    <div className="group/row flex items-center justify-between rounded-xl border-b border-white/5 px-3 py-3.5 text-sm transition-colors duration-200 hover:bg-white/5">
       <span className="text-[#a6bbdc] transition-colors group-hover/row:text-white">{label}</span>
       <span className={`font-bold flex items-center gap-1.5 ${val === null ? 'text-gray-600' : val > 0 ? 'text-green-400' : 'text-red-400'}`}>
         {val !== null ? `${val > 0 ? '+' : ''}${val.toFixed(2)}%` : 'N/A'}

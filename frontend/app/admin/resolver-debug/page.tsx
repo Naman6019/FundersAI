@@ -66,20 +66,25 @@ export default function AdminResolverDebugPage() {
       <Panel>
         <form onSubmit={onSubmit} className="flex flex-col gap-3 md:flex-row md:items-end">
           <div className="flex-1">
-            <label className="mb-1 block text-xs text-[#97afd2]">Search query</label>
+            <label htmlFor="search-query" className="mb-1 block text-xs text-[#97afd2]">Search query</label>
             <input
+              id="search-query"
+              name="query"
+              autoComplete="off"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="ICICI Multi Asset"
-              className="w-full rounded-xl border border-white/15 bg-[#0f1b31] px-3 py-2 text-sm text-white outline-none focus:border-[#69a7ff]"
+              className="w-full rounded-xl border border-white/15 bg-[#0f1b31] px-3 py-2 text-sm text-white outline-none focus:border-[#69a7ff] focus-visible:ring-2 focus-visible:ring-[#69a7ff]/30"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-[#97afd2]">Range</label>
+            <label htmlFor="range-select" className="mb-1 block text-xs text-[#97afd2]">Range</label>
             <select
+              id="range-select"
+              name="range"
               value={horizon}
               onChange={(event) => setHorizon(event.target.value as '1Y' | '3Y' | '5Y')}
-              className="rounded-xl border border-white/15 bg-[#0f1b31] px-3 py-2 text-sm text-white outline-none"
+              className="rounded-xl border border-white/15 bg-[#0f1b31] px-3 py-2 text-sm text-white outline-none focus:border-[#69a7ff] focus:ring-2 focus:ring-[#69a7ff]/20"
             >
               <option value="1Y">1Y</option>
               <option value="3Y">3Y</option>
@@ -89,9 +94,9 @@ export default function AdminResolverDebugPage() {
           <button
             type="submit"
             disabled={loading}
-            className="rounded-xl border border-white/15 bg-[#17325a] px-4 py-2 text-sm text-white disabled:opacity-60"
+            className="rounded-xl border border-white/15 bg-[#17325a] px-4 py-2 text-sm text-white disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-sky-500"
           >
-            {loading ? 'Testing...' : 'Test Resolver'}
+            {loading ? 'Testing…' : 'Test Resolver'}
           </button>
         </form>
         <div className="mt-3 flex flex-wrap gap-2">

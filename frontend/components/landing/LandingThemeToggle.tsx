@@ -21,7 +21,7 @@ export default function LandingThemeToggle() {
       onClick={() => setIsDark((value) => !value)}
       aria-label="Toggle dark mode"
     >
-      {isDark ? <Sun size={18} /> : <Moon size={18} />}
+      {isDark ? <Sun size={18} aria-hidden="true" /> : <Moon size={18} aria-hidden="true" />}
     </button>
   );
 }

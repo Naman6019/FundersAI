@@ -380,7 +380,18 @@ export default function DashboardLayout() {
       </div>
 
       {isMobile && isMobileSidebarOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 lg:hidden" onClick={() => setIsMobileSidebarOpen(false)}>
+        <div
+          role="button"
+          tabIndex={-1}
+          aria-label="Close sidebar menu"
+          className="fixed inset-0 z-50 bg-black/50 lg:hidden cursor-default"
+          onClick={() => setIsMobileSidebarOpen(false)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              setIsMobileSidebarOpen(false);
+            }
+          }}
+        >
           <aside
             className="h-full w-[290px] border-r border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,8,24,0.96))] p-4"
             onClick={(event) => event.stopPropagation()}

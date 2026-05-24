@@ -1,6 +1,6 @@
 # Current State
 
-**Last Updated**: 2026-05-20
+**Last Updated**: 2026-05-25
 
 ## Project Summary
 MarketMind is a research-first Indian stocks + mutual funds app with deterministic comparison outputs, Supabase-first runtime reads, and workflow-driven data ingestion.
@@ -43,6 +43,7 @@ MarketMind is a research-first Indian stocks + mutual funds app with determinist
 - Increase mutual-fund field coverage depth for PPFAS, ICICI, HDFC, SBI (especially holdings/sector/ratios completeness).
 - Reduce `needs_review` backlog in `mf_raw_documents` and `mf_parse_review_queue`.
 - Improve admin Data Coverage status interpretation for historical parser failures vs latest-run health.
+- Monitor scheduled parser retry outcomes for rows that remain in review after cooldown retries.
 
 ## Known Gaps
 - `backend/render.yaml` references `uvicorn api.index:app`; repo runtime entry is `uvicorn app.main:app`.
@@ -54,7 +55,8 @@ MarketMind is a research-first Indian stocks + mutual funds app with determinist
 - Runtime query-critical data remains in Supabase.
 - Raw MF documents and archival payloads are stored in R2.
 - Legacy heavy tables were dropped/compacted to protect Supabase free-tier storage limits.
-- MF parse pipeline uses explicit states (`pending`, `downloaded`, `needs_reparse`, `parsed`, `needs_review`, `failed`) to support reliability triage.
+- MF parse pipeline uses explicit states (`pending`, `downloaded`, `needs_reparse`, `parsed`, `needs_review`, `failed`, `skipped_not_supported`) to support reliability triage.
+- `retry-mf-parser-actions.yml` retries cooled-down `needs_review` / `failed` parser rows every 6 hours; it does not replace parser fixes or admin skips for invalid source documents.
 
 ## Workflows In Use
 - `sync-stock-universe.yml`
@@ -66,6 +68,7 @@ MarketMind is a research-first Indian stocks + mutual funds app with determinist
 - `mf-sync.yml`
 - `sync-mf-enrichment.yml` (optional fallback/manual)
 - `sync-mf-disclosures.yml`
+- `retry-mf-parser-actions.yml`
 - `migrate-mf-raw-to-r2.yml`
 - `compact-mf-storage.yml`
 - `keepalive.yml`

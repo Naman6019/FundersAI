@@ -75,6 +75,8 @@ export default function AuthForm() {
               onChange={(event) => setEmail(event.target.value)}
               required
               autoComplete="email"
+              name="email"
+              spellCheck={false}
             />
           </label>
 
@@ -87,13 +89,14 @@ export default function AuthForm() {
               required
               minLength={6}
               autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+              name="password"
             />
           </label>
 
           {message && <p className="auth-message">{message}</p>}
 
           <button type="submit" disabled={isLoading}>
-            {isLoading ? 'Please wait...' : mode === 'signin' ? 'Sign in' : 'Sign up'}
+            {isLoading ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Sign up'}
           </button>
         </form>
 

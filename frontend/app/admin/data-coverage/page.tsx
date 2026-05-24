@@ -34,11 +34,19 @@ type NeedsReviewEntry = {
   latest_at: string | null;
 };
 
+type ActionWorkflowStep = {
+  order: number;
+  label: string;
+  schedule: string;
+  action: string;
+};
+
 const FILTERS = ['all', 'fully-covered', 'partial', 'stale', 'missing-ter', 'missing-holdings', 'missing-ratios', 'parser-failing'] as const;
 
 type Payload = {
   rows: CoverageRow[];
   needs_review_entries: NeedsReviewEntry[];
+  action_workflow_order: ActionWorkflowStep[];
   pipeline_focus: { active_current: string[]; note: string };
   todo_notes: string[];
 };
@@ -66,7 +74,7 @@ export default function AdminDataCoveragePage() {
     setLoading(false);
   }, [filter]);
 
-  const handleDocumentAction = useCallback(async (documentId: string, action: 'reparse' | 'skip') => {
+  const handleDocumentAction = useCallback(async (documentId: string, action: 'reparse' | 'resolve' | 'skip') => {
     setActionId(`${action}:${documentId}`);
     setActionMessage(null);
     const res = await adminFetch(`/api/admin/data-coverage/documents/${encodeURIComponent(documentId)}/${action}`, {
@@ -78,7 +86,13 @@ export default function AdminDataCoveragePage() {
       setActionId(null);
       return;
     }
-    setActionMessage(action === 'reparse' ? 'Reparse queued.' : 'Document skipped.');
+    setActionMessage(
+      action === 'reparse'
+        ? 'Reparse queued.'
+        : action === 'resolve'
+        ? 'Document resolved.'
+        : 'Document skipped.'
+    );
     await load(filter);
     setActionId(null);
   }, [filter, load]);
@@ -114,6 +128,34 @@ export default function AdminDataCoveragePage() {
         </div>
         <p className="mt-2 text-xs text-[#8ea6cb]">{data.pipeline_focus?.note}</p>
       </Panel>
+
+      {data.action_workflow_order?.length ? (
+        <Panel>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-[#d6e6ff]">Parser Action Workflow</h3>
+            <span className="rounded-full border border-sky-400/35 bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-200">
+              Ordered
+            </span>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+            {data.action_workflow_order
+              .slice()
+              .sort((a, b) => a.order - b.order)
+              .map((step) => (
+                <div key={step.order} className="rounded-xl border border-white/10 bg-[#101d34] px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full border border-[#68a7ff]/40 bg-[#17325a] text-[11px] font-semibold text-[#d6e6ff]">
+                      {step.order}
+                    </span>
+                    <p className="text-xs font-semibold text-[#d6e6ff]">{step.label}</p>
+                  </div>
+                  <p className="mt-2 text-[11px] text-[#9fb7dc]">{step.schedule}</p>
+                  <p className="mt-1 text-[11px] leading-5 text-[#8ea6cb]">{step.action}</p>
+                </div>
+              ))}
+          </div>
+        </Panel>
+      ) : null}
 
       <Panel>
         <div className="overflow-x-auto">
@@ -217,15 +259,23 @@ export default function AdminDataCoveragePage() {
                           onClick={() => handleDocumentAction(entry.id, 'reparse')}
                           className="rounded-lg border border-[#68a7ff]/40 bg-[#17325a] px-2 py-1 text-[11px] text-[#d6e6ff] disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {actionId === `reparse:${entry.id}` ? 'Queuing...' : 'Reparse'}
+                          {actionId === `reparse:${entry.id}` ? 'Queuing…' : 'Reparse'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={Boolean(actionId)}
+                          onClick={() => handleDocumentAction(entry.id, 'resolve')}
+                          className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {actionId === `resolve:${entry.id}` ? 'Resolving…' : 'Resolve'}
                         </button>
                         <button
                           type="button"
                           disabled={Boolean(actionId)}
                           onClick={() => handleDocumentAction(entry.id, 'skip')}
-                          className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-lg border border-slate-400/35 bg-slate-500/10 px-2 py-1 text-[11px] text-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {actionId === `skip:${entry.id}` ? 'Skipping...' : 'Skip'}
+                          {actionId === `skip:${entry.id}` ? 'Skipping…' : 'Skip'}
                         </button>
                       </div>
                     </td>

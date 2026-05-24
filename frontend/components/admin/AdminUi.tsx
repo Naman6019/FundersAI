@@ -17,7 +17,7 @@ export function Panel({ children, className = '' }: { children: ReactNode; class
 }
 
 export function LoadingState() {
-  return <Panel><p className="text-sm text-[#9eb4d6]">Loading...</p></Panel>;
+  return <Panel><p className="text-sm text-[#9eb4d6]">Loading…</p></Panel>;
 }
 
 export function ErrorState({ message }: { message: string }) {

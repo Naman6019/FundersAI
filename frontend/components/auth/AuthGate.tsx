@@ -56,7 +56,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   if (!bypassAuth && (isLoading || !user)) {
     return (
       <div className="auth-loading">
-        <span>Loading workspace...</span>
+        <span>Loading workspace…</span>
       </div>
     );
   }

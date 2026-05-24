@@ -29,8 +29,11 @@ export default function LandingPromptBox() {
             openApp();
           }
         }}
-        placeholder="Ask FundersAI about a stock, mutual fund, index, or market trend..."
+        placeholder="Ask FundersAI about a stock or mutual fund (e.g., PPFAS vs ICICI)…"
         rows={3}
+        name="landing_query"
+        autoComplete="off"
+        aria-label="Ask FundersAI about a stock, mutual fund, index, or market trend"
       />
       <button type="button" onClick={openApp}>
         Try out FundersAI

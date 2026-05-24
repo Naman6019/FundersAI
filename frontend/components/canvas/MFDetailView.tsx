@@ -35,7 +35,7 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
 
   return (
     <div className="mf-detail p-6 bg-[var(--panel-bg)] rounded-2xl h-full flex flex-col border border-white/10 text-white overflow-hidden">
-      {loading && <div className="text-[var(--accent-color)] animate-pulse">Loading Mutual Fund data...</div>}
+      {loading && <div className="text-[var(--accent-color)] animate-pulse">Loading Mutual Fund data…</div>}
       {error && <div className="text-red-400">Error: {error}</div>}
       
       {!loading && !error && data && (

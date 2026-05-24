@@ -114,7 +114,7 @@ export default function StockDetailView({ stockId }: { stockId?: string }) {
         <p className="text-sm text-[var(--text-secondary)]">{String(metadata.industry || metadata.sector || 'NSE stock research')}</p>
       </div>
 
-      {loading && <div className="text-[var(--accent-color)]">Loading stock data...</div>}
+      {loading && <div className="text-[var(--accent-color)]">Loading stock data…</div>}
       {error && <div className="text-red-400">{UNAVAILABLE}</div>}
 
       {!loading && !error && (
