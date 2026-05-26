@@ -44,6 +44,8 @@ data/mf_raw_docs/**
 *.zip
 *.xlsx
 *.xls
+mfapis_openapi.json
+api-docs.html
 
 # Test output directories
 .pytest_tmp/

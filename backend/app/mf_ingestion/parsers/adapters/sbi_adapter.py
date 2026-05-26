@@ -100,24 +100,64 @@ def _parse_sbi_segment(rows: list[list[object]], context: ParseContext) -> dict 
     if header_row_idx is None:
         return None
 
-    holdings = _extract_holdings(rows[header_row_idx + 1 :], headers)
-    if not holdings:
+    raw_components = []
+    for row in rows[header_row_idx + 1 :]:
+        instrument_name = normalize_instrument_name(_get_row_cell(row, headers, "instrument_name"))
+        if _is_summary_or_noise_row(instrument_name):
+            continue
+
+        percent = _parse_percent(_get_row_cell(row, headers, "percent_aum"))
+        if percent is None or not (0.0 < percent <= 100.0):
+            continue
+
+        isin = _normalize_isin(_get_row_cell(row, headers, "isin"))
+        sector = normalize_instrument_name(_get_row_cell(row, headers, "sector")) or None
+        quantity = _parse_number(_get_row_cell(row, headers, "quantity"))
+        market_value = _parse_number(_get_row_cell(row, headers, "market_value"))
+
+        raw_components.append(
+            {
+                "instrument_name": instrument_name,
+                "isin": isin,
+                "sector": sector,
+                "percent_aum": percent,
+                "quantity": quantity,
+                "market_value": market_value,
+            }
+        )
+
+    if not raw_components:
         return None
 
     # Some disclosures publish true percentages (e.g. 0.99 means 0.99%),
     # others use fractions (e.g. 0.0099). Scale only when total is implausibly low.
-    raw_total = sum(float(row.get("percent_aum") or 0.0) for row in holdings)
+    raw_total = sum(float(row.get("percent_aum") or 0.0) for row in raw_components)
     if raw_total < 20.0:
         scaled = []
-        for row in holdings:
+        for row in raw_components:
             cloned = dict(row)
             cloned["percent_aum"] = round(float(cloned.get("percent_aum") or 0.0) * 100.0, 6)
             scaled.append(cloned)
         scaled_total = sum(float(row.get("percent_aum") or 0.0) for row in scaled)
         if scaled_total > raw_total:
-            holdings = scaled
+            raw_components = scaled
 
-    total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in holdings), 6)
+    # Deduplicate components
+    deduped: dict[str, dict] = {}
+    for row in raw_components:
+        name_key = str(row.get('instrument_name') or '').strip().lower()
+        isin_key = str(row.get('isin') or '').strip().upper()
+        key = f"{name_key}|{isin_key}"
+        if not key.strip("|"):
+            continue
+        existing = deduped.get(key)
+        if not existing or float(row.get("percent_aum") or 0.0) > float(existing.get("percent_aum") or 0.0):
+            deduped[key] = row
+    
+    unique_components = list(deduped.values())
+    holdings = [row for row in unique_components if row.get("isin")]
+
+    total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in unique_components), 6)
     warnings: list[str] = []
     if report_month is None:
         warnings.append("report_month_not_detected")

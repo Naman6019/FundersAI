@@ -22,6 +22,7 @@ def validate_holdings(
     rows: list[dict],
     scheme_match_confidence: float,
     report_month_present: bool,
+    total_percent_aum: float | None = None,
 ) -> HoldingValidationResult:
     issues: list[str] = []
 
@@ -48,7 +49,8 @@ def validate_holdings(
             except (TypeError, ValueError):
                 issues.append("percent_aum_invalid")
 
-    metric_result = validate_percent_aum_total(total_percent)
+    target_total = total_percent if total_percent_aum is None else total_percent_aum
+    metric_result = validate_percent_aum_total(target_total)
     if not metric_result.is_within_expected_band:
         issues.append("percent_aum_out_of_band")
 

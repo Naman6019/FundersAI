@@ -64,6 +64,7 @@ jobs:
           MF_SBI_FACTSHEET_DOCUMENT_URLS: ${{ secrets.MF_SBI_FACTSHEET_DOCUMENT_URLS }}
           MF_SBI_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_SBI_PORTFOLIO_DOCUMENT_URLS }}
           MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
+          ENABLE_MF_ENGINE_PARSER_BYPASS: "true"
           DISPATCH_AMCS: ${{ inputs.amcs }}
           DISPATCH_MAX_DOCS: ${{ inputs.max_documents }}
           DISPATCH_PARSE_LIMIT: ${{ inputs.parse_limit }}

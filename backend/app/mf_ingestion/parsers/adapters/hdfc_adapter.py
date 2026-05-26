@@ -125,18 +125,19 @@ def _parse_hdfc_frame(frame: pd.DataFrame, context: ParseContext, fallback_schem
 
     header_row_idx, instrument_idx, percent_idx, sector_idx = _locate_header_and_columns(rows)
     data_rows = rows[header_row_idx + 1 :] if header_row_idx is not None else rows
-    holdings = _extract_holdings(data_rows, instrument_idx, percent_idx, sector_idx)
+    holdings, total_percent = _extract_holdings(data_rows, instrument_idx, percent_idx, sector_idx)
     if not holdings:
         blob = _frame_blob_text(rows)
         holdings = _extract_holdings_from_blob(blob)
+        total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in holdings), 6)
     if page_text_full and _page_text_scoped_to_scheme(page_text_full, scheme_name):
         holdings.extend(_extract_holdings_from_page_text(page_text_full))
         holdings = _dedupe_holdings(holdings)
+        total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in holdings), 6)
     if not holdings:
         return None
 
     report_month = _extract_report_month(page_text_full, rows) or context.report_month
-    total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in holdings), 6)
     warnings: list[str] = []
     if report_month is None:
         warnings.append("report_month_not_detected")
@@ -242,18 +243,76 @@ def _extract_holdings(
     instrument_idx: int | None,
     percent_idx: int | None,
     sector_idx: int | None,
-) -> list[dict]:
+) -> tuple[list[dict], float]:
     holdings: list[dict] = []
+    true_total_percent = 0.0
+
     for row in rows:
-        direct = _extract_structured_row_holding(row, instrument_idx, percent_idx, sector_idx)
-        if direct:
-            holdings.append(direct)
+        # Extract direct percent
+        numeric_values = []
+        for idx, value in enumerate(row):
+            parsed = _parse_number(value)
+            if parsed is not None and 0.0 < parsed <= 100.0:
+                numeric_values.append(parsed)
+        
+        if percent_idx is not None and percent_idx < len(row):
+            percent = _parse_number(_safe_row_get(row, percent_idx))
+            if percent is None:
+                percent = _parse_number(_safe_row_get(row, percent_idx + 1))
+        else:
+            percent = numeric_values[-1] if numeric_values else None
+
+        if percent is None or percent <= 0.0 or percent > 100.0:
             continue
 
-        text = _frame_blob_text([row])
-        if text.count("\n") < 2:
+        # Extract instrument name
+        name_value = None
+        if instrument_idx is not None:
+            name_value = _safe_row_get(row, instrument_idx)
+        if not name_value:
+            for idx, value in enumerate(row):
+                if idx in ([percent_idx, percent_idx + 1] if percent_idx is not None else []):
+                    continue
+                text = normalize_instrument_name(value)
+                if text and re.search(r"[A-Za-z]", text):
+                    name_value = text
+                    break
+        
+        instrument_name = normalize_instrument_name(name_value)
+        if "\n" in str(name_value or ""):
+            instrument_name = instrument_name.split("\n")[0].strip()
+        
+        if not instrument_name or len(re.findall(r"\d{1,2}\.\d{2}", instrument_name)) >= 2:
             continue
-        holdings.extend(_extract_holdings_from_blob(text))
+
+        low_name = instrument_name.lower()
+        if any(marker in low_name for marker in ("grand total", "grand_total", "total assets", "total equity", "total debt")):
+            continue
+        if low_name in ("equity", "debt", "mutual fund units"):
+            continue
+
+        if not any(marker in low_name for marker in ("sub total", "subtotal", "total value", "total market value")):
+            true_total_percent += percent
+
+        if _is_summary_or_noise_row(instrument_name):
+            continue
+
+        sector = None
+        if sector_idx is not None and sector_idx < len(row):
+            sector = normalize_instrument_name(_safe_row_get(row, sector_idx)) or None
+            if sector and sector.lower() == instrument_name.lower():
+                sector = None
+
+        holdings.append(
+            {
+                "instrument_name": instrument_name,
+                "isin": None,
+                "sector": sector,
+                "percent_aum": round(percent, 6),
+                "quantity": None,
+                "market_value": None,
+            }
+        )
 
     deduped: dict[str, dict] = {}
     for row in holdings:
@@ -263,7 +322,8 @@ def _extract_holdings(
         existing = deduped.get(key)
         if not existing or float(row.get("percent_aum") or 0.0) > float(existing.get("percent_aum") or 0.0):
             deduped[key] = row
-    return list(deduped.values())
+
+    return list(deduped.values()), round(true_total_percent, 6)
 
 
 def _safe_row_get(row: list[object], index: int) -> object:

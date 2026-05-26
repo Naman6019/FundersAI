@@ -34,16 +34,17 @@ class FactsheetParser:
         return self.parse_text(text=text, report_month=context.report_month)
 
     def parse_text(self, text: str, report_month: date | None) -> list[FactsheetRecord]:
-        matches = list(SCHEME_NAME_PATTERN.finditer(text or ""))
+        cleaned_text = _preprocess_factsheet_text(text)
+        matches = list(SCHEME_NAME_PATTERN.finditer(cleaned_text or ""))
         if not matches:
             return []
 
         best_by_scheme: dict[str, tuple[int, FactsheetRecord]] = {}
         for index, match in enumerate(matches):
             start = match.start()
-            next_start = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-            end = min(len(text), max(start + 2500, next_start))
-            chunk = str(text[start:end])
+            next_start = matches[index + 1].start() if index + 1 < len(matches) else len(cleaned_text)
+            end = min(len(cleaned_text), max(start + 2500, next_start))
+            chunk = str(cleaned_text[start:end])
 
             scheme_name = _clean_scheme_name(match.group("name"))
             fields = _extract_fields(chunk)
@@ -67,8 +68,20 @@ class FactsheetParser:
         records = [entry[1] for entry in sorted(best_by_scheme.values(), key=lambda value: value[1].scheme_name)]
         for record in records:
             if record.aum is None:
-                record.aum = _extract_aum_from_scheme_occurrences(text, record.scheme_name)
+                record.aum = _extract_aum_from_scheme_occurrences(cleaned_text, record.scheme_name)
         return records
+
+
+def _preprocess_factsheet_text(text: str) -> str:
+    if not text:
+        return ""
+    # Clean newlines in scheme names for PPFAS and other split scheme names
+    text = re.sub(r"(?i)\bParag\s+Parikh\s*\n+\s*", "Parag Parikh ", text)
+    text = re.sub(r"(?i)\bFlexi\s*\n+\s*Cap\b", "Flexi Cap", text)
+    text = re.sub(r"(?i)\bTax\s*\n+\s*Saver\b", "Tax Saver", text)
+    text = re.sub(r"(?i)\bHybrid\s*\n+\s*Fund\b", "Hybrid Fund", text)
+    text = re.sub(r"(?i)\bAsset\s*\n+\s*Allocation\b", "Asset Allocation", text)
+    return text
 
 
 def _clean_scheme_name(raw: str) -> str:

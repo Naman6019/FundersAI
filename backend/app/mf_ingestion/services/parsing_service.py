@@ -3,6 +3,7 @@ from __future__ import annotations
 import gzip
 import json
 import logging
+import os
 import tempfile
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -24,12 +25,14 @@ from app.mf_ingestion.storage.r2_store import R2Store, build_safe_key
 from app.repositories.stock_repository import StockRepository
 from app.mf_ingestion.services.review_service import ReviewService
 from app.mf_ingestion.validators.holdings_validator import validate_holdings
+from app.services import mf_engine_service
 
 logger = logging.getLogger(__name__)
 
 HOLDINGS_SUPPORTED_DOCUMENT_TYPES = {"portfolio_disclosure"}
 FACTSHEET_SUPPORTED_DOCUMENT_TYPES = {"factsheet", "ter_disclosure"}
 AMC_DISCLOSURE_SOURCE = "amc_disclosure"
+MF_ENGINE_SOURCE = mf_engine_service.PROVIDER
 
 
 class ParsingService:
@@ -91,6 +94,11 @@ class ParsingService:
             issue = f"unsupported_document_type:{document_type}"
             self._mark_document(document_id, "skipped_not_supported", [issue])
             return {"source_document_id": document_id, "status": "skipped", "reason": issue}
+
+        api_coverage_issue = self._api_coverage_issue(document)
+        if api_coverage_issue:
+            self._mark_document(document_id, "api_covered", [api_coverage_issue])
+            return {"source_document_id": document_id, "status": "api_covered", "reason": api_coverage_issue}
 
         resolved_path, temp_downloaded = self._resolve_document_path(document)
         if not resolved_path:
@@ -171,6 +179,7 @@ class ParsingService:
                 parsed.holdings,
                 scheme_match_confidence=scheme_match.confidence,
                 report_month_present=bool(parsed.report_month),
+                total_percent_aum=parsed.metrics.get("total_percent_aum"),
             )
             final_confidence = min(parsed.confidence_score, scheme_match.confidence)
             scheme_id = self._upsert_scheme(amc_code, scheme_match.canonical_name, scheme_match.confidence)
@@ -412,6 +421,95 @@ class ParsingService:
             names.append("Parag Parikh Flexi Cap Fund")
         return names
 
+    def _api_coverage_issue(self, document: dict[str, Any]) -> str | None:
+        if not _truthy_env("ENABLE_MF_ENGINE_PARSER_BYPASS", True):
+            return None
+        document_type = str(document.get("document_type") or "").strip().lower()
+        amc_code = str(document.get("amc_code") or "").strip().lower()
+        report_month = _to_date_or_none(document.get("report_month"))
+        if not document_type or not amc_code or not report_month:
+            return None
+
+        factsheet_covered = self._mf_engine_factsheet_covers_document(amc_code, report_month)
+        holdings_covered = self._mf_engine_holdings_cover_document(amc_code, report_month)
+
+        if document_type in HOLDINGS_SUPPORTED_DOCUMENT_TYPES and holdings_covered:
+            return "skipped_api_covered:holdings"
+        if document_type in FACTSHEET_SUPPORTED_DOCUMENT_TYPES:
+            if amc_code == "hdfc":
+                if factsheet_covered and holdings_covered:
+                    return "skipped_api_covered:factsheet_and_holdings"
+                return None
+            if factsheet_covered:
+                return "skipped_api_covered:factsheet"
+        return None
+
+    def _mf_engine_core_rows_for_amc(self, amc_code: str) -> list[dict[str, Any]]:
+        client = self.repository.supabase if self.repository else supabase
+        if not client:
+            return []
+        patterns = _amc_lookup_patterns(amc_code)
+        rows: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for pattern in patterns:
+            try:
+                response = (
+                    client.table("mutual_fund_core_snapshot")
+                    .select("scheme_code,amc_name,data_source,provider_payload,aum,expense_ratio,benchmark,fund_manager")
+                    .ilike("amc_name", pattern)
+                    .limit(1000)
+                    .execute()
+                )
+            except Exception:
+                logger.exception("event=mf_engine_core_lookup_failed amc_code=%s", amc_code)
+                continue
+            for row in response.data or []:
+                scheme_code = str(row.get("scheme_code") or "")
+                if not scheme_code or scheme_code in seen:
+                    continue
+                if MF_ENGINE_SOURCE not in str(row.get("data_source") or ""):
+                    continue
+                seen.add(scheme_code)
+                rows.append(row)
+        return rows
+
+    def _mf_engine_factsheet_covers_document(self, amc_code: str, report_month: date) -> bool:
+        report_month_iso = report_month.isoformat()
+        for row in self._mf_engine_core_rows_for_amc(amc_code):
+            payload = row.get("provider_payload") if isinstance(row.get("provider_payload"), dict) else {}
+            trace = payload.get("mf_engine_trace") if isinstance(payload.get("mf_engine_trace"), dict) else {}
+            factsheet_trace = trace.get("factsheet") if isinstance(trace.get("factsheet"), dict) else {}
+            if factsheet_trace.get("report_month") != report_month_iso:
+                continue
+            if any(row.get(field) not in (None, "") for field in ("aum", "expense_ratio", "benchmark", "fund_manager")):
+                return True
+        return False
+
+    def _mf_engine_holdings_cover_document(self, amc_code: str, report_month: date) -> bool:
+        client = self.repository.supabase if self.repository else supabase
+        if not client:
+            return False
+        scheme_codes = [str(row.get("scheme_code")) for row in self._mf_engine_core_rows_for_amc(amc_code) if row.get("scheme_code")]
+        if not scheme_codes:
+            return False
+        code_values: list[Any] = []
+        for code in scheme_codes:
+            code_values.append(int(code) if code.isdigit() else code)
+        try:
+            response = (
+                client.table("mutual_fund_holdings")
+                .select("scheme_code")
+                .eq("source", MF_ENGINE_SOURCE)
+                .eq("as_of_date", report_month.isoformat())
+                .in_("scheme_code", code_values)
+                .limit(1)
+                .execute()
+            )
+            return bool(response.data)
+        except Exception:
+            logger.exception("event=mf_engine_holdings_coverage_lookup_failed amc_code=%s report_month=%s", amc_code, report_month)
+            return False
+
     def _mark_document(self, source_document_id: str, status: str, issues: list[str]) -> None:
         supabase.table("mf_raw_documents").update(
             {
@@ -420,6 +518,11 @@ class ParsingService:
                 "parsed_at": datetime.now(timezone.utc).isoformat(),
             }
         ).eq("id", source_document_id).execute()
+        if status in {"api_covered", "parsed", "skipped_not_supported"}:
+            try:
+                supabase.table("mf_parse_review_queue").delete().eq("source_document_id", source_document_id).execute()
+            except Exception:
+                logger.warning("event=review_queue_cleanup_failed source_document_id=%s status=%s", source_document_id, status)
 
     def _sync_amc_derived_views(
         self,
@@ -991,6 +1094,25 @@ def _merge_sources(*values: object) -> str:
             if clean and clean not in ordered:
                 ordered.append(clean)
     return "+".join(ordered)
+
+
+def _truthy_env(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _amc_lookup_patterns(amc_code: str) -> list[str]:
+    key = str(amc_code or "").strip().lower()
+    labels = {
+        "hdfc": ["hdfc"],
+        "sbi": ["sbi"],
+        "icici": ["icici"],
+        "ppfas": ["ppfas", "parag", "parikh"],
+        "mirae": ["mirae"],
+    }.get(key, [key])
+    return [f"%{label}%" for label in labels if label]
 
 
 def _merge_parse_outcomes(primary: dict[str, Any], secondary: dict[str, Any]) -> dict[str, Any]:

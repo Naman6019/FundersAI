@@ -557,11 +557,10 @@ def _parse_holdings_frame(frame: pd.DataFrame, context: ParseContext) -> dict | 
 
     scheme_name = _extract_scheme_name(columns, raw_rows)
     report_month = context.report_month or _detect_report_month_from_rows(raw_rows)
-    holdings = _extract_holdings_from_rows(data_rows, headers)
+    holdings, total_percent = _extract_holdings_from_rows(data_rows, headers)
     if not holdings:
         return None
 
-    total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in holdings), 6)
     warnings: list[str] = []
     if report_month is None:
         warnings.append("report_month_not_detected")
@@ -589,7 +588,7 @@ def _parse_holdings_text(pdf_text: str, context: ParseContext) -> dict | None:
 
     report_month = context.report_month or detect_report_month(pdf_text)
     scheme_name = _extract_scheme_name_from_text(pdf_text) or PPFAS_FLEXI_CAP_SCHEME_CANONICAL
-    holdings: list[dict] = []
+    components: list[dict] = []
     for line in pdf_text.splitlines():
         clean = " ".join(str(line or "").split())
         if not clean:
@@ -598,30 +597,54 @@ def _parse_holdings_text(pdf_text: str, context: ParseContext) -> dict | None:
             r"^(?P<name>.+?)\s+(?P<isin>[A-Z]{2}[A-Z0-9]{9}\d)\s+(?P<pct>-?\d+(?:\.\d+)?%?)$",
             clean,
         )
-        if not match:
-            continue
-        instrument_name = normalize_instrument_name(match.group("name"))
-        if _is_summary_row(instrument_name):
-            continue
-        percent_aum = _parse_percent(match.group("pct"))
-        if percent_aum is None:
-            continue
-        holdings.append(
-            {
-                "instrument_name": instrument_name,
-                "isin": match.group("isin"),
-                "sector": None,
-                "percent_aum": percent_aum,
-                "market_value": None,
-                "quantity": None,
-            }
-        )
+        if match:
+            instrument_name = normalize_instrument_name(match.group("name"))
+            if _is_summary_row(instrument_name):
+                continue
+            percent_aum = _parse_percent(match.group("pct"))
+            if percent_aum is None:
+                continue
+            components.append(
+                {
+                    "instrument_name": instrument_name,
+                    "isin": match.group("isin"),
+                    "sector": None,
+                    "percent_aum": percent_aum,
+                    "market_value": None,
+                    "quantity": None,
+                }
+            )
+        else:
+            match_no_isin = re.search(
+                r"^(?P<name>.+?)\s+(?P<pct>-?\d+(?:\.\d+)?%?)$",
+                clean,
+            )
+            if match_no_isin:
+                instrument_name = normalize_instrument_name(match_no_isin.group("name"))
+                if _is_summary_row(instrument_name):
+                    continue
+                low_name = instrument_name.lower()
+                cash_keywords = ("cash", "treps", "repo", "receivables", "net current assets", "nca", "clearing corporation", "current assets")
+                if any(k in low_name for k in cash_keywords):
+                    percent_aum = _parse_percent(match_no_isin.group("pct"))
+                    if percent_aum is not None:
+                        components.append(
+                            {
+                                "instrument_name": instrument_name,
+                                "isin": None,
+                                "sector": None,
+                                "percent_aum": percent_aum,
+                                "market_value": None,
+                                "quantity": None,
+                            }
+                        )
 
-    if not holdings:
+    if not components:
         return None
 
-    holdings = _scale_percent_aum_if_necessary(holdings)
-    total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in holdings), 6)
+    components = _scale_percent_aum_if_necessary(components)
+    holdings = [row for row in components if row.get("isin")]
+    total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in components), 6)
     warnings: list[str] = []
     if not (90.0 <= total_percent <= 110.0):
         warnings.append("percent_aum_total_out_of_band")
@@ -656,8 +679,8 @@ def _scale_percent_aum_if_necessary(holdings: list[dict]) -> list[dict]:
     return holdings
 
 
-def _extract_holdings_from_rows(rows: list[list[object]], headers: list[str]) -> list[dict]:
-    holdings: list[dict] = []
+def _extract_holdings_from_rows(rows: list[list[object]], headers: list[str]) -> tuple[list[dict], float]:
+    components: list[dict] = []
     for row in rows:
         instrument_name = normalize_instrument_name(_get_row_cell(row, headers, "instrument_name"))
         if _is_summary_row(instrument_name):
@@ -669,13 +692,11 @@ def _extract_holdings_from_rows(rows: list[list[object]], headers: list[str]) ->
             continue
 
         isin_value = _normalize_isin(_get_row_cell(row, headers, "isin"))
-        if not isin_value:
-            continue
         sector = normalize_instrument_name(_get_row_cell(row, headers, "sector")) or None
         quantity = _parse_number(_get_row_cell(row, headers, "quantity"))
         market_value = _parse_number(_get_row_cell(row, headers, "market_value"))
 
-        holdings.append(
+        components.append(
             {
                 "instrument_name": instrument_name,
                 "isin": isin_value,
@@ -687,20 +708,21 @@ def _extract_holdings_from_rows(rows: list[list[object]], headers: list[str]) ->
         )
 
     deduped: dict[str, dict] = {}
-    for row in holdings:
-        key = "|".join(
-            [
-                str(row.get("instrument_name") or "").strip().lower(),
-                str(row.get("isin") or "").strip().upper(),
-            ]
-        )
+    for row in components:
+        name_key = str(row.get("instrument_name") or "").strip().lower()
+        isin_key = str(row.get("isin") or "").strip().upper()
+        key = f"{name_key}|{isin_key}"
         if not key.strip("|"):
             continue
         existing = deduped.get(key)
         if not existing or float(row.get("percent_aum") or 0.0) > float(existing.get("percent_aum") or 0.0):
             deduped[key] = row
 
-    return _scale_percent_aum_if_necessary(list(deduped.values()))
+    unique_components = _scale_percent_aum_if_necessary(list(deduped.values()))
+    holdings = [row for row in unique_components if row.get("isin")]
+    total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in unique_components), 6)
+
+    return holdings, total_percent
 
 
 def _get_row_cell(row: list[object], headers: list[str], key: str) -> object:

@@ -46,3 +46,14 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           ENABLE_MF_NAV_SYNC: "true"
         run: python -m backend.app.jobs.sync_mf_nav
+
+      - name: Sync MF Engine Enrichment
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          ENABLE_MF_ENGINE_SYNC: "true"
+          MF_ENGINE_BASE_URL: ${{ secrets.MF_ENGINE_BASE_URL }}
+          MF_ENGINE_EMAIL: ${{ secrets.MF_ENGINE_EMAIL }}
+          MF_ENGINE_PASSWORD: ${{ secrets.MF_ENGINE_PASSWORD }}
+          MF_ENGINE_PARTNER_TOKEN: ${{ secrets.MF_ENGINE_PARTNER_TOKEN }}
+        run: python -m backend.app.jobs.sync_mf_engine_enrichment
