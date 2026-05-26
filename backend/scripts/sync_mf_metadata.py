@@ -148,9 +148,19 @@ def update_funds(supabase, updates: list[dict[str, Any]], source_name: str) -> i
     for i in range(0, len(updates), BATCH_SIZE):
         batch = updates[i:i + BATCH_SIZE]
         try:
+            existing_core = _load_existing_core_rows(supabase, batch)
             supabase.table("mutual_funds").upsert(batch, on_conflict="scheme_code").execute()
-            core_batch = [
-                {
+            core_batch = []
+            for row in batch:
+                scheme_code = str(row["scheme_code"])
+                existing = existing_core.get(scheme_code, {})
+                provider_payload = _merge_official_source_trace(
+                    existing.get("provider_payload"),
+                    source_name,
+                    row,
+                )
+                core_batch.append(
+                    {
                     "scheme_code": str(row["scheme_code"]),
                     "scheme_name": row.get("scheme_name"),
                     "amc_name": row.get("fund_house"),
@@ -161,16 +171,64 @@ def update_funds(supabase, updates: list[dict[str, Any]], source_name: str) -> i
                     "expense_ratio": row.get("expense_ratio"),
                     "aum": row.get("aum"),
                     "benchmark": row.get("benchmark"),
-                    "data_source": source_name,
+                    "data_source": _merge_sources(existing.get("data_source"), source_name),
+                    "provider_payload": provider_payload,
                     "last_updated": utc_now(),
-                }
-                for row in batch
-            ]
+                    }
+                )
             supabase.table("mutual_fund_core_snapshot").upsert(core_batch, on_conflict="scheme_code").execute()
             written += len(batch)
         except Exception as e:
             logger.error("%s metadata upsert failed: %s", source_name, e)
     return written
+
+
+def _load_existing_core_rows(supabase, batch: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    codes = [str(row.get("scheme_code")) for row in batch if row.get("scheme_code") is not None]
+    if not codes:
+        return {}
+    try:
+        res = (
+            supabase.table("mutual_fund_core_snapshot")
+            .select("scheme_code,data_source,provider_payload")
+            .in_("scheme_code", codes)
+            .execute()
+        )
+    except Exception as exc:
+        logger.warning("Existing MF core lookup failed before %s upsert: %s", batch[0].get("scheme_code"), exc)
+        return {}
+    return {str(row.get("scheme_code")): row for row in (res.data or []) if row.get("scheme_code") is not None}
+
+
+def _merge_sources(*values: object) -> str:
+    ordered: list[str] = []
+    for value in values:
+        for part in str(value or "").split("+"):
+            clean = part.strip()
+            if clean and clean not in ordered:
+                ordered.append(clean)
+    return "+".join(ordered)
+
+
+def _merge_official_source_trace(existing_payload: object, source_name: str, row: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(existing_payload) if isinstance(existing_payload, dict) else {}
+    trace = payload.get("official_source_trace") if isinstance(payload.get("official_source_trace"), dict) else {}
+    fields = [
+        field
+        for field in ("aum", "expense_ratio", "benchmark")
+        if row.get(field) not in (None, "")
+    ]
+    trace[_source_key(source_name)] = {
+        "source": source_name,
+        "fields": fields,
+        "updated_at": utc_now(),
+    }
+    payload["official_source_trace"] = trace
+    return payload
+
+
+def _source_key(source_name: str) -> str:
+    return "_".join(str(source_name or "").strip().lower().replace("-", " ").split())
 
 
 def build_fund_update(fund: dict[str, Any], values: dict[str, Any]) -> dict[str, Any]:

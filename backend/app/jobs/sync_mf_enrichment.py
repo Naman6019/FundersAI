@@ -163,6 +163,8 @@ def _merge_snapshot(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[
             continue
         if field in nav_owned_fields and existing.get(field) not in (None, ""):
             continue
+        if field not in nav_owned_fields and existing.get(field) not in (None, ""):
+            continue
         if value not in (None, ""):
             merged[field] = value
     merged["scheme_code"] = str(incoming.get("scheme_code") or existing.get("scheme_code"))

@@ -79,6 +79,47 @@ def fetch_amfi_nav():
         logger.error(f"Failed to fetch AMFI NAV: {e}")
         return []
 
+
+def _load_existing_core_rows(supabase, batch: list[dict]) -> dict[str, dict]:
+    codes = [str(row.get("scheme_code")) for row in batch if row.get("scheme_code") is not None]
+    if not codes:
+        return {}
+    try:
+        res = (
+            supabase.table("mutual_fund_core_snapshot")
+            .select("scheme_code,data_source,provider_payload")
+            .in_("scheme_code", codes)
+            .execute()
+        )
+    except Exception as exc:
+        logger.warning("Existing MF core lookup failed before AMFI NAV upsert: %s", exc)
+        return {}
+    return {str(row.get("scheme_code")): row for row in (res.data or []) if row.get("scheme_code") is not None}
+
+
+def _merge_sources(*values: object) -> str:
+    ordered: list[str] = []
+    for value in values:
+        for part in str(value or "").split("+"):
+            clean = part.strip()
+            if clean and clean not in ordered:
+                ordered.append(clean)
+    return "+".join(ordered)
+
+
+def _build_core_snapshot_row(update: dict, existing: dict | None = None) -> dict:
+    existing = existing or {}
+    return {
+        "scheme_code": str(update["scheme_code"]),
+        "scheme_name": update["scheme_name"],
+        "nav": update["nav"],
+        "nav_date": update["nav_date"],
+        "data_source": _merge_sources(existing.get("data_source"), "amfi_navall"),
+        "provider_payload": existing.get("provider_payload"),
+        "last_updated": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 def main():
     if not SUPABASE_URL or not SUPABASE_KEY:
         raise RuntimeError("Missing SUPABASE_URL or SUPABASE_KEY environment variables.")
@@ -96,6 +137,7 @@ def main():
     for i in range(0, len(updates), BATCH_SIZE):
         batch = updates[i:i + BATCH_SIZE]
         try:
+            existing_core = _load_existing_core_rows(supabase, batch)
             # 1. Update main table
             supabase.table('mutual_funds').upsert(batch, on_conflict='scheme_code').execute()
 
@@ -109,15 +151,10 @@ def main():
             supabase.table('mutual_fund_nav_history').upsert(nav_history_batch, on_conflict='scheme_code,nav_date').execute()
 
             # 3. Keep core snapshot aligned.
-            core_snapshot_batch = [{
-                "scheme_code": str(u["scheme_code"]),
-                "scheme_name": u["scheme_name"],
-                "nav": u["nav"],
-                "nav_date": u["nav_date"],
-                "data_source": "amfi_navall",
-                "provider_payload": None,
-                "last_updated": datetime.now(timezone.utc).isoformat(),
-            } for u in batch]
+            core_snapshot_batch = [
+                _build_core_snapshot_row(u, existing_core.get(str(u["scheme_code"])))
+                for u in batch
+            ]
             supabase.table('mutual_fund_core_snapshot').upsert(core_snapshot_batch, on_conflict='scheme_code').execute()
             
             success += len(batch)

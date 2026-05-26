@@ -27,11 +27,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
 
-      - name: Run MFdata enrichment
+      - name: Run MF enrichment
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          ENABLE_MF_ENRICHMENT_SYNC: "true"
+          ENABLE_MFDATA_FALLBACK_SYNC: "true"
           MFDATA_TIMEOUT_SECONDS: "30"
           MFDATA_MAX_RETRIES: "4"
           MFDATA_RETRY_BACKOFF_SECONDS: "1.2"
@@ -49,4 +49,4 @@ jobs:
             args+=(--scheme-codes "$DISPATCH_SCHEME_CODES")
           fi
 
-          python -m backend.app.jobs.sync_mf_enrichment "${args[@]}"
+          python -m backend.app.jobs.sync_mf_enrichment_unified "${args[@]}"

@@ -25,14 +25,14 @@ from app.mf_ingestion.storage.r2_store import R2Store, build_safe_key
 from app.repositories.stock_repository import StockRepository
 from app.mf_ingestion.services.review_service import ReviewService
 from app.mf_ingestion.validators.holdings_validator import validate_holdings
-from app.services import mf_engine_service
 
 logger = logging.getLogger(__name__)
 
 HOLDINGS_SUPPORTED_DOCUMENT_TYPES = {"portfolio_disclosure"}
 FACTSHEET_SUPPORTED_DOCUMENT_TYPES = {"factsheet", "ter_disclosure"}
 AMC_DISCLOSURE_SOURCE = "amc_disclosure"
-MF_ENGINE_SOURCE = mf_engine_service.PROVIDER
+OFFICIAL_CORE_SOURCE_MARKERS = ("AMFI TER API", "AMFI AUM API", "TER", "AUM", AMC_DISCLOSURE_SOURCE)
+OFFICIAL_HOLDING_SOURCES = ("AMFI scheme-wise disclosure", AMC_DISCLOSURE_SOURCE)
 
 
 class ParsingService:
@@ -97,8 +97,8 @@ class ParsingService:
 
         api_coverage_issue = self._api_coverage_issue(document)
         if api_coverage_issue:
-            self._mark_document(document_id, "api_covered", [api_coverage_issue])
-            return {"source_document_id": document_id, "status": "api_covered", "reason": api_coverage_issue}
+            self._mark_document(document_id, "official_source_covered", [api_coverage_issue])
+            return {"source_document_id": document_id, "status": "official_source_covered", "reason": api_coverage_issue}
 
         resolved_path, temp_downloaded = self._resolve_document_path(document)
         if not resolved_path:
@@ -269,6 +269,8 @@ class ParsingService:
 
         dedup_issues = sorted(set(merged_issues))
         status = "needs_review" if review_needed_overall else "parsed"
+        if review_needed_overall and inserted_total > 0:
+            status = "parsed_partial"
         self._mark_document(document_id, status, dedup_issues)
         self._upload_parse_debug_snapshot(
             document=document,
@@ -348,6 +350,7 @@ class ParsingService:
             status = "needs_review"
             issues.append("factsheet_scheme_matching_failed")
         elif unmatched > 0:
+            status = "parsed_partial"
             issues.append("factsheet_partial_scheme_matching")
         self._mark_document(document_id, status, issues)
         self._upload_parse_debug_snapshot(
@@ -422,7 +425,7 @@ class ParsingService:
         return names
 
     def _api_coverage_issue(self, document: dict[str, Any]) -> str | None:
-        if not _truthy_env("ENABLE_MF_ENGINE_PARSER_BYPASS", True):
+        if not _truthy_env("ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS", True):
             return None
         document_type = str(document.get("document_type") or "").strip().lower()
         amc_code = str(document.get("amc_code") or "").strip().lower()
@@ -430,21 +433,21 @@ class ParsingService:
         if not document_type or not amc_code or not report_month:
             return None
 
-        factsheet_covered = self._mf_engine_factsheet_covers_document(amc_code, report_month)
-        holdings_covered = self._mf_engine_holdings_cover_document(amc_code, report_month)
+        factsheet_covered = self._official_factsheet_covers_document(amc_code, report_month)
+        holdings_covered = self._official_holdings_cover_document(amc_code, report_month)
 
         if document_type in HOLDINGS_SUPPORTED_DOCUMENT_TYPES and holdings_covered:
-            return "skipped_api_covered:holdings"
+            return "skipped_official_source_covered:holdings"
         if document_type in FACTSHEET_SUPPORTED_DOCUMENT_TYPES:
             if amc_code == "hdfc":
                 if factsheet_covered and holdings_covered:
-                    return "skipped_api_covered:factsheet_and_holdings"
+                    return "skipped_official_source_covered:factsheet_and_holdings"
                 return None
             if factsheet_covered:
-                return "skipped_api_covered:factsheet"
+                return "skipped_official_source_covered:factsheet"
         return None
 
-    def _mf_engine_core_rows_for_amc(self, amc_code: str) -> list[dict[str, Any]]:
+    def _official_core_rows_for_amc(self, amc_code: str) -> list[dict[str, Any]]:
         client = self.repository.supabase if self.repository else supabase
         if not client:
             return []
@@ -461,35 +464,30 @@ class ParsingService:
                     .execute()
                 )
             except Exception:
-                logger.exception("event=mf_engine_core_lookup_failed amc_code=%s", amc_code)
+                logger.exception("event=official_core_lookup_failed amc_code=%s", amc_code)
                 continue
             for row in response.data or []:
                 scheme_code = str(row.get("scheme_code") or "")
                 if not scheme_code or scheme_code in seen:
                     continue
-                if MF_ENGINE_SOURCE not in str(row.get("data_source") or ""):
+                source = str(row.get("data_source") or "")
+                if not any(marker in source for marker in OFFICIAL_CORE_SOURCE_MARKERS):
                     continue
                 seen.add(scheme_code)
                 rows.append(row)
         return rows
 
-    def _mf_engine_factsheet_covers_document(self, amc_code: str, report_month: date) -> bool:
-        report_month_iso = report_month.isoformat()
-        for row in self._mf_engine_core_rows_for_amc(amc_code):
-            payload = row.get("provider_payload") if isinstance(row.get("provider_payload"), dict) else {}
-            trace = payload.get("mf_engine_trace") if isinstance(payload.get("mf_engine_trace"), dict) else {}
-            factsheet_trace = trace.get("factsheet") if isinstance(trace.get("factsheet"), dict) else {}
-            if factsheet_trace.get("report_month") != report_month_iso:
-                continue
+    def _official_factsheet_covers_document(self, amc_code: str, report_month: date) -> bool:
+        for row in self._official_core_rows_for_amc(amc_code):
             if any(row.get(field) not in (None, "") for field in ("aum", "expense_ratio", "benchmark", "fund_manager")):
                 return True
         return False
 
-    def _mf_engine_holdings_cover_document(self, amc_code: str, report_month: date) -> bool:
+    def _official_holdings_cover_document(self, amc_code: str, report_month: date) -> bool:
         client = self.repository.supabase if self.repository else supabase
         if not client:
             return False
-        scheme_codes = [str(row.get("scheme_code")) for row in self._mf_engine_core_rows_for_amc(amc_code) if row.get("scheme_code")]
+        scheme_codes = [str(row.get("scheme_code")) for row in self._official_core_rows_for_amc(amc_code) if row.get("scheme_code")]
         if not scheme_codes:
             return False
         code_values: list[Any] = []
@@ -498,16 +496,15 @@ class ParsingService:
         try:
             response = (
                 client.table("mutual_fund_holdings")
-                .select("scheme_code")
-                .eq("source", MF_ENGINE_SOURCE)
+                .select("scheme_code,source,as_of_date")
                 .eq("as_of_date", report_month.isoformat())
                 .in_("scheme_code", code_values)
-                .limit(1)
+                .limit(50)
                 .execute()
             )
-            return bool(response.data)
+            return any(_is_official_holding_source(row.get("source")) for row in (response.data or []))
         except Exception:
-            logger.exception("event=mf_engine_holdings_coverage_lookup_failed amc_code=%s report_month=%s", amc_code, report_month)
+            logger.exception("event=official_holdings_coverage_lookup_failed amc_code=%s report_month=%s", amc_code, report_month)
             return False
 
     def _mark_document(self, source_document_id: str, status: str, issues: list[str]) -> None:
@@ -518,7 +515,7 @@ class ParsingService:
                 "parsed_at": datetime.now(timezone.utc).isoformat(),
             }
         ).eq("id", source_document_id).execute()
-        if status in {"api_covered", "parsed", "skipped_not_supported"}:
+        if status in {"api_covered", "official_source_covered", "parsed", "parsed_partial", "skipped_not_supported", "skipped_no_source_data"}:
             try:
                 supabase.table("mf_parse_review_queue").delete().eq("source_document_id", source_document_id).execute()
             except Exception:
@@ -790,8 +787,15 @@ class ParsingService:
         parsed_fields = {key: value for key, value in field_values.items() if value not in (None, "")}
         if not parsed_fields:
             return False
+        write_fields = {
+            key: value
+            for key, value in parsed_fields.items()
+            if existing.get(key) in (None, "")
+        }
+        if not write_fields:
+            return True
 
-        for field_name, value in parsed_fields.items():
+        for field_name, value in write_fields.items():
             amc_trace[field_name] = {
                 "source_document_id": source_document_id,
                 "source_url": source_url,
@@ -808,14 +812,8 @@ class ParsingService:
             "data_source": _merge_sources(existing.get("data_source"), AMC_DISCLOSURE_SOURCE),
             "provider_payload": provider_payload,
         }
-        if aum is not None:
-            row["aum"] = aum
-        if expense_ratio is not None:
-            row["expense_ratio"] = expense_ratio
-        if benchmark:
-            row["benchmark"] = benchmark
-        if fund_manager:
-            row["fund_manager"] = fund_manager
+        for field_name, value in write_fields.items():
+            row[field_name] = value
 
         self._upsert_core_snapshot_row(row)
         return True
@@ -1103,6 +1101,11 @@ def _truthy_env(name: str, default: bool) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _is_official_holding_source(value: object) -> bool:
+    source = str(value or "")
+    return any(marker in source for marker in OFFICIAL_HOLDING_SOURCES)
+
+
 def _amc_lookup_patterns(amc_code: str) -> list[str]:
     key = str(amc_code or "").strip().lower()
     labels = {
@@ -1120,6 +1123,7 @@ def _merge_parse_outcomes(primary: dict[str, Any], secondary: dict[str, Any]) ->
         "failed": 5,
         "error": 5,
         "needs_review": 4,
+        "parsed_partial": 3,
         "partial": 3,
         "parsed": 2,
         "ok": 2,

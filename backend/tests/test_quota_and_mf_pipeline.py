@@ -187,6 +187,33 @@ def test_mfapi_normalization(monkeypatch):
     assert history["data"][0]["scheme_code"] == "120503"
 
 
+def test_amfi_nav_core_snapshot_preserves_existing_provider_payload():
+    from backend.scripts import sync_mf
+
+    row = sync_mf._build_core_snapshot_row(
+        {"scheme_code": 120503, "scheme_name": "Fund A", "nav": 123.45, "nav_date": "2026-05-10"},
+        {
+            "data_source": "mfapi+AMFI TER API",
+            "provider_payload": {"official_source_trace": {"amfi_ter_api": {"fields": ["expense_ratio"]}}},
+        },
+    )
+
+    assert row["data_source"] == "mfapi+AMFI TER API+amfi_navall"
+    assert row["provider_payload"]["official_source_trace"]["amfi_ter_api"]["fields"] == ["expense_ratio"]
+
+
+def test_mfapi_nav_sync_preserves_equal_or_fresher_existing_nav():
+    from app.jobs import sync_mf_nav
+
+    nav, nav_date = sync_mf_nav._select_nav(
+        {"nav": 124.0, "nav_date": "2026-05-11"},
+        {"nav": 123.0, "nav_date": "2026-05-10"},
+    )
+
+    assert nav == 124.0
+    assert nav_date == "2026-05-11"
+
+
 def test_mfdata_enrichment_normalization(monkeypatch):
     from app.services import mfdata_service
 
@@ -294,3 +321,48 @@ def test_mf_enrichment_merge_preserves_nav_owned_fields_and_amc_trace():
     assert merged["provider_payload"]["amc_trace"]["holdings"]["source_document_id"] == "doc-1"
     assert merged["provider_payload"]["family_id"] == 99
     assert merged["data_source"] == "mfapi+amc_disclosure+mfdata"
+
+
+def test_mfdata_fallback_does_not_overwrite_existing_enrichment_fields():
+    from app.jobs import sync_mf_enrichment
+
+    existing = {
+        "scheme_code": "120503",
+        "scheme_name": "Fund A",
+        "aum": 1000,
+        "expense_ratio": 0.52,
+        "benchmark": "Nifty 500 TRI",
+        "data_source": "mfapi+AMFI TER API+AMFI AUM API",
+        "provider_payload": {},
+    }
+    incoming = {
+        "scheme_code": "120503",
+        "scheme_name": "Fund A New",
+        "aum": 900,
+        "expense_ratio": 0.75,
+        "benchmark": "Other Index",
+        "fund_manager": "Jane Doe",
+        "data_source": "mfdata",
+        "provider_payload": {"family_id": 99},
+    }
+
+    merged = sync_mf_enrichment._merge_snapshot(existing, incoming)
+
+    assert merged["scheme_name"] == "Fund A"
+    assert merged["aum"] == 1000
+    assert merged["expense_ratio"] == 0.52
+    assert merged["benchmark"] == "Nifty 500 TRI"
+    assert merged["fund_manager"] == "Jane Doe"
+
+
+def test_amfi_metadata_source_trace_merges_existing_payload():
+    from backend.scripts import sync_mf_metadata
+
+    payload = sync_mf_metadata._merge_official_source_trace(
+        {"amc_trace": {"holdings": {"source_document_id": "doc-1"}}},
+        "AMFI TER API",
+        {"expense_ratio": 0.52, "aum": None},
+    )
+
+    assert payload["amc_trace"]["holdings"]["source_document_id"] == "doc-1"
+    assert payload["official_source_trace"]["amfi_ter_api"]["fields"] == ["expense_ratio"]

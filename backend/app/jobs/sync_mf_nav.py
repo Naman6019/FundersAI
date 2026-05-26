@@ -85,6 +85,23 @@ def _merge_provider_payload(existing: object, incoming: object) -> dict:
     return merged
 
 
+def _to_date_value(value: object):
+    if value in (None, ""):
+        return None
+    try:
+        return datetime.fromisoformat(str(value)[:10]).date()
+    except ValueError:
+        return None
+
+
+def _select_nav(existing: dict, latest: dict) -> tuple[object, object]:
+    existing_date = _to_date_value(existing.get("nav_date"))
+    latest_date = _to_date_value(latest.get("nav_date"))
+    if existing.get("nav") not in (None, "") and existing_date and latest_date and existing_date >= latest_date:
+        return existing.get("nav"), existing.get("nav_date")
+    return latest.get("nav"), latest.get("nav_date")
+
+
 def _upsert_legacy_mutual_funds_row(repo: StockRepository, snapshot_row: dict) -> None:
     if not repo.supabase:
         return
@@ -158,6 +175,7 @@ def main() -> None:
 
             full_history = repo.get_mutual_fund_nav_history(scheme_code, limit=4000)
             metrics = compute_nav_metrics(full_history)
+            selected_nav, selected_nav_date = _select_nav(existing, latest)
 
             snapshot_row = {
                 "scheme_code": str(scheme_code),
@@ -168,8 +186,8 @@ def main() -> None:
                 "plan_type": existing.get("plan_type"),
                 "option_type": existing.get("option_type"),
                 "fund_type": latest.get("fund_type") or existing.get("fund_type"),
-                "nav": latest.get("nav"),
-                "nav_date": latest.get("nav_date"),
+                "nav": selected_nav,
+                "nav_date": selected_nav_date,
                 "return_1m": metrics.get("return_1m"),
                 "return_3m": metrics.get("return_3m"),
                 "return_6m": metrics.get("return_6m"),

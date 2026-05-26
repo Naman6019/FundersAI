@@ -77,11 +77,13 @@ class _FakeSupabase:
                 {
                     "scheme_code": "120503",
                     "amc_name": "HDFC Mutual Fund",
-                    "data_source": "mfapi+mf_engine",
+                    "data_source": "mfapi+AMFI TER API",
                     "provider_payload": {
-                        "mf_engine_trace": {
-                            "factsheet": {"report_month": "2026-04-01"},
-                            "holdings": {"report_months": ["2026-04-01"]},
+                        "official_source_trace": {
+                            "amfi_ter_api": {
+                                "source": "AMFI TER API",
+                                "fields": ["expense_ratio"],
+                            },
                         }
                     },
                     "aum": 1000,
@@ -92,7 +94,7 @@ class _FakeSupabase:
                 {
                     "scheme_code": 120503,
                     "as_of_date": "2026-04-01",
-                    "source": "mf_engine",
+                    "source": "AMFI scheme-wise disclosure: HDFC Mutual Fund",
                     "security_name": "HDFC Bank Ltd.",
                 }
             ],
@@ -117,7 +119,7 @@ def _service(fake_supabase):
     return service
 
 
-def test_api_covered_portfolio_document_skips_parser_and_review_queue(monkeypatch):
+def test_official_source_covered_portfolio_document_skips_parser_and_review_queue(monkeypatch):
     fake = _FakeSupabase()
     monkeypatch.setattr(parsing_service, "supabase", fake)
     service = _service(fake)
@@ -131,10 +133,10 @@ def test_api_covered_portfolio_document_skips_parser_and_review_queue(monkeypatc
         }
     )
 
-    assert result["status"] == "api_covered"
-    assert result["reason"] == "skipped_api_covered:holdings"
-    assert fake.tables["mf_raw_documents"][0]["parse_status"] == "api_covered"
-    assert fake.tables["mf_raw_documents"][0]["validation_issues"] == ["skipped_api_covered:holdings"]
+    assert result["status"] == "official_source_covered"
+    assert result["reason"] == "skipped_official_source_covered:holdings"
+    assert fake.tables["mf_raw_documents"][0]["parse_status"] == "official_source_covered"
+    assert fake.tables["mf_raw_documents"][0]["validation_issues"] == ["skipped_official_source_covered:holdings"]
     assert fake.deletes == [("mf_parse_review_queue", {"source_document_id": "doc-1"})]
 
 
@@ -160,3 +162,13 @@ def test_missing_api_coverage_falls_back_to_existing_parser_path(monkeypatch):
     assert result["status"] == "failed"
     assert result["reason"] == "raw_file_missing"
     assert fake.tables["mf_raw_documents"][0]["parse_status"] == "failed"
+
+
+def test_mf_workflow_does_not_schedule_indianapi_or_mf_engine_for_mutual_funds():
+    from pathlib import Path
+
+    workflow = Path(".github/workflows/mf-sync.yml").read_text()
+
+    assert "sync_mf_enrichment_unified" in workflow
+    assert "sync_mf_engine_enrichment" not in workflow
+    assert "sync_mf_from_indianapi" not in workflow
