@@ -22,9 +22,6 @@ SUMMARY_ROW_MARKERS = (
     "equity & equity related",
     "debt instruments",
     "mutual fund units",
-    "cash and cash equivalents",
-    "treps",
-    "reverse repo",
 )
 
 
@@ -107,7 +104,7 @@ def _parse_sbi_segment(rows: list[list[object]], context: ParseContext) -> dict 
             continue
 
         percent = _parse_percent(_get_row_cell(row, headers, "percent_aum"))
-        if percent is None or not (0.0 < percent <= 100.0):
+        if percent is None or not (-100.0 <= percent <= 100.0) or percent == 0:
             continue
 
         isin = _normalize_isin(_get_row_cell(row, headers, "isin"))
@@ -129,18 +126,18 @@ def _parse_sbi_segment(rows: list[list[object]], context: ParseContext) -> dict 
     if not raw_components:
         return None
 
-    # Some disclosures publish true percentages (e.g. 0.99 means 0.99%),
-    # others use fractions (e.g. 0.0099). Scale only when total is implausibly low.
     raw_total = sum(float(row.get("percent_aum") or 0.0) for row in raw_components)
-    if raw_total < 20.0:
-        scaled = []
-        for row in raw_components:
-            cloned = dict(row)
-            cloned["percent_aum"] = round(float(cloned.get("percent_aum") or 0.0) * 100.0, 6)
-            scaled.append(cloned)
-        scaled_total = sum(float(row.get("percent_aum") or 0.0) for row in scaled)
-        if scaled_total > raw_total:
-            raw_components = scaled
+    max_percent = max(float(row.get("percent_aum") or 0.0) for row in raw_components)
+    # Excel percentage-formatted cells can arrive as fractions. SBI's April 2026
+    # workbook also has true sub-1% values, so scale only the clear fraction case.
+    if raw_total <= 2.0 and max_percent <= 0.2:
+        raw_components = [
+            {
+                **row,
+                "percent_aum": round(float(row.get("percent_aum") or 0.0) * 100.0, 6),
+            }
+            for row in raw_components
+        ]
 
     # Deduplicate components
     deduped: dict[str, dict] = {}
@@ -155,7 +152,7 @@ def _parse_sbi_segment(rows: list[list[object]], context: ParseContext) -> dict 
             deduped[key] = row
     
     unique_components = list(deduped.values())
-    holdings = [row for row in unique_components if row.get("isin")]
+    holdings = [row for row in unique_components if row.get("isin") and float(row.get("percent_aum") or 0.0) > 0.0]
 
     total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in unique_components), 6)
     warnings: list[str] = []

@@ -366,3 +366,70 @@ def test_amfi_metadata_source_trace_merges_existing_payload():
 
     assert payload["amc_trace"]["holdings"]["source_document_id"] == "doc-1"
     assert payload["official_source_trace"]["amfi_ter_api"]["fields"] == ["expense_ratio"]
+
+
+def test_amfi_holdings_tries_next_quarter_after_404(monkeypatch):
+    from backend.scripts import sync_mf_metadata
+
+    class _Response:
+        status_code = 404
+
+    class _Http404(Exception):
+        response = _Response()
+
+    calls = []
+    written = {}
+
+    monkeypatch.setattr(
+        sync_mf_metadata,
+        "parse_amfi_payload_options",
+        lambda session: (
+            [{"mf_id": "9", "mf_name": "HDFC Mutual Fund"}],
+            [
+                {"QuarterDate": "2026-01-01T00:00:00"},
+                {"QuarterDate": "2025-10-01T00:00:00"},
+            ],
+        ),
+    )
+
+    def fake_get_json(session, path, params=None):
+        calls.append(dict(params or {}))
+        if params["strMonth"] == "01-Jan-2026":
+            raise _Http404()
+        return [
+            {
+                "Scheme_Name": "Fund A",
+                "Company_Name": "HDFC Bank Ltd.",
+                "MarketValuePercentage": "8.5",
+                "ISIN": "INE040A01034",
+                "Security_Type": "Equity",
+            }
+        ]
+
+    def fake_upsert(_supabase, holdings):
+        written["holdings"] = holdings
+        return len(holdings)
+
+    monkeypatch.setattr(sync_mf_metadata, "amfi_get_json", fake_get_json)
+    monkeypatch.setattr(sync_mf_metadata, "upsert_holdings", fake_upsert)
+
+    count = sync_mf_metadata.sync_amfi_holdings_api(
+        object(),
+        sync_mf_metadata.build_scheme_index([
+            {
+                "scheme_code": 120503,
+                "scheme_name": "Fund A",
+                "fund_house": "HDFC Mutual Fund",
+                "category": "Equity",
+                "sub_category": "Large Cap",
+                "nav": 100,
+                "nav_date": "2026-05-25",
+            }
+        ]),
+        object(),
+    )
+
+    assert count == 1
+    assert [call["strMonth"] for call in calls] == ["01-Jan-2026", "01-Oct-2025"]
+    assert written["holdings"][0]["as_of_date"] == "2025-10-01"
+    assert written["holdings"][0]["security_name"] == "HDFC Bank Ltd."

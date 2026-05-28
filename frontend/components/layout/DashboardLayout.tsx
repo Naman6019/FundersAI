@@ -168,7 +168,11 @@ export default function DashboardLayout() {
   const navStatus = dataHealth.find((item) => item.label === 'MF NAV')?.status || 'Checking';
   const getCanvasBounds = () => {
     const min = 420;
-    const max = Math.min(Math.max(window.innerWidth - 520, 560), 980);
+    const sidebarWidth = !isSidebarCollapsed ? 276 : 0;
+    const paddingAndGap = 48; // p-6 on main container
+    const availableWidth = window.innerWidth - sidebarWidth - paddingAndGap;
+    // Chat window min width is 320px, and gap is 16px. So max canvas width is availableWidth - 336px
+    const max = Math.max(availableWidth - 336, min);
     return { min, max };
   };
 
@@ -248,8 +252,8 @@ export default function DashboardLayout() {
 
     const onMouseMove = (event: MouseEvent) => {
       const { min, max } = getCanvasBounds();
-      const rightGap = 22;
-      const next = window.innerWidth - event.clientX - rightGap;
+      const rightPadding = 24; // p-6 is 24px padding on the right edge
+      const next = window.innerWidth - rightPadding - event.clientX;
       setCanvasWidth(Math.min(Math.max(next, min), max));
     };
 
@@ -360,11 +364,41 @@ export default function DashboardLayout() {
                 )}
               </div>
             ) : isCanvasOpen ? (
-              <div className="grid h-full grid-cols-[420px_minmax(0,1fr)] gap-6">
-                <aside className="min-h-0 h-full">
+              <div className="flex h-full gap-4 relative">
+                <aside className="flex-1 min-w-[320px] h-full min-h-0">
                   <ChatWindow />
                 </aside>
-                <main className="min-h-0 min-w-0 h-full overflow-y-auto rounded-[1.2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.85),rgba(2,6,23,0.9))] p-5 backdrop-blur-xl">
+                
+                {/* Drag handle styled like Gemini's canvas handle */}
+                <div
+                  onMouseDown={() => setIsResizingCanvas(true)}
+                  className={`w-3 cursor-col-resize self-stretch transition-all duration-150 relative z-20 flex-shrink-0 flex items-center justify-center group`}
+                  title="Drag to resize canvas"
+                >
+                  {/* Central divider line */}
+                  <div className={`w-[2px] h-full transition-all duration-150 ${
+                    isResizingCanvas ? 'bg-sky-400' : 'bg-white/10 group-hover:bg-sky-400/50'
+                  }`} />
+                  
+                  {/* Glassmorphic Capsule Handle */}
+                  <div className={`absolute w-5 h-12 rounded-full border bg-slate-950/80 backdrop-blur-md flex flex-col gap-1 items-center justify-center shadow-lg transition-all duration-200 pointer-events-none ${
+                    isResizingCanvas 
+                      ? 'border-sky-400/80 scale-105 opacity-100 shadow-[0_0_12px_rgba(56,189,248,0.3)]' 
+                      : 'border-white/10 opacity-40 group-hover:opacity-100 group-hover:border-sky-400/40'
+                  }`}>
+                    {/* Vertical grip dots */}
+                    <div className="flex flex-col gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-sky-300" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-sky-300" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-sky-300" />
+                    </div>
+                  </div>
+                </div>
+
+                <main 
+                  style={{ width: `${canvasWidth}px` }}
+                  className="min-h-0 min-w-0 h-full overflow-y-auto rounded-[1.2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.85),rgba(2,6,23,0.9))] p-5 backdrop-blur-xl flex-shrink-0"
+                >
                   {renderCanvasContent()}
                 </main>
               </div>

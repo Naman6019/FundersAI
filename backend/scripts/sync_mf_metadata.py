@@ -48,6 +48,7 @@ AMFI_BASE_URL = os.environ.get("AMFI_BASE_URL", "https://www.amfiindia.com").rst
 AMFI_PAGE_SIZE = int(os.environ.get("AMFI_METADATA_PAGE_SIZE", "10000"))
 AMFI_TER_MAX_PAGES = int(os.environ.get("AMFI_TER_MAX_PAGES", "20"))
 AMFI_HOLDINGS_FUND_LIMIT = int(os.environ.get("AMFI_HOLDINGS_FUND_LIMIT", "60"))
+AMFI_HOLDINGS_MAX_QUARTERS = int(os.environ.get("AMFI_HOLDINGS_MAX_QUARTERS", "4"))
 
 SCHEME_ALIASES = [
     "scheme name",
@@ -138,6 +139,27 @@ def parse_amfi_payload_options(session) -> tuple[list[dict[str, Any]], list[dict
 def quarter_endpoint_date(raw_date: str) -> tuple[str, str | None]:
     dt = datetime.fromisoformat(raw_date)
     return dt.strftime("%d-%b-%Y"), dt.date().isoformat()
+
+
+def amfi_holding_quarter_candidates(quarters: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    explicit_quarter = os.environ.get("MF_HOLDINGS_QUARTER_DATE")
+    raw_dates = [explicit_quarter] if explicit_quarter else [row.get("QuarterDate") for row in quarters]
+    candidates: list[tuple[str, str]] = []
+    for raw_date in raw_dates:
+        if not raw_date:
+            continue
+        try:
+            str_month, as_of_date = quarter_endpoint_date(str(raw_date))
+        except Exception as exc:
+            logger.info("Skipping invalid AMFI holdings quarter %s: %s", raw_date, exc)
+            continue
+        if as_of_date:
+            candidate = (str_month, as_of_date)
+            if candidate not in candidates:
+                candidates.append(candidate)
+        if explicit_quarter or len(candidates) >= AMFI_HOLDINGS_MAX_QUARTERS:
+            break
+    return candidates
 
 
 def update_funds(supabase, updates: list[dict[str, Any]], source_name: str) -> int:
@@ -420,50 +442,93 @@ def sync_amfi_holdings_api(supabase, funds: list[dict[str, Any]], session) -> in
         logger.warning("AMFI holdings sync skipped: fund or quarter options unavailable.")
         return 0
 
-    explicit_quarter = os.environ.get("MF_HOLDINGS_QUARTER_DATE")
-    if explicit_quarter:
-        str_month, as_of_date = quarter_endpoint_date(explicit_quarter)
-    else:
-        str_month, as_of_date = quarter_endpoint_date(quarters[0]["QuarterDate"])
+    quarter_candidates = amfi_holding_quarter_candidates(quarters)
+    if not quarter_candidates:
+        logger.warning("AMFI holdings sync skipped: no valid quarter dates.")
+        return 0
 
-    holdings = []
-    for amfi_fund in amfi_funds[:AMFI_HOLDINGS_FUND_LIMIT]:
-        try:
-            rows = amfi_get_json(
-                session,
-                "/api/schemewisedisclosure-investment",
-                {"MF_ID": amfi_fund["mf_id"], "strMonth": str_month},
+    for str_month, as_of_date in quarter_candidates:
+        holdings: list[dict[str, Any]] = []
+        fetched_row_count = 0
+        skipped_no_source_data = 0
+
+        for amfi_fund in amfi_funds[:AMFI_HOLDINGS_FUND_LIMIT]:
+            try:
+                rows = amfi_get_json(
+                    session,
+                    "/api/schemewisedisclosure-investment",
+                    {"MF_ID": amfi_fund["mf_id"], "strMonth": str_month},
+                )
+            except Exception as e:
+                if _exception_status_code(e) == 404:
+                    skipped_no_source_data += 1
+                    logger.info(
+                        "AMFI holdings skipped_no_source_data fund=%s quarter=%s status=404",
+                        amfi_fund["mf_name"],
+                        as_of_date,
+                    )
+                else:
+                    logger.info("No AMFI holdings rows for %s quarter=%s: %s", amfi_fund["mf_name"], as_of_date, e)
+                continue
+
+            if not isinstance(rows, list) or not rows:
+                skipped_no_source_data += 1
+                logger.info(
+                    "AMFI holdings skipped_no_source_data fund=%s quarter=%s status=empty",
+                    amfi_fund["mf_name"],
+                    as_of_date,
+                )
+                continue
+
+            fetched_row_count += len(rows)
+            for row in rows:
+                scheme_name = clean_scheme_name(row.get("Scheme_Name"))
+                security_name = clean_scheme_name(row.get("Company_Name"))
+                weight_pct = parse_number(row.get("MarketValuePercentage"))
+                if not scheme_name or not security_name or weight_pct is None:
+                    continue
+                fund = match_fund(scheme_name, funds)
+                if not fund:
+                    continue
+                holdings.append({
+                    "scheme_code": int(fund["scheme_code"]),
+                    "as_of_date": as_of_date,
+                    "security_name": security_name,
+                    "isin": clean_scheme_name(row.get("ISIN")) or None,
+                    "sector": clean_scheme_name(row.get("Security_Type")) or None,
+                    "weight_pct": weight_pct,
+                    "source": f"AMFI scheme-wise disclosure: {amfi_fund['mf_name']}",
+                    "updated_at": utc_now(),
+                })
+
+        if fetched_row_count == 0:
+            logger.info(
+                "AMFI holdings quarter %s had no source rows. skipped_no_source_data=%s",
+                as_of_date,
+                skipped_no_source_data,
             )
-        except Exception as e:
-            logger.info("No AMFI holdings rows for %s: %s", amfi_fund["mf_name"], e)
             continue
 
-        if not isinstance(rows, list):
-            continue
+        written = upsert_holdings(supabase, holdings)
+        logger.info(
+            "AMFI holdings API upserted %s rows for %s from %s source rows.",
+            written,
+            as_of_date,
+            fetched_row_count,
+        )
+        return written
 
-        for row in rows:
-            scheme_name = clean_scheme_name(row.get("Scheme_Name"))
-            security_name = clean_scheme_name(row.get("Company_Name"))
-            weight_pct = parse_number(row.get("MarketValuePercentage"))
-            if not scheme_name or not security_name or weight_pct is None:
-                continue
-            fund = match_fund(scheme_name, funds)
-            if not fund:
-                continue
-            holdings.append({
-                "scheme_code": int(fund["scheme_code"]),
-                "as_of_date": as_of_date,
-                "security_name": security_name,
-                "isin": clean_scheme_name(row.get("ISIN")) or None,
-                "sector": clean_scheme_name(row.get("Security_Type")) or None,
-                "weight_pct": weight_pct,
-                "source": f"AMFI scheme-wise disclosure: {amfi_fund['mf_name']}",
-                "updated_at": utc_now(),
-            })
+    logger.info("AMFI holdings API found no source rows across %s quarter candidates.", len(quarter_candidates))
+    return 0
 
-    written = upsert_holdings(supabase, holdings)
-    logger.info("AMFI holdings API upserted %s rows for %s.", written, as_of_date)
-    return written
+
+def _exception_status_code(exc: Exception) -> int | None:
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    try:
+        return int(status_code)
+    except (TypeError, ValueError):
+        return None
 
 
 def upsert_holdings(supabase, holdings: list[dict[str, Any]]) -> int:

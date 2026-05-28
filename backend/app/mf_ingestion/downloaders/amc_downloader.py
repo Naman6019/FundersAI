@@ -34,6 +34,10 @@ MONTH_PATTERN = re.compile(
     r"(?P<month>jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:[\s\-_]+(?P<day>\d{1,2}))?[\s\-_\,]+(?P<year>20\d{2})",
     re.IGNORECASE,
 )
+DAY_FIRST_MONTH_PATTERN = re.compile(
+    r"\b\d{1,2}(?:st|nd|rd|th)?[\s\-_]+(?P<month>jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\-_\,]+(?P<year>20\d{2})",
+    re.IGNORECASE,
+)
 SUPPORTED_FILE_EXTENSIONS = {".pdf", ".xls", ".xlsx", ".xlsm", ".csv", ".zip"}
 GENERIC_KEYWORDS = {
     "factsheet": ("factsheet", "fact sheet", "fund sheet", "monthly factsheet"),
@@ -42,7 +46,7 @@ GENERIC_KEYWORDS = {
 GENERIC_REQUIRED_KEYWORDS: dict[str, dict[str, tuple[str, ...]]] = {
     "hdfc": {
         "factsheet": ("factsheet", "fact sheet", "fund fact"),
-        "portfolio_disclosure": ("portfolio", "holding", "monthly portfolio"),
+        "portfolio_disclosure": ("portfolio", "holding", "monthly portfolio", "monthly hdfc"),
     },
     "sbi": {
         "factsheet": ("factsheet", "fact sheet", "fund fact"),
@@ -102,6 +106,20 @@ class AMCDownloader(BaseDownloader):
             )
             return docs
         if adapter_key in {"hdfc", "sbi"}:
+            if adapter_key == "sbi" and (document_type or "").strip().lower() == "factsheet":
+                docs = _discover_sbi_factsheet_documents(
+                    self.source,
+                    timeout_seconds=self.timeout_seconds,
+                    user_agent=self.user_agent,
+                )
+                logger.info(
+                    "event=amc_discovery_complete amc_code=%s adapter=%s document_type=%s count=%s",
+                    self.source.amc_code,
+                    adapter_key,
+                    document_type,
+                    len(docs),
+                )
+                return docs
             docs = _discover_generic_anchor_documents(
                 self.source,
                 document_type=document_type,
@@ -304,9 +322,43 @@ def _discover_generic_anchor_documents(
             )
         )
 
+    adapter_key = (source.adapter_key or "").strip().lower()
+    if adapter_key == "hdfc":
+        hdfc_extensions = (".pdf",) if doc_type == "factsheet" else (".xlsx", ".xlsm", ".xls", ".csv", ".zip", ".pdf")
+        embedded_urls = _extract_embedded_file_urls(response.text or "", response.url or listing_url, extensions=hdfc_extensions)
+        for url in embedded_urls:
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+            title = _human_title_from_url(url)
+            combined = f"{title} {url}".lower()
+            ext = Path(urlsplit(url).path).suffix.lower() or _infer_file_ext_from_text(combined)
+            if ext not in SUPPORTED_FILE_EXTENSIONS:
+                continue
+            if not _generic_candidate_allowed(source, combined, doc_type, ext, required_keywords):
+                continue
+            report_month = _detect_report_month_from_text(combined)
+            base_score = _generic_base_score(ext=ext, document_type=doc_type)
+            recency_score = 0
+            if report_month:
+                recency_score = (report_month.year * 12 + report_month.month) * 10
+            docs.append(
+                DiscoveredDocument(
+                    amc_name=source.amc_name,
+                    amc_code=source.amc_code,
+                    document_type=doc_type,
+                    title=title,
+                    url=url,
+                    discovery_page_url=response.url or listing_url,
+                    file_ext=ext,
+                    report_month=report_month,
+                    priority_score=base_score + recency_score + 40,
+                )
+            )
+
     # SBI portfolios page often exposes XLSX links inside scripts/JSON, not plain anchors.
-    if (source.adapter_key or "").strip().lower() == "sbi" and doc_type == "portfolio_disclosure":
-        embedded_urls = _extract_embedded_file_urls(response.text or "", response.url or listing_url, extensions=(".xlsx", ".xls", ".xlsm", ".csv", ".zip"))
+    if adapter_key == "sbi" and doc_type == "portfolio_disclosure":
+        embedded_urls = _extract_embedded_file_urls(response.text or "", response.url or listing_url, extensions=(".xlsx", ".xlsm", ".xls", ".csv", ".zip"))
         for url in embedded_urls:
             if url in seen_urls:
                 continue
@@ -380,6 +432,66 @@ def _discover_generic_anchor_documents(
                     )
                 )
 
+    docs.sort(key=lambda item: item.priority_score, reverse=True)
+    return docs
+
+
+def _discover_sbi_factsheet_documents(
+    source: AMCDocumentSource,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    listing_url = source.factsheet_page_url or "https://www.sbimf.com/factsheets"
+    endpoint = urljoin(listing_url, "/ajaxcall/CMS/GetRecentFactSheets")
+    try:
+        response = _request_with_retry(
+            "POST",
+            endpoint,
+            timeout_seconds=timeout_seconds,
+            headers={
+                "User-Agent": user_agent,
+                "Referer": listing_url,
+                "Content-Type": "application/json;charset=utf-8",
+            },
+            json_payload={},
+        )
+    except Exception as exc:
+        logger.exception("event=sbi_factsheet_discovery_failed reason=%s", exc)
+        return []
+
+    soup = BeautifulSoup(response.text or "", "html.parser")
+    docs: list[DiscoveredDocument] = []
+    seen_urls: set[str] = set()
+    for anchor in soup.find_all("a"):
+        href = str(anchor.get("href") or "").strip()
+        if not href:
+            continue
+        url = urljoin(listing_url, href)
+        if url in seen_urls:
+            continue
+        title = " ".join(anchor.get_text(" ", strip=True).split()) or _human_title_from_url(url)
+        combined = f"{title} {url}".lower()
+        ext = Path(urlsplit(url).path).suffix.lower() or _infer_file_ext_from_text(combined)
+        if ext != ".pdf":
+            continue
+        if "factsheet" not in combined:
+            continue
+        seen_urls.add(url)
+        report_month = _detect_report_month_from_text(combined)
+        recency_score = (report_month.year * 12 + report_month.month) * 10 if report_month else 0
+        docs.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type="factsheet",
+                title=title,
+                url=url,
+                discovery_page_url=listing_url,
+                file_ext=ext,
+                report_month=report_month,
+                priority_score=_generic_base_score(ext=ext, document_type="factsheet") + recency_score,
+            )
+        )
     docs.sort(key=lambda item: item.priority_score, reverse=True)
     return docs
 
@@ -512,7 +624,8 @@ def _extract_embedded_file_urls(html: str, base_url: str, extensions: tuple[str,
     raw = unescape(str(html or ""))
     if not raw.strip():
         return []
-    extension_pattern = "|".join(re.escape(ext.lstrip(".")) for ext in extensions)
+    ordered_extensions = sorted({ext.lstrip(".") for ext in extensions}, key=len, reverse=True)
+    extension_pattern = "|".join(re.escape(ext) for ext in ordered_extensions)
     patterns = [
         re.compile(rf"https?://[^\s\"'<>]+\.({extension_pattern})(?:\?[^\s\"'<>]*)?", re.IGNORECASE),
         re.compile(rf"/[^\s\"'<>]+\.({extension_pattern})(?:\?[^\s\"'<>]*)?", re.IGNORECASE),
@@ -607,7 +720,8 @@ def _generic_candidate_allowed(
 
     # Portfolio ingestion should avoid non-portfolio disclosures.
     if document_type == "portfolio_disclosure" and "portfolio" not in low and "holding" not in low:
-        return False
+        if not (adapter_key == "hdfc" and "monthly hdfc" in low):
+            return False
 
     # SBI portfolio disclosures are expected as spreadsheet payloads.
     if adapter_key == "sbi" and document_type == "portfolio_disclosure":
@@ -828,7 +942,9 @@ def _generic_base_score(ext: str, document_type: str) -> int:
 
 
 def _detect_report_month_from_text(text: str) -> date | None:
-    match = MONTH_PATTERN.search(text or "")
+    match = DAY_FIRST_MONTH_PATTERN.search(text or "")
+    if not match:
+        match = MONTH_PATTERN.search(text or "")
     if not match:
         return None
     month = datetime.strptime(match.group("month")[:3], "%b").month

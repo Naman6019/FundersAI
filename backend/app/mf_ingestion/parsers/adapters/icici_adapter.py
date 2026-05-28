@@ -23,13 +23,23 @@ SUMMARY_ROW_MARKERS = (
     "grand total",
     "net assets",
     "equity & equity related instruments",
+    "equity & equity related",
     "debt instruments",
     "units of mutual funds",
     "listed / awaiting listing",
     "unlisted",
+)
+
+NON_ISIN_ALLOCATION_MARKERS = (
+    "cash",
     "cash and cash equivalents",
+    "net current assets",
+    "net receivable",
+    "net payable",
     "treps",
     "reverse repo",
+    "term deposits placed as margins",
+    "margin amount",
 )
 
 
@@ -169,7 +179,8 @@ def _detect_report_month_from_rows(rows: list[list[object]]) -> date | None:
 
 def _scale_percent_aum_if_necessary(holdings: list[dict]) -> list[dict]:
     raw_total = sum(float(row.get("percent_aum") or 0.0) for row in holdings)
-    if 0.0 < raw_total < 2.0:
+    max_percent = max((float(row.get("percent_aum") or 0.0) for row in holdings), default=0.0)
+    if 0.0 < raw_total <= 2.5 and max_percent <= 1.0:
         for row in holdings:
             if row.get("percent_aum") is not None:
                 row["percent_aum"] = round(float(row["percent_aum"]) * 100.0, 6)
@@ -186,8 +197,12 @@ def _extract_holdings_from_rows(rows: list[list[object]], headers: list[str]) ->
         percent = _parse_percent(_get_row_cell(row, headers, "percent_aum"))
         if percent is None:
             continue
+        if not (-100.0 <= percent <= 100.0) or percent == 0:
+            continue
 
         isin = _normalize_isin(_get_row_cell(row, headers, "isin"))
+        if not isin and not _is_non_isin_allocation_row(instrument_name):
+            continue
         quantity = _parse_number(_get_row_cell(row, headers, "quantity"))
         market_value = _parse_number(_get_row_cell(row, headers, "market_value"))
         sector = normalize_instrument_name(_get_row_cell(row, headers, "sector")) or None
@@ -202,6 +217,8 @@ def _extract_holdings_from_rows(rows: list[list[object]], headers: list[str]) ->
             }
         )
 
+    components = _drop_non_isin_parent_allocation_totals(components)
+
     # Deduplicate components
     deduped: dict[str, dict] = {}
     for row in components:
@@ -211,11 +228,16 @@ def _extract_holdings_from_rows(rows: list[list[object]], headers: list[str]) ->
         if not key.strip("|"):
             continue
         existing = deduped.get(key)
+        if existing and not isin_key:
+            existing["percent_aum"] = round(float(existing.get("percent_aum") or 0.0) + float(row.get("percent_aum") or 0.0), 6)
+            if existing.get("market_value") is not None or row.get("market_value") is not None:
+                existing["market_value"] = round(float(existing.get("market_value") or 0.0) + float(row.get("market_value") or 0.0), 6)
+            continue
         if not existing or float(row.get("percent_aum") or 0.0) > float(existing.get("percent_aum") or 0.0):
             deduped[key] = row
     
     unique_components = _scale_percent_aum_if_necessary(list(deduped.values()))
-    holdings = [row for row in unique_components if row.get("isin")]
+    holdings = [row for row in unique_components if row.get("isin") and float(row.get("percent_aum") or 0.0) > 0.0]
     total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in unique_components), 6)
     
     return holdings, total_percent
@@ -279,6 +301,31 @@ def _is_summary_row(instrument_name: str) -> bool:
     if not low:
         return True
     return any(marker in low for marker in SUMMARY_ROW_MARKERS)
+
+
+def _is_non_isin_allocation_row(instrument_name: str) -> bool:
+    low = re.sub(r"\s+", " ", str(instrument_name or "").strip().lower())
+    if not low:
+        return False
+    return any(marker in low for marker in NON_ISIN_ALLOCATION_MARKERS)
+
+
+def _drop_non_isin_parent_allocation_totals(rows: list[dict]) -> list[dict]:
+    non_isin_names = [
+        re.sub(r"\s+", " ", str(row.get("instrument_name") or "").strip().lower())
+        for row in rows
+        if not row.get("isin")
+    ]
+    output: list[dict] = []
+    for row in rows:
+        if row.get("isin"):
+            output.append(row)
+            continue
+        name = re.sub(r"\s+", " ", str(row.get("instrument_name") or "").strip().lower())
+        if any(other != name and other.startswith(f"{name} (") for other in non_isin_names):
+            continue
+        output.append(row)
+    return output
 
 
 def _compute_confidence(holdings: list[dict], report_month: date | None, total_percent: float, scheme_name: str) -> float:

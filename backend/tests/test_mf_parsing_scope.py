@@ -4,7 +4,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from app.mf_ingestion.services import parsing_service
-from app.mf_ingestion.services.parsing_service import ParsingService
+from app.mf_ingestion.services.parsing_service import ParsingService, _source_month_from_text
+from datetime import date
 
 
 class _FakeSupabase:
@@ -126,3 +127,38 @@ def test_parse_pending_documents_skips_irrelevant_disclosure_urls(monkeypatch):
     assert eq_filters["id"] == "doc-sai-1"
     assert update_payload["parse_status"] == "skipped_not_supported"
     assert update_payload["validation_issues"][0].startswith("skipped_irrelevant_document")
+
+
+def test_parse_pending_documents_skips_report_month_mismatch(monkeypatch):
+    fake_doc = {
+        "id": "doc-old-icici-1",
+        "amc_code": "ICICI",
+        "document_type": "portfolio_disclosure",
+        "report_month": "2024-12-01",
+        "source_url": "https://www.icicipruamc.com/blob/downloads/Files/Monthly%20Portfolio%20Disclosures/2020/liquid-portfolio-as-on-03-july-2020.xlsx",
+        "file_name": "liquid-portfolio-as-on-03-july-2020.xlsx",
+        "storage_path": "ignored",
+        "parse_status": "pending",
+    }
+    fake_supabase = _FakeSupabase([fake_doc])
+    monkeypatch.setattr(parsing_service, "supabase", fake_supabase)
+
+    service = ParsingService()
+    result = service.parse_pending_documents(limit=1, amc_code="ICICI")
+
+    assert result["processed"][0]["status"] == "skipped"
+    _, eq_filters, update_payload = fake_supabase.updated_rows[0]
+    assert eq_filters["id"] == "doc-old-icici-1"
+    assert update_payload["parse_status"] == "skipped_not_supported"
+    assert update_payload["validation_issues"] == [
+        "skipped_irrelevant_document:report_month_mismatch:2020-07-01!=2024-12-01"
+    ]
+
+
+def test_source_month_prefers_explicit_file_date_over_storage_folder():
+    text = (
+        "https://files.hdfcfund.com/s3fs-public/2026-05/"
+        "Monthly%20HDFC%20Value%20Fund%20-%2030%20April%202026.xlsx"
+    )
+
+    assert _source_month_from_text(text) == date(2026, 4, 1)

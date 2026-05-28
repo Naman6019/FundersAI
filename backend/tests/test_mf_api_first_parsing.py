@@ -119,10 +119,12 @@ def _service(fake_supabase):
     return service
 
 
-def test_official_source_covered_portfolio_document_skips_parser_and_review_queue(monkeypatch):
+def test_official_source_covered_portfolio_document_does_not_skip_amc_parser(monkeypatch):
     fake = _FakeSupabase()
     monkeypatch.setattr(parsing_service, "supabase", fake)
     service = _service(fake)
+    service.r2_store = None
+    service.config = None
 
     result = service._parse_one(
         {
@@ -130,14 +132,14 @@ def test_official_source_covered_portfolio_document_skips_parser_and_review_queu
             "amc_code": "hdfc",
             "document_type": "portfolio_disclosure",
             "report_month": "2026-04-01",
+            "storage_backend": "local",
+            "storage_path": "missing.xlsx",
         }
     )
 
-    assert result["status"] == "official_source_covered"
-    assert result["reason"] == "skipped_official_source_covered:holdings"
-    assert fake.tables["mf_raw_documents"][0]["parse_status"] == "official_source_covered"
-    assert fake.tables["mf_raw_documents"][0]["validation_issues"] == ["skipped_official_source_covered:holdings"]
-    assert fake.deletes == [("mf_parse_review_queue", {"source_document_id": "doc-1"})]
+    assert result["status"] == "failed"
+    assert result["reason"] == "raw_file_missing"
+    assert fake.tables["mf_raw_documents"][0]["parse_status"] == "failed"
 
 
 def test_missing_api_coverage_falls_back_to_existing_parser_path(monkeypatch):

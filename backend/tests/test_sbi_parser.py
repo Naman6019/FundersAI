@@ -96,3 +96,32 @@ def test_sbi_parse_holdings_does_not_mix_repeated_scheme_sections():
     assert len(parsed.holdings) == 2
     assert parsed.metrics["total_percent_aum"] == 100.0
     assert "percent_aum_total_out_of_band" not in parsed.warnings
+
+
+def test_sbi_total_percent_includes_non_isin_cash_rows_without_storing_them():
+    frame = pd.DataFrame(
+        [
+            ["SCHEME NAME :", "SBI Overnight Fund", None, None, None, None],
+            ["PORTFOLIO STATEMENT AS ON :", "2026-04-30", None, None, None, None],
+            ["Name of the Instrument / Issuer", "ISIN", "Rating / Industry^", "Quantity", "Market value", "% to AUM"],
+            ["91 DAY T-BILL 14.05.26", "IN002025X455", "Sovereign", 26000000, 25952.39, 0.96],
+            ["TREPS / Reverse Repo Investments", None, None, None, None, None],
+            ["TREPS", None, None, None, 2450601.12, 90.62],
+            ["Reverse Repo", None, None, None, 148698.67, 5.50],
+            ["Net Receivable / Payable", None, None, None, -731.50, -0.02],
+        ],
+        columns=["c1", "c2", "c3", "c4", "c5", "c6"],
+    )
+
+    adapter = SBIAdapter()
+    parsed = adapter.parse_holdings(
+        excel_frames=[frame],
+        pdf_table_frames=[],
+        pdf_text="",
+        context=SimpleNamespace(source_document_id="doc-4", source_url="local", report_month=None),
+    )
+
+    assert len(parsed.holdings) == 1
+    assert parsed.holdings[0]["instrument_name"] == "91 DAY T-BILL 14.05.26"
+    assert parsed.metrics["total_percent_aum"] == 97.06
+    assert "percent_aum_total_out_of_band" not in parsed.warnings

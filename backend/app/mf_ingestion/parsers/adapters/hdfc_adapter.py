@@ -25,6 +25,14 @@ INLINE_DATE_PATTERN_MONTH_FIRST = re.compile(
     r"\b(?P<month>Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(?P<day>\d{1,2}),\s*(?P<year>20\d{2})\b",
     re.IGNORECASE,
 )
+AS_ON_DATE_PATTERN = re.compile(
+    r"\b(?:as\s+on|as\s+of)\s+(?P<month>Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(?P<day>\d{1,2}),\s*(?P<year>20\d{2})\b",
+    re.IGNORECASE,
+)
+AS_ON_DATE_PATTERN_DAY_FIRST = re.compile(
+    r"\b(?:as\s+on|as\s+of)\s+(?P<day>\d{1,2})\s+(?P<month>Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[,\s]+(?P<year>20\d{2})\b",
+    re.IGNORECASE,
+)
 SUMMARY_ROW_MARKERS = (
     "sub total",
     "subtotal",
@@ -50,6 +58,19 @@ PAGE_STOP_MARKERS = (
     "exit load",
     "benchmark",
     "name since",
+)
+PDF_MIN_PORTFOLIO_PAGE = 7
+PAGE_REJECT_MARKERS = (
+    "contents",
+    "glossary",
+    "market review",
+)
+PORTFOLIO_TABLE_MARKERS = (
+    "portfolio",
+    "company/instrument",
+    "% to nav",
+    "% to\nnav",
+    "equity & equity related",
 )
 
 
@@ -108,20 +129,44 @@ def _parse_hdfc_frame(frame: pd.DataFrame, context: ParseContext, fallback_schem
     if frame is None or frame.empty:
         return None
 
+    page_number = _frame_page_number(frame)
+    if page_number is not None and page_number < PDF_MIN_PORTFOLIO_PAGE:
+        return None
+
     rows = frame.where(pd.notna(frame), None).values.tolist()
     if not rows:
         return None
 
+    page_text_full = str(frame.attrs.get("page_text_full") or "")
     flattened = " ".join(str(cell or "") for row in rows[:20] for cell in row).lower()
-    if not any(token in flattened for token in ("portfolio", "% to", "company", "instrument", "nav")):
+    page_low = page_text_full.lower()
+    if not _looks_like_hdfc_portfolio_page(flattened, page_low):
         return None
 
-    page_text_full = str(frame.attrs.get("page_text_full") or "")
     scheme_name = _extract_scheme_name(frame, rows, page_text_full=page_text_full) or (fallback_scheme or "")
     if scheme_name.strip().lower() == "hdfc mutual fund":
         scheme_name = fallback_scheme or ""
     if not scheme_name:
         return None
+
+    word_holdings = _extract_holdings_from_page_words(frame.attrs.get("page_words") or [])
+    if word_holdings:
+        total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in word_holdings), 6)
+        report_month = _extract_report_month(page_text_full, rows) or context.report_month
+        warnings: list[str] = []
+        if report_month is None:
+            warnings.append("report_month_not_detected")
+        if not (80.0 <= total_percent <= 120.0):
+            warnings.append("percent_aum_total_out_of_band")
+        return {
+            "scheme_name": scheme_name,
+            "report_month": report_month,
+            "holdings": word_holdings,
+            "metrics": {"total_percent_aum": total_percent},
+            "warnings": warnings,
+            "confidence_score": _compute_confidence(word_holdings, report_month, total_percent, scheme_name),
+            "selection_score": float(len(word_holdings)) + (30.0 if 80.0 <= total_percent <= 120.0 else 0.0),
+        }
 
     header_row_idx, instrument_idx, percent_idx, sector_idx = _locate_header_and_columns(rows)
     data_rows = rows[header_row_idx + 1 :] if header_row_idx is not None else rows
@@ -155,7 +200,115 @@ def _parse_hdfc_frame(frame: pd.DataFrame, context: ParseContext, fallback_schem
     }
 
 
+def _frame_page_number(frame: pd.DataFrame) -> int | None:
+    raw = frame.attrs.get("page_number")
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _looks_like_hdfc_portfolio_page(table_text: str, page_text: str) -> bool:
+    combined = f"{page_text} {table_text}".lower()
+    if any(marker in combined for marker in PAGE_REJECT_MARKERS) and "portfolio" not in table_text:
+        return False
+    has_portfolio_marker = any(marker in combined for marker in PORTFOLIO_TABLE_MARKERS)
+    has_columns = ("company" in combined or "instrument" in combined) and ("% to" in combined or "nav" in combined)
+    has_inline_holdings = "portfolio" in combined and bool(_extract_inline_name_pct_pairs(combined))
+    return has_portfolio_marker and (has_columns or has_inline_holdings)
+
+
+def _extract_holdings_from_page_words(words: list[dict]) -> list[dict]:
+    if not words:
+        return []
+
+    holdings: list[dict] = []
+    for bounds in ((198.0, 278.0, 346.0, 365.0), (376.0, 463.0, 531.0, 552.0)):
+        holdings.extend(_extract_holdings_from_word_column(words, bounds))
+    return _dedupe_holdings(holdings)
+
+
+def _extract_holdings_from_word_column(words: list[dict], bounds: tuple[float, float, float, float]) -> list[dict]:
+    name_x0, sector_x0, percent_x0, x1_limit = bounds
+    candidates = []
+    for word in words:
+        try:
+            x0 = float(word.get("x0") or 0.0)
+            top = float(word.get("top") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if top < 135.0 or top > 705.0:
+            continue
+        if x0 < name_x0 or x0 > x1_limit:
+            continue
+        candidates.append(word)
+
+    line_map: dict[int, list[dict]] = {}
+    for word in candidates:
+        bucket = int(round(float(word.get("top") or 0.0) / 2.0) * 2)
+        line_map.setdefault(bucket, []).append(word)
+
+    holdings: list[dict] = []
+    for line_words in line_map.values():
+        ordered = sorted(line_words, key=lambda item: float(item.get("x0") or 0.0))
+        percent_words = [word for word in ordered if float(word.get("x0") or 0.0) >= percent_x0]
+        percent = _parse_number("".join(str(word.get("text") or "") for word in percent_words))
+        if percent is None or percent <= 0.0 or percent > 100.0:
+            continue
+
+        name_words = [
+            str(word.get("text") or "")
+            for word in ordered
+            if name_x0 <= float(word.get("x0") or 0.0) < sector_x0
+        ]
+        sector_words = [
+            str(word.get("text") or "")
+            for word in ordered
+            if sector_x0 <= float(word.get("x0") or 0.0) < percent_x0
+        ]
+        instrument_name = _clean_word_text(name_words)
+        sector = _clean_word_text(sector_words) or None
+        if not instrument_name or _is_summary_or_noise_row(instrument_name):
+            continue
+        if any(marker in instrument_name.lower() for marker in ("regular plan", "direct plan", "nav per", "expense ratio")):
+            continue
+
+        holdings.append(
+            {
+                "instrument_name": instrument_name,
+                "isin": None,
+                "sector": sector,
+                "percent_aum": round(percent, 6),
+                "quantity": None,
+                "market_value": None,
+            }
+        )
+    return holdings
+
+
+def _clean_word_text(tokens: list[str]) -> str:
+    cleaned = [str(token or "").strip() for token in tokens if str(token or "").strip()]
+    if not cleaned:
+        return ""
+    one_char_count = sum(1 for token in cleaned if len(token) == 1)
+    if len(cleaned) >= 4 and one_char_count / len(cleaned) > 0.65:
+        text = "".join(cleaned)
+        text = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", text)
+    else:
+        text = " ".join(cleaned)
+    text = text.encode("ascii", "ignore").decode("ascii")
+    return normalize_instrument_name(text)
+
+
 def _extract_scheme_name(frame: pd.DataFrame, rows: list[list[object]], page_text_full: str = "") -> str:
+    for column in frame.columns:
+        text = " ".join(str(column or "").replace("\n", " ").split())
+        if not text or "Unnamed" in text:
+            continue
+        match = SCHEME_PATTERN.search(text)
+        if match:
+            return " ".join(match.group(1).split())
+
     page_head = str(frame.attrs.get("page_text_head") or "")
     if page_head:
         match = SCHEME_PATTERN.search(page_head)
@@ -279,6 +432,7 @@ def _extract_holdings(
                     break
         
         instrument_name = normalize_instrument_name(name_value)
+        instrument_name = instrument_name.encode("ascii", "ignore").decode("ascii")
         if "\n" in str(name_value or ""):
             instrument_name = instrument_name.split("\n")[0].strip()
         
@@ -291,7 +445,7 @@ def _extract_holdings(
         if low_name in ("equity", "debt", "mutual fund units"):
             continue
 
-        if not any(marker in low_name for marker in ("sub total", "subtotal", "total value", "total market value")):
+        if not any(marker in low_name for marker in ("sub total", "subtotal", "total", "grand total", "total value", "total market value")):
             true_total_percent += percent
 
         if _is_summary_or_noise_row(instrument_name):
@@ -300,6 +454,8 @@ def _extract_holdings(
         sector = None
         if sector_idx is not None and sector_idx < len(row):
             sector = normalize_instrument_name(_safe_row_get(row, sector_idx)) or None
+            if sector:
+                sector = sector.encode("ascii", "ignore").decode("ascii")
             if sector and sector.lower() == instrument_name.lower():
                 sector = None
 
@@ -493,7 +649,12 @@ def _extract_holdings_from_page_text(page_text: str) -> list[dict]:
 
     for line in lines:
         low = line.lower()
-        if not in_portfolio and ("portfolio" in low or "company/instrument" in low):
+        if not in_portfolio and (
+            "company/instrument" in low
+            or low.startswith("company ")
+            or "equity & equity related" in low
+            or "debt & debt related" in low
+        ):
             in_portfolio = True
             continue
         if not in_portfolio:
@@ -582,6 +743,20 @@ def _extract_inline_name_pct_pairs(line: str) -> list[tuple[str, float]]:
 
 def _extract_report_month(page_text_full: str, rows: list[list[object]]) -> date | None:
     candidates = [page_text_full, _frame_blob_text(rows[:30])]
+    for text in candidates:
+        if not text:
+            continue
+        for pattern in (AS_ON_DATE_PATTERN, AS_ON_DATE_PATTERN_DAY_FIRST):
+            match = pattern.search(text)
+            if not match:
+                continue
+            try:
+                month_name = match.group("month")
+                month_number = _month_name_to_number(month_name)
+                year = int(match.group("year"))
+                return date(year, month_number, 1)
+            except Exception:
+                continue
     for text in candidates:
         if not text:
             continue

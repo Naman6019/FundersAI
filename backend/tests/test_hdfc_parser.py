@@ -65,6 +65,42 @@ def test_hdfc_parse_holdings_tolerates_missing_isin():
     assert parsed.holdings[0]["percent_aum"] == 0.06
 
 
+def test_hdfc_parse_holdings_extracts_rows_from_monthly_excel_frame():
+    frame = pd.DataFrame(
+        [
+            ["Portfolio as on 30-Apr-2026", None, None, None, None, None, None, None],
+            [None, "ISIN", "Coupon (%)", "Name Of the Instrument", "Industry+ /Rating", "Quantity", "Market/ Fair Value", "% to NAV"],
+            [None, "INE090A01021", None, "ICICI Bank Ltd.", "Banks", 100, 1000, 6.47],
+            [None, "INE040A01034", None, "HDFC Bank Ltd.Ł", "Banks", 100, 1000, 5.45],
+            [None, None, None, "Grand Total", None, None, None, 100.0],
+        ],
+        columns=[
+            "HDFC Value Fund (An open ended equity scheme following a value investment strategy)",
+            "HDFC Value Fund (An open ended equity scheme following a value investment strategy).1",
+            "HDFC Value Fund (An open ended equity scheme following a value investment strategy).2",
+            "HDFC Value Fund (An open ended equity scheme following a value investment strategy).3",
+            "HDFC Value Fund (An open ended equity scheme following a value investment strategy).4",
+            "HDFC Value Fund (An open ended equity scheme following a value investment strategy).5",
+            "HDFC Value Fund (An open ended equity scheme following a value investment strategy).6",
+            "HDFC Value Fund (An open ended equity scheme following a value investment strategy).7",
+        ],
+    )
+
+    adapter = HDFCAdapter()
+    parsed = adapter.parse_holdings(
+        excel_frames=[frame],
+        pdf_table_frames=[],
+        pdf_text="",
+        context=SimpleNamespace(source_document_id="doc-xlsx", source_url="local", report_month=date(2026, 4, 1)),
+    )
+
+    assert parsed.scheme_name == "HDFC Value Fund"
+    assert parsed.report_month == date(2026, 4, 1)
+    assert len(parsed.holdings) == 2
+    assert parsed.holdings[1]["instrument_name"] == "HDFC Bank Ltd."
+    assert parsed.metrics["total_percent_aum"] == 11.92
+
+
 def test_hdfc_parse_holdings_splits_inline_name_percent_sequences_and_detects_month():
     frame = pd.DataFrame(
         [

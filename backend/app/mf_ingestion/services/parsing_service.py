@@ -4,10 +4,12 @@ import gzip
 import json
 import logging
 import os
+import re
 import tempfile
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 
 from app.database import supabase
 from app.mf_ingestion.constants import VALIDATION_STATUS_INVALID, VALIDATION_STATUS_REVIEW
@@ -161,6 +163,11 @@ class ParsingService:
 
         if not parsed_documents:
             issue = "holdings_not_found_in_document"
+            self._upload_parse_debug_snapshot(
+                document=document,
+                artifact="holdings_parse_failure",
+                payload=self._build_parse_failure_debug_payload(file_path=file_path, reason=issue),
+            )
             self._mark_document(document_id, "needs_review", [issue])
             return {"source_document_id": document_id, "status": "needs_review", "reason": issue}
 
@@ -436,12 +443,10 @@ class ParsingService:
         factsheet_covered = self._official_factsheet_covers_document(amc_code, report_month)
         holdings_covered = self._official_holdings_cover_document(amc_code, report_month)
 
-        if document_type in HOLDINGS_SUPPORTED_DOCUMENT_TYPES and holdings_covered:
-            return "skipped_official_source_covered:holdings"
+        if document_type in HOLDINGS_SUPPORTED_DOCUMENT_TYPES:
+            return None
         if document_type in FACTSHEET_SUPPORTED_DOCUMENT_TYPES:
             if amc_code == "hdfc":
-                if factsheet_covered and holdings_covered:
-                    return "skipped_official_source_covered:factsheet_and_holdings"
                 return None
             if factsheet_covered:
                 return "skipped_official_source_covered:factsheet"
@@ -952,6 +957,90 @@ class ParsingService:
             metadata=metadata,
         )
 
+    def _build_parse_failure_debug_payload(self, *, file_path: str, reason: str) -> dict[str, Any]:
+        path = Path(file_path)
+        payload: dict[str, Any] = {
+            "reason": reason,
+            "file_name": path.name,
+            "file_ext": path.suffix.lower(),
+            "file_size_bytes": path.stat().st_size if path.exists() else None,
+            "detected_pages": [],
+            "detected_sheets": [],
+            "headers": [],
+            "raw_sample_rows": [],
+            "normalized_sample_rows": [],
+        }
+        try:
+            if path.suffix.lower() in {".xls", ".xlsx", ".xlsm", ".csv"}:
+                self._append_excel_failure_debug(payload, path)
+            elif path.suffix.lower() == ".pdf":
+                self._append_pdf_failure_debug(payload, path)
+        except Exception as exc:
+            payload["debug_error"] = f"{type(exc).__name__}:{exc}"
+        return payload
+
+    def _append_excel_failure_debug(self, payload: dict[str, Any], path: Path) -> None:
+        import pandas as pd
+
+        workbook = pd.read_excel(path, sheet_name=None, nrows=12)
+        for sheet_name, frame in list(workbook.items())[:8]:
+            payload["detected_sheets"].append(sheet_name)
+            headers = [str(col) for col in list(frame.columns)[:12]]
+            payload["headers"].append({"sheet": sheet_name, "columns": headers})
+            rows = frame.head(5).where(pd.notna(frame.head(5)), None).values.tolist()
+            payload["raw_sample_rows"].append({"sheet": sheet_name, "rows": rows})
+            payload["normalized_sample_rows"].append(
+                {
+                    "sheet": sheet_name,
+                    "rows": [
+                        [" ".join(str(cell or "").split()) for cell in row[:12]]
+                        for row in rows
+                    ],
+                }
+            )
+
+    def _append_pdf_failure_debug(self, payload: dict[str, Any], path: Path) -> None:
+        import pdfplumber
+
+        with pdfplumber.open(path) as pdf:
+            for page in pdf.pages[:8]:
+                page_text = page.extract_text() or ""
+                tables = page.extract_tables() or []
+                page_payload = {
+                    "page_number": page.page_number,
+                    "text_head": page_text.splitlines()[:20],
+                    "table_count": len(tables),
+                }
+                payload["detected_pages"].append(page_payload)
+                for table_index, table in enumerate(tables[:3]):
+                    if not table:
+                        continue
+                    payload["headers"].append(
+                        {
+                            "page_number": page.page_number,
+                            "table_index": table_index,
+                            "columns": [str(cell or "") for cell in table[0][:12]],
+                        }
+                    )
+                    sample_rows = table[1:6]
+                    payload["raw_sample_rows"].append(
+                        {
+                            "page_number": page.page_number,
+                            "table_index": table_index,
+                            "rows": sample_rows,
+                        }
+                    )
+                    payload["normalized_sample_rows"].append(
+                        {
+                            "page_number": page.page_number,
+                            "table_index": table_index,
+                            "rows": [
+                                [" ".join(str(cell or "").split()) for cell in row[:12]]
+                                for row in sample_rows
+                            ],
+                        }
+                    )
+
 
 def _source_hash(row: dict[str, Any]) -> str:
     return "|".join(
@@ -1140,6 +1229,10 @@ def _merge_parse_outcomes(primary: dict[str, Any], secondary: dict[str, Any]) ->
 
 
 def _irrelevant_document_issue(document: dict[str, Any]) -> str | None:
+    month_mismatch = _report_month_mismatch_issue(document)
+    if month_mismatch:
+        return month_mismatch
+
     values = [
         document.get("source_url"),
         document.get("file_name"),
@@ -1165,6 +1258,68 @@ def _irrelevant_document_issue(document: dict[str, Any]) -> str | None:
     for marker in blocked_markers:
         if marker in text:
             return f"skipped_irrelevant_document:{marker}"
+    return None
+
+
+def _report_month_mismatch_issue(document: dict[str, Any]) -> str | None:
+    report_month = _to_date_or_none(document.get("report_month"))
+    if not report_month:
+        return None
+
+    values = [
+        document.get("source_url"),
+        document.get("file_name"),
+        document.get("storage_key"),
+        document.get("storage_path"),
+    ]
+    text = " ".join(str(value or "").lower() for value in values)
+    source_month = _source_month_from_text(text)
+    if not source_month:
+        return None
+
+    if source_month.year == report_month.year and source_month.month == report_month.month:
+        return None
+    return f"skipped_irrelevant_document:report_month_mismatch:{source_month.isoformat()}!={report_month.isoformat()}"
+
+
+def _source_month_from_text(text: str) -> date | None:
+    text = unquote(str(text or "")).lower()
+    month_names = {
+        "jan": 1,
+        "january": 1,
+        "feb": 2,
+        "february": 2,
+        "mar": 3,
+        "march": 3,
+        "apr": 4,
+        "april": 4,
+        "may": 5,
+        "jun": 6,
+        "june": 6,
+        "jul": 7,
+        "july": 7,
+        "aug": 8,
+        "august": 8,
+        "sep": 9,
+        "sept": 9,
+        "september": 9,
+        "oct": 10,
+        "october": 10,
+        "nov": 11,
+        "november": 11,
+        "dec": 12,
+        "december": 12,
+    }
+    name_pattern = "|".join(sorted(month_names, key=len, reverse=True))
+
+    for match in re.finditer(rf"\b\d{{1,2}}[-_\s]+({name_pattern})[-_\s]+(20\d{{2}})\b", text):
+        return date(int(match.group(2)), month_names[match.group(1)], 1)
+    for match in re.finditer(rf"\b({name_pattern})[-_\s]+(20\d{{2}})\b", text):
+        return date(int(match.group(2)), month_names[match.group(1)], 1)
+    for match in re.finditer(r"\b(20\d{2})[-_/](0[1-9]|1[0-2])\b", text):
+        return date(int(match.group(1)), int(match.group(2)), 1)
+    for match in re.finditer(r"\b(0[1-9]|1[0-2])[-_/](20\d{2})\b", text):
+        return date(int(match.group(2)), int(match.group(1)), 1)
     return None
 
 

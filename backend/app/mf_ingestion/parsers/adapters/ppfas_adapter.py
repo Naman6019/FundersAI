@@ -136,7 +136,7 @@ class PPFASAdapter(BaseAMCAdapter):
             )
 
         method = (form.get("method") or "GET").upper()
-        action = form.get("action") or url
+        action = form.get("action") or _ppfas_confirmation_url(url)
         action_url = urljoin(url, action)
         payload = build_confirmation_payload(form)
 
@@ -331,6 +331,14 @@ def build_confirmation_payload(form) -> dict[str, str]:
     return payload
 
 
+def _ppfas_confirmation_url(url: str) -> str:
+    parsed = urlparse(url)
+    path = (parsed.path or "").lower()
+    if "/statutory-disclosures/" in path:
+        return "/statutory-disclosures/ConfirmCitizenship.php"
+    return "/downloads/ConfirmCitizenship.php"
+
+
 def extract_anchor_links(base_url: str, html: str) -> list[dict[str, str]]:
     soup = BeautifulSoup(html, "html.parser")
     links: list[dict[str, str]] = []
@@ -404,6 +412,7 @@ def classify_documents(
         if report_month:
             recency_score = (report_month.year * 12 + report_month.month) * 10
         ter_penalty = -80 if any(keyword in combined for keyword in TER_KEYWORDS) else 0
+        cadence_penalty = -500 if document_type == "portfolio_disclosure" and "fortnightly" in combined else 0
         docs.append(
             DiscoveredDocument(
                 amc_name=source.amc_name,
@@ -414,7 +423,7 @@ def classify_documents(
                 discovery_page_url=discovery_page_url,
                 file_ext=file_ext,
                 report_month=report_month,
-                priority_score=base_score + month_score + recency_score + ter_penalty,
+                priority_score=base_score + month_score + recency_score + ter_penalty + cadence_penalty,
             )
         )
     return docs
@@ -718,9 +727,10 @@ def _extract_holdings_from_rows(rows: list[list[object]], headers: list[str]) ->
         if not existing or float(row.get("percent_aum") or 0.0) > float(existing.get("percent_aum") or 0.0):
             deduped[key] = row
 
-    unique_components = _scale_percent_aum_if_necessary(list(deduped.values()))
+    unique_components = list(deduped.values())
     holdings = [row for row in unique_components if row.get("isin")]
-    total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in unique_components), 6)
+    holdings = _scale_percent_aum_if_necessary(holdings)
+    total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in holdings), 6)
 
     return holdings, total_percent
 

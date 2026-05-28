@@ -508,40 +508,6 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
     const comparison = mapQuantResponse(auxiliaryData?.quant_data) || fetchedComparison;
     const whyBetter = getWhyBetter(auxiliaryData?.quant_data) || fetchedWhyBetter;
     const entities = Object.keys(comparison);
-    const metrics: Array<[string, string, (value: MetricValue) => string]> = [
-      ['Price', 'price', formatPrice],
-      ['Market Cap', 'market_cap', formatMarketCap],
-      ['Enterprise Value', 'enterprise_value', formatMarketCap],
-      ['Beta', 'beta', formatValue],
-      ['Alpha vs Nifty', 'alpha_vs_nifty', (val) => {
-        const num = toNumber(val);
-        return num !== null ? formatPercent(num) : 'Not available';
-      }],
-      ['P/E', 'fundamentals.pe', formatValue],
-      ['P/B', 'fundamentals.pb', formatValue],
-      ['P/S', 'fundamentals.ps', formatValue],
-      ['EV/EBITDA', 'fundamentals.ev_ebitda', formatValue],
-      ['ROE', 'fundamentals.roe', formatRatioPercent],
-      ['ROCE', 'fundamentals.roce', formatRatioPercent],
-      ['ROA', 'fundamentals.roa', formatRatioPercent],
-      ['Debt/Equity', 'fundamentals.debt_to_equity', formatValue],
-      ['Dividend Yield', 'fundamentals.dividend_yield', formatRatioPercent],
-      ['Sales Growth (1Y)', 'fundamentals.sales_growth_1y', formatRatioPercent],
-      ['Sales Growth (3Y)', 'fundamentals.sales_growth_3y', formatRatioPercent],
-      ['Profit Growth (1Y)', 'fundamentals.profit_growth_1y', formatRatioPercent],
-      ['Profit Growth (3Y)', 'fundamentals.profit_growth_3y', formatRatioPercent],
-      ['EPS Growth (1Y)', 'fundamentals.eps_growth_1y', formatRatioPercent],
-      ['EPS Growth (3Y)', 'fundamentals.eps_growth_3y', formatRatioPercent],
-      ['Latest Quarterly Revenue', 'fundamentals.revenue_qtr', formatValue],
-      ['Latest Quarterly Net Profit', 'fundamentals.net_profit_qtr', formatValue],
-      ['Latest Annual Revenue', 'fundamentals.revenue_ann', formatValue],
-      ['Latest Annual Net Profit', 'fundamentals.net_profit_ann', formatValue],
-      ['Promoter Holding', 'fundamentals.promoter_holding', formatRatioPercent],
-      ['FII Holding', 'fundamentals.fii_holding', formatRatioPercent],
-      ['DII Holding', 'fundamentals.dii_holding', formatRatioPercent],
-      ['Public Holding', 'fundamentals.public_holding', formatRatioPercent],
-      ['Data Source', 'fundamentals.source', formatValue],
-    ];
     const colors = ['#5eead4', '#60a5fa', '#f97316', '#a78bfa'];
     const hasFundamentals = entities.some(entity => {
       const fundamentals = comparison[entity]?.fundamentals as FundamentalMetric | undefined;
@@ -556,7 +522,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
     const staleEntities = entities.filter(entity => Boolean(comparison[entity]?.source_summary?.stale));
 
     const renderBarChart = (title: string, rows: Record<string, string | number | null>[], suffix = '%') => (
-      <section className="rounded-2xl border border-[#2d3b55] bg-[#111b2d] p-4">
+      <section className="rounded-2xl border border-[#2d3b55] bg-[#111b2d] p-4 shadow-md">
         <h3 className="mb-3 text-sm font-semibold text-[#d7e4fb]">{title}</h3>
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
@@ -581,15 +547,113 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
       </section>
     );
 
+    const scaleGroup = [
+      { label: 'Price', key: 'price', formatter: formatPrice },
+      { label: 'Market Cap', key: 'market_cap', formatter: formatMarketCap },
+      { label: 'Enterprise Value', key: 'enterprise_value', formatter: formatMarketCap },
+    ];
+
+    const valuationGroup = [
+      { label: 'P/E Ratio', key: 'fundamentals.pe', formatter: formatValue },
+      { label: 'P/B Ratio', key: 'fundamentals.pb', formatter: formatValue },
+      { label: 'P/S Ratio', key: 'fundamentals.ps', formatter: formatValue },
+      { label: 'EV/EBITDA', key: 'fundamentals.ev_ebitda', formatter: formatValue },
+      { label: 'Dividend Yield', key: 'fundamentals.dividend_yield', formatter: formatRatioPercent },
+    ];
+
+    const qualityGroup = [
+      { label: 'Beta', key: 'beta', formatter: formatValue },
+      { label: 'Alpha vs Nifty', key: 'alpha_vs_nifty', formatter: (val: MetricValue) => {
+        const num = toNumber(val);
+        return num !== null ? formatPercent(num) : 'Not available';
+      }},
+      { label: 'ROE', key: 'fundamentals.roe', formatter: formatRatioPercent },
+      { label: 'ROCE', key: 'fundamentals.roce', formatter: formatRatioPercent },
+      { label: 'ROA', key: 'fundamentals.roa', formatter: formatRatioPercent },
+      { label: 'Debt/Equity', key: 'fundamentals.debt_to_equity', formatter: formatValue },
+    ];
+
+    const growthGroup = [
+      { label: 'Sales Growth (1Y)', key: 'fundamentals.sales_growth_1y', formatter: formatRatioPercent },
+      { label: 'Sales Growth (3Y)', key: 'fundamentals.sales_growth_3y', formatter: formatRatioPercent },
+      { label: 'Profit Growth (1Y)', key: 'fundamentals.profit_growth_1y', formatter: formatRatioPercent },
+      { label: 'Profit Growth (3Y)', key: 'fundamentals.profit_growth_3y', formatter: formatRatioPercent },
+      { label: 'EPS Growth (1Y)', key: 'fundamentals.eps_growth_1y', formatter: formatRatioPercent },
+      { label: 'EPS Growth (3Y)', key: 'fundamentals.eps_growth_3y', formatter: formatRatioPercent },
+    ];
+
+    const financialsGroup = [
+      { label: 'Latest Qtr Revenue', key: 'fundamentals.revenue_qtr', formatter: formatValue },
+      { label: 'Latest Qtr Net Profit', key: 'fundamentals.net_profit_qtr', formatter: formatValue },
+      { label: 'Latest Annual Revenue', key: 'fundamentals.revenue_ann', formatter: formatValue },
+      { label: 'Latest Annual Net Profit', key: 'fundamentals.net_profit_ann', formatter: formatValue },
+    ];
+
+    const shareholdingGroup = [
+      { label: 'Promoter Holding', key: 'fundamentals.promoter_holding', formatter: formatRatioPercent },
+      { label: 'FII Holding', key: 'fundamentals.fii_holding', formatter: formatRatioPercent },
+      { label: 'DII Holding', key: 'fundamentals.dii_holding', formatter: formatRatioPercent },
+      { label: 'Public Holding', key: 'fundamentals.public_holding', formatter: formatRatioPercent },
+      { label: 'Data Source', key: 'fundamentals.source', formatter: formatValue },
+    ];
+
+    const renderStockGroupedTable = (title: string, rows: Array<{ label: string; key: string; formatter: (val: MetricValue) => string }>) => {
+      const getStockWinner = (label: string, valA: number | null, valB: number | null): 'a' | 'b' | null => {
+        if (valA === null || valB === null) return null;
+        if (valA === valB) return null;
+        const labelLower = label.toLowerCase();
+        
+        if (labelLower.includes('p/e') || labelLower.includes('p/b') || labelLower.includes('p/s') || labelLower.includes('ev/ebitda') || labelLower.includes('debt/equity')) {
+          return valA < valB ? 'a' : 'b';
+        }
+        return valA > valB ? 'a' : 'b';
+      };
+
+      return (
+        <div className="rounded-2xl border border-white/10 bg-[#0f172a]/60 overflow-hidden shadow-lg backdrop-blur-md">
+          <div className="px-5 py-3.5 border-b border-white/10 bg-white/[0.02]">
+            <h4 className="text-sm font-semibold text-white tracking-wide">{title}</h4>
+          </div>
+          <div className="divide-y divide-white/5">
+            {rows.map((row) => {
+              const valA = metricValue(comparison[entities[0]], row.key);
+              const valB = metricValue(comparison[entities[1]], row.key);
+              const numA = toNumber(valA);
+              const numB = toNumber(valB);
+              const winner = getStockWinner(row.label, numA, numB);
+
+              return (
+                <div key={row.label} className="grid grid-cols-[1.5fr_1fr_1fr] text-sm items-center hover:bg-white/[0.01] transition-colors">
+                  <div className="px-5 py-3 font-medium text-slate-300">{row.label}</div>
+                  <div className={`px-5 py-3 text-left ${winner === 'a' ? 'text-emerald-300 font-semibold bg-emerald-500/5' : 'text-slate-200'}`}>
+                    <span className="flex items-center gap-1.5 font-mono">
+                      {row.formatter(valA)}
+                      {winner === 'a' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+                    </span>
+                  </div>
+                  <div className={`px-5 py-3 text-left ${winner === 'b' ? 'text-emerald-300 font-semibold bg-emerald-500/5' : 'text-slate-200'}`}>
+                    <span className="flex items-center gap-1.5 font-mono">
+                      {row.formatter(valB)}
+                      {winner === 'b' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    };
+
     return (
-      <div className="comparison-detail finance-compare-wrap p-3 sm:p-6 h-full flex flex-col overflow-hidden">
-        <div className="mb-5 rounded-2xl border border-[#2f3b57] bg-[#121a2d] px-4 py-4 sm:px-5">
+      <div className="comparison-detail finance-compare-wrap p-3 sm:p-6 h-full flex flex-col overflow-hidden max-w-7xl mx-auto w-full">
+        <div className="mb-5 rounded-2xl border border-[#2d3b55] bg-[#111b2d] px-5 py-4 shadow-md">
           <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Stock Comparison Console</h2>
           <p className="text-sm text-[#a7bad9] mt-1">
             Source-neutral valuation, growth, quality, and ownership comparison
           </p>
         </div>
-        <div className="custom-scroll flex-1 space-y-5 overflow-y-auto pr-2">
+        <div className="custom-scroll flex-1 space-y-5 overflow-y-auto pr-2 pb-10">
           {staleEntities.length > 0 && (
             <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm text-amber-100">
               Data may be stale for: {staleEntities.join(', ')}.
@@ -597,7 +661,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
           )}
           <WhyBetterPanel payload={whyBetter} />
           {priceRows.length > 0 && (
-            <section className="rounded-2xl border border-[#2d3b55] bg-[#111b2d] p-4">
+            <section className="rounded-2xl border border-[#2d3b55] bg-[#111b2d] p-4 shadow-md">
               <h3 className="mb-3 text-sm font-semibold text-[#d7e4fb]">Price History</h3>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
@@ -629,29 +693,17 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
               {stockError || 'Fundamentals are unavailable because no fundamentals provider has supplied these fields yet.'}
             </div>
           )}
-          <div className="overflow-auto rounded-2xl border border-[#2d3b55] bg-[#10192a]">
-            <table className="w-full min-w-[760px] border-collapse text-sm">
-              <thead className="bg-[#1a2740] text-[#d7e4fb]">
-                <tr>
-                  <th className="sticky left-0 z-10 bg-[#1a2740] px-4 py-3 text-left font-semibold">Metric</th>
-                  {entities.map(entity => (
-                    <th key={entity} className="px-4 py-3 text-left font-semibold">{entity}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {metrics.map(([label, key, formatter]) => (
-                  <tr key={label} className="border-t border-white/10 odd:bg-[#111e33] even:bg-[#0f1a2d]">
-                    <td className="sticky left-0 z-10 bg-inherit px-4 py-3 font-medium text-[#bdd0ee]">{label}</td>
-                    {entities.map(entity => (
-                      <td key={`${entity}-${label}`} className="px-4 py-3 text-white">
-                        {formatter(metricValue(comparison[entity], key))}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          
+          <div className="space-y-4">
+            <h3 className="text-base font-bold text-white tracking-tight mt-6 mb-2">Detailed Metric Comparison</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderStockGroupedTable('Scale & Pricing', scaleGroup)}
+              {renderStockGroupedTable('Valuation Ratios', valuationGroup)}
+              {renderStockGroupedTable('Quality & Risk', qualityGroup)}
+              {renderStockGroupedTable('Growth Profile', growthGroup)}
+              {renderStockGroupedTable('Financial Position', financialsGroup)}
+              {renderStockGroupedTable('Shareholding & Metadata', shareholdingGroup)}
+            </div>
           </div>
         </div>
       </div>
@@ -666,6 +718,107 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
     auxiliaryData?.quant_data && typeof auxiliaryData.quant_data === 'object'
       ? (auxiliaryData.quant_data as { comparison?: Record<string, unknown> }).comparison
       : auxiliaryData?.comparison;
+
+  const getWinner = (
+    label: string, 
+    valA: number | null, 
+    valB: number | null
+  ): 'a' | 'b' | null => {
+    if (valA === null || valB === null) return null;
+    if (valA === valB) return null;
+
+    const labelLower = label.toLowerCase();
+    if (labelLower.includes('expense')) {
+      return valA < valB ? 'a' : 'b';
+    }
+    if (labelLower.includes('drawdown')) {
+      return valA > valB ? 'a' : 'b';
+    }
+    if (labelLower.includes('volatility')) {
+      return valA < valB ? 'a' : 'b';
+    }
+    return valA > valB ? 'a' : 'b';
+  };
+
+  const renderGroupedTable = (title: string, rows: Array<{ label: string; a: string | number | null; b: string | number | null; winner: 'a' | 'b' | null }>) => (
+    <div className="rounded-2xl border border-white/10 bg-[#0f172a]/60 overflow-hidden shadow-lg backdrop-blur-md">
+      <div className="px-5 py-3.5 border-b border-white/10 bg-white/[0.02]">
+        <h4 className="text-sm font-semibold text-white tracking-wide">{title}</h4>
+      </div>
+      <div className="divide-y divide-white/5">
+        {rows.map((row) => (
+          <div key={row.label} className="grid grid-cols-[1.5fr_1fr_1fr] text-sm items-center hover:bg-white/[0.01] transition-colors">
+            <div className="px-5 py-3 font-medium text-slate-300">{row.label}</div>
+            <div className={`px-5 py-3 text-left ${row.winner === 'a' ? 'text-emerald-300 font-semibold bg-emerald-500/5' : 'text-slate-200'}`}>
+              <span className="flex items-center gap-1.5 font-mono">
+                {row.a === 'N/A' || row.a === null ? <span className="text-slate-500">N/A</span> : row.a}
+                {row.winner === 'a' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+              </span>
+            </div>
+            <div className={`px-5 py-3 text-left ${row.winner === 'b' ? 'text-emerald-300 font-semibold bg-emerald-500/5' : 'text-slate-200'}`}>
+              <span className="flex items-center gap-1.5 font-mono">
+                {row.b === 'N/A' || row.b === null ? <span className="text-slate-500">N/A</span> : row.b}
+                {row.winner === 'b' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const Skeleton = () => (
+    <div className="flex-1 space-y-6 overflow-hidden animate-pulse max-w-7xl mx-auto w-full p-3 sm:p-6">
+      <div className="h-24 rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5 space-y-3">
+        <div className="h-6 w-1/3 rounded bg-white/[0.05]" />
+        <div className="h-4 w-1/2 rounded bg-white/[0.05]" />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {[1, 2].map((i) => (
+          <div key={i} className="rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5 space-y-3">
+            <div className="h-6 w-1/2 rounded bg-white/[0.05]" />
+            <div className="h-4 w-3/4 rounded bg-white/[0.05]" />
+            <div className="h-5 w-24 rounded bg-white/[0.05]" />
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5 space-y-2">
+        <div className="h-5 w-32 rounded bg-white/[0.05]" />
+        <div className="h-4 w-full rounded bg-white/[0.05]" />
+        <div className="h-4 w-5/6 rounded bg-white/[0.05]" />
+      </div>
+
+      <div className="rounded-3xl border border-[#2d3b55] bg-[#0e182b] p-5 h-72 flex items-end justify-between gap-4">
+        {[...Array(12)].map((_, i) => (
+          <div key={i} className="bg-white/[0.03] rounded-t-lg w-full" style={{ height: `${20 + Math.random() * 60}%` }} />
+        ))}
+      </div>
+
+      <div className="space-y-4">
+        <div className="h-6 w-44 rounded bg-white/[0.05]" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1, 2].map((i) => (
+            <div key={i} className="rounded-2xl border border-white/10 bg-[#0f172a]/60 overflow-hidden">
+              <div className="p-4 border-b border-white/10 bg-white/[0.02]">
+                <div className="h-4 w-32 rounded bg-white/[0.05]" />
+              </div>
+              <div className="p-4 space-y-3">
+                {[1, 2, 3].map((j) => (
+                  <div key={j} className="flex justify-between">
+                    <div className="h-3 w-20 rounded bg-white/[0.05]" />
+                    <div className="h-3 w-12 rounded bg-white/[0.05]" />
+                    <div className="h-3 w-12 rounded bg-white/[0.05]" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="comparison-detail finance-compare-wrap p-3 sm:p-6 h-full flex flex-col overflow-hidden max-w-7xl mx-auto w-full">
@@ -714,12 +867,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
         </div>
       </div>
 
-      {loading && (
-        <div className="flex-1 flex flex-col items-center justify-center space-y-4">
-          <div className="w-12 h-12 border-4 border-[#4f8ff7] border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-[#4f8ff7] font-medium">Fetching real-time NAV data…</p>
-        </div>
-      )}
+      {loading && <Skeleton />}
 
       {error && (
         <div className="flex-1 flex flex-col items-center justify-center p-8 bg-red-500/10 rounded-3xl border border-red-500/20 mx-4">
@@ -785,19 +933,25 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
             const aLastNav = aCov?.last_nav_date;
             const bLastNav = bCov?.last_nav_date;
 
-            const tableRows = [
-              { label: '1Y Return', a: formatPercent(aReturn1Y), b: formatPercent(bReturn1Y) },
-              { label: '3Y Return', a: formatPercent(aReturn3Y), b: formatPercent(bReturn3Y) },
-              { label: '5Y Return', a: formatPercent(aReturn5Y), b: formatPercent(bReturn5Y) },
-              { label: 'Volatility (1Y)', a: formatPercent(aVol), b: formatPercent(bVol) },
-              { label: 'Sharpe Ratio', a: formatPlain(aSharpe), b: formatPlain(bSharpe) },
-              { label: 'Alpha vs Nifty', a: formatPercent(aAlpha), b: formatPercent(bAlpha) },
-              { label: 'Beta', a: formatPlain(aBeta), b: formatPlain(bBeta) },
-              { label: 'Max Drawdown', a: formatPercent(aDrawdown), b: formatPercent(bDrawdown) },
-              { label: 'Expense Ratio', a: formatExpense(aRecord?.expense_ratio ?? fundA.details?.expense_ratio), b: formatExpense(bRecord?.expense_ratio ?? fundB.details?.expense_ratio) },
-              { label: 'AUM', a: formatAum(aRecord?.aum ?? fundA.details?.aum), b: formatAum(bRecord?.aum ?? fundB.details?.aum) },
-              { label: 'NAV history points', a: formatStringOrNA(aHistoryPts), b: formatStringOrNA(bHistoryPts) },
-              { label: 'Latest NAV date', a: formatStringOrNA(aLastNav), b: formatStringOrNA(bLastNav) },
+            const pGroup = [
+              { label: '1Y Return', a: formatPercent(aReturn1Y), b: formatPercent(bReturn1Y), winner: getWinner('1Y Return', aReturn1Y, bReturn1Y) },
+              { label: '3Y Return', a: formatPercent(aReturn3Y), b: formatPercent(bReturn3Y), winner: getWinner('3Y Return', aReturn3Y, bReturn3Y) },
+              { label: '5Y Return', a: formatPercent(aReturn5Y), b: formatPercent(bReturn5Y), winner: getWinner('5Y Return', aReturn5Y, bReturn5Y) },
+              { label: 'Alpha vs Nifty', a: formatPercent(aAlpha), b: formatPercent(bAlpha), winner: getWinner('Alpha', aAlpha, bAlpha) },
+            ];
+
+            const rGroup = [
+              { label: 'Volatility (1Y)', a: formatPercent(aVol), b: formatPercent(bVol), winner: getWinner('Volatility', aVol, bVol) },
+              { label: 'Sharpe Ratio', a: formatPlain(aSharpe), b: formatPlain(bSharpe), winner: getWinner('Sharpe', aSharpe, bSharpe) },
+              { label: 'Beta', a: formatPlain(aBeta), b: formatPlain(bBeta), winner: getWinner('Beta', aBeta, bBeta) },
+              { label: 'Max Drawdown', a: formatPercent(aDrawdown), b: formatPercent(bDrawdown), winner: getWinner('Drawdown', aDrawdown, bDrawdown) },
+            ];
+
+            const dGroup = [
+              { label: 'Expense Ratio', a: formatExpense(aRecord?.expense_ratio ?? fundA.details?.expense_ratio), b: formatExpense(bRecord?.expense_ratio ?? fundB.details?.expense_ratio), winner: getWinner('Expense Ratio', toNumber(aRecord?.expense_ratio ?? fundA.details?.expense_ratio), toNumber(bRecord?.expense_ratio ?? fundB.details?.expense_ratio)) },
+              { label: 'AUM', a: formatAum(aRecord?.aum ?? fundA.details?.aum), b: formatAum(bRecord?.aum ?? fundB.details?.aum), winner: getWinner('AUM', toNumber(aRecord?.aum ?? fundA.details?.aum), toNumber(bRecord?.aum ?? fundB.details?.aum)) },
+              { label: 'NAV points synced', a: aHistoryPts ? String(aHistoryPts) : 'N/A', b: bHistoryPts ? String(bHistoryPts) : 'N/A', winner: getWinner('NAV points', toNumber(aHistoryPts), toNumber(bHistoryPts)) },
+              { label: 'Latest NAV Date', a: aLastNav ? String(aLastNav) : 'N/A', b: bLastNav ? String(bLastNav) : 'N/A', winner: null },
             ];
 
             const aFreshness = fundA.freshness as Record<string, unknown> | undefined;
@@ -864,34 +1018,12 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                   />
                 </div>
 
-                <div className="rounded-3xl border border-[#2d3b55] bg-[#101b2d] overflow-hidden">
-                  <div className="p-5 border-b border-[#2d3b55]">
-                    <h3 className="text-base font-semibold text-white">Comparison metrics</h3>
-                    <p className="text-xs text-[#8ea7cd] mt-1">Returns, risk, cost, scale, and data quality</p>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-[#15233d] text-[#a7bad9]">
-                        <tr>
-                          <th className="px-5 py-4 text-left font-medium">Metric</th>
-                          <th className="px-5 py-4 text-left font-medium">{aLabel}</th>
-                          <th className="px-5 py-4 text-left font-medium">{bLabel}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#2d3b55]">
-                        {tableRows.map((row) => (
-                          <tr key={row.label} className="bg-[#0e182b] hover:bg-[#15233d] transition-colors">
-                            <td className="px-5 py-3 font-medium text-[#bdd0ee]">{row.label}</td>
-                            <td className="px-5 py-3 text-white">
-                              {row.a === 'N/A' ? <span className="text-slate-500">N/A</span> : row.a}
-                            </td>
-                            <td className="px-5 py-3 text-white">
-                              {row.b === 'N/A' ? <span className="text-slate-500">N/A</span> : row.b}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                <div className="space-y-4 mt-6">
+                  <h3 className="text-base font-bold text-white tracking-tight">Detailed Metric Comparison</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {renderGroupedTable('Returns & Performance', pGroup)}
+                    {renderGroupedTable('Risk & Volatility Indicators', rGroup)}
+                    {renderGroupedTable('Costs, Scale & Data Quality', dGroup)}
                   </div>
                 </div>
 

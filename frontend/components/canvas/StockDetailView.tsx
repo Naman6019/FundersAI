@@ -52,21 +52,21 @@ function ProviderSection({ title, block }: { title: string; block?: ProviderBloc
   const rows = block?.ok ? firstRows(block.data) : [];
 
   return (
-    <section className="border-t border-white/10 py-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--accent-color)]">{title}</h3>
-        {block?.fetchedAt && <span className="text-xs text-gray-500">{new Date(block.fetchedAt).toLocaleString()}</span>}
+    <section className="rounded-2xl border border-white/10 bg-[#0f172a]/60 p-5 shadow-lg backdrop-blur-md">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-white">{title}</h3>
+        {block?.fetchedAt && <span className="text-xs text-slate-400 font-mono">{new Date(block.fetchedAt).toLocaleString('en-IN')}</span>}
       </div>
       {!rows.length ? (
-        <p className="text-sm text-gray-400">{UNAVAILABLE}</p>
+        <p className="text-sm text-slate-400 italic">{UNAVAILABLE}</p>
       ) : (
         <div className="space-y-3">
           {rows.map((row, idx) => (
-            <div key={idx} className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm text-gray-200">
-              <div className="font-medium text-white">
+            <div key={idx} className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-sky-500/20">
+              <div className="font-semibold text-slate-200">
                 {pick(row, ['title', 'subject', 'companyName', 'name', 'action_type', 'type']) || 'Provider data'}
               </div>
-              <div className="mt-1 text-gray-400">
+              <div className="mt-1.5 text-xs text-slate-400 leading-relaxed">
                 {pick(row, ['description', 'details', 'purpose', 'summary', 'industry']) || JSON.stringify(row).slice(0, 180)}
               </div>
             </div>
@@ -102,46 +102,78 @@ export default function StockDetailView({ stockId }: { stockId?: string }) {
     void fetchStock();
   }, [stockId]);
 
-  if (!stockId) return <div className="p-4">No stock selected.</div>;
+  if (!stockId) return <div className="p-4 text-slate-400">No stock selected.</div>;
 
   const metadata = data?.metadata || {};
   const provider = data?.indianapi || {};
 
-  return (
-    <div className="stock-detail h-full overflow-y-auto rounded-2xl border border-white/10 bg-[var(--panel-bg)] p-6 text-white">
-      <div className="mb-5">
-        <h2 className="text-2xl font-semibold">{String(metadata.company_name || stockId)}</h2>
-        <p className="text-sm text-[var(--text-secondary)]">{String(metadata.industry || metadata.sector || 'NSE stock research')}</p>
+  const Skeleton = () => (
+    <div className="space-y-6 animate-pulse">
+      <div className="space-y-2 pb-4 border-b border-white/5">
+        <div className="h-8 w-2/3 rounded-lg bg-white/[0.05]" />
+        <div className="h-4 w-1/3 rounded-md bg-white/[0.05]" />
       </div>
 
-      {loading && <div className="text-[var(--accent-color)]">Loading stock data…</div>}
-      {error && <div className="text-red-400">{UNAVAILABLE}</div>}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-16 rounded-xl border border-white/10 bg-white/[0.03]" />
+        ))}
+      </div>
+
+      <div className="space-y-4 pt-4 border-t border-white/5">
+        <div className="h-6 w-32 rounded bg-white/[0.05]" />
+        <div className="space-y-3">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-20 rounded-xl border border-white/10 bg-white/[0.02]" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="stock-detail h-full flex flex-col text-slate-100 overflow-hidden">
+      {loading && <Skeleton />}
+      {error && (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400">
+          {UNAVAILABLE}
+        </div>
+      )}
 
       {!loading && !error && (
-        <>
-          <section className="grid grid-cols-2 gap-3 pb-4 md:grid-cols-4">
-            <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-              <div className="text-xs text-gray-400">Price</div>
-              <div className="text-lg font-medium">{String(data?.latest_price?.close ?? 'N/A')}</div>
+        <div className="flex-1 overflow-y-auto pr-2 custom-scroll space-y-6 pb-6">
+          <div className="mb-4 border-b border-white/10 pb-4">
+            <h2 className="text-2xl font-bold tracking-tight text-white mb-1">{String(metadata.company_name || stockId)}</h2>
+            <p className="text-xs text-slate-400">{String(metadata.industry || metadata.sector || 'NSE stock research')}</p>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-sky-500/20">
+              <div className="text-slate-400 text-xs mb-1">Price</div>
+              <div className="text-lg font-bold text-sky-300">{String(data?.latest_price?.close ?? 'N/A')}</div>
             </div>
-            <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-              <div className="text-xs text-gray-400">P/E</div>
-              <div className="text-lg font-medium">{String(data?.ratios?.pe ?? 'N/A')}</div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-sky-500/20">
+              <div className="text-slate-400 text-xs mb-1">P/E</div>
+              <div className="text-lg font-bold text-slate-200">{String(data?.ratios?.pe ?? 'N/A')}</div>
             </div>
-            <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-              <div className="text-xs text-gray-400">Market Cap</div>
-              <div className="text-lg font-medium">{String(data?.ratios?.market_cap ?? 'N/A')}</div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-sky-500/20">
+              <div className="text-slate-400 text-xs mb-1">Market Cap</div>
+              <div className="text-lg font-bold text-slate-200">{String(data?.ratios?.market_cap ?? 'N/A')}</div>
             </div>
-            <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-              <div className="text-xs text-gray-400">Source</div>
-              <div className="text-sm font-medium">{String(data?.source_summary?.metadata || 'N/A')}</div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-sky-500/20">
+              <div className="text-slate-400 text-xs mb-1">Source</div>
+              <div className="text-sm font-semibold text-slate-200 truncate" title={String(data?.source_summary?.metadata || 'N/A')}>
+                {String(data?.source_summary?.metadata || 'N/A')}
+              </div>
             </div>
-          </section>
+          </div>
 
-          <ProviderSection title="Company Overview" block={provider.profile} />
-          <ProviderSection title="Corporate Actions" block={provider.corporate_actions} />
-          <ProviderSection title="Recent Announcements" block={provider.recent_announcements} />
-        </>
+          <div className="space-y-6">
+            <ProviderSection title="Company Overview" block={provider.profile} />
+            <ProviderSection title="Corporate Actions" block={provider.corporate_actions} />
+            <ProviderSection title="Recent Announcements" block={provider.recent_announcements} />
+          </div>
+        </div>
       )}
     </div>
   );

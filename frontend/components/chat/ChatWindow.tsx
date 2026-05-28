@@ -60,6 +60,7 @@ export default function ChatWindow() {
   const [isHistoryReady, setIsHistoryReady] = useState(!hasSupabaseBrowserEnv);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const initialQuerySentRef = useRef(false);
 
@@ -70,9 +71,26 @@ export default function ChatWindow() {
   }, []);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    const scrollEl = scrollRef.current;
+    const contentEl = contentRef.current;
+    if (!scrollEl || !contentEl) return;
+
+    const scrollToBottom = () => {
+      scrollEl.scrollTop = scrollEl.scrollHeight;
+    };
+
+    // Scroll to bottom immediately
+    scrollToBottom();
+
+    // Create ResizeObserver to observe size changes of content and container
+    const observer = new ResizeObserver(() => {
+      scrollToBottom();
+    });
+
+    observer.observe(contentEl);
+    observer.observe(scrollEl);
+
+    return () => observer.disconnect();
   }, [messages, isProcessing]);
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -255,91 +273,50 @@ export default function ChatWindow() {
         </div>
       </header>
 
-      <div ref={scrollRef} className="custom-scroll flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-4 sm:px-5">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={
-              msg.role === 'user'
-                ? 'ml-auto w-fit max-w-[85%] rounded-2xl border border-sky-300/40 bg-[linear-gradient(140deg,#1d4f91,#2563eb)] px-4 py-3 text-sm text-[#f3f8ff]'
-                : 'mr-auto max-w-[92%] rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-relaxed text-slate-100'
-            }
-          >
-            {msg.role === 'system' ? (
-              <div className="chat-markdown text-sm">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                  {msg.content}
-                </ReactMarkdown>
-              </div>
-            ) : (
-              msg.content
-            )}
-            {msg.id === '1' && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-sky-300/45 hover:text-white" onClick={() => applySuggestion('Compare Parag Parikh Flexi Cap and ICICI Multi Asset Fund for long-term consistency.')}>Fund consistency</button>
-                <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-sky-300/45 hover:text-white" onClick={() => applySuggestion('Which of these two funds has lower expense ratio and better Sharpe?')}>Sharpe + cost</button>
-                <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-sky-300/45 hover:text-white" onClick={() => applySuggestion('Show NAV trend differences between Parag Parikh Flexi Cap and ICICI Multi Asset Fund.')}>NAV trend</button>
-              </div>
-            )}
-          </div>
-        ))}
+      <div ref={scrollRef} className="custom-scroll flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pt-4 sm:px-5">
+        <div ref={contentRef} className="flex flex-col gap-3 pb-8">
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={
+                msg.role === 'user'
+                  ? 'ml-auto w-fit max-w-[85%] rounded-2xl border border-sky-300/40 bg-[linear-gradient(140deg,#1d4f91,#2563eb)] px-4 py-3 text-sm text-[#f3f8ff]'
+                  : 'mr-auto max-w-[92%] rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-relaxed text-slate-100'
+              }
+            >
+              {msg.role === 'system' ? (
+                <div className="chat-markdown text-sm">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                    {msg.content}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                msg.content
+              )}
+              {msg.id === '1' && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-sky-300/45 hover:text-white" onClick={() => applySuggestion('Compare Parag Parikh Flexi Cap and ICICI Multi Asset Fund for long-term consistency.')}>Fund consistency</button>
+                  <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-sky-300/45 hover:text-white" onClick={() => applySuggestion('Which of these two funds has lower expense ratio and better Sharpe?')}>Sharpe + cost</button>
+                  <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-sky-300/45 hover:text-white" onClick={() => applySuggestion('Show NAV trend differences between Parag Parikh Flexi Cap and ICICI Multi Asset Fund.')}>NAV trend</button>
+                </div>
+              )}
+            </div>
+          ))}
 
-        <div className="rounded-xl border border-amber-300/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-100/90">
-          This is not investment advice. Verify data independently.
+          <div className="rounded-xl border border-amber-300/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-100/90">
+            This is not investment advice. Verify data independently.
+          </div>
         </div>
       </div>
 
-      <div className="space-y-2 border-t border-white/10 bg-[linear-gradient(180deg,rgba(2,8,24,0.95),rgba(2,6,18,0.98))] px-3 py-3 sm:px-4">
+      <div className="border-t border-white/10 bg-[#070b19] p-3 sm:p-4">
         {isProcessing && (
-          <div className="rounded-lg border border-sky-300/25 bg-sky-300/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-200">
-            Pipeline thinking…
+          <div className="mb-3 rounded-lg border border-sky-300/20 bg-sky-500/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-300 animate-pulse">
+            Thinking…
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          {[
-            { label: 'Auto', value: 'auto' },
-            { label: 'Stocks', value: 'stock' },
-            { label: 'Mutual Funds', value: 'mutual_fund' },
-          ].map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
-                assetType === option.value
-                  ? 'border-[#4f8ff7] bg-[#4f8ff7]/25 text-[#e2eeff]'
-                  : 'border-white/15 bg-white/[0.04] text-slate-300 hover:border-sky-300/45 hover:text-white'
-              }`}
-              onClick={() => setAssetType(option.value as AssetType)}
-              disabled={isProcessing}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          {[
-            { label: 'Canvas', value: 'canvas' },
-            { label: 'Chat', value: 'chat' },
-          ].map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
-                comparisonViewMode === option.value
-                  ? 'border-emerald-300/40 bg-emerald-300/15 text-emerald-100'
-                  : 'border-white/15 bg-white/[0.04] text-slate-300 hover:border-sky-300/45 hover:text-white'
-              }`}
-              onClick={() => setComparisonViewMode(option.value as ComparisonViewMode)}
-              disabled={isProcessing}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-end gap-2 rounded-xl border border-white/10 bg-white/[0.04] p-2 transition duration-200 focus-within:border-sky-500/50 focus-within:ring-2 focus-within:ring-sky-500/20">
+        <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-2 transition-all duration-300 focus-within:border-sky-500/40 focus-within:bg-white/[0.04] focus-within:ring-4 focus-within:ring-sky-500/10">
           <textarea
             ref={textareaRef}
             value={input}
@@ -350,16 +327,77 @@ export default function ChatWindow() {
                 handleSend();
               }
             }}
-            placeholder={assetType === 'mutual_fund' ? 'Compare PPFAS and ICICI funds for long-term consistency…' : assetType === 'stock' ? 'Stock research is in progress. Try fund comparison prompts.' : 'Ask for PPFAS vs ICICI comparison, risk, cost, or NAV view…'}
+            placeholder={
+              assetType === 'mutual_fund'
+                ? 'Compare PPFAS and ICICI funds for long-term consistency…'
+                : assetType === 'stock'
+                ? 'Stock research is in progress. Try fund comparison prompts.'
+                : 'Ask for PPFAS vs ICICI comparison, risk, cost, or NAV view…'
+            }
             rows={1}
             name="chat_message"
             autoComplete="off"
             aria-label="Type your message"
-            className="max-h-28 min-h-[2.5rem] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none"
+            className="max-h-28 min-h-[2.5rem] w-full resize-none bg-transparent px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none"
           />
-          <button className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-sky-300/45 bg-[linear-gradient(140deg,#1d4f91,#2563eb)] text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50" onClick={handleSend} aria-label="Send Message" disabled={isProcessing}>
-            <Send size={18} />
-          </button>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-2 px-1">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Asset Type selector */}
+              <div className="inline-flex rounded-full bg-white/[0.03] p-1 border border-white/5 gap-1">
+                {[
+                  { label: 'Auto', value: 'auto' },
+                  { label: 'Stocks', value: 'stock' },
+                  { label: 'Funds', value: 'mutual_fund' },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide transition-all ${
+                      assetType === option.value
+                        ? 'bg-sky-500/20 border border-sky-400/30 text-sky-200'
+                        : 'text-slate-400 hover:text-white border border-transparent'
+                    }`}
+                    onClick={() => setAssetType(option.value as AssetType)}
+                    disabled={isProcessing}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* View Mode selector */}
+              <div className="inline-flex rounded-full bg-white/[0.03] p-1 border border-white/5 gap-1">
+                {[
+                  { label: 'Canvas', value: 'canvas' },
+                  { label: 'Chat', value: 'chat' },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide transition-all ${
+                      comparisonViewMode === option.value
+                        ? 'bg-emerald-500/20 border border-emerald-400/30 text-emerald-200'
+                        : 'text-slate-400 hover:text-white border border-transparent'
+                    }`}
+                    onClick={() => setComparisonViewMode(option.value as ComparisonViewMode)}
+                    disabled={isProcessing}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={handleSend}
+              aria-label="Send Message"
+              disabled={isProcessing || !input.trim()}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500 text-slate-950 transition-all hover:bg-sky-400 hover:scale-105 active:scale-95 disabled:scale-100 disabled:cursor-not-allowed disabled:bg-white/5 disabled:text-slate-600"
+            >
+              <Send size={15} />
+            </button>
+          </div>
         </div>
       </div>
     </section>
