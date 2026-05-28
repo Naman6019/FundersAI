@@ -1,0 +1,962 @@
+.page {
+  min-height: 100vh;
+  background: #05070f;
+  color: #c5c6c7;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.page a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.nav {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 50;
+  background: rgba(11, 12, 16, 0.9);
+  border-bottom: 1px solid rgba(102, 252, 241, 0.13);
+  backdrop-filter: blur(18px);
+}
+
+.navInner,
+.shell {
+  width: min(1280px, calc(100% - 48px));
+  margin: 0 auto;
+}
+
+.navInner {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.logoMark {
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 0 14px rgba(102, 252, 241, 0.45);
+}
+
+.logoMark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.navLinks,
+.navActions {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.navLinks a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+  color: #c5c6c7;
+}
+
+.navLinks a:hover,
+.linkButton:hover {
+  color: #66fcf1;
+}
+
+.navActions {
+  gap: 12px;
+}
+
+.ghostButton,
+.primaryButton,
+.primaryButtonLarge,
+.secondaryButton,
+.menuButton {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.ghostButton {
+  padding: 8px 16px;
+  color: #c5c6c7;
+  background: transparent;
+  border-radius: 6px;
+}
+
+.ghostButton:hover {
+  color: #fff;
+  background: rgba(31, 40, 51, 0.6);
+}
+
+.primaryButton,
+.primaryButtonLarge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #05070f;
+  background: #66fcf1;
+  border-radius: 7px;
+  font-weight: 800;
+  box-shadow: 0 0 18px rgba(102, 252, 241, 0.32);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.primaryButton {
+  padding: 9px 20px;
+  font-size: 0.88rem;
+}
+
+.primaryButtonLarge {
+  padding: 12px 26px;
+  font-size: 0.92rem;
+}
+
+.primaryButton:hover,
+.primaryButtonLarge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 30px rgba(102, 252, 241, 0.55);
+}
+
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  min-height: 46px;
+  padding: 0 26px;
+  color: #fff;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+}
+
+.secondaryButton:hover {
+  color: #66fcf1;
+  background: rgba(102, 252, 241, 0.07);
+  border-color: rgba(102, 252, 241, 0.35);
+}
+
+.menuButton,
+.mobileMenu {
+  display: none;
+}
+
+.section,
+.sectionAlt,
+.footer {
+  padding: 96px 0;
+}
+
+.hero {
+  min-height: 100vh;
+  padding-top: 160px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  background:
+    linear-gradient(rgba(102, 252, 241, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(102, 252, 241, 0.03) 1px, transparent 1px),
+    radial-gradient(ellipse at 72% 18%, rgba(102, 252, 241, 0.12), transparent 42%),
+    #05070f;
+  background-size: 48px 48px, 48px 48px, auto, auto;
+}
+
+.sectionAlt,
+.footer {
+  background: #0b0c10;
+}
+
+.heroGrid,
+.aiGrid,
+.dataGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 56px;
+  align-items: center;
+}
+
+.overline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  color: #66fcf1;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.overline::before {
+  content: "";
+  width: 24px;
+  height: 1px;
+  background: #66fcf1;
+}
+
+.hero h1 {
+  margin: 0 0 20px;
+  color: #fff;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: clamp(2.4rem, 5vw, 3.8rem);
+  font-weight: 900;
+  line-height: 1.08;
+}
+
+.hero h1 span,
+.sectionHeading h2 span {
+  color: #66fcf1;
+}
+
+.heroCopy,
+.sectionHeading > p:last-child,
+.dataCopy,
+.footer p {
+  color: #8a9199;
+  line-height: 1.75;
+}
+
+.heroCopy {
+  max-width: 540px;
+  margin: 0 0 34px;
+  font-size: 1.05rem;
+}
+
+.ctaRow,
+.statRow,
+.tagRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.ctaRow {
+  margin-bottom: 42px;
+}
+
+.statRow {
+  gap: 28px;
+  color: #8a9199;
+  font-size: 0.83rem;
+}
+
+.statRow span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.statRow svg,
+.featureLabel svg,
+.aiHeader svg,
+.metricLine svg {
+  color: #66fcf1;
+}
+
+.terminalCard,
+.panel,
+.featureCard,
+.logPanel {
+  background: rgba(31, 40, 51, 0.65);
+  border: 1px solid rgba(102, 252, 241, 0.14);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.terminalCard {
+  overflow: hidden;
+}
+
+.terminalHeader,
+.logHead {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 16px;
+  background: rgba(11, 12, 16, 0.7);
+  border-bottom: 1px solid rgba(102, 252, 241, 0.1);
+  color: #8a9199;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+}
+
+.terminalHeader span {
+  flex: 1;
+  margin-left: 8px;
+}
+
+.terminalHeader strong,
+.logHead {
+  color: #66fcf1;
+  font-weight: 500;
+}
+
+.redDot,
+.yellowDot,
+.greenDot,
+.statusDot {
+  display: inline-block;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.redDot,
+.yellowDot,
+.greenDot {
+  width: 10px;
+  height: 10px;
+}
+
+.redDot {
+  background: #ff5f57;
+}
+
+.yellowDot {
+  background: #febc2e;
+}
+
+.greenDot {
+  background: #28c840;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  background: #66fcf1;
+  box-shadow: 0 0 8px #66fcf1;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+.fundTableHead,
+.fundRow {
+  display: grid;
+  grid-template-columns: 1fr 72px 52px 56px;
+  gap: 4px;
+  padding: 8px 12px;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.fundTableHead {
+  color: #45a29e;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(102, 252, 241, 0.08);
+}
+
+.fundRow {
+  color: #c5c6c7;
+  font-size: 0.72rem;
+  border-left: 2px solid transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.fundRow span:first-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fundRow strong {
+  color: #66fcf1;
+}
+
+.activeFund {
+  background: rgba(102, 252, 241, 0.06);
+  border-left-color: #66fcf1;
+}
+
+.insightBox,
+.contextBox {
+  margin: 12px;
+  padding: 14px;
+  background: rgba(11, 12, 16, 0.62);
+  border: 1px solid rgba(102, 252, 241, 0.12);
+  border-radius: 10px;
+}
+
+.insightBox p,
+.metricLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  color: #66fcf1;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.insightBox span {
+  display: block;
+  color: #c5c6c7;
+  font-size: 0.78rem;
+  line-height: 1.65;
+}
+
+.sectionHeading {
+  max-width: 620px;
+  margin-bottom: 54px;
+}
+
+.sectionHeading.center {
+  margin-right: auto;
+  margin-left: auto;
+  text-align: center;
+}
+
+.sectionHeading.center .overline {
+  justify-content: center;
+}
+
+.sectionHeading h2 {
+  margin: 0;
+  color: #fff;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.featuresGrid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 20px;
+}
+
+.featureCard {
+  grid-column: span 6;
+  padding: 28px;
+  overflow: hidden;
+}
+
+.featureWide {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 32px;
+}
+
+.featureCard:hover {
+  border-color: rgba(102, 252, 241, 0.28);
+  transform: translateY(-3px);
+}
+
+.featureLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  color: #45a29e;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.featureLabel span,
+.aiHeader > span {
+  display: inline-flex;
+  padding: 10px;
+  background: rgba(102, 252, 241, 0.1);
+  border-radius: 10px;
+}
+
+.featureCard h3 {
+  margin: 0 0 10px;
+  color: #fff;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 1.35rem;
+}
+
+.featureCard p {
+  color: #8a9199;
+  line-height: 1.7;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  color: #66fcf1;
+  background: rgba(102, 252, 241, 0.1);
+  border: 1px solid rgba(102, 252, 241, 0.3);
+  border-radius: 3px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tagRow {
+  gap: 7px;
+  margin: 16px 0 22px;
+}
+
+.linkButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  color: #66fcf1;
+  background: transparent;
+  border: 0;
+  font-weight: 700;
+}
+
+.comparisonMini {
+  padding: 16px;
+  background: rgba(11, 12, 16, 0.7);
+  border: 1px solid rgba(102, 252, 241, 0.1);
+  border-radius: 12px;
+}
+
+.comparisonMini > p {
+  margin: 0 0 12px;
+  color: #45a29e;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+}
+
+.comparisonMini div {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.comparisonMini span {
+  padding: 10px;
+  background: rgba(31, 40, 51, 0.55);
+  border: 1px solid rgba(102, 252, 241, 0.16);
+  border-radius: 8px;
+}
+
+.comparisonMini small,
+.comparisonMini em,
+.providerCard span,
+.providerCard em {
+  display: block;
+  color: #8a9199;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.62rem;
+  font-style: normal;
+}
+
+.comparisonMini strong {
+  display: block;
+  margin: 4px 0;
+  color: #66fcf1;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.panel {
+  min-height: 100%;
+  padding: 28px;
+}
+
+.metricTabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.metricTabs button {
+  padding: 8px 10px;
+  color: #8a9199;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.7rem;
+}
+
+.metricTabs .selectedTab {
+  color: #66fcf1;
+  background: rgba(102, 252, 241, 0.1);
+  border-color: rgba(102, 252, 241, 0.4);
+}
+
+.metricValue {
+  margin-bottom: 30px;
+  text-align: center;
+}
+
+.metricValue span,
+.metricValue em {
+  display: block;
+  font-family: "IBM Plex Mono", monospace;
+  text-transform: uppercase;
+}
+
+.metricValue span {
+  margin-bottom: 10px;
+  color: #45a29e;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+}
+
+.metricValue strong {
+  display: block;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 3.5rem;
+  line-height: 1;
+}
+
+.metricValue em {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 3px 10px;
+  border: 1px solid;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-style: normal;
+  letter-spacing: 0.1em;
+}
+
+.range {
+  width: 100%;
+  accent-color: #66fcf1;
+}
+
+.rangeLabels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  color: #8a9199;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.65rem;
+}
+
+.aiHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(102, 252, 241, 0.08);
+}
+
+.aiHeader strong {
+  color: #fff;
+  font-family: "Space Grotesk", Inter, sans-serif;
+}
+
+.aiHeader p {
+  margin: 3px 0 0;
+  color: #45a29e;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.65rem;
+}
+
+.aiHeader em {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 4px 10px;
+  color: #66fcf1;
+  background: rgba(102, 252, 241, 0.08);
+  border: 1px solid rgba(102, 252, 241, 0.2);
+  border-radius: 6px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.62rem;
+  font-style: normal;
+}
+
+.explanation {
+  margin: 0 0 24px;
+  color: #c5c6c7;
+  line-height: 1.8;
+}
+
+.contextBox {
+  margin: 0;
+}
+
+.contextBox strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #45a29e;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.contextBox p {
+  margin: 0;
+  color: #8a9199;
+  line-height: 1.65;
+}
+
+.dataHeading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 44px;
+}
+
+.dataHeading .sectionHeading {
+  margin-bottom: 0;
+}
+
+.freshness {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  color: #66fcf1;
+  background: rgba(102, 252, 241, 0.06);
+  border: 1px solid rgba(102, 252, 241, 0.2);
+  border-radius: 999px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.dataGrid {
+  grid-template-columns: 4fr 3fr;
+  align-items: stretch;
+}
+
+.dataCopy {
+  max-width: 520px;
+  margin: 0 0 24px;
+}
+
+.providerGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.providerCard {
+  padding: 14px;
+  background: rgba(31, 40, 51, 0.72);
+  border: 1px solid rgba(102, 252, 241, 0.1);
+  border-radius: 10px;
+}
+
+.providerCard p {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 5px;
+}
+
+.providerCard strong {
+  color: #66fcf1;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.66rem;
+}
+
+.providerCard svg {
+  color: #45a29e;
+}
+
+.providerCard em {
+  margin-top: 4px;
+  color: #45a29e;
+}
+
+.logPanel {
+  overflow: hidden;
+  background: #08090d;
+}
+
+.logHead {
+  color: #8a9199;
+}
+
+.logPanel p {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 16px;
+  color: #8a9199;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.logPanel p span {
+  color: #45a29e;
+}
+
+.logPanel p strong {
+  color: #66fcf1;
+  font-weight: 500;
+}
+
+.logPanel .activeLog {
+  color: #c5c6c7;
+  background: rgba(102, 252, 241, 0.04);
+}
+
+.promptLine {
+  display: flex;
+  padding: 14px 16px;
+  color: #66fcf1;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.66rem;
+}
+
+.promptLine span {
+  margin-left: auto;
+  color: #8a9199;
+}
+
+.footer {
+  border-top: 1px solid rgba(102, 252, 241, 0.1);
+}
+
+.footerGrid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  gap: 40px;
+  margin-bottom: 48px;
+}
+
+.footer h4 {
+  margin: 0 0 18px;
+  color: #fff;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.footer a:not(.logo) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 12px;
+  color: #8a9199;
+  font-size: 0.85rem;
+}
+
+.footer a:hover {
+  color: #66fcf1;
+}
+
+.footerBottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(102, 252, 241, 0.07);
+  color: #8a9199;
+  font-size: 0.78rem;
+}
+
+.footerBottom span:last-child {
+  color: #45a29e;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (max-width: 980px) {
+  .navLinks,
+  .navActions {
+    display: none;
+  }
+
+  .menuButton {
+    display: inline-flex;
+    color: #c5c6c7;
+    background: transparent;
+  }
+
+  .mobileMenu {
+    display: grid;
+    width: min(1280px, calc(100% - 48px));
+    margin: 0 auto;
+    padding: 14px 0 20px;
+    border-top: 1px solid rgba(102, 252, 241, 0.1);
+  }
+
+  .mobileMenu a {
+    padding: 10px 0;
+  }
+
+  .heroGrid,
+  .aiGrid,
+  .dataGrid,
+  .featureWide,
+  .footerGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .featureCard {
+    grid-column: 1 / -1;
+  }
+
+  .dataHeading,
+  .footerBottom {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 640px) {
+  .navInner,
+  .shell,
+  .mobileMenu {
+    width: min(100% - 32px, 1280px);
+  }
+
+  .hero {
+    padding-top: 128px;
+  }
+
+  .section,
+  .sectionAlt,
+  .footer {
+    padding: 72px 0;
+  }
+
+  .providerGrid,
+  .comparisonMini div {
+    grid-template-columns: 1fr;
+  }
+
+  .fundTableHead,
+  .fundRow {
+    grid-template-columns: 1fr 62px 44px 44px;
+  }
+
+  .terminalCard,
+  .panel,
+  .featureCard {
+    border-radius: 12px;
+  }
+
+  .metricValue strong {
+    font-size: 2.8rem;
+  }
+}

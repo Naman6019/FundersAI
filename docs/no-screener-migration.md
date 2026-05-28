@@ -1,6 +1,6 @@
 # No-Screener Migration
 
-MarketMind no longer requires Screener CSV exports for active stock comparison or AI chat quant data.
+FundersAI no longer requires Screener CSV exports for active stock comparison or AI chat quant data.
 
 ## Changed
 - Active stock comparison reads `/api/quant/stocks/compare`.

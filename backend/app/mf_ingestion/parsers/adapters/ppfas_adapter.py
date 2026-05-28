@@ -23,7 +23,7 @@ from app.mf_ingestion.sources.registry import AMCDocumentSource
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_USER_AGENT = "MarketMindResearchBot/1.0 contact: YOUR_EMAIL_HERE"
+DEFAULT_USER_AGENT = "FundersAIResearchBot/1.0 contact: YOUR_EMAIL_HERE"
 REQUEST_TIMEOUT_SECONDS = 30
 MAX_NETWORK_RETRIES = 2
 

@@ -1,6 +1,6 @@
 # Project Overview
 
-MarketMind is a research-first web app for Indian stocks and mutual funds.
+FundersAI is a research-first web app for Indian stocks and mutual funds.
 
 ## Purpose
 - Help users compare and analyze assets using deterministic metrics plus AI summaries.

@@ -1,7 +1,7 @@
 # Product Specification
 
 ## Positioning
-MarketMind is a research-only product for Indian stocks and mutual funds.  
+FundersAI is a research-only product for Indian stocks and mutual funds.  
 It does not provide investment advice.
 
 ## Core Features (Current)

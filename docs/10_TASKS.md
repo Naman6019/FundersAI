@@ -12,7 +12,7 @@
 - [ ] Basic strategy backtesting: simulate simple rules against clean historical EOD data with fees, slippage, benchmark comparison, and result charts.
 - [ ] Historical anomaly detection: flag unusual price, volume, valuation, or fundamentals changes with evidence; avoid predictive wording until models are validated.
 
-## MarketMind Product Improvement Roadmap
+## FundersAI Product Improvement Roadmap
 
 ### 1. Research Scorecard
 - [ ] Add a clear scorecard for each stock and mutual fund.
@@ -74,7 +74,7 @@
 - Why this matters:
   - Creates repeat-user workflows and personalized context.
 
-### 6. Daily MarketMind Brief
+### 6. Daily FundersAI Brief
 - [ ] Add a daily market summary experience.
 - [ ] Include market mood, Nifty/Sensex trend, top/weak sectors, important news, watchlist changes, and MF NAV updates.
 - [ ] Keep structure beginner-friendly: What happened, why it matters, what to watch next.
@@ -146,14 +146,14 @@
 
 ### Phase 3: Retention
 7. Watchlist
-8. Daily MarketMind Brief
+8. Daily FundersAI Brief
 9. Saved Reports and PDF Export
 
 ### Phase 4: Growth
 10. SEO Learning Pages
 
 ## Implementation Notes
-- Do not make MarketMind look like a stock tips or recommendation platform.
+- Do not make FundersAI look like a stock tips or recommendation platform.
 - Keep the product positioning as research-only.
 - Every AI-generated insight should be backed by deterministic data where possible.
 - Add disclaimers where financial interpretation is shown.
@@ -167,14 +167,15 @@
 - [ ] Expanding stock coverage beyond the current Nifty-focused list.
 - [ ] Testing `NIFTY500` vs `NIFTYTOTALMARKET`.
 - [ ] Tuning `STOCK_INFO_ENRICH_LIMIT` and `STOCK_YFINANCE_FALLBACK_LIMIT`.
-- [ ] Fill mutual fund missing data gaps for PPFAS, ICICI, HDFC, SBI (AUM/TER/holdings/sector/ratios).
-- [ ] Reduce `mf_raw_documents` + `mf_parse_review_queue` backlog (`needs_review` and failed rows).
+- [ ] Fill mutual fund missing data gaps beyond holdings for PPFAS, ICICI, HDFC, SBI (AUM/TER/benchmark/risk/ratios).
+- [ ] Reduce historical `mf_raw_documents` + `mf_parse_review_queue` backlog (`needs_review` and failed rows).
 
 ## Done
 - [x] Admin dashboard Phase 1 at `/admin` with server-side role enforcement (`user_profiles.role=admin`).
 - [x] Added admin APIs: session, overview, users, AI usage, data coverage, NAV sync, resolver debug.
 - [x] Added `/dashboard/admin` compatibility redirect to `/admin`.
 - [x] Added R2-first MF raw document ingestion path and optional SBI portfolio URL dispatch input.
+- [x] Made April 2026 AMC holdings parsing production-ready for HDFC, SBI, PPFAS, and ICICI with golden fixture tests and live clean reparses.
 - [x] Added MF raw migration and MF storage compaction workflows.
 - [x] Added Data Coverage "Needs Review Entries" section for parser triage visibility.
 - [x] Quota-aware fundamentals cadence: monthly NIFTY500, weekly watched stocks, and on-demand compared symbols.
@@ -207,5 +208,5 @@
 
 ## Known Issues
 - YFinance rate limits often on Render deployments.
-- [ ] Portfolio overlap is partial because AMFI holdings API often returns `Nil`.
+- [ ] Portfolio overlap is partial for schemes/months not yet covered by AMC disclosure parser outputs.
 - News uses Google News RSS and can be slow.

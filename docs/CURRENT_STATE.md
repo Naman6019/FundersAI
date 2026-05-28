@@ -1,9 +1,9 @@
 # Current State
 
-**Last Updated**: 2026-05-25
+**Last Updated**: 2026-05-28
 
 ## Project Summary
-MarketMind is a research-first Indian stocks + mutual funds app with deterministic comparison outputs, Supabase-first runtime reads, and workflow-driven data ingestion.
+FundersAI is a research-first Indian stocks + mutual funds app with deterministic comparison outputs, Supabase-first runtime reads, and workflow-driven data ingestion.
 
 ## Stack Snapshot
 - Frontend: Next.js `16.2.4`, React `19.2.4`, Tailwind CSS 4, Zustand, Recharts
@@ -23,6 +23,12 @@ MarketMind is a research-first Indian stocks + mutual funds app with determinist
   - parsing
   - validation / review queue
   - R2-first storage
+  - April 2026 holdings parser path verified clean for all four AMCs:
+    - HDFC: parsed clean
+    - SBI: parsed clean
+    - PPFAS: parsed clean
+    - ICICI: parsed clean
+  - AMC holdings parsers keep stored holdings ISIN-only while using cash/TREPS/reverse-repo allocation rows for total exposure validation where needed.
 - MF storage controls:
   - `migrate-mf-raw-to-r2.yml`
   - `compact-mf-storage.yml`
@@ -40,8 +46,8 @@ MarketMind is a research-first Indian stocks + mutual funds app with determinist
   - compatibility redirect `/dashboard/admin -> /admin`
 
 ## In Progress
-- Increase mutual-fund field coverage depth for PPFAS, ICICI, HDFC, SBI (especially holdings/sector/ratios completeness).
-- Reduce `needs_review` backlog in `mf_raw_documents` and `mf_parse_review_queue`.
+- Increase mutual-fund field coverage depth beyond holdings for PPFAS, ICICI, HDFC, SBI (AUM/TER/benchmark/risk/ratios completeness).
+- Reduce historical `needs_review` backlog in `mf_raw_documents` and `mf_parse_review_queue`.
 - Improve admin Data Coverage status interpretation for historical parser failures vs latest-run health.
 - Monitor scheduled parser retry outcomes for rows that remain in review after cooldown retries.
 
@@ -57,6 +63,7 @@ MarketMind is a research-first Indian stocks + mutual funds app with determinist
 - Legacy heavy tables were dropped/compacted to protect Supabase free-tier storage limits.
 - MF parse pipeline uses explicit states (`pending`, `downloaded`, `needs_reparse`, `parsed`, `needs_review`, `failed`, `skipped_not_supported`) to support reliability triage.
 - `retry-mf-parser-actions.yml` retries cooled-down `needs_review` / `failed` parser rows every 6 hours; it does not replace parser fixes or admin skips for invalid source documents.
+- Current parser reliability baseline uses local golden fixtures from the `AMC Data` set plus live April 2026 reparses for HDFC, SBI, and ICICI; PPFAS April 2026 was already clean in live ingestion.
 
 ## Workflows In Use
 - `sync-stock-universe.yml`

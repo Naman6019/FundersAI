@@ -1,7 +1,7 @@
 # Architecture
 
 ## System Shape
-MarketMind is a split web architecture:
+FundersAI is a split web architecture:
 - Next.js frontend for UI + server-side proxy/admin routes
 - FastAPI backend for analysis orchestration and internal admin diagnostics
 - Supabase as primary structured runtime store

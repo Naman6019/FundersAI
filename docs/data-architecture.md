@@ -1,6 +1,6 @@
 # Data Architecture
 
-MarketMind stock data is source-neutral. App code reads normalized tables and does not depend on CSV exports.
+FundersAI stock data is source-neutral. App code reads normalized tables and does not depend on CSV exports.
 
 ## Stock Data Layers
 - `stocks`: NSE/BSE metadata and identifiers.

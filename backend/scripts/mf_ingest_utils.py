@@ -16,7 +16,7 @@ from urllib3.util.retry import Retry
 logger = logging.getLogger(__name__)
 
 DEFAULT_HEADERS = {
-    "User-Agent": "MarketMind research data sync/1.0",
+    "User-Agent": "FundersAI research data sync/1.0",
     "Accept": "text/html,application/xhtml+xml,application/xml,text/csv,application/pdf,*/*",
 }
 

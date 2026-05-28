@@ -1,6 +1,6 @@
-# MarketMind Project Summary
+# FundersAI Project Summary
 
-MarketMind is a research-first app for Indian stocks and mutual funds.  
+FundersAI is a research-first app for Indian stocks and mutual funds.  
 The product emphasizes deterministic data, transparent coverage, and explainable comparisons instead of recommendation-style outputs.
 
 ## Current Product Surface

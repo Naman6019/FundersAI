@@ -1,8 +1,0 @@
-{
-  "dependencies": {
-    "@tailwindcss/postcss": "^4.3.0",
-    "@vercel/speed-insights": "^2.0.0",
-    "postcss": "^8.5.15",
-    "tailwindcss": "^4.3.0"
-  }
-}

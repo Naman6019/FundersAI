@@ -29,7 +29,7 @@ def get_config() -> IngestionConfig:
         parser_version=os.getenv("MF_PARSER_VERSION", "mf_ingestion_v1"),
         user_agent=os.getenv(
             "MF_INGESTION_USER_AGENT",
-            "MarketMindResearchBot/1.0 contact: YOUR_EMAIL_HERE",
+            "FundersAIResearchBot/1.0 contact: YOUR_EMAIL_HERE",
         ),
         r2_endpoint=os.getenv("R2_ENDPOINT", "").strip(),
         r2_access_key_id=os.getenv("R2_ACCESS_KEY_ID", "").strip(),

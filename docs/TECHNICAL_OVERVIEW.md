@@ -21,6 +21,8 @@
   - normalized parsed rows (`mf_scheme_holdings`, `mf_scheme_monthly_metrics`)
   - review queue entries for low-confidence parses
 - Derived holdings/sector views sync into runtime MF tables only when validation passes.
+- Holdings parser baseline is production-ready for April 2026 documents across HDFC, SBI, PPFAS, and ICICI.
+- Parser validation uses complete exposure totals, including cash/TREPS/reverse-repo allocation rows where the AMC format requires them, while stored holdings remain ISIN-only.
 
 ## 4. Storage Management
 - `migrate-mf-raw-to-r2.yml`: migrates raw docs out of local/Supabase paths to R2 metadata-backed storage.
@@ -51,3 +53,4 @@
 - Runtime is designed to degrade gracefully with partial responses when data is incomplete.
 - MF parser runs may fail intentionally when `needs_review` is treated as strict failure.
 - Coverage badges reflect table-level field completeness, not just workflow success.
+- Four-AMC parser reliability is backed by local golden fixture tests and live clean reparses for the current April 2026 holdings documents.

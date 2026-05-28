@@ -165,7 +165,7 @@ function HeroPreview() {
       try {
         const [res1, res2] = await Promise.all([
           fetch('/api/mf/122639').then(r => r.json()).catch(() => null),
-          fetch('/api/mf/100356').then(r => r.json()).catch(() => null)
+          fetch('/api/mf/101144').then(r => r.json()).catch(() => null)
         ]);
         setData({ ppfas: res1, icici: res2 });
       } catch (e) {

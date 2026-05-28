@@ -3,8 +3,33 @@ import { SpeedInsights } from '@vercel/speed-insights/next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'FundersAI | AI-Orchestrated Financial Research',
-  description: 'FundersAI fuses real-time quantitative metrics with AI-driven news sentiment to provide institutional-grade insights for the Indian markets.',
+  title: 'FundersAI | Mutual Fund Comparison & Screening Workspace',
+  description: 'Compare Parag Parikh Flexi Cap vs ICICI Prudential Multi Asset and other mutual funds. Analyze Sharpe ratio, expense ratios (TER), alpha, and beta with AI-powered explanations.',
+  keywords: [
+    'Indian Mutual Funds',
+    'Mutual Fund Comparison',
+    'Screener',
+    'Parag Parikh Flexi Cap',
+    'ICICI Prudential Multi Asset',
+    'Sharpe Ratio Calculator',
+    'Expense Ratio Comparison',
+    'FundersAI',
+    'Financial Research AI'
+  ],
+  authors: [{ name: 'FundersAI Team' }],
+  openGraph: {
+    title: 'FundersAI | Mutual Fund Comparison & Screening Workspace',
+    description: 'Compare Parag Parikh Flexi Cap vs ICICI Prudential Multi Asset and other mutual funds. Analyze Sharpe ratio, expense ratios (TER), alpha, and beta with AI-powered explanations.',
+    url: 'https://fundersai.com',
+    siteName: 'FundersAI',
+    locale: 'en_IN',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'FundersAI | Mutual Fund Comparison Workspace',
+    description: 'Compare Parag Parikh Flexi Cap vs ICICI Prudential Multi Asset and other mutual funds. Analyze Sharpe ratio, expense ratios (TER), alpha, and beta with AI-powered explanations.',
+  },
 };
 
 export default function RootLayout({

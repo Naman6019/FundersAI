@@ -1,7 +1,13 @@
 import PremiumLandingPage from '@/components/landing/PremiumLandingPage';
+import SchemaMarkup from '@/components/landing/SchemaMarkup';
 
 export const revalidate = 60;
 
 export default async function LandingPage() {
-  return <PremiumLandingPage />;
+  return (
+    <>
+      <SchemaMarkup />
+      <PremiumLandingPage />
+    </>
+  );
 }

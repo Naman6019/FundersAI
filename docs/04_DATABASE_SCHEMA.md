@@ -1,6 +1,6 @@
 # Database Schema
 
-MarketMind uses Supabase (PostgreSQL) as its primary structured data store.  
+FundersAI uses Supabase (PostgreSQL) as its primary structured data store.  
 Writes are server-side only (backend jobs, backend APIs, or trusted service-role environments).
 
 ## Core Stock Tables

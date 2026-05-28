@@ -1,6 +1,6 @@
-# MarketMind
+# FundersAI
 
-MarketMind is an AI-orchestrated financial research platform for the Indian stock and mutual fund markets. It provides retail-investor-friendly insights by synthesizing quantitative metrics, news sentiment, and historical trends through a multi-agent pipeline.
+FundersAI is an AI-orchestrated financial research platform for the Indian stock and mutual fund markets. It provides retail-investor-friendly insights by synthesizing quantitative metrics, news sentiment, and historical trends through a multi-agent pipeline.
 
 ## Features
 - **AI Chat & Intent Routing**: Routes queries to Quant, News, Screener, or Comparison pipelines.
@@ -16,7 +16,7 @@ MarketMind is an AI-orchestrated financial research platform for the Indian stoc
 
 ## Project Structure
 ```
-MarketMind/
+FundersAI/
 ├── .github/workflows/      # Data synchronization cron jobs
 ├── backend/                # FastAPI application & fetching scripts
 ├── frontend/               # Next.js web application

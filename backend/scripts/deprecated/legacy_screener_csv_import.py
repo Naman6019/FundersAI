@@ -1,7 +1,7 @@
 """
 DEPRECATED: one-off legacy import for old CSV exports.
 
-This is not part of production jobs. MarketMind now uses source-neutral stock
+This is not part of production jobs. FundersAI now uses source-neutral stock
 tables plus provider adapters for fundamentals.
 
 Usage:

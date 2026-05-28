@@ -38,7 +38,7 @@ FALLBACK_SYMBOLS = {
 
 def _headers() -> dict[str, str]:
     return {
-        "User-Agent": "MarketMind stock universe sync/1.0",
+        "User-Agent": "FundersAI stock universe sync/1.0",
         "Accept": "text/csv,*/*",
     }
 

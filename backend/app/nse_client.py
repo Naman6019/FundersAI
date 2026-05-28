@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 NSE_ARCHIVE_BASE_URL = "https://nsearchives.nseindia.com/content/cm"
 NSE_HEADERS = {
-    "User-Agent": "MarketMind/1.0 (Language=python)",
+    "User-Agent": "FundersAI/1.0 (Language=python)",
     "Accept-Language": "*",
 }
 
