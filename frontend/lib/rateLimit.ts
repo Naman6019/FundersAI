@@ -147,9 +147,9 @@ export async function checkRateLimit(
   }
 
   const config = upstashConfig();
-  const useMemory = !config.configured && process.env.NODE_ENV !== 'production';
-  if (!config.configured && !useMemory) {
-    return { allowed: false, configured: false, limit: 0, remaining: 0, resetSeconds: 60, retryAfterSeconds: 60 };
+  const useMemory = !config.configured;
+  if (!config.configured) {
+    console.warn('Rate limit storage (Upstash Redis) is not configured; falling back to in-memory rate limiting.');
   }
 
   const nowMs = options.nowMs ?? Date.now();
