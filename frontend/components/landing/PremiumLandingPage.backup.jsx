@@ -121,54 +121,27 @@ function Glow({ className = "", delay = 0 }) {
   );
 }
 
-function AmbientBackground() {
+function FineGrid() {
   return (
-    <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-      <div className="absolute inset-0 bg-[#020617]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(16,185,129,0.12),transparent_60%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_80%,rgba(56,189,248,0.08),transparent_50%)]" />
-      <div className="absolute inset-0 opacity-[0.035] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:100px_100px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_80%)]" />
-    </div>
+    <div
+      aria-hidden="true"
+      className="absolute inset-0 -z-10 bg-[linear-gradient(to_right,rgba(255,255,255,0.055)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.055)_1px,transparent_1px)] bg-[size:80px_80px] [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_72%)]"
+    />
   );
 }
 
 function PremiumButton({ href, children, variant = "primary" }) {
-  const ref = React.useRef(null);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-
-  const handleMouse = (e) => {
-    if (!ref.current) return;
-    const { clientX, clientY } = e;
-    const { height, width, left, top } = ref.current.getBoundingClientRect();
-    const middleX = clientX - (left + width / 2);
-    const middleY = clientY - (top + height / 2);
-    setPosition({ x: middleX * 0.15, y: middleY * 0.15 });
-  };
-
-  const reset = () => setPosition({ x: 0, y: 0 });
-
-  const base = "group relative inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition-colors duration-300 overflow-hidden";
+  const base = "group inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition duration-300";
   const styles =
     variant === "primary"
-      ? "bg-white text-slate-950 shadow-[0_20px_70px_rgba(255,255,255,0.16)] hover:bg-emerald-100"
-      : "border border-white/12 bg-white/[0.05] text-white backdrop-blur-xl hover:bg-white/[0.09]";
+      ? "bg-white text-slate-950 shadow-[0_20px_70px_rgba(255,255,255,0.16)] hover:-translate-y-0.5 hover:bg-emerald-100"
+      : "border border-white/12 bg-white/[0.05] text-white backdrop-blur-xl hover:-translate-y-0.5 hover:bg-white/[0.09]";
 
   return (
-    <motion.a
-      ref={ref}
-      href={href}
-      onMouseMove={handleMouse}
-      onMouseLeave={reset}
-      animate={{ x: position.x, y: position.y }}
-      transition={{ type: "spring", stiffness: 150, damping: 15, mass: 0.1 }}
-      className={`${base} ${styles}`}
-    >
-      <span className="relative z-10 flex items-center">
-        {children}
-        {variant === "primary" && <ArrowRight className="ml-2 h-4 w-4 transition group-hover:translate-x-1" />}
-      </span>
-    </motion.a>
+    <a href={href} className={`${base} ${styles}`}>
+      {children}
+      {variant === "primary" && <ArrowRight className="ml-2 h-4 w-4 transition group-hover:translate-x-1" />}
+    </a>
   );
 }
 
@@ -186,9 +159,6 @@ function Badge({ children }) {
 
 function HeroPreview() {
   const [data, setData] = useState({ ppfas: null, icici: null });
-  const heroRef = React.useRef(null);
-  const [rotateX, setRotateX] = useState(0);
-  const [rotateY, setRotateY] = useState(0);
 
   useEffect(() => {
     async function loadData() {
@@ -205,35 +175,15 @@ function HeroPreview() {
     loadData();
   }, []);
 
-  const handleMouseMove = (e) => {
-    if (!heroRef.current) return;
-    const rect = heroRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-    setRotateX((centerY - y) / 30);
-    setRotateY((x - centerX) / 30);
-  };
-
-  const handleMouseLeave = () => {
-    setRotateX(0);
-    setRotateY(0);
-  };
-
   const ppfasReturn = data.ppfas?.returns?.['1Y'] ? `+${(data.ppfas.returns['1Y'] * 100).toFixed(1)}%` : "+22.4%";
   const iciciReturn = data.icici?.returns?.['1Y'] ? `+${(data.icici.returns['1Y'] * 100).toFixed(1)}%` : "+19.8%";
 
   return (
     <motion.div
-      ref={heroRef}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
       initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0, rotateX, rotateY }}
-      transition={{ duration: 0.8, ease, rotateX: { type: "spring", stiffness: 150, damping: 20 }, rotateY: { type: "spring", stiffness: 150, damping: 20 } }}
-      style={{ transformStyle: "preserve-3d", perspective: "1000px" }}
-      className="relative mx-auto mt-12 w-full max-w-4xl rounded-2xl border border-white/10 bg-[#0F172A]/90 backdrop-blur-2xl p-6 shadow-2xl"
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.8, ease }}
+      className="relative mx-auto mt-12 w-full max-w-4xl rounded-2xl border border-white/10 bg-[#0F172A] p-6 shadow-2xl"
     >
       <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-6">
         <div className="flex items-center gap-3">
@@ -374,58 +324,93 @@ function SectionHeading({ eyebrow, title, body, align = "center" }) {
   );
 }
 
-function FeatureBento() {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-6 gap-4 w-full">
-      {features.map((feature, index) => {
-        const Icon = feature.icon;
-        let spanClass = "md:col-span-2"; // default small square
-        if (index === 0) spanClass = "md:col-span-4"; // wide top left
-        else if (index === 1) spanClass = "md:col-span-2"; // small top right
-        else if (index === 2) spanClass = "md:col-span-3"; // half mid
-        else if (index === 3) spanClass = "md:col-span-3"; // half mid
-        else if (index === 4) spanClass = "md:col-span-2"; // small bot left
-        else if (index === 5) spanClass = "md:col-span-4"; // wide bot right
+function FeatureCarousel() {
+  const [active, setActive] = useState(0);
+  const [direction, setDirection] = useState(1);
+  const activeFeature = features[active];
+  const Icon = activeFeature.icon;
 
-        return (
-          <motion.div
-            key={feature.title}
-            variants={fadeUp}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-40px" }}
-            whileHover={{ y: -5, transition: { duration: 0.2 } }}
-            className={`group relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.02] p-8 shadow-2xl backdrop-blur-xl transition-colors hover:bg-white/[0.04] hover:border-white/20 ${spanClass}`}
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-            
-            <div className="relative z-10 flex h-full flex-col justify-between gap-8">
-              <div>
-                <div className="mb-6 flex items-center justify-between">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-white shadow-inner backdrop-blur-md transition-transform group-hover:scale-110">
-                    <Icon className="h-6 w-6" />
-                  </div>
-                  <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-slate-300">
-                    {feature.eyebrow}
-                  </span>
+  const selectFeature = (index) => {
+    setDirection(index >= active ? 1 : -1);
+    setActive(index);
+  };
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setDirection(1);
+      setActive((current) => (current + 1) % features.length);
+    }, 3200);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="relative">
+      <div className="mb-5 flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-3 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap gap-2">
+          {features.map((feature, index) => (
+            <button
+              key={feature.title}
+              onClick={() => selectFeature(index)}
+              className={`rounded-full border px-4 py-2 text-xs font-medium transition duration-300 ${
+                active === index
+                  ? "border-emerald-300/40 bg-emerald-300/[0.12] text-emerald-100 shadow-[0_0_24px_rgba(16,185,129,0.12)]"
+                  : "border-white/10 bg-white/[0.035] text-slate-400 hover:bg-white/[0.07] hover:text-white"
+              }`}
+            >
+              {feature.eyebrow}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2 self-start sm:self-auto">
+          {features.map((feature, index) => (
+            <button
+              key={feature.title}
+              aria-label={`View ${feature.title}`}
+              onClick={() => selectFeature(index)}
+              className={`h-2.5 rounded-full transition-[width,background-color] duration-300 ${
+                active === index ? "w-8 bg-white" : "w-2.5 bg-white/25 hover:bg-white/50"
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="relative min-h-[360px] overflow-hidden rounded-[2.25rem] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.16),transparent_34%),rgba(255,255,255,0.045)] shadow-2xl shadow-black/10">
+        <div className="absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent" />
+        <motion.div
+          key={activeFeature.title}
+          initial={{ opacity: 0, x: direction > 0 ? 72 : -72, filter: "blur(10px)" }}
+          animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+          exit={{ opacity: 0, x: direction > 0 ? -72 : 72, filter: "blur(10px)" }}
+          transition={{ duration: 0.55, ease }}
+          className="min-h-[360px] p-6 sm:p-8"
+        >
+          <div className="flex h-full flex-col justify-between gap-10">
+            <div>
+              <div className="mb-8 flex items-center justify-between gap-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-950 shadow-lg">
+                  <Icon className="h-6 w-6" />
                 </div>
-                <h3 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-                  {feature.title}
-                </h3>
-                <p className="mt-4 text-sm leading-relaxed text-slate-400">
-                  {feature.body}
-                </p>
-              </div>
-              <div className="mt-auto">
-                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400">
-                  <Sparkle className="h-3.5 w-3.5" weight="fill" />
-                  {feature.proof}
+                <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs text-slate-300">
+                  {activeFeature.eyebrow}
                 </span>
               </div>
+              <h3 className="max-w-xl text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">
+                {activeFeature.title}
+              </h3>
+              <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-400">
+                {activeFeature.body}
+              </p>
             </div>
-          </motion.div>
-        );
-      })}
+
+            <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.07] px-4 py-3 text-sm text-emerald-100">
+              {activeFeature.proof}
+            </div>
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 }
@@ -444,14 +429,11 @@ function FundPairCard() {
       variants={stagger}
       initial="hidden"
       whileInView="visible"
-      viewport={{ once: true, margin: "-120px" }}
-      className="mt-16 overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/[0.02] shadow-2xl backdrop-blur-3xl"
+      viewport={{ once: true, margin: "-80px" }}
+      className="mt-12 overflow-hidden rounded-[2.25rem] border border-white/10 bg-white/[0.045] shadow-2xl shadow-black/10"
     >
       <div className="grid gap-0 lg:grid-cols-[1fr_1fr]">
-        <motion.div
-          variants={{ hidden: { opacity: 0, x: -80 }, visible: { opacity: 1, x: 0, transition: { duration: 0.8, ease } } }}
-          className="border-b border-white/10 p-8 lg:border-b-0 lg:border-r hover:bg-white/[0.02] transition-colors"
-        >
+        <motion.div variants={fadeUp} className="border-b border-white/10 p-6 lg:border-b-0 lg:border-r">
           <div className="mb-4 inline-flex rounded-full border border-emerald-300/20 bg-emerald-300/[0.08] px-3 py-1 text-xs font-medium text-emerald-100">
             Steadier profile
           </div>
@@ -463,10 +445,7 @@ function FundPairCard() {
           </p>
         </motion.div>
 
-        <motion.div
-          variants={{ hidden: { opacity: 0, x: 80 }, visible: { opacity: 1, x: 0, transition: { duration: 0.8, ease } } }}
-          className="p-8 hover:bg-white/[0.02] transition-colors"
-        >
+        <motion.div variants={fadeUp} className="p-6">
           <div className="mb-4 inline-flex rounded-full border border-sky-300/20 bg-sky-300/[0.08] px-3 py-1 text-xs font-medium text-sky-100">
             Diversified allocation
           </div>
@@ -479,13 +458,13 @@ function FundPairCard() {
         </motion.div>
       </div>
 
-      <motion.div variants={fadeUp} className="border-t border-white/10 bg-black/40 p-6 sm:p-8">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="border-t border-white/10 bg-slate-950/25 p-4 sm:p-6">
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-white">Live comparison preview</p>
             <p className="mt-1 text-xs text-slate-500">Formatted as a table so long fund names do not break the card layout.</p>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-medium text-slate-300 backdrop-blur-md">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-slate-300">
             <Sparkle className="h-3.5 w-3.5 text-emerald-300" weight="fill" />
             FundersAI explains the difference
           </div>
@@ -495,18 +474,19 @@ function FundPairCard() {
           {rows.map(([metric, ppfas, icici], index) => {
             const isValNumeric = (str) => /^[\d%.+-]+$/.test(str.replace(/\s+/g, ''));
             return (
-              <div
+              <motion.div
                 key={metric}
-                className={`group grid gap-0 text-sm sm:grid-cols-[0.8fr_1fr_1fr] transition-colors hover:bg-white/[0.04] ${index !== rows.length - 1 ? "border-b border-white/10" : ""}`}
+                variants={fadeUp}
+                className={`grid gap-0 text-sm sm:grid-cols-[0.8fr_1fr_1fr] ${index !== rows.length - 1 ? "border-b border-white/10" : ""}`}
               >
-                <div className="bg-white/[0.02] px-5 py-4 font-medium text-slate-300 transition-colors group-hover:text-white">{metric}</div>
-                <div className={`border-t border-white/10 px-5 py-4 text-slate-300 sm:border-l sm:border-t-0 transition-colors group-hover:text-white ${isValNumeric(ppfas) ? "font-mono text-emerald-300/90 font-medium group-hover:text-emerald-300" : ""}`}>{ppfas}</div>
-                <div className={`border-t border-white/10 px-5 py-4 text-slate-300 sm:border-l sm:border-t-0 transition-colors group-hover:text-white ${isValNumeric(icici) ? "font-mono text-emerald-300/90 font-medium group-hover:text-emerald-300" : ""}`}>{icici}</div>
-              </div>
+                <div className="bg-white/[0.035] px-4 py-3 font-medium text-slate-300">{metric}</div>
+                <div className={`border-t border-white/10 px-4 py-3 text-slate-200 sm:border-l sm:border-t-0 ${isValNumeric(ppfas) ? "font-mono text-emerald-300 font-medium" : ""}`}>{ppfas}</div>
+                <div className={`border-t border-white/10 px-4 py-3 text-slate-200 sm:border-l sm:border-t-0 ${isValNumeric(icici) ? "font-mono text-emerald-300 font-medium" : ""}`}>{icici}</div>
+              </motion.div>
             );
           })}
         </div>
-      </motion.div>
+      </div>
     </motion.div>
   );
 }
@@ -516,14 +496,8 @@ export default function FundersAILandingPage() {
   const heroGridY = useTransform(scrollYProgress, [0, 0.25], [0, 120]);
   const heroTextY = useTransform(scrollYProgress, [0, 0.18], [0, -28]);
 
-  const wordReveal = {
-    hidden: { opacity: 0, y: 30, rotateX: -20 },
-    visible: { opacity: 1, y: 0, rotateX: 0, transition: { duration: 0.9, ease: [0.22, 1, 0.36, 1] } }
-  };
-  const words = "Mutual fund research, simplified.".split(" ");
-
   return (
-    <main className="w-full min-w-0 min-h-screen overflow-hidden scroll-smooth bg-[#020617] text-slate-200 selection:bg-emerald-500/30">
+    <main className="w-full min-w-0 min-h-screen overflow-hidden scroll-smooth bg-[#020617] text-slate-200">
       <motion.div
         aria-hidden="true"
         className="fixed left-0 top-0 z-50 h-1 bg-emerald-400"
@@ -532,7 +506,7 @@ export default function FundersAILandingPage() {
 
       <section className="relative isolate w-full min-w-0 min-h-screen overflow-hidden">
         <motion.div style={{ y: heroGridY }}>
-          <AmbientBackground />
+          <FineGrid />
         </motion.div>
 
         <motion.nav
@@ -586,20 +560,10 @@ export default function FundersAILandingPage() {
                 </span>
               </motion.div>
               <motion.h1
-                variants={{
-                  hidden: {},
-                  visible: { transition: { staggerChildren: 0.12, delayChildren: 0.2 } }
-                }}
-                initial="hidden"
-                animate="visible"
-                className="text-balance text-6xl font-medium tracking-tighter text-white sm:text-7xl lg:text-8xl"
-                style={{ perspective: "1000px" }}
+                variants={fadeUp}
+                className="text-balance text-5xl font-semibold tracking-[-0.055em] text-white sm:text-7xl lg:text-8xl"
               >
-                {words.map((word, i) => (
-                  <span key={i} className="inline-block overflow-hidden pb-3 mr-[0.25em]">
-                    <motion.span variants={wordReveal} className="inline-block">{word}</motion.span>
-                  </span>
-                ))}
+                Mutual fund research, simplified.
               </motion.h1>
               <motion.p
                 variants={fadeUp}
@@ -750,14 +714,14 @@ export default function FundersAILandingPage() {
       </section>
 
       <section id="features" className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-10">
-        <div className="flex flex-col gap-12">
+        <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
           <SectionHeading
             align="left"
             eyebrow="Intelligence"
             title="Explore mutual fund DNA & risk signals."
             body="From instant risk-adjusted metrics to natural language explanations, FundersAI gives you the tools to screen and compare Indian mutual funds with speed."
           />
-          <FeatureBento />
+          <FeatureCarousel />
         </div>
       </section>
 

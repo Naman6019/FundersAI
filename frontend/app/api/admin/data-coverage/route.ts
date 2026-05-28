@@ -35,6 +35,34 @@ function normalizeAmcCode(name: string): string {
   return clean || 'UNKNOWN';
 }
 
+function normalizeSchemeName(name: string): string {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\b(direct|regular|growth|plan|option)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function addCoverageName(map: Map<string, Set<string>>, amc: string, schemeName: string) {
+  const normalizedAmc = normalizeAmcCode(amc);
+  const normalizedName = normalizeSchemeName(schemeName);
+  if (!normalizedName) return;
+  const names = map.get(normalizedAmc) || new Set<string>();
+  names.add(normalizedName);
+  map.set(normalizedAmc, names);
+}
+
+function hasCoverageName(map: Map<string, Set<string>>, amc: string, schemeName: string): boolean {
+  const normalizedName = normalizeSchemeName(schemeName);
+  if (!normalizedName) return false;
+  const names = map.get(normalizeAmcCode(amc));
+  if (!names) return false;
+  if (names.has(normalizedName)) return true;
+  return Array.from(names).some((name) => name.includes(normalizedName) || normalizedName.includes(name));
+}
+
 const ACTION_WORKFLOW_ORDER = [
   {
     order: 1,
@@ -76,7 +104,7 @@ export async function GET(request: Request) {
 
   const coreRes = await supabase
     .from('mutual_fund_core_snapshot')
-    .select('scheme_code,amc_name,nav_date,aum,expense_ratio,alpha,beta,sharpe_ratio,benchmark')
+    .select('scheme_code,scheme_name,amc_name,nav_date,aum,expense_ratio,alpha,beta,sharpe_ratio,benchmark')
     .limit(20000);
   const coreRows = coreRes.data || [];
 
@@ -91,6 +119,27 @@ export async function GET(request: Request) {
     .limit(50000);
   const sectorRows = sectorRes.data || [];
 
+  const nativeSchemesRes = await supabase
+    .from('mf_schemes')
+    .select('id,amc_code,scheme_name')
+    .limit(50000);
+  const nativeSchemes = nativeSchemesRes.data || [];
+  const nativeSchemeById = new Map(
+    nativeSchemes.map((row) => [
+      String(row.id || ''),
+      {
+        amc: normalizeAmcCode(row.amc_code || ''),
+        schemeName: String(row.scheme_name || ''),
+      },
+    ])
+  );
+
+  const nativeHoldingsRes = await supabase
+    .from('mf_scheme_holdings')
+    .select('scheme_id,sector')
+    .limit(50000);
+  const nativeHoldingsRows = nativeHoldingsRes.data || [];
+
   const docsRes = await supabase
     .from('mf_raw_documents')
     .select('id,amc_code,source_document_type,source_url,parse_status,validation_issues,downloaded_at,parsed_at')
@@ -99,6 +148,14 @@ export async function GET(request: Request) {
 
   const holdingsSet = new Set(holdingsRows.map((row) => String(row.scheme_code || '').trim()).filter(Boolean));
   const sectorSet = new Set(sectorRows.map((row) => String(row.scheme_code || '').trim()).filter(Boolean));
+  const nativeHoldingsByAmc = new Map<string, Set<string>>();
+  const nativeSectorByAmc = new Map<string, Set<string>>();
+  for (const row of nativeHoldingsRows) {
+    const scheme = nativeSchemeById.get(String(row.scheme_id || ''));
+    if (!scheme) continue;
+    addCoverageName(nativeHoldingsByAmc, scheme.amc, scheme.schemeName);
+    if (String(row.sector || '').trim()) addCoverageName(nativeSectorByAmc, scheme.amc, scheme.schemeName);
+  }
   const staleCutoff = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   type Bucket = {
@@ -153,9 +210,9 @@ export async function GET(request: Request) {
     if (row.aum !== null && row.aum !== undefined) bucket.funds_with_aum += 1;
     if (row.expense_ratio !== null && row.expense_ratio !== undefined) bucket.funds_with_ter += 1;
     if (row.expense_ratio === null || row.expense_ratio === undefined) bucket.missing_ter_count += 1;
-    if (schemeCode && holdingsSet.has(schemeCode)) bucket.funds_with_holdings += 1;
-    if (schemeCode && sectorSet.has(schemeCode)) bucket.funds_with_sector_allocation += 1;
-    if (schemeCode && sectorSet.has(schemeCode)) bucket.funds_with_asset_allocation += 1; // TODO: add dedicated asset allocation table when available.
+    if ((schemeCode && holdingsSet.has(schemeCode)) || hasCoverageName(nativeHoldingsByAmc, amc, row.scheme_name || '')) bucket.funds_with_holdings += 1;
+    if ((schemeCode && sectorSet.has(schemeCode)) || hasCoverageName(nativeSectorByAmc, amc, row.scheme_name || '')) bucket.funds_with_sector_allocation += 1;
+    if ((schemeCode && sectorSet.has(schemeCode)) || hasCoverageName(nativeSectorByAmc, amc, row.scheme_name || '')) bucket.funds_with_asset_allocation += 1; // TODO: add dedicated asset allocation table when available.
     if (row.alpha !== null || row.beta !== null || row.sharpe_ratio !== null) bucket.funds_with_ratios += 1;
     if (row.benchmark) bucket.funds_with_benchmark += 1;
 
@@ -250,8 +307,8 @@ export async function GET(request: Request) {
     needs_review_entries: needsReviewEntries,
     action_workflow_order: ACTION_WORKFLOW_ORDER,
     pipeline_focus: {
-      active_current: ['PPFAS', 'ICICI'],
-      note: 'Current MVP pipeline is strongest on PPFAS and ICICI while broader AMC coverage is being expanded.',
+      active_current: ['PPFAS', 'ICICI', 'HDFC', 'SBI'],
+      note: 'Current parser pipeline is active for PPFAS, ICICI, HDFC, and SBI while broader AMC coverage is being expanded.',
     },
     todo_notes: [
       'TODO: dedicated asset allocation coverage needs a normalized table.',
