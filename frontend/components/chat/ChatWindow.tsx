@@ -8,6 +8,7 @@ import { Send, Sparkles, Trash2 } from 'lucide-react';
 import { useCanvasStore } from '@/store/useCanvasStore';
 import { AssetType, ComparisonViewMode, initialMessages, Message, ResearchDepth, useChatStore } from '@/store/useChatStore';
 import { hasSupabaseBrowserEnv, supabaseBrowser } from '@/lib/supabaseBrowser';
+import Magnetic from '@/components/ui/Magnetic';
 
 const markdownComponents = {
   h1: (props: React.ComponentProps<'h1'>) => <h1 className="mb-3 mt-1 text-lg font-bold text-white" {...props} />,
@@ -17,10 +18,10 @@ const markdownComponents = {
   ul: (props: React.ComponentProps<'ul'>) => <ul className="mb-3 list-disc space-y-1 pl-5" {...props} />,
   ol: (props: React.ComponentProps<'ol'>) => <ol className="mb-3 list-decimal space-y-1 pl-5" {...props} />,
   li: (props: React.ComponentProps<'li'>) => <li className="leading-7 text-slate-100" {...props} />,
-  blockquote: (props: React.ComponentProps<'blockquote'>) => <blockquote className="mb-3 border-l-2 border-sky-300/60 pl-3 text-slate-200" {...props} />,
+  blockquote: (props: React.ComponentProps<'blockquote'>) => <blockquote className="mb-3 border-l-2 border-[#66a3ff]/60 pl-3 text-slate-200" {...props} />,
   a: (props: React.ComponentProps<'a'>) => (
     <a
-      className="text-sky-300 underline underline-offset-2 hover:text-sky-200"
+      className="text-[#66a3ff] underline underline-offset-2 hover:text-[#cce0ff]"
       target="_blank"
       rel="noreferrer"
       {...props}
@@ -36,7 +37,7 @@ const markdownComponents = {
   tr: (props: React.ComponentProps<'tr'>) => <tr className="border-t border-white/10" {...props} />,
   th: (props: React.ComponentProps<'th'>) => <th className="px-3 py-2 text-left font-semibold" {...props} />,
   td: (props: React.ComponentProps<'td'>) => <td className="px-3 py-2 align-top text-slate-100" {...props} />,
-  code: (props: React.ComponentProps<'code'>) => <code className="rounded bg-white/[0.08] px-1.5 py-0.5 text-sky-200" {...props} />,
+  code: (props: React.ComponentProps<'code'>) => <code className="rounded bg-white/[0.08] px-1.5 py-0.5 text-[#cce0ff]" {...props} />,
   hr: (props: React.ComponentProps<'hr'>) => <hr className="my-3 border-white/10" {...props} />,
 };
 
@@ -57,6 +58,8 @@ export default function ChatWindow() {
   const setMessages = useChatStore((state) => state.setMessages);
   const addMessage = useChatStore((state) => state.addMessage);
   const resetMessages = useChatStore((state) => state.resetMessages);
+  const pendingQuery = useChatStore((state) => state.pendingQuery);
+  const setPendingQuery = useChatStore((state) => state.setPendingQuery);
   const [isHistoryReady, setIsHistoryReady] = useState(!hasSupabaseBrowserEnv);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -225,6 +228,13 @@ export default function ChatWindow() {
     void sendQuery(query, nextAssetType, nextResearchDepth, comparisonViewMode);
   }, [comparisonViewMode, isHistoryReady, searchParams, sendQuery, setAssetType, setResearchDepth]);
 
+  useEffect(() => {
+    if (pendingQuery) {
+      void sendQuery(pendingQuery);
+      setPendingQuery(null);
+    }
+  }, [pendingQuery, sendQuery, setPendingQuery]);
+
   const handleSend = async () => {
     await sendQuery(input, assetType, researchDepth, comparisonViewMode);
   };
@@ -253,7 +263,7 @@ export default function ChatWindow() {
         </div>
         <div className="flex items-center gap-2">
           {isHistoryLoading ? (
-            <span className="rounded-full border border-sky-300/30 bg-sky-300/10 px-2.5 py-1 text-[11px] font-semibold text-sky-200">
+            <span className="rounded-full border border-[#66a3ff]/30 bg-[#66a3ff]/10 px-2.5 py-1 text-[11px] font-semibold text-[#66a3ff]">
               Loading
             </span>
           ) : null}
@@ -267,7 +277,7 @@ export default function ChatWindow() {
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
-          <span className="rounded-full border border-emerald-300/30 bg-emerald-300/12 px-2.5 py-1 text-[11px] font-semibold text-emerald-200">
+          <span className="rounded-full border border-[#007acc]/30 bg-[#007acc]/12 px-2.5 py-1 text-[11px] font-semibold text-[#66a3ff]">
             Research only
           </span>
         </div>
@@ -280,7 +290,7 @@ export default function ChatWindow() {
               key={msg.id}
               className={
                 msg.role === 'user'
-                  ? 'ml-auto w-fit max-w-[85%] rounded-2xl border border-sky-300/40 bg-[linear-gradient(140deg,#1d4f91,#2563eb)] px-4 py-3 text-sm text-[#f3f8ff]'
+                  ? 'ml-auto w-fit max-w-[85%] rounded-2xl border border-[#66a3ff]/40 bg-[linear-gradient(140deg,#003366,#00509e)] px-4 py-3 text-sm text-[#f3f8ff]'
                   : 'mr-auto max-w-[92%] rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-relaxed text-slate-100'
               }
             >
@@ -295,9 +305,15 @@ export default function ChatWindow() {
               )}
               {msg.id === '1' && (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-sky-300/45 hover:text-white" onClick={() => applySuggestion('Compare Parag Parikh Flexi Cap and ICICI Multi Asset Fund for long-term consistency.')}>Fund consistency</button>
-                  <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-sky-300/45 hover:text-white" onClick={() => applySuggestion('Which of these two funds has lower expense ratio and better Sharpe?')}>Sharpe + cost</button>
-                  <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-sky-300/45 hover:text-white" onClick={() => applySuggestion('Show NAV trend differences between Parag Parikh Flexi Cap and ICICI Multi Asset Fund.')}>NAV trend</button>
+                  <Magnetic>
+                    <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white" onClick={() => applySuggestion('Compare Parag Parikh Flexi Cap and ICICI Multi Asset Fund for long-term consistency.')}>Fund consistency</button>
+                  </Magnetic>
+                  <Magnetic>
+                    <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white" onClick={() => applySuggestion('Which of these two funds has lower expense ratio and better Sharpe?')}>Sharpe + cost</button>
+                  </Magnetic>
+                  <Magnetic>
+                    <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white" onClick={() => applySuggestion('Show NAV trend differences between Parag Parikh Flexi Cap and ICICI Multi Asset Fund.')}>NAV trend</button>
+                  </Magnetic>
                 </div>
               )}
             </div>
@@ -311,12 +327,12 @@ export default function ChatWindow() {
 
       <div className="border-t border-white/10 bg-[#070b19] p-3 sm:p-4">
         {isProcessing && (
-          <div className="mb-3 rounded-lg border border-sky-300/20 bg-sky-500/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-300 animate-pulse">
+          <div className="mb-3 rounded-lg border border-[#66a3ff]/20 bg-[#00509e]/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#66a3ff] animate-pulse">
             Thinking…
           </div>
         )}
 
-        <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-2 transition-all duration-300 focus-within:border-sky-500/40 focus-within:bg-white/[0.04] focus-within:ring-4 focus-within:ring-sky-500/10">
+        <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-2 transition-all duration-300 focus-within:border-[#66a3ff]/40 focus-within:bg-white/[0.04] focus-within:ring-4 focus-within:ring-[#66a3ff]/10">
           <textarea
             ref={textareaRef}
             value={input}
@@ -355,7 +371,7 @@ export default function ChatWindow() {
                     type="button"
                     className={`rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide transition-all ${
                       assetType === option.value
-                        ? 'bg-sky-500/20 border border-sky-400/30 text-sky-200'
+                        ? 'bg-[#00509e]/20 border border-[#66a3ff]/30 text-[#66a3ff]'
                         : 'text-slate-400 hover:text-white border border-transparent'
                     }`}
                     onClick={() => setAssetType(option.value as AssetType)}
@@ -377,7 +393,7 @@ export default function ChatWindow() {
                     type="button"
                     className={`rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide transition-all ${
                       comparisonViewMode === option.value
-                        ? 'bg-emerald-500/20 border border-emerald-400/30 text-emerald-200'
+                        ? 'bg-[#007acc]/20 border border-[#007acc]/30 text-[#66a3ff]'
                         : 'text-slate-400 hover:text-white border border-transparent'
                     }`}
                     onClick={() => setComparisonViewMode(option.value as ComparisonViewMode)}
@@ -389,14 +405,16 @@ export default function ChatWindow() {
               </div>
             </div>
 
-            <button
-              onClick={handleSend}
-              aria-label="Send Message"
-              disabled={isProcessing || !input.trim()}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500 text-slate-950 transition-all hover:bg-sky-400 hover:scale-105 active:scale-95 disabled:scale-100 disabled:cursor-not-allowed disabled:bg-white/5 disabled:text-slate-600"
-            >
-              <Send size={15} />
-            </button>
+            <Magnetic>
+              <button
+                onClick={handleSend}
+                aria-label="Send Message"
+                disabled={isProcessing || !input.trim()}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#66a3ff] text-slate-950 transition-all hover:bg-[#66a3ff]/80 hover:scale-105 active:scale-95 disabled:scale-100 disabled:cursor-not-allowed disabled:bg-white/5 disabled:text-slate-600"
+              >
+                <Send size={15} />
+              </button>
+            </Magnetic>
           </div>
         </div>
       </div>

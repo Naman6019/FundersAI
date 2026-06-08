@@ -6,32 +6,32 @@
 
   /* Stitch Design Tokens - Prefixed to avoid collision with standard Tailwind keywords */
   --color-on-surface: #e2e2e3;
-  --color-on-primary-container: #00716b;
+  --color-on-primary-container: #00509e;
   --color-surface-container-highest: #333536;
-  --color-primary-fixed: #62f9ee;
-  --color-outline-variant: #3c4948;
-  --color-secondary: #7bd6d1;
-  --color-on-secondary: #003735;
-  --color-primary-container: #62f9ee;
+  --color-primary-fixed: #66a3ff;
+  --color-outline-variant: #1e2a38;
+  --color-secondary: #66a3ff;
+  --color-on-secondary: #001f3f;
+  --color-primary-container: #66a3ff;
   --color-tertiary-fixed-dim: #bec7d6;
-  --color-primary-fixed-dim: #3cdcd1;
+  --color-primary-fixed-dim: #007acc;
   --color-tertiary-fixed: #dae3f2;
   --color-on-surface-variant: #bacac7;
-  --color-on-secondary-container: #a1fcf7;
-  --color-on-secondary-fixed: #00201f;
+  --color-on-secondary-container: #cce0ff;
+  --color-on-secondary-fixed: #001f3f;
   --color-surface-dim: #111415;
   --color-tertiary-container: #dae3f2;
   --color-primary: #ffffff;
-  --color-on-primary-fixed-variant: #00504b;
+  --color-on-primary-fixed-variant: #003366;
   --color-on-tertiary-container: #5c6572;
   --color-surface-variant: #333536;
-  --color-on-primary: #003734;
-  --color-inverse-primary: #006a64;
-  --color-secondary-fixed-dim: #7bd6d1;
-  --color-secondary-container: #007774;
+  --color-on-primary: #001f3f;
+  --color-inverse-primary: #00509e;
+  --color-secondary-fixed-dim: #66a3ff;
+  --color-secondary-container: #003366;
   --color-surface: #111415;
   --color-surface-container-low: #1a1c1d;
-  --color-on-secondary-fixed-variant: #00504d;
+  --color-on-secondary-fixed-variant: #003366;
   --color-tertiary: #ffffff;
   --color-on-tertiary-fixed: #131c27;
   --color-surface-container: #1e2021;
@@ -41,15 +41,15 @@
   --color-inverse-surface: #e2e2e3;
   --color-on-error-container: #ffdad6;
   --color-error-container: #93000a;
-  --color-surface-tint: #3cdcd1;
+  --color-surface-tint: #007acc;
   --color-surface-container-lowest: #0c0f0f;
   --color-on-tertiary-fixed-variant: #3e4753;
   --color-on-background: #e2e2e3;
   --color-error: #ffb4ab;
-  --color-on-primary-fixed: #00201e;
+  --color-on-primary-fixed: #001f3f;
   --color-surface-bright: #37393a;
   --color-on-tertiary: #28313c;
-  --color-secondary-fixed: #98f2ed;
+  --color-secondary-fixed: #cce0ff;
   --color-on-error: #690005;
 
   --radius-s-default: 0.125rem;
@@ -74,6 +74,11 @@
   --font-body-md: "Inter", sans-serif;
   --font-body-lg: "Inter", sans-serif;
   --font-data-mono: "IBM Plex Mono", monospace;
+  --font-serif-display: "Playfair Display", Georgia, serif;
+}
+
+.font-serif-display {
+  font-family: var(--font-serif-display), serif;
 }
 
 :root {
@@ -84,11 +89,11 @@
   --chat-bg: #1f2833;
   --text-primary: #c5c6c7;
   --text-secondary: #8a9199;
-  --accent-color: #66fcf1;
-  --accent-glow: rgba(102, 252, 241, 0.3);
-  --accent-dark: #45a29e;
+  --accent-color: #66a3ff;
+  --accent-glow: rgba(0, 80, 158, 0.3);
+  --accent-dark: #00509e;
   
-  --glass-border-color: rgba(102, 252, 241, 0.15);
+  --glass-border-color: rgba(102, 163, 255, 0.15);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
 }
 
@@ -270,7 +275,7 @@
 }
 
 .sign-out-button:hover {
-  border-color: rgba(102, 252, 241, 0.35);
+  border-color: rgba(102, 163, 255, 0.35);
   color: #ffffff;
 }
 
@@ -315,7 +320,7 @@
   height: 30px;
   place-items: center;
   border-radius: 7px;
-  background: #66fcf1;
+  background: #66a3ff;
   color: #0b0c10;
 }
 
@@ -338,6 +343,56 @@
   gap: 16px;
 }
 
+.auth-google-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(197, 198, 199, 0.18);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1f1f1f;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.auth-google-button span {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid #dadce0;
+  color: #4285f4;
+  font-weight: 900;
+}
+
+.auth-google-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  color: #859491;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: rgba(197, 198, 199, 0.14);
+}
+
 .auth-form label {
   display: grid;
   gap: 8px;
@@ -358,8 +413,8 @@
 }
 
 .auth-form input:focus {
-  border-color: #66fcf1;
-  box-shadow: 0 0 0 3px rgba(102, 252, 241, 0.12);
+  border-color: #66a3ff;
+  box-shadow: 0 0 0 3px rgba(102, 163, 255, 0.12);
 }
 
 .auth-form button,
@@ -372,7 +427,7 @@
 
 .auth-form button {
   border: 0;
-  background: #66fcf1;
+  background: #66a3ff;
   color: #0b0c10;
 }
 
@@ -392,7 +447,7 @@
   margin-top: 18px;
   border: 1px solid rgba(197, 198, 199, 0.12);
   background: transparent;
-  color: #66fcf1;
+  color: #66a3ff;
 }
 
 .chat-area {
@@ -471,7 +526,7 @@
 }
 
 .user-msg .msg-content {
-  background: linear-gradient(135deg, var(--accent-dark), rgba(69, 162, 158, 0.7));
+  background: linear-gradient(135deg, var(--accent-dark), rgba(0, 122, 204, 0.7));
   color: white;
   border-bottom-right-radius: 4px;
 }
@@ -499,7 +554,7 @@
   margin-bottom: 0.75rem;
   font-size: 1.3rem;
   font-weight: 600;
-  border-bottom: 1px solid rgba(102, 252, 241, 0.2);
+  border-bottom: 1px solid rgba(102, 163, 255, 0.2);
   padding-bottom: 0.4rem;
 }
 
@@ -531,7 +586,7 @@
 }
 
 .system-msg blockquote {
-  background: rgba(102, 252, 241, 0.05);
+  background: rgba(102, 163, 255, 0.05);
   font-style: italic;
   color: #a0aab2;
   border-left: 3px solid var(--accent-color);
@@ -660,8 +715,8 @@ tr:hover td {
 }
 
 .input-wrapper:focus-within {
-  border-color: rgba(102, 252, 241, 0.45);
-  box-shadow: 0 0 0 3px rgba(102, 252, 241, 0.12);
+  border-color: rgba(102, 163, 255, 0.45);
+  box-shadow: 0 0 0 3px rgba(102, 163, 255, 0.12);
 }
 
 textarea {
@@ -704,18 +759,18 @@ textarea {
 
 /* Stitch Custom Styles */
 .glass-border {
-  border: 1px solid rgba(102, 252, 241, 0.15);
+  border: 1px solid rgba(102, 163, 255, 0.15);
   background-color: rgba(31, 40, 51, 0.4);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
 
 .accent-glow {
-  box-shadow: 0 0 30px rgba(102, 252, 241, 0.1);
+  box-shadow: 0 0 30px rgba(102, 163, 255, 0.1);
 }
 
 .accent-glow-strong {
-  box-shadow: 0 0 40px rgba(102, 252, 241, 0.2);
+  box-shadow: 0 0 40px rgba(102, 163, 255, 0.2);
 }
 
 @keyframes marquee {
@@ -728,13 +783,13 @@ textarea {
 }
 
 .chart-line {
-  stroke: #66fcf1;
+  stroke: #66a3ff;
   stroke-width: 1.5;
   fill: none;
 }
 
 .chart-line-secondary {
-  stroke: rgba(102, 252, 241, 0.4);
+  stroke: rgba(102, 163, 255, 0.4);
   stroke-width: 1.5;
   fill: none;
 }
@@ -744,7 +799,7 @@ textarea {
 }
 
 .grid-line {
-  stroke: rgba(102, 252, 241, 0.05);
+  stroke: rgba(102, 163, 255, 0.05);
   stroke-width: 1;
 }
 
@@ -753,7 +808,7 @@ textarea {
   min-height: 100vh;
   overflow-x: clip;
   background:
-    radial-gradient(circle at 50% 9%, rgba(102, 252, 241, 0.08), transparent 34rem),
+    radial-gradient(circle at 50% 9%, rgba(102, 163, 255, 0.08), transparent 34rem),
     #0b0c10;
   color: #e2e2e3;
   font-family: "Inter", sans-serif;
@@ -766,7 +821,7 @@ textarea {
   height: 72px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(31, 40, 51, 0.78);
-  box-shadow: 0 0 18px rgba(102, 252, 241, 0.1);
+  box-shadow: 0 0 18px rgba(102, 163, 255, 0.1);
   backdrop-filter: blur(18px);
 }
 
@@ -783,7 +838,7 @@ textarea {
 }
 
 .landing-brand {
-  color: #66fcf1;
+  color: #66a3ff;
   font-size: 24px;
   font-weight: 700;
   text-decoration: none;
@@ -805,11 +860,11 @@ textarea {
 
 .landing-links a:hover,
 .landing-links a.active {
-  color: #66fcf1;
+  color: #66a3ff;
 }
 
 .landing-links a.active {
-  border-bottom: 2px solid #66fcf1;
+  border-bottom: 2px solid #66a3ff;
 }
 
 .landing-small-cta,
@@ -828,9 +883,9 @@ textarea {
   min-height: 30px;
   padding: 5px 10px;
   border-radius: 4px;
-  background: #62f9ee;
-  color: #003734;
-  box-shadow: 0 0 18px rgba(102, 252, 241, 0.45);
+  background: #66a3ff;
+  color: #001f3f;
+  box-shadow: 0 0 18px rgba(102, 163, 255, 0.45);
 }
 
 .landing-main {
@@ -860,7 +915,7 @@ textarea {
   aspect-ratio: 1;
   transform: translateX(-50%);
   border-radius: 999px;
-  background: rgba(102, 252, 241, 0.05);
+  background: rgba(102, 163, 255, 0.05);
   filter: blur(110px);
   pointer-events: none;
 }
@@ -913,15 +968,15 @@ textarea {
 }
 
 .landing-primary-action {
-  background: #62f9ee;
-  color: #003734;
-  box-shadow: 0 0 22px rgba(102, 252, 241, 0.42);
+  background: #66a3ff;
+  color: #001f3f;
+  box-shadow: 0 0 22px rgba(102, 163, 255, 0.42);
 }
 
 .landing-secondary-action {
   border: 1px solid #859491;
   background: rgba(17, 20, 21, 0.72);
-  color: #62f9ee;
+  color: #66a3ff;
 }
 
 .landing-trust-strip {
@@ -951,7 +1006,7 @@ textarea {
 .landing-trust-pill .material-symbols-outlined,
 .landing-feature-card .material-symbols-outlined,
 .landing-data-card > .material-symbols-outlined {
-  color: #62f9ee;
+  color: #66a3ff;
 }
 
 .landing-trust-pill .material-symbols-outlined {
@@ -973,7 +1028,7 @@ textarea {
   border: 1px solid rgba(60, 73, 72, 0.75);
   border-radius: 8px;
   background: rgba(30, 32, 33, 0.72);
-  box-shadow: 0 0 24px rgba(102, 252, 241, 0.08);
+  box-shadow: 0 0 24px rgba(102, 163, 255, 0.08);
 }
 
 .landing-market-strip-label {
@@ -983,7 +1038,7 @@ textarea {
   min-height: 34px;
   padding: 0 12px;
   border-right: 1px solid rgba(60, 73, 72, 0.8);
-  color: #66fcf1;
+  color: #66a3ff;
   font-family: "Space Grotesk", sans-serif;
   font-size: 14px;
   font-weight: 700;
@@ -1044,7 +1099,7 @@ textarea {
 }
 
 .landing-market-tick .positive {
-  color: #62f9ee;
+  color: #66a3ff;
 }
 
 .landing-market-tick .negative {
@@ -1139,7 +1194,7 @@ textarea {
   border: 1px solid rgba(60, 73, 72, 0.65);
   border-radius: 6px;
   background: #111415;
-  color: #62f9ee;
+  color: #66a3ff;
   font-family: "Space Grotesk", sans-serif;
   font-size: 14px;
   font-weight: 700;
@@ -1190,7 +1245,7 @@ textarea {
 .landing-footer strong {
   display: block;
   margin-bottom: 12px;
-  color: #66fcf1;
+  color: #66a3ff;
   font-size: 20px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1222,7 +1277,7 @@ textarea {
 }
 
 .landing-footer a:hover {
-  color: #66fcf1;
+  color: #66a3ff;
 }
 
 @media (max-width: 900px) {

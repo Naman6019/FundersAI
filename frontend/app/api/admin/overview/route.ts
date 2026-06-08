@@ -24,6 +24,7 @@ export async function GET(request: Request) {
   const totalUsers = Number(usersRes.count || users.length || 0);
   const freeUsers = users.filter((u) => u.tier === 'free').length;
   const proUsers = users.filter((u) => u.tier === 'pro').length;
+  const ultraUsers = users.filter((u) => u.tier === 'ultra').length;
   const adminTesterUsers = users.filter((u) => u.role === 'admin' || u.role === 'tester').length;
   const activeUsersTodayByProfile = users.filter((u) => (u.last_active_at || '') >= dayStart).length;
 
@@ -142,6 +143,7 @@ export async function GET(request: Request) {
         active_users_today: activeUsersToday,
         free_users: freeUsers,
         pro_users: proUsers,
+        ultra_users: ultraUsers,
         admin_tester_users: adminTesterUsers,
       },
       ai_usage: {

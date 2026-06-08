@@ -133,7 +133,7 @@ export default function AdminDataCoveragePage() {
         <Panel>
           <div className="mb-3 flex items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-[#d6e6ff]">Parser Action Workflow</h3>
-            <span className="rounded-full border border-sky-400/35 bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-200">
+            <span className="rounded-full border border-[#66a3ff]/35 bg-[#66a3ff]/10 px-2 py-0.5 text-[11px] text-[#66a3ff]">
               Ordered
             </span>
           </div>

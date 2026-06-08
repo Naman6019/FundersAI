@@ -94,7 +94,7 @@ export default function AdminResolverDebugPage() {
           <button
             type="submit"
             disabled={loading}
-            className="rounded-xl border border-white/15 bg-[#17325a] px-4 py-2 text-sm text-white disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-sky-500"
+            className="rounded-xl border border-white/15 bg-[#17325a] px-4 py-2 text-sm text-white disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-[#66a3ff]"
           >
             {loading ? 'Testing…' : 'Test Resolver'}
           </button>

@@ -34,6 +34,9 @@
 - On dashboard load, frontend triggers `/api/keepalive`.
 - Chat and canvas stay in one workspace; canvas overlay should not clear chat state.
 - Comparison/detail canvas relies on structured `quant_data` payload shape.
+- Overview is intended to become the first post-login dashboard experience.
+- AI Research is reached through the existing tab/CTA handoff, not a separate `/dashboard/research` route in V1.
+- `pendingQuery` is the handoff mechanism from dashboard prompts into chat.
 
 ## Local Run
 ```bash

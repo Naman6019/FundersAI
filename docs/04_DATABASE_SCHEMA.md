@@ -34,8 +34,12 @@ Writes are server-side only (backend jobs, backend APIs, or trusted service-role
 ## Admin / Access Control
 - `user_profiles`
   - `role`: `user | admin | tester`
-  - `tier`: `free | pro`
+  - `tier`: `free | pro | ultra`
   - `last_active_at`, `created_at`, `updated_at`
+- `billing_subscriptions`
+  - Razorpay subscription id, plan id, tier, billing period, status, current period dates
+- `billing_events`
+  - Razorpay event id, event type, subscription id, payload metadata
 - RLS policies enforce:
   - user can read own profile
   - admin can read all profiles

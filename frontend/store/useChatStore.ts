@@ -25,6 +25,8 @@ interface ChatState {
   assetType: AssetType;
   researchDepth: ResearchDepth;
   comparisonViewMode: ComparisonViewMode;
+  pendingQuery: string | null;
+  setPendingQuery: (query: string | null) => void;
   setInput: (input: string) => void;
   setIsProcessing: (isProcessing: boolean) => void;
   setAssetType: (assetType: AssetType) => void;
@@ -42,6 +44,8 @@ export const useChatStore = create<ChatState>((set) => ({
   assetType: 'auto',
   researchDepth: 'standard',
   comparisonViewMode: 'canvas',
+  pendingQuery: null,
+  setPendingQuery: (pendingQuery) => set({ pendingQuery }),
   setInput: (input) => set({ input }),
   setIsProcessing: (isProcessing) => set({ isProcessing }),
   setAssetType: (assetType) => set({ assetType }),

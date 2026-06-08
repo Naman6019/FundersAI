@@ -1,5 +1,15 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import type { UserRole, UserTier } from '@/lib/billing/tiers';
+
+export type ProfileRow = {
+  user_id: string;
+  role: UserRole;
+  tier: UserTier;
+  last_active_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
 
 export type UserContext = {
   token: string;
@@ -7,6 +17,7 @@ export type UserContext = {
     id: string;
     email: string | null;
   };
+  profile: ProfileRow;
   supabaseAdmin: SupabaseClient;
 };
 
@@ -37,6 +48,28 @@ export function createServiceClient(): SupabaseClient | null {
   });
 }
 
+export async function fetchOrCreateUserProfile(
+  supabaseAdmin: SupabaseClient,
+  userId: string,
+): Promise<ProfileRow | null> {
+  const readRes = await supabaseAdmin
+    .from('user_profiles')
+    .select('user_id,role,tier,last_active_at,created_at,updated_at')
+    .eq('user_id', userId)
+    .limit(1)
+    .maybeSingle();
+  if (readRes.data) return readRes.data as ProfileRow;
+
+  const insertRes = await supabaseAdmin
+    .from('user_profiles')
+    .insert([{ user_id: userId, role: 'user', tier: 'free' }])
+    .select('user_id,role,tier,last_active_at,created_at,updated_at')
+    .limit(1)
+    .maybeSingle();
+
+  return (insertRes.data as ProfileRow | null) || null;
+}
+
 export async function getUserContext(request: Request): Promise<UserContext | null> {
   const token = bearerToken(request);
   const url = supabaseUrl();
@@ -50,12 +83,16 @@ export async function getUserContext(request: Request): Promise<UserContext | nu
   const { data, error } = await anonClient.auth.getUser(token);
   if (error || !data.user) return null;
 
+  const profile = await fetchOrCreateUserProfile(supabaseAdmin, data.user.id);
+  if (!profile) return null;
+
   return {
     token,
     user: {
       id: data.user.id,
       email: data.user.email ?? null,
     },
+    profile,
     supabaseAdmin,
   };
 }

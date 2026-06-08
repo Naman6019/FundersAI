@@ -62,7 +62,7 @@ function ProviderSection({ title, block }: { title: string; block?: ProviderBloc
       ) : (
         <div className="space-y-3">
           {rows.map((row, idx) => (
-            <div key={idx} className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-sky-500/20">
+            <div key={idx} className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-[#66a3ff]/20">
               <div className="font-semibold text-slate-200">
                 {pick(row, ['title', 'subject', 'companyName', 'name', 'action_type', 'type']) || 'Provider data'}
               </div>
@@ -148,21 +148,21 @@ export default function StockDetailView({ stockId }: { stockId?: string }) {
           </div>
           
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-sky-500/20">
-              <div className="text-slate-400 text-xs mb-1">Price</div>
-              <div className="text-lg font-bold text-sky-300">{String(data?.latest_price?.close ?? 'N/A')}</div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-[#66a3ff]/20 flex flex-col gap-1">
+              <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Price</div>
+              <div className="font-serif-display text-2xl font-bold text-[#66a3ff]">{String(data?.latest_price?.close ?? 'N/A')}</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-sky-500/20">
-              <div className="text-slate-400 text-xs mb-1">P/E</div>
-              <div className="text-lg font-bold text-slate-200">{String(data?.ratios?.pe ?? 'N/A')}</div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-[#66a3ff]/20 flex flex-col gap-1">
+              <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">P/E Ratio</div>
+              <div className="font-serif-display text-2xl font-bold text-slate-200">{String(data?.ratios?.pe ?? 'N/A')}</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-sky-500/20">
-              <div className="text-slate-400 text-xs mb-1">Market Cap</div>
-              <div className="text-lg font-bold text-slate-200">{String(data?.ratios?.market_cap ?? 'N/A')}</div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-[#66a3ff]/20 flex flex-col gap-1">
+              <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Market Cap</div>
+              <div className="font-serif-display text-2xl font-bold text-slate-200">{String(data?.ratios?.market_cap ?? 'N/A')}</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-sky-500/20">
-              <div className="text-slate-400 text-xs mb-1">Source</div>
-              <div className="text-sm font-semibold text-slate-200 truncate" title={String(data?.source_summary?.metadata || 'N/A')}>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-[#66a3ff]/20 flex flex-col gap-1">
+              <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Source</div>
+              <div className="text-sm font-semibold text-slate-300 truncate mt-auto" title={String(data?.source_summary?.metadata || 'N/A')}>
                 {String(data?.source_summary?.metadata || 'N/A')}
               </div>
             </div>

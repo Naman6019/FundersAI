@@ -84,50 +84,50 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
             <h2 className="text-2xl font-bold tracking-tight text-white mb-2">{data.details.scheme_name}</h2>
             <div className="flex gap-2 flex-wrap text-xs">
               <span className="bg-white/5 border border-white/10 px-2.5 py-1 rounded text-slate-300">{data.details.fund_house}</span>
-              <span className="bg-sky-500/10 border border-sky-500/20 text-sky-300 px-2.5 py-1 rounded">{data.details.category}</span>
+              <span className="bg-[#66a3ff]/10 border border-[#66a3ff]/20 text-[#66a3ff] px-2.5 py-1 rounded">{data.details.category}</span>
               <span className="bg-purple-500/10 border border-purple-500/20 text-purple-300 px-2.5 py-1 rounded">{data.details.sub_category}</span>
             </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-sky-500/20">
-              <div className="text-slate-400 text-xs mb-1">NAV ({navDateLabel})</div>
-              <div className="text-lg font-bold text-sky-300">₹{data.details.nav}</div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-[#66a3ff]/20 flex flex-col gap-1">
+              <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">NAV ({navDateLabel})</div>
+              <div className="font-serif-display text-2xl font-bold text-[#66a3ff]">₹{data.details.nav}</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-sky-500/20">
-              <div className="text-slate-400 text-xs mb-1">AUM (Cr)</div>
-              <div className="text-lg font-bold text-slate-200">₹{data.details.aum || 'N/A'}</div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-[#66a3ff]/20 flex flex-col gap-1">
+              <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">AUM (Cr)</div>
+              <div className="font-serif-display text-2xl font-bold text-slate-200">₹{data.details.aum || 'N/A'}</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-sky-500/20">
-              <div className="text-slate-400 text-xs mb-1">Expense Ratio</div>
-              <div className="text-lg font-bold text-slate-200">{data.details.expense_ratio ? `${data.details.expense_ratio}%` : 'N/A'}</div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-[#66a3ff]/20 flex flex-col gap-1">
+              <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Expense Ratio</div>
+              <div className="font-serif-display text-2xl font-bold text-slate-200">{data.details.expense_ratio ? `${data.details.expense_ratio}%` : 'N/A'}</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-sky-500/20">
-              <div className="text-slate-400 text-xs mb-1">Exit Load</div>
-              <div className="text-sm font-semibold text-slate-200 truncate" title={data.details.exit_load || 'N/A'}>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-[#66a3ff]/20 flex flex-col gap-1">
+              <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Exit Load</div>
+              <div className="text-sm font-semibold text-slate-300 truncate mt-auto" title={data.details.exit_load || 'N/A'}>
                 {data.details.exit_load || 'N/A'}
               </div>
             </div>
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-[#0f172a]/60 p-5 shadow-lg backdrop-blur-md">
-            <h3 className="text-sm font-semibold text-white tracking-wide mb-4">Historical Returns (CAGR)</h3>
+            <h3 className="text-sm font-semibold text-white tracking-wide mb-4 uppercase">Historical Returns (CAGR)</h3>
             <div className="grid grid-cols-3 gap-4 text-center">
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-slate-400 text-xs mb-1">1 Year</div>
-                <div className={`font-bold text-base ${(returns?.['1Y'] ?? 0) > 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
+                <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">1 Year</div>
+                <div className={`font-serif-display font-bold text-2xl ${(returns?.['1Y'] ?? 0) > 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                   {returns?.['1Y'] !== null && returns?.['1Y'] !== undefined ? `${returns['1Y']}%` : 'N/A'}
                 </div>
               </div>
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-slate-400 text-xs mb-1">3 Years</div>
-                <div className={`font-bold text-base ${(returns?.['3Y'] ?? 0) > 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
+                <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">3 Years</div>
+                <div className={`font-serif-display font-bold text-2xl ${(returns?.['3Y'] ?? 0) > 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                   {returns?.['3Y'] !== null && returns?.['3Y'] !== undefined ? `${returns['3Y']}%` : 'N/A'}
                 </div>
               </div>
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-slate-400 text-xs mb-1">5 Years</div>
-                <div className={`font-bold text-base ${(returns?.['5Y'] ?? 0) > 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
+                <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">5 Years</div>
+                <div className={`font-serif-display font-bold text-2xl ${(returns?.['5Y'] ?? 0) > 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                   {returns?.['5Y'] !== null && returns?.['5Y'] !== undefined ? `${returns['5Y']}%` : 'N/A'}
                 </div>
               </div>
@@ -141,27 +141,27 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
                 <span className="text-[10px] text-slate-400 font-normal uppercase tracking-wider">Based on full NAV history (RFR 6%)</span>
               </h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                  <div className="text-slate-400 text-xs mb-1">Sharpe Ratio</div>
-                  <div className={`font-bold text-base ${(riskMetrics.sharpeRatio ?? 0) >= 1 ? 'text-emerald-300' : (riskMetrics.sharpeRatio ?? 0) >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
+                  <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Sharpe Ratio</div>
+                  <div className={`font-serif-display font-bold text-2xl ${(riskMetrics.sharpeRatio ?? 0) >= 1 ? 'text-emerald-300' : (riskMetrics.sharpeRatio ?? 0) >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>
                     {riskMetrics.sharpeRatio ?? 'N/A'}
                   </div>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                  <div className="text-slate-400 text-xs mb-1">Sortino Ratio</div>
-                  <div className={`font-bold text-base ${(riskMetrics.sortinoRatio ?? 0) >= 1 ? 'text-emerald-300' : (riskMetrics.sortinoRatio ?? 0) >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
+                  <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Sortino Ratio</div>
+                  <div className={`font-serif-display font-bold text-2xl ${(riskMetrics.sortinoRatio ?? 0) >= 1 ? 'text-emerald-300' : (riskMetrics.sortinoRatio ?? 0) >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>
                     {riskMetrics.sortinoRatio ?? 'N/A'}
                   </div>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                  <div className="text-slate-400 text-xs mb-1">Std Dev (Ann.)</div>
-                  <div className="font-semibold text-base text-slate-200">
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
+                  <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Std Dev (Ann.)</div>
+                  <div className="font-serif-display font-bold text-2xl text-slate-200">
                     {typeof riskMetrics.stdDev === 'number' ? `${(riskMetrics.stdDev * 100).toFixed(1)}%` : 'N/A'}
                   </div>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                  <div className="text-slate-400 text-xs mb-1">Max Drawdown</div>
-                  <div className="font-semibold text-base text-rose-300">
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
+                  <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Max Drawdown</div>
+                  <div className="font-serif-display font-bold text-2xl text-rose-300">
                     {typeof riskMetrics.maxDrawdown === 'number' ? `-${(riskMetrics.maxDrawdown * 100).toFixed(1)}%` : 'N/A'}
                   </div>
                 </div>
@@ -183,14 +183,14 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
                       tickFormatter={(val) => {
                          const d = new Date(val.split('-').reverse().join('-')); // approx parsing
                          return `${d.getMonth()+1}/${d.getFullYear().toString().substr(-2)}`;
-                      }} 
+                      }}
                     />
                     <YAxis stroke="#8a9199" fontSize={11} domain={['dataMin', 'dataMax']} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: 'rgba(11, 12, 16, 0.95)', borderColor: 'rgba(56, 189, 248, 0.2)', borderRadius: '12px' }} 
-                      itemStyle={{ color: '#38bdf8' }}
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'rgba(11, 12, 16, 0.95)', borderColor: 'rgba(102, 163, 255, 0.2)', borderRadius: '12px' }}
+                      itemStyle={{ color: '#66a3ff' }}
                     />
-                    <Line type="monotone" dataKey="value" stroke="#38bdf8" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                    <Line type="monotone" dataKey="value" stroke="#66a3ff" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (

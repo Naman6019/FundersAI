@@ -74,6 +74,7 @@ export default function AdminOverviewPage() {
             <p>Active today: <span className="font-semibold">{users.active_users_today || 0}</span></p>
             <p>Free: <span className="font-semibold">{users.free_users || 0}</span></p>
             <p>Pro: <span className="font-semibold">{users.pro_users || 0}</span></p>
+            <p>Ultra: <span className="font-semibold">{users.ultra_users || 0}</span></p>
             <p>Admin/Tester: <span className="font-semibold">{users.admin_tester_users || 0}</span></p>
           </div>
         </Panel>

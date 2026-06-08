@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { UserRole, UserTier, effectiveRateLimitTier } from './billing/tiers';
 
 type RateLimitWindow = {
   name: string;
@@ -51,6 +52,56 @@ export const RATE_LIMIT_GROUPS: Record<RateLimitGroup, RateLimitWindow[]> = {
   'admin-mutation': [
     { name: 'minute', limit: 20, seconds: 60 },
   ],
+};
+
+export const RATE_LIMIT_TIERS: Record<UserTier, Partial<Record<RateLimitGroup, RateLimitWindow[]>>> = {
+  free: {
+    chat: [
+      { name: 'minute', limit: 5, seconds: 60 },
+      { name: 'day', limit: 10, seconds: 86400 },
+    ],
+    quant: [
+      { name: 'minute', limit: 20, seconds: 60 },
+      { name: 'day', limit: 100, seconds: 86400 },
+    ],
+    'mf-detail': [
+      { name: 'minute', limit: 20, seconds: 60 },
+      { name: 'day', limit: 100, seconds: 86400 },
+    ],
+    search: [
+      { name: 'minute', limit: 10, seconds: 60 },
+      { name: 'day', limit: 50, seconds: 86400 },
+    ],
+    'data-health': [
+      { name: 'minute', limit: 15, seconds: 60 },
+      { name: 'day', limit: 100, seconds: 86400 },
+    ],
+  },
+  pro: RATE_LIMIT_GROUPS,
+  ultra: {
+    chat: [
+      { name: 'minute', limit: 30, seconds: 60 },
+      { name: 'day', limit: 300, seconds: 86400 },
+    ],
+    quant: [
+      { name: 'minute', limit: 180, seconds: 60 },
+      { name: 'day', limit: 3000, seconds: 86400 },
+    ],
+    'mf-detail': [
+      { name: 'minute', limit: 180, seconds: 60 },
+      { name: 'day', limit: 3000, seconds: 86400 },
+    ],
+    search: [
+      { name: 'minute', limit: 90, seconds: 60 },
+      { name: 'day', limit: 1500, seconds: 86400 },
+    ],
+    'data-health': [
+      { name: 'minute', limit: 90, seconds: 60 },
+      { name: 'day', limit: 1500, seconds: 86400 },
+    ],
+    'cron-sync-mf': RATE_LIMIT_GROUPS['cron-sync-mf'],
+    'admin-mutation': RATE_LIMIT_GROUPS['admin-mutation'],
+  },
 };
 
 type WindowUsage = {
@@ -139,18 +190,22 @@ async function readUpstashWindow(group: RateLimitGroup, identity: string, window
 export async function checkRateLimit(
   request: Request,
   group: RateLimitGroup,
-  options: { identifier?: string; nowMs?: number } = {},
+  options: { identifier?: string; nowMs?: number; tier?: UserTier; role?: UserRole } = {},
 ): Promise<RateLimitResult> {
-  const windows = RATE_LIMIT_GROUPS[group];
+  const tier = effectiveRateLimitTier(options.tier, options.role);
+  const windows = RATE_LIMIT_TIERS[tier][group] || RATE_LIMIT_GROUPS[group];
   if (!isEnabled() || !windows) {
     return { allowed: true, configured: true, limit: 0, remaining: 0, resetSeconds: 0, retryAfterSeconds: 0 };
   }
 
   const config = upstashConfig();
-  const useMemory = !config.configured;
   if (!config.configured) {
+    if (process.env.NODE_ENV === 'production') {
+      return { allowed: false, configured: false, limit: 0, remaining: 0, resetSeconds: 60, retryAfterSeconds: 60 };
+    }
     console.warn('Rate limit storage (Upstash Redis) is not configured; falling back to in-memory rate limiting.');
   }
+  const useMemory = !config.configured;
 
   const nowMs = options.nowMs ?? Date.now();
   const identity = rateLimitIdentity(request, options.identifier);
@@ -205,7 +260,7 @@ export function rateLimitResponse(result: RateLimitResult): Response {
 export async function enforceRateLimit(
   request: Request,
   group: RateLimitGroup,
-  options: { identifier?: string } = {},
+  options: { identifier?: string; tier?: UserTier; role?: UserRole } = {},
 ): Promise<Response | null> {
   let result: RateLimitResult;
   try {

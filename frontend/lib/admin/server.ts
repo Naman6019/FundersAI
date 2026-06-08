@@ -1,8 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-
-export type UserRole = 'user' | 'admin' | 'tester';
-export type UserTier = 'free' | 'pro';
+import type { UserRole, UserTier } from '@/lib/billing/tiers';
 
 type ProfileRow = {
   user_id: string;
@@ -157,4 +155,3 @@ export function readNumber(input: unknown): number {
   const value = Number(input);
   return Number.isFinite(value) ? value : 0;
 }
-

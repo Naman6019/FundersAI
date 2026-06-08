@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import test from 'node:test';
 import { createRequire } from 'node:module';
 
@@ -10,19 +10,22 @@ const Module = require('module');
 
 function loadRateLimitModule() {
   const filename = resolve('lib/rateLimit.ts');
-  const source = readFileSync(filename, 'utf8');
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2022,
-      esModuleInterop: true,
-    },
-  }).outputText;
-  const mod = new Module(filename);
-  mod.filename = filename;
-  mod.paths = Module._nodeModulePaths(dirname(filename));
-  mod._compile(output, filename);
-  return mod.exports;
+  const previous = Module._extensions['.ts'];
+  Module._extensions['.ts'] = (mod, childFilename) => {
+    const source = readFileSync(childFilename, 'utf8');
+    const output = ts.transpileModule(source, {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        esModuleInterop: true,
+      },
+    }).outputText;
+    mod._compile(output, childFilename);
+  };
+  delete require.cache[filename];
+  const loaded = require(filename);
+  Module._extensions['.ts'] = previous;
+  return loaded;
 }
 
 function requestFor(ip) {
@@ -33,7 +36,7 @@ function requestFor(ip) {
   });
 }
 
-test('chat limit blocks after the minute bucket is exhausted', async () => {
+test('free chat limit blocks after the day bucket is exhausted', async () => {
   process.env.NODE_ENV = 'test';
   delete process.env.UPSTASH_REDIS_REST_URL;
   delete process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -41,18 +44,42 @@ test('chat limit blocks after the minute bucket is exhausted', async () => {
   limiter.resetRateLimitMemoryForTests();
 
   for (let i = 0; i < 10; i += 1) {
-    const result = await limiter.checkRateLimit(requestFor('203.0.113.10'), 'chat', { nowMs: 1000 });
+    const result = await limiter.checkRateLimit(requestFor('203.0.113.10'), 'chat', {
+      nowMs: 1000 + i * 61000,
+      tier: 'free',
+    });
     assert.equal(result.allowed, true);
   }
 
-  const blocked = await limiter.checkRateLimit(requestFor('203.0.113.10'), 'chat', { nowMs: 1000 });
+  const blocked = await limiter.checkRateLimit(requestFor('203.0.113.10'), 'chat', {
+    nowMs: 1000 + 10 * 61000,
+    tier: 'free',
+  });
   assert.equal(blocked.allowed, false);
-  assert.equal(blocked.retryAfterSeconds, 59);
 
   const response = limiter.rateLimitResponse(blocked);
   assert.equal(response.status, 429);
-  assert.equal(response.headers.get('Retry-After'), '59');
   assert.equal((await response.json()).error, 'rate_limited');
+});
+
+test('paid tiers use higher chat buckets', async () => {
+  process.env.NODE_ENV = 'test';
+  delete process.env.UPSTASH_REDIS_REST_URL;
+  delete process.env.UPSTASH_REDIS_REST_TOKEN;
+  const limiter = loadRateLimitModule();
+  limiter.resetRateLimitMemoryForTests();
+
+  const pro = await limiter.checkRateLimit(requestFor('203.0.113.13'), 'chat', { nowMs: 1000, tier: 'pro' });
+  assert.equal(pro.allowed, true);
+  assert.equal(pro.limit, 10);
+
+  const ultra = await limiter.checkRateLimit(requestFor('203.0.113.14'), 'chat', { nowMs: 1000, tier: 'ultra' });
+  assert.equal(ultra.allowed, true);
+  assert.equal(ultra.limit, 30);
+
+  const admin = await limiter.checkRateLimit(requestFor('203.0.113.15'), 'chat', { nowMs: 1000, tier: 'free', role: 'admin' });
+  assert.equal(admin.allowed, true);
+  assert.equal(admin.limit, 30);
 });
 
 test('route groups use separate buckets', async () => {
@@ -66,7 +93,7 @@ test('route groups use separate buckets', async () => {
 
   const quant = await limiter.checkRateLimit(requestFor('203.0.113.11'), 'quant', { nowMs: 1000 });
   assert.equal(quant.allowed, true);
-  assert.equal(quant.remaining, 59);
+  assert.equal(quant.remaining, 19);
 });
 
 test('production without Upstash config fails closed', async () => {

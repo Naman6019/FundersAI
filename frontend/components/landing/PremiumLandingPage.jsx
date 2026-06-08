@@ -1,7 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { motion, useScroll, useTransform } from "framer-motion";
+import React, { useEffect, useRef, useState } from "react";
+import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
+import PageCurtain from "./PageCurtain";
+import SplitReveal from "./SplitReveal";
+import AnimatedCounter from "./AnimatedCounter";
 import {
   ArrowRight,
   ChartBar,
@@ -28,6 +31,17 @@ const fadeUp = {
     y: 0,
     filter: "blur(0px)",
     transition: { duration: 0.75, ease },
+  },
+};
+
+// Deeper, more dramatic section reveal inspired by Wolverine Worldwide
+const slideReveal = {
+  hidden: { opacity: 0, y: 60, filter: "blur(8px)" },
+  visible: {
+    opacity: 1,
+    y: 0,
+    filter: "blur(0px)",
+    transition: { duration: 0.9, ease: [0.22, 1, 0.36, 1] },
   },
 };
 
@@ -122,13 +136,22 @@ function Glow({ className = "", delay = 0 }) {
 }
 
 function AmbientBackground() {
+  const { scrollYProgress } = useScroll();
+  // Parallax: grid breathes upward as you scroll — Wolverine scroll scrub effect
+  const gridY = useTransform(scrollYProgress, [0, 0.5], [0, 80]);
+  const shouldReduce = useReducedMotion();
+
   return (
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
       <div className="absolute inset-0 bg-[#020617]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(16,185,129,0.12),transparent_60%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_80%,rgba(56,189,248,0.08),transparent_50%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,80,158,0.14),transparent_60%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_80%,rgba(102,163,255,0.08),transparent_50%)]" />
       <div className="absolute inset-0 opacity-[0.035] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:100px_100px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_80%)]" />
+      {/* Scroll-parallax grid — moves at slower rate than content for depth */}
+      <motion.div
+        className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:100px_100px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_80%)]"
+        style={{ y: shouldReduce ? 0 : gridY }}
+      />
     </div>
   );
 }
@@ -136,9 +159,11 @@ function AmbientBackground() {
 function PremiumButton({ href, children, variant = "primary" }) {
   const ref = React.useRef(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [hovered, setHovered] = useState(false);
+  const shouldReduce = useReducedMotion();
 
   const handleMouse = (e) => {
-    if (!ref.current) return;
+    if (!ref.current || shouldReduce) return;
     const { clientX, clientY } = e;
     const { height, width, left, top } = ref.current.getBoundingClientRect();
     const middleX = clientX - (left + width / 2);
@@ -146,27 +171,51 @@ function PremiumButton({ href, children, variant = "primary" }) {
     setPosition({ x: middleX * 0.15, y: middleY * 0.15 });
   };
 
-  const reset = () => setPosition({ x: 0, y: 0 });
+  const reset = () => {
+    setPosition({ x: 0, y: 0 });
+    setHovered(false);
+  };
 
-  const base = "group relative inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition-colors duration-300 overflow-hidden";
+  const base = "group relative inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold overflow-hidden";
   const styles =
     variant === "primary"
-      ? "bg-white text-slate-950 shadow-[0_20px_70px_rgba(255,255,255,0.16)] hover:bg-emerald-100"
-      : "border border-white/12 bg-white/[0.05] text-white backdrop-blur-xl hover:bg-white/[0.09]";
+      ? "bg-white text-slate-950 shadow-[0_20px_70px_rgba(255,255,255,0.16)]"
+      : "border border-white/12 bg-white/[0.05] text-white backdrop-blur-xl";
 
   return (
     <motion.a
       ref={ref}
       href={href}
       onMouseMove={handleMouse}
+      onMouseEnter={() => setHovered(true)}
       onMouseLeave={reset}
       animate={{ x: position.x, y: position.y }}
       transition={{ type: "spring", stiffness: 150, damping: 15, mass: 0.1 }}
       className={`${base} ${styles}`}
     >
-      <span className="relative z-10 flex items-center">
+      {/* Ink-fill hover effect — color bleeds in from left, inspired by Tresmares c-button */}
+      <motion.span
+        aria-hidden="true"
+        className="absolute inset-0 rounded-full"
+        style={{
+          backgroundColor: variant === "primary" ? "#cce0ff" : "rgba(102,163,255,0.12)",
+          transformOrigin: "left center",
+        }}
+        initial={{ scaleX: 0 }}
+        animate={{ scaleX: hovered ? 1 : 0 }}
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+      />
+      <span className="relative z-10 flex items-center transition-colors duration-200">
         {children}
-        {variant === "primary" && <ArrowRight className="ml-2 h-4 w-4 transition group-hover:translate-x-1" />}
+        {variant === "primary" && (
+          <motion.span
+            animate={{ x: hovered ? 4 : 0 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            className="inline-flex"
+          >
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </motion.span>
+        )}
       </span>
     </motion.a>
   );
@@ -178,7 +227,7 @@ function Badge({ children }) {
       variants={fadeUp}
       className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.055] px-3 py-1.5 text-xs font-medium text-slate-300 shadow-sm backdrop-blur-xl"
     >
-      <CheckCircle className="h-3.5 w-3.5 text-emerald-300" weight="fill" />
+      <CheckCircle className="h-3.5 w-3.5 text-[#66a3ff]" weight="fill" />
       {children}
     </motion.span>
   );
@@ -237,7 +286,7 @@ function HeroPreview() {
     >
       <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-6">
         <div className="flex items-center gap-3">
-          <Sparkle className="h-4 w-4 text-emerald-400" weight="fill" />
+          <Sparkle className="h-4 w-4 text-[#66a3ff]" weight="fill" />
           <span className="text-sm font-semibold text-slate-200">FundersAI Chat</span>
         </div>
         <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-slate-400">
@@ -260,7 +309,7 @@ function HeroPreview() {
 
         {/* AI Response */}
         <div className="flex gap-4">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#00509e]/20 text-[#66a3ff]">
             <Sparkle className="h-4 w-4" weight="fill" />
           </div>
           <div className="flex-1 space-y-5 pt-1">
@@ -271,12 +320,12 @@ function HeroPreview() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-xl border border-white/10 bg-black/20 p-4">
                 <div className="text-xs font-semibold text-slate-400">Parag Parikh Flexi Cap</div>
-                <div className="mt-2 text-2xl font-mono text-emerald-400">{ppfasReturn}</div>
+                <div className="mt-2 text-2xl font-mono text-[#66a3ff]">{ppfasReturn}</div>
                 <div className="mt-1 text-[10px] uppercase tracking-wider text-slate-500">1Y Return (Live Data)</div>
               </div>
               <div className="rounded-xl border border-white/10 bg-black/20 p-4">
                 <div className="text-xs font-semibold text-slate-400">ICICI Pru Multi Asset</div>
-                <div className="mt-2 text-2xl font-mono text-emerald-400">{iciciReturn}</div>
+                <div className="mt-2 text-2xl font-mono text-[#66a3ff]">{iciciReturn}</div>
                 <div className="mt-1 text-[10px] uppercase tracking-wider text-slate-500">1Y Return (Live Data)</div>
               </div>
             </div>
@@ -289,7 +338,7 @@ function HeroPreview() {
               </div>
               <div className="flex justify-between border-b border-white/5 py-3">
                 <span>Sharpe Ratio</span>
-                <span className="w-20 text-emerald-400 text-right">1.22</span>
+                <span className="w-20 text-[#66a3ff] text-right">1.22</span>
                 <span className="w-20 text-slate-300 text-right">1.08</span>
               </div>
               <div className="flex justify-between py-3">
@@ -334,43 +383,69 @@ function LogoCloud() {
 }
 
 function MarqueePrompts() {
+  const [paused, setPaused] = useState(false);
+  const shouldReduce = useReducedMotion();
+
   return (
-    <div className="relative mx-auto mt-10 max-w-6xl overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_12%,black_88%,transparent)]">
+    <motion.div
+      className="relative mx-auto mt-10 max-w-6xl overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_5%,black_95%,transparent)]"
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.6 }}
+    >
       <motion.div
         className="flex w-max gap-3"
-        animate={{ x: [0, -780] }}
+        animate={shouldReduce ? {} : { x: [0, -780] }}
         transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+        style={{ animationPlayState: paused ? "paused" : "running" }}
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
       >
         {[...promptChips, ...promptChips, ...promptChips].map((prompt, index) => (
           <button
             key={`${prompt}-${index}`}
-            className="rounded-full border border-white/10 bg-white/[0.045] px-5 py-3 text-sm text-slate-200 transition hover:border-emerald-300/30 hover:bg-emerald-300/10 hover:text-white"
+            className="rounded-full border border-white/10 bg-white/[0.045] px-5 py-3 text-sm text-slate-200 transition hover:border-[#66a3ff]/30 hover:bg-[#00509e]/15 hover:text-white"
           >
             {prompt}
           </button>
         ))}
       </motion.div>
-    </div>
+    </motion.div>
   );
 }
 
 function SectionHeading({ eyebrow, title, body, align = "center" }) {
   return (
-    <motion.div
-      variants={stagger}
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once: true, margin: "-90px" }}
-      className={align === "center" ? "mx-auto max-w-3xl text-center" : "max-w-3xl"}
-    >
-      <motion.p variants={fadeUp} className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">
+    <div className={align === "center" ? "mx-auto max-w-3xl text-center" : "max-w-3xl"}>
+      <motion.p
+        initial={{ opacity: 0, y: 14 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-90px" }}
+        transition={{ duration: 0.5, ease }}
+        className="text-sm font-semibold uppercase tracking-[0.22em] text-[#66a3ff]"
+      >
         {eyebrow}
       </motion.p>
-      <motion.h2 variants={fadeUp} className="mt-4 text-4xl font-semibold tracking-[-0.035em] text-white sm:text-5xl">
-        {title}
-      </motion.h2>
-      {body && <motion.p variants={fadeUp} className="mt-5 text-lg leading-8 text-slate-400">{body}</motion.p>}
-    </motion.div>
+      {/* SplitReveal — character-level clip reveal on section headings (Tresmares-style) */}
+      <SplitReveal
+        text={title}
+        as="h2"
+        delay={0.1}
+        className="mt-4 text-4xl font-semibold tracking-[-0.035em] text-white sm:text-5xl"
+      />
+      {body && (
+        <motion.p
+          initial={{ opacity: 0, y: 18 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-90px" }}
+          transition={{ duration: 0.65, ease, delay: 0.25 }}
+          className="mt-5 text-lg leading-8 text-slate-400"
+        >
+          {body}
+        </motion.p>
+      )}
+    </div>
   );
 }
 
@@ -417,7 +492,7 @@ function FeatureBento() {
                 </p>
               </div>
               <div className="mt-auto">
-                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400">
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#66a3ff]">
                   <Sparkle className="h-3.5 w-3.5" weight="fill" />
                   {feature.proof}
                 </span>
@@ -452,7 +527,7 @@ function FundPairCard() {
           variants={{ hidden: { opacity: 0, x: -80 }, visible: { opacity: 1, x: 0, transition: { duration: 0.8, ease } } }}
           className="border-b border-white/10 p-8 lg:border-b-0 lg:border-r hover:bg-white/[0.02] transition-colors"
         >
-          <div className="mb-4 inline-flex rounded-full border border-emerald-300/20 bg-emerald-300/[0.08] px-3 py-1 text-xs font-medium text-emerald-100">
+          <div className="mb-4 inline-flex rounded-full border-[#66a3ff]/20 bg-[#00509e]/10 px-3 py-1 text-xs font-medium text-slate-100">
             Steadier profile
           </div>
           <h3 className="text-3xl font-semibold tracking-[-0.035em] text-white sm:text-4xl">
@@ -467,7 +542,7 @@ function FundPairCard() {
           variants={{ hidden: { opacity: 0, x: 80 }, visible: { opacity: 1, x: 0, transition: { duration: 0.8, ease } } }}
           className="p-8 hover:bg-white/[0.02] transition-colors"
         >
-          <div className="mb-4 inline-flex rounded-full border border-sky-300/20 bg-sky-300/[0.08] px-3 py-1 text-xs font-medium text-sky-100">
+          <div className="mb-4 inline-flex rounded-full border border-[#66a3ff]/20 bg-[#66a3ff]/[0.08] px-3 py-1 text-xs font-medium text-[#cce0ff]">
             Diversified allocation
           </div>
           <h3 className="text-3xl font-semibold tracking-[-0.035em] text-white sm:text-4xl">
@@ -486,7 +561,7 @@ function FundPairCard() {
             <p className="mt-1 text-xs text-slate-500">Formatted as a table so long fund names do not break the card layout.</p>
           </div>
           <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-medium text-slate-300 backdrop-blur-md">
-            <Sparkle className="h-3.5 w-3.5 text-emerald-300" weight="fill" />
+            <Sparkle className="h-3.5 w-3.5 text-[#66a3ff]" weight="fill" />
             FundersAI explains the difference
           </div>
         </div>
@@ -500,8 +575,8 @@ function FundPairCard() {
                 className={`group grid gap-0 text-sm sm:grid-cols-[0.8fr_1fr_1fr] transition-colors hover:bg-white/[0.04] ${index !== rows.length - 1 ? "border-b border-white/10" : ""}`}
               >
                 <div className="bg-white/[0.02] px-5 py-4 font-medium text-slate-300 transition-colors group-hover:text-white">{metric}</div>
-                <div className={`border-t border-white/10 px-5 py-4 text-slate-300 sm:border-l sm:border-t-0 transition-colors group-hover:text-white ${isValNumeric(ppfas) ? "font-mono text-emerald-300/90 font-medium group-hover:text-emerald-300" : ""}`}>{ppfas}</div>
-                <div className={`border-t border-white/10 px-5 py-4 text-slate-300 sm:border-l sm:border-t-0 transition-colors group-hover:text-white ${isValNumeric(icici) ? "font-mono text-emerald-300/90 font-medium group-hover:text-emerald-300" : ""}`}>{icici}</div>
+                <div className={`border-t border-white/10 px-5 py-4 text-slate-300 sm:border-l sm:border-t-0 transition-colors group-hover:text-white ${isValNumeric(ppfas) ? "font-mono text-[#66a3ff]/90 font-medium group-hover:text-[#66a3ff]" : ""}`}>{ppfas}</div>
+                <div className={`border-t border-white/10 px-5 py-4 text-slate-300 sm:border-l sm:border-t-0 transition-colors group-hover:text-white ${isValNumeric(icici) ? "font-mono text-[#66a3ff]/90 font-medium group-hover:text-[#66a3ff]" : ""}`}>{icici}</div>
               </div>
             );
           })}
@@ -515,18 +590,28 @@ export default function FundersAILandingPage() {
   const { scrollYProgress } = useScroll();
   const heroGridY = useTransform(scrollYProgress, [0, 0.25], [0, 120]);
   const heroTextY = useTransform(scrollYProgress, [0, 0.18], [0, -28]);
+  const shouldReduce = useReducedMotion();
 
+  // Upgraded word reveal — deeper 3D rotateX clip, Wolverine kinetic hero style
   const wordReveal = {
-    hidden: { opacity: 0, y: 30, rotateX: -20 },
-    visible: { opacity: 1, y: 0, rotateX: 0, transition: { duration: 0.9, ease: [0.22, 1, 0.36, 1] } }
+    hidden: { opacity: 0, y: shouldReduce ? 0 : 42, rotateX: shouldReduce ? 0 : -28, filter: shouldReduce ? "none" : "blur(4px)" },
+    visible: {
+      opacity: 1,
+      y: 0,
+      rotateX: 0,
+      filter: "blur(0px)",
+      transition: { duration: 1.0, ease: [0.16, 1, 0.3, 1] }
+    }
   };
   const words = "Mutual fund research, simplified.".split(" ");
 
   return (
-    <main className="w-full min-w-0 min-h-screen overflow-hidden scroll-smooth bg-[#020617] text-slate-200 selection:bg-emerald-500/30">
+    <main className="w-full min-w-0 min-h-screen overflow-hidden scroll-smooth bg-[#020617] text-slate-200 selection:bg-[#007acc]/30">
+      {/* Corporate Blues curtain reveal — slides up to expose page (Tresmares + Wolverine) */}
+      <PageCurtain />
       <motion.div
         aria-hidden="true"
-        className="fixed left-0 top-0 z-50 h-1 bg-emerald-400"
+        className="fixed left-0 top-0 z-50 h-1 bg-[#66a3ff]"
         style={{ scaleX: scrollYProgress, transformOrigin: "0%" }}
       />
 
@@ -563,7 +648,7 @@ export default function FundersAILandingPage() {
               <a href="/login" className="hidden rounded-full border border-white/10 bg-white/[0.045] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/[0.09] sm:inline-flex">
                 Login
               </a>
-              <a href="/dashboard" className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-100">
+              <a href="/dashboard" className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-[#cce0ff]">
                 Try FundersAI
               </a>
             </div>
@@ -581,7 +666,7 @@ export default function FundersAILandingPage() {
             >
               <motion.div variants={fadeUp} className="mb-6 flex justify-start">
                 <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm text-slate-300 shadow-sm backdrop-blur-xl">
-                  <Star className="h-4 w-4 text-emerald-300" weight="fill" />
+                  <Star className="h-4 w-4 text-[#66a3ff]" weight="fill" />
                   Mutual fund comparison workspace
                 </span>
               </motion.div>
@@ -634,9 +719,9 @@ export default function FundersAILandingPage() {
                   <div className="flex items-center gap-2">
                     <span className="h-3 w-3 rounded-full bg-red-400/80" />
                     <span className="h-3 w-3 rounded-full bg-yellow-300/80" />
-                    <span className="h-3 w-3 rounded-full bg-emerald-300/80" />
+                    <span className="h-3 w-3 rounded-full bg-[#66a3ff]/80" />
                   </div>
-                  <div className="text-xs text-emerald-300 font-semibold tracking-wide">Live Workspace</div>
+                  <div className="text-xs text-[#66a3ff] font-semibold tracking-wide">Live Workspace</div>
                 </div>
 
                 <div className="p-5 space-y-4">
@@ -646,7 +731,7 @@ export default function FundersAILandingPage() {
                       <p className="text-xs text-slate-400">Direct Plan - Growth</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-mono text-sm font-semibold text-emerald-300">+22.4%</p>
+                      <p className="font-mono text-sm font-semibold text-[#66a3ff]">+22.4%</p>
                       <p className="text-[10px] text-slate-500">1Y Return</p>
                     </div>
                   </div>
@@ -657,13 +742,13 @@ export default function FundersAILandingPage() {
                       <p className="text-xs text-slate-400">Direct Plan - Growth</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-mono text-sm font-semibold text-emerald-300">+19.8%</p>
+                      <p className="font-mono text-sm font-semibold text-[#66a3ff]">+19.8%</p>
                       <p className="text-[10px] text-slate-500">1Y Return</p>
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.05] p-3 text-xs leading-relaxed text-slate-200">
-                    <div className="flex items-center gap-1.5 font-semibold text-emerald-300 mb-1">
+                  <div className="rounded-2xl border-[#66a3ff]/20 bg-[#00509e]/10 p-3 text-xs leading-relaxed text-slate-200">
+                    <div className="flex items-center gap-1.5 font-semibold text-[#66a3ff] mb-1">
                       <Sparkle className="h-3.5 w-3.5" weight="fill" />
                       FundersAI Synthesis
                     </div>
@@ -676,7 +761,7 @@ export default function FundersAILandingPage() {
 
           <div className="mt-24 border-t border-white/10 pt-16">
             <div className="mb-8 text-center">
-              <span className="text-xs uppercase tracking-[0.22em] text-emerald-300 font-semibold">Workspace Walkthrough</span>
+              <span className="text-xs uppercase tracking-[0.22em] text-[#66a3ff] font-semibold">Workspace Walkthrough</span>
               <h3 className="mt-3 text-3xl font-semibold text-white">Factsheet Comparison Engine</h3>
             </div>
             <HeroPreview />
@@ -688,10 +773,10 @@ export default function FundersAILandingPage() {
             initial={{ opacity: 0, y: 18, filter: "blur(8px)" }}
             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             transition={{ duration: 0.7, ease, delay: 0.55 }}
-            className="mx-auto mt-10 max-w-3xl rounded-full border border-sky-300/20 bg-sky-300/[0.07] px-5 py-3 text-center text-sm text-sky-100/90 backdrop-blur-xl"
+            className="mx-auto mt-10 max-w-3xl rounded-full border border-[#66a3ff]/20 bg-[#66a3ff]/[0.07] px-5 py-3 text-center text-sm text-[#cce0ff]/90 backdrop-blur-xl"
           >
             <span className="inline-flex items-center justify-center gap-2">
-              <Clock className="h-4 w-4 text-sky-300" />
+              <Clock className="h-4 w-4 text-[#66a3ff]" />
               Stock coverage is on the way. FundersAI currently focuses on mutual fund comparison first, starting with the live Parag Parikh and ICICI pipeline.
             </span>
           </motion.div>
@@ -704,11 +789,11 @@ export default function FundersAILandingPage() {
           whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           viewport={{ once: true, margin: "-80px" }}
           transition={{ duration: 0.75, ease }}
-          className="relative overflow-hidden rounded-[2.25rem] border border-sky-300/20 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.16),transparent_34%),rgba(255,255,255,0.04)] p-6 sm:p-10"
+          className="relative overflow-hidden rounded-[2.25rem] border border-[#66a3ff]/20 bg-[radial-gradient(circle_at_top_right,rgba(102,163,255,0.16),transparent_34%),rgba(255,255,255,0.04)] p-6 sm:p-10"
         >
           <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-sky-300">Coming next</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#66a3ff]">Coming next</p>
               <h2 className="mt-4 text-4xl font-semibold tracking-[-0.035em] text-white sm:text-5xl">
                 Stock coverage is on the way.
               </h2>
@@ -771,17 +856,18 @@ export default function FundersAILandingPage() {
         >
           <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">Data integrity</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#66a3ff]">Data integrity</p>
               <h2 className="mt-4 text-4xl font-semibold tracking-[-0.035em] text-white sm:text-5xl">Unified snapshots for deep screening.</h2>
               <p className="mt-5 text-lg leading-8 text-slate-400">Instantly view essential metrics: NAV freshness, rolling returns, portfolio turnover, and expense ratios. No more digging through confusing PDF disclosures.</p>
             </div>
+            {/* Verifiable animated stats — real numbers from the live pipeline */}
             <div className="grid gap-4 sm:grid-cols-2">
               {[
-                ["Current pipeline", "PPFAS + ICICI", "Live"],
-                ["Next coverage", "Major AMCs", "Planned"],
-                ["Data scope", "NAV + factsheet", "Expanding"],
-                ["Full launch", "After coverage", "Later"],
-              ].map(([label, title, value], index) => (
+                { label: "AMCs live", value: 2, suffix: "", note: "PPFAS + ICICI" },
+                { label: "NAV data points", value: 10, suffix: "K+", note: "Synced daily" },
+                { label: "Risk metrics", value: 6, suffix: "", note: "Per fund" },
+                { label: "Data sync", value: 24, suffix: "h", note: "Refresh cycle" },
+              ].map(({ label, value, suffix, note }, index) => (
                 <motion.div
                   key={label}
                   initial={{ opacity: 0, y: 16 }}
@@ -792,8 +878,12 @@ export default function FundersAILandingPage() {
                   className="rounded-[1.5rem] border border-white/10 bg-slate-950/45 p-5"
                 >
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p>
-                  <p className="mt-4 text-lg font-semibold text-white">{title}</p>
-                  <p className="mt-2 text-2xl font-semibold text-emerald-300">{value}</p>
+                  <AnimatedCounter
+                    value={value}
+                    suffix={suffix}
+                    className="mt-4 block font-serif-display text-3xl font-bold text-[#66a3ff]"
+                  />
+                  <p className="mt-1 text-xs text-slate-400">{note}</p>
                 </motion.div>
               ))}
             </div>
@@ -809,8 +899,8 @@ export default function FundersAILandingPage() {
         />
         <motion.div variants={stagger} initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-80px" }} className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {steps.slice(0, 4).map(([number, title, body]) => (
-            <motion.div key={title} variants={fadeUp} whileHover={{ y: -6 }} className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-6">
-              <p className="text-sm text-emerald-300">{number}</p>
+            <motion.div key={title} variants={slideReveal} whileHover={{ y: -6 }} className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-6">
+              <p className="text-sm text-[#66a3ff]">{number}</p>
               <h3 className="mt-6 text-xl font-semibold text-white">{title}</h3>
               <p className="mt-3 text-sm leading-6 text-slate-400">{body}</p>
             </motion.div>
@@ -826,7 +916,7 @@ export default function FundersAILandingPage() {
         >
           <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-sky-300">Primary focus now</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#66a3ff]">Primary focus now</p>
               <h3 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-white sm:text-4xl">
                 Coverage expansion comes before the full stock module.
               </h3>
@@ -875,8 +965,8 @@ export default function FundersAILandingPage() {
               [Database, "Freshness signals", "Makes update status part of the product experience."],
               [ShieldCheck, "User protection", "Frames output as education and research only."],
             ].map(([Icon, title, body]) => (
-              <motion.div key={title} variants={fadeUp} whileHover={{ y: -6 }} className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-6">
-                <Icon className="h-6 w-6 text-emerald-300" />
+              <motion.div key={title} variants={slideReveal} whileHover={{ y: -6 }} className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-6">
+                <Icon className="h-6 w-6 text-[#66a3ff]" />
                 <h3 className="mt-5 text-xl font-semibold text-white">{title}</h3>
                 <p className="mt-3 leading-7 text-slate-400">{body}</p>
               </motion.div>

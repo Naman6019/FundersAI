@@ -11,6 +11,7 @@
 - [ ] Document analysis: support annual report/PDF upload, extraction, summaries, and cited answers.
 - [ ] Basic strategy backtesting: simulate simple rules against clean historical EOD data with fees, slippage, benchmark comparison, and result charts.
 - [ ] Historical anomaly detection: flag unusual price, volume, valuation, or fundamentals changes with evidence; avoid predictive wording until models are validated.
+- [ ] Route-based dashboard split: consider dedicated `/dashboard/research`, `/dashboard/compare`, portfolio, reports, watchlist, and learn pages after the V1 dashboard-first shell is validated.
 
 ## FundersAI Product Improvement Roadmap
 
@@ -164,6 +165,11 @@
 - Do not make database-destructive changes.
 
 ## In Progress
+- [ ] Dashboard-first onboarding flow.
+  - `/dashboard` opens Overview first.
+  - Overview has clear Compare, Ask AI, and Portfolio Review CTAs.
+  - CTAs hand off to existing AI Research/chat/canvas state.
+  - No dashboard route split in V1.
 - [ ] Expanding stock coverage beyond the current Nifty-focused list.
 - [ ] Testing `NIFTY500` vs `NIFTYTOTALMARKET`.
 - [ ] Tuning `STOCK_INFO_ENRICH_LIMIT` and `STOCK_YFINANCE_FALLBACK_LIMIT`.

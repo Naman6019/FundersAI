@@ -8,11 +8,14 @@ function trimForHistory(value: unknown): string {
 
 export async function POST(req: Request) {
   try {
-    const limited = await enforceRateLimit(req, 'chat');
-    if (limited) return limited;
-
     const body = await req.json();
     const userContext = await getUserContext(req);
+    const limited = await enforceRateLimit(req, 'chat', userContext ? {
+      identifier: userContext.user.id,
+      tier: userContext.profile.tier,
+      role: userContext.profile.role,
+    } : {});
+    if (limited) return limited;
 
     const TARGET = process.env.NODE_ENV === 'development'
       ? 'http://127.0.0.1:8000/api/chat'

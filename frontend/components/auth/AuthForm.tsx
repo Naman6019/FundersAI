@@ -16,6 +16,29 @@ export default function AuthForm() {
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const isAuthLoading = isLoading || isGoogleLoading;
+
+  const handleGoogleAuth = async () => {
+    if (!hasSupabaseBrowserEnv) {
+      setMessage('Supabase auth is not configured.');
+      return;
+    }
+
+    setIsGoogleLoading(true);
+    setMessage('');
+
+    const redirectPath = nextPath.startsWith('/') ? nextPath : '/dashboard';
+    const { error } = await supabaseBrowser.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}${redirectPath}` },
+    });
+
+    if (error) {
+      setIsGoogleLoading(false);
+      setMessage(error.message);
+    }
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -66,10 +89,29 @@ export default function AuthForm() {
           <p>Use your account to access the research workspace.</p>
         </div>
 
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <label>
+        <button
+          type="button"
+          className="auth-google-button"
+          onClick={handleGoogleAuth}
+          disabled={isAuthLoading}
+        >
+          <span>G</span>
+          {isGoogleLoading
+            ? 'Connecting...'
+            : mode === 'signin'
+              ? 'Sign in with Google'
+              : 'Sign up with Google'}
+        </button>
+
+        <div className="auth-divider">
+          <span>or</span>
+        </div>
+
+        <form className="auth-form" onSubmit={handleSubmit} suppressHydrationWarning>
+          <label suppressHydrationWarning>
             Email
             <input
+              suppressHydrationWarning
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
@@ -80,9 +122,10 @@ export default function AuthForm() {
             />
           </label>
 
-          <label>
+          <label suppressHydrationWarning>
             Password
             <input
+              suppressHydrationWarning
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
@@ -95,7 +138,7 @@ export default function AuthForm() {
 
           {message && <p className="auth-message">{message}</p>}
 
-          <button type="submit" disabled={isLoading}>
+          <button type="submit" disabled={isAuthLoading}>
             {isLoading ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Sign up'}
           </button>
         </form>
@@ -107,6 +150,7 @@ export default function AuthForm() {
             setMode(mode === 'signin' ? 'signup' : 'signin');
             setMessage('');
           }}
+          disabled={isAuthLoading}
         >
           {mode === 'signin' ? 'Need an account? Sign up' : 'Already have an account? Sign in'}
         </button>

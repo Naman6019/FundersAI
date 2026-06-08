@@ -13,7 +13,13 @@
 3. Backend fetches Supabase-first data and composes deterministic payloads.
 4. Frontend renders structured outputs (tables/charts/badges) with explicit limitation states when data is missing.
 
-## 3. Mutual Fund Ingestion Path
+## 3. Frontend Workspace
+- `/dashboard` currently renders one authenticated client workspace, not a route tree.
+- `DashboardLayout` owns Overview / Research tab state and the responsive shell.
+- `ChatWindow`, `ComparisonView`, and canvas state stay in the existing workspace flow.
+- Dedicated `/dashboard/research` and `/dashboard/compare` routes are deferred until after the dashboard-first V1 flow is validated.
+
+## 4. Mutual Fund Ingestion Path
 - `sync-mf-disclosures.yml` ingests AMC documents for `ppfas,icici,hdfc,sbi`.
 - Raw documents are stored in R2-first mode.
 - Parser writes:
@@ -24,12 +30,12 @@
 - Holdings parser baseline is production-ready for April 2026 documents across HDFC, SBI, PPFAS, and ICICI.
 - Parser validation uses complete exposure totals, including cash/TREPS/reverse-repo allocation rows where the AMC format requires them, while stored holdings remain ISIN-only.
 
-## 4. Storage Management
+## 5. Storage Management
 - `migrate-mf-raw-to-r2.yml`: migrates raw docs out of local/Supabase paths to R2 metadata-backed storage.
 - `compact-mf-storage.yml`: archives old NAV/holdings slices to R2 and trims hot tables.
 - Compaction supports dry-run and scheduled maintenance.
 
-## 5. Admin Platform (Phase 1)
+## 6. Admin Platform (Phase 1)
 - Route: `/admin` (with `/dashboard/admin` redirect)
 - Access model:
   - Supabase session required
@@ -43,13 +49,13 @@
   - NAV Sync
   - Resolver Debug
 
-## 6. Internal Admin Diagnostics
+## 7. Internal Admin Diagnostics
 - Backend provides protected endpoints:
   - `/api/admin/ops-overview`
   - `/api/admin/mf-resolver-debug`
 - Next admin resolver route proxies with `MF_INTERNAL_ADMIN_KEY` so secret keys remain server-side.
 
-## 7. Reliability Notes
+## 8. Reliability Notes
 - Runtime is designed to degrade gracefully with partial responses when data is incomplete.
 - MF parser runs may fail intentionally when `needs_review` is treated as strict failure.
 - Coverage badges reflect table-level field completeness, not just workflow success.

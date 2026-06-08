@@ -962,7 +962,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5">
-                    <h3 className="text-lg font-bold text-white">{aLabel}</h3>
+                    <h3 className="font-serif-display text-2xl font-bold text-white">{aLabel}</h3>
                     <p className="text-xs text-[#8ea7cd] mt-1 line-clamp-1" title={fundA.meta.scheme_name}>{fundA.meta.scheme_name}</p>
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                        {aFreshness?.status === 'fresh' || aFreshness?.stale === false ? (
@@ -971,16 +971,16 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                           <span className="rounded bg-amber-500/10 px-2 py-1 text-[10px] font-medium text-amber-300 border border-amber-500/20">Stale NAV</span>
                        )}
                        {(aCov as any)?.supports?.['5Y'] || (aCov as any)?.supports_5y ? (
-                          <span className="rounded bg-sky-500/10 px-2 py-1 text-[10px] font-medium text-sky-300 border border-sky-500/20">5Y+ Data</span>
+                          <span className="rounded bg-[#66a3ff]/10 px-2 py-1 text-[10px] font-medium text-[#66a3ff] border border-[#66a3ff]/20">5Y+ Data</span>
                        ) : (aCov as any)?.supports?.['3Y'] || (aCov as any)?.supports_3y ? (
-                          <span className="rounded bg-sky-500/10 px-2 py-1 text-[10px] font-medium text-sky-300 border border-sky-500/20">3Y Data</span>
+                          <span className="rounded bg-[#66a3ff]/10 px-2 py-1 text-[10px] font-medium text-[#66a3ff] border border-[#66a3ff]/20">3Y Data</span>
                        ) : (
                           <span className="rounded bg-slate-500/10 px-2 py-1 text-[10px] font-medium text-slate-300 border border-slate-500/20">Limited Data</span>
                        )}
                     </div>
                   </div>
                   <div className="rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5">
-                    <h3 className="text-lg font-bold text-white">{bLabel}</h3>
+                    <h3 className="font-serif-display text-2xl font-bold text-white">{bLabel}</h3>
                     <p className="text-xs text-[#8ea7cd] mt-1 line-clamp-1" title={fundB.meta.scheme_name}>{fundB.meta.scheme_name}</p>
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                        {bFreshness?.status === 'fresh' || bFreshness?.stale === false ? (
@@ -989,9 +989,9 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                           <span className="rounded bg-amber-500/10 px-2 py-1 text-[10px] font-medium text-amber-300 border border-amber-500/20">Stale NAV</span>
                        )}
                        {(bCov as any)?.supports?.['5Y'] || (bCov as any)?.supports_5y ? (
-                          <span className="rounded bg-sky-500/10 px-2 py-1 text-[10px] font-medium text-sky-300 border border-sky-500/20">5Y+ Data</span>
+                          <span className="rounded bg-[#66a3ff]/10 px-2 py-1 text-[10px] font-medium text-[#66a3ff] border border-[#66a3ff]/20">5Y+ Data</span>
                        ) : (bCov as any)?.supports?.['3Y'] || (bCov as any)?.supports_3y ? (
-                          <span className="rounded bg-sky-500/10 px-2 py-1 text-[10px] font-medium text-sky-300 border border-sky-500/20">3Y Data</span>
+                          <span className="rounded bg-[#66a3ff]/10 px-2 py-1 text-[10px] font-medium text-[#66a3ff] border border-[#66a3ff]/20">3Y Data</span>
                        ) : (
                           <span className="rounded bg-slate-500/10 px-2 py-1 text-[10px] font-medium text-slate-300 border border-slate-500/20">Limited Data</span>
                        )}
@@ -1019,7 +1019,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                 </div>
 
                 <div className="space-y-4 mt-6">
-                  <h3 className="text-base font-bold text-white tracking-tight">Detailed Metric Comparison</h3>
+                  <h3 className="font-serif-display text-xl font-bold text-white tracking-tight">Detailed Metric Comparison</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {renderGroupedTable('Returns & Performance', pGroup)}
                     {renderGroupedTable('Risk & Volatility Indicators', rGroup)}

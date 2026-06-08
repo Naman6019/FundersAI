@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 import { backendUrl } from '../quant/proxy';
 import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/rateLimit';
+import { getUserContext } from '@/lib/auth/server';
 
 export async function GET(request: Request) {
   try {
-    const rateLimit = await checkRateLimit(request, 'data-health');
+    const userContext = await getUserContext(request);
+    const rateLimit = await checkRateLimit(request, 'data-health', userContext ? {
+      identifier: userContext.user.id,
+      tier: userContext.profile.tier,
+      role: userContext.profile.role,
+    } : {});
     if (!rateLimit.allowed && rateLimit.configured) {
       return rateLimitResponse(rateLimit);
     }

@@ -14,9 +14,12 @@ type UserRow = {
   requests_today: number;
   monthly_tokens: number;
   subscription_status: string | null;
+  provider_subscription_id: string | null;
+  provider_plan_id: string | null;
+  subscription_current_end: string | null;
 };
 
-const FILTERS = ['all', 'free', 'pro', 'admin', 'tester'] as const;
+const FILTERS = ['all', 'free', 'pro', 'ultra', 'admin', 'tester'] as const;
 
 function fmt(value: string | null) {
   if (!value) return '-';
@@ -91,6 +94,8 @@ export default function AdminUsersPage() {
                 <th className="px-2 py-2 text-right">Requests Today</th>
                 <th className="px-2 py-2 text-right">Monthly Tokens</th>
                 <th className="px-2 py-2 text-left">Subscription</th>
+                <th className="px-2 py-2 text-left">Razorpay</th>
+                <th className="px-2 py-2 text-left">Period End</th>
                 <th className="px-2 py-2 text-left">Actions</th>
               </tr>
             </thead>
@@ -100,12 +105,14 @@ export default function AdminUsersPage() {
                   <td className="px-2 py-2">{row.email || '-'}</td>
                   <td className="px-2 py-2 text-[#9db4d6]">{row.user_id}</td>
                   <td className="px-2 py-2"><span className={`rounded-full border px-2 py-0.5 ${statusBadgeClass(row.role)}`}>{row.role}</span></td>
-                  <td className="px-2 py-2"><span className={`rounded-full border px-2 py-0.5 ${statusBadgeClass(row.tier === 'pro' ? 'active' : 'planned')}`}>{row.tier}</span></td>
+                  <td className="px-2 py-2"><span className={`rounded-full border px-2 py-0.5 ${statusBadgeClass(row.tier === 'pro' || row.tier === 'ultra' ? 'active' : 'planned')}`}>{row.tier}</span></td>
                   <td className="px-2 py-2">{fmt(row.created_at)}</td>
                   <td className="px-2 py-2">{fmt(row.last_active_at)}</td>
                   <td className="px-2 py-2 text-right">{row.requests_today}</td>
                   <td className="px-2 py-2 text-right">{row.monthly_tokens}</td>
                   <td className="px-2 py-2">{row.subscription_status || '-'}</td>
+                  <td className="px-2 py-2 text-[#9db4d6]">{row.provider_subscription_id || '-'}</td>
+                  <td className="px-2 py-2">{fmt(row.subscription_current_end)}</td>
                   <td className="px-2 py-2">
                     <div className="flex flex-wrap gap-1">
                       <button type="button" disabled className="rounded border border-white/10 px-2 py-0.5 text-[10px] text-[#8ea6cb]">View</button>

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { enforceRateLimit, getClientIp } from '@/lib/rateLimit';
+import { getUserContext } from '@/lib/auth/server';
 
 export function backendUrl(path: string, search = '') {
   const base = process.env.NODE_ENV === 'development'
@@ -12,7 +13,12 @@ export function backendUrl(path: string, search = '') {
 
 export async function proxyGet(path: string, request: Request) {
   try {
-    const limited = await enforceRateLimit(request, 'quant');
+    const userContext = await getUserContext(request);
+    const limited = await enforceRateLimit(request, 'quant', userContext ? {
+      identifier: userContext.user.id,
+      tier: userContext.profile.tier,
+      role: userContext.profile.role,
+    } : {});
     if (limited) return limited;
 
     const url = new URL(request.url);

@@ -1,6 +1,6 @@
 # Current State
 
-**Last Updated**: 2026-05-28
+**Last Updated**: 2026-06-08
 
 ## Project Summary
 FundersAI is a research-first Indian stocks + mutual funds app with deterministic comparison outputs, Supabase-first runtime reads, and workflow-driven data ingestion.
@@ -14,6 +14,8 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 
 ## Implemented
 - Supabase-auth dashboard (`/dashboard`) with `/auth` sign-in/sign-up.
+  - Current implementation is one authenticated client workspace powered by `DashboardLayout`.
+  - `DashboardLayout` owns the Overview / Research tab state and keeps the chat + comparison canvas flow in the same shell.
 - Research-oriented landing page at `/`.
 - Deterministic compare responses with `why_better`, structured winner context, and data limitation/freshness metadata.
 - Source-neutral stock data model and scheduled stock workflows.
@@ -40,12 +42,21 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - NAV Sync
   - Resolver Debug
 - Admin security foundation:
-  - `user_profiles` roles (`user|admin|tester`) and tiers (`free|pro`)
+  - `user_profiles` roles (`user|admin|tester`) and tiers (`free|pro|ultra`)
   - RLS policies for profile reads/updates
   - server-side admin checks for `/api/admin/*`
   - compatibility redirect `/dashboard/admin -> /admin`
+- Razorpay monthly subscription foundation:
+  - Free, Pro, and Ultra tier model
+  - billing subscription/event tables
+  - webhook-only tier activation
+  - tier-aware request limits
 
 ## In Progress
+- Dashboard-first onboarding flow:
+  - users should land on the dashboard Overview first
+  - AI Research should remain inside the same `/dashboard` shell for V1
+  - dashboard CTAs should hand off into the existing chat/canvas state instead of creating new `/dashboard/research` or `/dashboard/compare` routes
 - Increase mutual-fund field coverage depth beyond holdings for PPFAS, ICICI, HDFC, SBI (AUM/TER/benchmark/risk/ratios completeness).
 - Reduce historical `needs_review` backlog in `mf_raw_documents` and `mf_parse_review_queue`.
 - Improve admin Data Coverage status interpretation for historical parser failures vs latest-run health.

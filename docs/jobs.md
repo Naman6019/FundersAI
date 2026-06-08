@@ -17,7 +17,7 @@ GitHub Actions runs stock and mutual-fund sync jobs from `.github/workflows/`.
 
 | Workflow file | Schedule (UTC) | Steps |
 |---|---|---|
-| `mf-sync.yml` | `30 13 * * 1-5` | `sync_mf.py` -> `sync_mf_history.py` -> `python -m backend.app.jobs.sync_mf_nav` -> `python -m backend.app.jobs.sync_mf_enrichment_unified` |
+| `mf-sync.yml` | `30 17 * * 1-5` | `sync_mf.py` -> `sync_mf_history.py` -> `python -m backend.app.jobs.sync_mf_nav` -> `python -m backend.app.jobs.sync_mf_enrichment_unified` |
 | `sync-mf-enrichment.yml` | Manual only | `python -m backend.app.jobs.sync_mf_enrichment_unified` (AMFI first, optional MFdata fallback) |
 | `sync-mf-disclosures.yml` | `30 4 * * 1-5`, plus manual | `ingest_latest_amc_docs` + `parse_pending_documents` for `ppfas,icici,hdfc,sbi` (R2-first) |
 | `retry-mf-parser-actions.yml` | `15 */6 * * *`, plus manual | `reparse_needs_review` for cooled-down `needs_review` / `failed` docs, default order `sbi,hdfc,icici,ppfas` |

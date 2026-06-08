@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import type { SearchResultItem } from '@/types/funds';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { getUserContext } from '@/lib/auth/server';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -13,7 +14,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const limited = await enforceRateLimit(request, 'search');
+    const userContext = await getUserContext(request);
+    const limited = await enforceRateLimit(request, 'search', userContext ? {
+      identifier: userContext.user.id,
+      tier: userContext.profile.tier,
+      role: userContext.profile.role,
+    } : {});
     if (limited) return limited;
 
     const results: SearchResultItem[] = [];

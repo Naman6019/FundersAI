@@ -84,8 +84,8 @@ const metricDefs = [
     explain: (v: number) => {
       if (v < 0.7) return ["Poor", "#ff6b6b", `A Sharpe ratio of ${v.toFixed(2)} suggests weak returns for the risk taken.`];
       if (v < 1.2) return ["Below Average", "#ffd166", `A Sharpe ratio of ${v.toFixed(2)} is positive, but risk-adjusted efficiency is limited.`];
-      if (v < 1.7) return ["Good", "#66fcf1", `A Sharpe ratio of ${v.toFixed(2)} is strong for active fund research and suggests efficient risk use.`];
-      return ["Excellent", "#45a29e", `A Sharpe ratio of ${v.toFixed(2)} is unusually strong and should be checked over rolling periods.`];
+      if (v < 1.7) return ["Good", "#66a3ff", `A Sharpe ratio of ${v.toFixed(2)} is strong for active fund research and suggests efficient risk use.`];
+      return ["Excellent", "#007acc", `A Sharpe ratio of ${v.toFixed(2)} is unusually strong and should be checked over rolling periods.`];
     },
   },
   {
@@ -99,8 +99,8 @@ const metricDefs = [
     explain: (v: number) => {
       if (v < 0) return ["Negative Alpha", "#ff6b6b", `Alpha of ${v.toFixed(1)}% means the fund underperformed its benchmark after risk adjustment.`];
       if (v < 2) return ["Marginal", "#ffd166", `Alpha of +${v.toFixed(1)}% is modest after accounting for active management costs.`];
-      if (v < 6) return ["Strong", "#66fcf1", `Alpha of +${v.toFixed(1)}% is meaningful and worth validating over 3Y and 5Y windows.`];
-      return ["Very High", "#45a29e", `Alpha of +${v.toFixed(1)}% is high and may compress as fund size grows.`];
+      if (v < 6) return ["Strong", "#66a3ff", `Alpha of +${v.toFixed(1)}% is meaningful and worth validating over 3Y and 5Y windows.`];
+      return ["Very High", "#007acc", `Alpha of +${v.toFixed(1)}% is high and may compress as fund size grows.`];
     },
   },
   {
@@ -112,8 +112,8 @@ const metricDefs = [
     value: 0.92,
     format: (v: number) => v.toFixed(2),
     explain: (v: number) => {
-      if (v < 0.7) return ["Defensive", "#66fcf1", `Beta of ${v.toFixed(2)} means the fund moves less than the market.`];
-      if (v < 1.05) return ["Market-Like", "#66fcf1", `Beta of ${v.toFixed(2)} indicates movement close to the benchmark.`];
+      if (v < 0.7) return ["Defensive", "#66a3ff", `Beta of ${v.toFixed(2)} means the fund moves less than the market.`];
+      if (v < 1.05) return ["Market-Like", "#66a3ff", `Beta of ${v.toFixed(2)} indicates movement close to the benchmark.`];
       if (v < 1.3) return ["Moderate Aggression", "#ffd166", `Beta of ${v.toFixed(2)} amplifies market moves and needs higher risk tolerance.`];
       return ["High Aggression", "#ff6b6b", `Beta of ${v.toFixed(2)} strongly amplifies market movement.`];
     },

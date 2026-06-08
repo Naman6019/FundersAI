@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { calculateCAGR, calculateRiskMetrics } from '@/lib/mf/returns';
 import { enforceRateLimit, getClientIp } from '@/lib/rateLimit';
+import { getUserContext } from '@/lib/auth/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -170,7 +171,12 @@ export async function GET(request: Request, context: { params: Promise<{ schemeC
   }
 
   try {
-    const limited = await enforceRateLimit(request, 'mf-detail');
+    const userContext = await getUserContext(request);
+    const limited = await enforceRateLimit(request, 'mf-detail', userContext ? {
+      identifier: userContext.user.id,
+      tier: userContext.profile.tier,
+      role: userContext.profile.role,
+    } : {});
     if (limited) return limited;
 
     // Primary source: backend API uses the same DB path as chat resolution.

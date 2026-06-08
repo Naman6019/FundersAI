@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { monthStartIso, readNumber, requireAdminFromRequest, utcDayStartIso } from '@/lib/admin/server';
 
-type UserFilter = 'all' | 'free' | 'pro' | 'admin' | 'tester';
+type UserFilter = 'all' | 'free' | 'pro' | 'ultra' | 'admin' | 'tester';
 
 function normalizeFilter(value: string | null): UserFilter {
   const raw = String(value || 'all').toLowerCase();
-  if (raw === 'free' || raw === 'pro' || raw === 'admin' || raw === 'tester') return raw;
+  if (raw === 'free' || raw === 'pro' || raw === 'ultra' || raw === 'admin' || raw === 'tester') return raw;
   return 'all';
 }
 
@@ -32,9 +32,36 @@ export async function GET(request: Request) {
 
   const profileRows = profiles.filter((row) => {
     if (filter === 'all') return true;
-    if (filter === 'free' || filter === 'pro') return row.tier === filter;
+    if (filter === 'free' || filter === 'pro' || filter === 'ultra') return row.tier === filter;
     return row.role === filter;
   });
+
+  let subscriptionMap = new Map<string, {
+    status?: string | null;
+    provider_subscription_id?: string | null;
+    provider_plan_id?: string | null;
+    current_end?: string | null;
+  }>();
+  try {
+    const subscriptionsRes = await supabase
+      .from('billing_subscriptions')
+      .select('user_id,status,provider_subscription_id,provider_plan_id,current_end,created_at')
+      .order('created_at', { ascending: false })
+      .limit(10000);
+    for (const row of subscriptionsRes.data || []) {
+      const userId = String(row.user_id || '');
+      if (userId && !subscriptionMap.has(userId)) {
+        subscriptionMap.set(userId, {
+          status: row.status || null,
+          provider_subscription_id: row.provider_subscription_id || null,
+          provider_plan_id: row.provider_plan_id || null,
+          current_end: row.current_end || null,
+        });
+      }
+    }
+  } catch {
+    subscriptionMap = new Map();
+  }
 
   const usageRowsRes = await supabase
     .from('provider_usage_logs')
@@ -69,6 +96,7 @@ export async function GET(request: Request) {
   const rows = profileRows.map((profile) => {
     const userId = String(profile.user_id);
     const tier = String(profile.tier || 'free');
+    const subscription = subscriptionMap.get(userId) || null;
     return {
       user_id: userId,
       email: emailMap.get(userId) || null,
@@ -78,7 +106,10 @@ export async function GET(request: Request) {
       last_active_at: profile.last_active_at || null,
       requests_today: byUserTodayRequests.get(userId) || 0,
       monthly_tokens: byUserMonthTokens.get(userId) || 0,
-      subscription_status: tier === 'pro' ? 'active' : 'free',
+      subscription_status: subscription?.status || (tier === 'free' ? 'free' : 'manual'),
+      provider_subscription_id: subscription?.provider_subscription_id || null,
+      provider_plan_id: subscription?.provider_plan_id || null,
+      subscription_current_end: subscription?.current_end || null,
     };
   });
 
@@ -98,4 +129,3 @@ export async function GET(request: Request) {
     },
   });
 }
-

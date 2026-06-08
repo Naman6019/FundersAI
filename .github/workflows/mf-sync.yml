@@ -2,8 +2,8 @@ name: Mutual Fund Data Sync
 
 on:
   schedule:
-    # 6:30 PM IST is 13:00 UTC, Mon-Fri
-    - cron: '30 13 * * 1-5'
+    # 11:00 PM IST is 17:30 UTC, Mon-Fri
+    - cron: '30 17 * * 1-5'
   workflow_dispatch: # Allow manual trigger
 
 jobs:
