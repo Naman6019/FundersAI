@@ -17,7 +17,8 @@ export default function AuthForm() {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const isAuthLoading = isLoading || isGoogleLoading;
+const isAuthLoading = isLoading || isGoogleLoading;
+const AUTH_NEXT_STORAGE_KEY = 'fundersai_auth_next';
 
   const handleGoogleAuth = async () => {
     if (!hasSupabaseBrowserEnv) {
@@ -29,9 +30,10 @@ export default function AuthForm() {
     setMessage('');
 
     const redirectPath = nextPath.startsWith('/') ? nextPath : '/dashboard';
+    window.localStorage.setItem(AUTH_NEXT_STORAGE_KEY, redirectPath);
     const { error } = await supabaseBrowser.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}${redirectPath}` },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
 
     if (error) {
@@ -56,7 +58,7 @@ export default function AuthForm() {
         : supabaseBrowser.auth.signUp({
             email,
             password,
-            options: { emailRedirectTo: `${window.location.origin}/dashboard` },
+            options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
           });
 
     const { error } = await authCall;
