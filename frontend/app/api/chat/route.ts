@@ -60,6 +60,7 @@ export async function POST(req: Request) {
           created_at: new Date(nowMs + 1).toISOString(),
           metadata: {
             system_action: data.system_action || null,
+            conversation_context: data.conversation_context || null,
             has_quant_data: Boolean(data.quant_data),
           },
         },

@@ -111,6 +111,7 @@ type WindowUsage = {
 };
 
 const memoryStore = new Map<string, { count: number; expiresAtMs: number }>();
+let warnedInMemoryFallback = false;
 
 function isEnabled(): boolean {
   return String(process.env.RATE_LIMIT_ENABLED ?? 'true').trim().toLowerCase() !== 'false';
@@ -203,7 +204,10 @@ export async function checkRateLimit(
     if (process.env.NODE_ENV === 'production') {
       return { allowed: false, configured: false, limit: 0, remaining: 0, resetSeconds: 60, retryAfterSeconds: 60 };
     }
-    console.warn('Rate limit storage (Upstash Redis) is not configured; falling back to in-memory rate limiting.');
+    if (!warnedInMemoryFallback) {
+      warnedInMemoryFallback = true;
+      console.warn('Rate limit storage (Upstash Redis) is not configured; falling back to in-memory rate limiting.');
+    }
   }
   const useMemory = !config.configured;
 

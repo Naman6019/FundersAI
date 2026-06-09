@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { CanvasPayload } from '@/types/funds';
 
-type ViewMode = 'NONE' | 'STOCK_DETAIL' | 'MF_DETAIL' | 'COMPARISON';
+type ViewMode = 'NONE' | 'STOCK_DETAIL' | 'MF_DETAIL' | 'COMPARISON' | 'PORTFOLIO_REVIEW' | 'CATEGORY_COMPARE';
 
 interface CanvasState {
   activeView: ViewMode;

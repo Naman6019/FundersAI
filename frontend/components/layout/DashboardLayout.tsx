@@ -33,16 +33,20 @@ import {
   Wallet,
   TrendingUp,
   History,
+  Check,
 } from 'lucide-react';
 import { useCanvasStore } from '@/store/useCanvasStore';
 import { useChatStore, AssetType } from '@/store/useChatStore';
-import SignOutButton from '@/components/auth/SignOutButton';
+import UserProfileDropdown from '@/components/auth/UserProfileDropdown';
 import ChatWindow from '@/components/chat/ChatWindow';
 import StockDetailView from '@/components/canvas/StockDetailView';
 import MFDetailView from '@/components/canvas/MFDetailView';
 import ComparisonView from '@/components/canvas/ComparisonView';
+import PortfolioReviewView from '@/components/canvas/PortfolioReviewView';
+import CategoryCompareView from '@/components/canvas/CategoryCompareView';
 import Magnetic from '@/components/ui/Magnetic';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
+import type { CategoryComparePayload, CategoryFundRow } from '@/types/funds';
 import type { UserTier } from '@/lib/billing/tiers';
 
 type DataHealthItem = {
@@ -59,6 +63,15 @@ const DEFAULT_DATA_HEALTH: DataHealthItem[] = [
   { label: 'Factsheets', status: 'Checking' },
 ];
 
+const CATEGORY_CARDS = [
+  { key: 'large_cap', title: 'Large Cap', desc: 'Top 100 companies', icon: Landmark },
+  { key: 'mid_cap', title: 'Mid Cap', desc: 'High growth potential', icon: TrendingUp },
+  { key: 'small_cap', title: 'Small Cap', desc: 'Aggressive growth', icon: ChartSpline },
+  { key: 'flexi_cap', title: 'Flexi Cap', desc: 'Dynamic allocation', icon: PieChart },
+  { key: 'index', title: 'Index Funds', desc: 'Low cost tracking', icon: Database },
+  { key: 'elss', title: 'ELSS', desc: 'Tax saving funds', icon: ShieldCheck },
+];
+
 function statusColorClass(status: string): string {
   const normalized = (status || '').toLowerCase();
   if (['fresh', 'synced', 'ready', 'indexed'].includes(normalized)) return 'text-emerald-300';
@@ -71,23 +84,23 @@ function CanvasPlaceholder() {
   return (
     <div className="flex h-full flex-col rounded-[1.35rem] border border-white/10 bg-[linear-gradient(160deg,rgba(15,23,42,0.82),rgba(2,8,24,0.9))] p-5 shadow-[0_20px_44px_rgba(0,0,0,0.35)] backdrop-blur-xl">
       <div>
-        <h2 className="text-3xl font-semibold tracking-tight text-white">Fund comparison canvas</h2>
-        <p className="mt-1 text-sm text-slate-300">Parag Parikh Flexi Cap vs ICICI Multi Asset Fund</p>
+        <h2 className="text-3xl font-semibold tracking-tight text-white">Comparison canvas</h2>
+        <p className="mt-1 text-sm text-slate-300">Ask FundersAI to compare two funds to open side-by-side metrics here.</p>
         <span className="mt-4 inline-flex rounded-full border border-[#66a3ff]/30 bg-[#66a3ff]/10 px-3 py-1 text-xs text-[#66a3ff]">
-          Side-by-side
+          Waiting for comparison
         </span>
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-4">
         {[
-          { label: '3Y Return', value: '+18.6%', note: 'Performance' },
-          { label: 'Expense Ratio', value: '0.63%', note: 'Risk-Cost' },
-          { label: 'Sharpe', value: '1.12', note: 'Risk-adjusted' },
-          { label: 'Coverage', value: 'PPFAS + ICICI', note: 'Current pipeline' },
+          { label: 'Returns', value: 'Side-by-side', note: '1Y, 3Y, 5Y' },
+          { label: 'Risk', value: 'Side-by-side', note: 'Volatility, drawdown, Sharpe' },
+          { label: 'Costs', value: 'Side-by-side', note: 'Expense ratio and AUM' },
+          { label: 'Data', value: 'Side-by-side', note: 'NAV date and coverage' },
         ].map((item) => (
           <div key={item.label} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
             <p className="text-xs text-slate-300">{item.label}</p>
-            <p className="mt-2 text-3xl font-semibold tracking-tight text-white">{item.value}</p>
+            <p className="mt-2 text-lg font-semibold tracking-tight text-white">{item.value}</p>
             <p className="mt-1 text-xs text-slate-400">{item.note}</p>
           </div>
         ))}
@@ -233,24 +246,7 @@ function SidebarContent({
       </div>
 
       <div className="mt-auto pt-4 border-t border-white/10 space-y-3">
-        <Link
-          href="/billing"
-          className="flex items-center justify-between rounded-xl border border-[#66a3ff]/25 bg-[#66a3ff]/10 px-3 py-2 text-xs text-[#cce0ff] transition hover:border-[#66a3ff]/50 hover:bg-[#66a3ff]/15"
-        >
-          <span>Current tier</span>
-          <span className="font-semibold uppercase">{currentTier}</span>
-        </Link>
-        <div className="flex items-center justify-between px-2">
-          <div className="flex items-center gap-2.5">
-            <img
-              alt="User Profile"
-              className="w-7 h-7 rounded-full border border-white/20"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuC2yc-OZ72YKCNRfbOXvs1JmLKZ8WsL1I4VdXs7ay-q-nGiubYiIDIn5X-U2JM7CUVh4ez21gIRIi88QOJbY2MGm4mxh4VKFl3jfsj00Xu-2wkZyL8elq700xoxfN8ggkPtWyu1QMLbXeSfy4p5SePZGFHluNczs4uCQdnfoc3hLiJXqSIUeyAVFOLC_g-dgN5Vua1TH3ooT3QW6lOXjtHGvBH_ktSxj7IoGj7WqZ3yR_GOcOkozqObt4umNwUzkBPsvUJlmwlhVp5f"
-            />
-            <span className="text-xs text-slate-300 font-medium">Reaper</span>
-          </div>
-          <SignOutButton />
-        </div>
+        <UserProfileDropdown currentTier={currentTier} />
       </div>
     </div>
   );
@@ -258,7 +254,7 @@ function SidebarContent({
 
 export default function DashboardLayout() {
   const searchParams = useSearchParams();
-  const { activeView, selectedIds, auxiliaryData, isCanvasOpen, toggleCanvas } = useCanvasStore();
+  const { activeView, selectedIds, auxiliaryData, isCanvasOpen, toggleCanvas, setView, setIds, openCanvas } = useCanvasStore();
   const [isMobile, setIsMobile] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -273,6 +269,14 @@ export default function DashboardLayout() {
   const [compareFund2, setCompareFund2] = useState('');
   const [assistantInput, setAssistantInput] = useState('');
   const [currentTier, setCurrentTier] = useState<UserTier>('free');
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [categoryFunds, setCategoryFunds] = useState<CategoryFundRow[]>([]);
+  const [categoryLoading, setCategoryLoading] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [selectedCategoryCodes, setSelectedCategoryCodes] = useState<string[]>([]);
+  const [categoryCompare, setCategoryCompare] = useState<CategoryComparePayload | null>(null);
+  const [categoryCompareLoading, setCategoryCompareLoading] = useState(false);
+  const [categoryCompareError, setCategoryCompareError] = useState<string | null>(null);
   const setPendingQuery = useChatStore((state) => state.setPendingQuery);
   const navStatus = dataHealth.find((item) => item.label === 'MF NAV')?.status || 'Checking';
   const getCanvasBounds = () => {
@@ -412,6 +416,90 @@ export default function DashboardLayout() {
     setActiveTab('research');
   };
 
+  const formatPercent = (value: unknown) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? `${num.toFixed(2)}%` : 'N/A';
+  };
+
+  const formatAum = (value: unknown) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? `INR ${Math.round(num).toLocaleString('en-IN')}` : 'N/A';
+  };
+
+  const compactFundName = (value: unknown) => String(value || 'N/A')
+    .replace(/\s*-\s*Direct Plan\s*-\s*Growth/gi, '')
+    .replace(/\s*Direct\s*Growth/gi, '')
+    .trim();
+
+  const loadCategoryFunds = async (categoryKey: string) => {
+    setActiveCategory(categoryKey);
+    setCategoryLoading(true);
+    setCategoryError(null);
+    setCategoryCompare(null);
+    setCategoryCompareError(null);
+    setSelectedCategoryCodes([]);
+    try {
+      const res = await fetch(`/api/funds/category?category=${encodeURIComponent(categoryKey)}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Unable to load category funds.');
+      const payload = await res.json();
+      setCategoryFunds(Array.isArray(payload?.rows) ? payload.rows : []);
+    } catch (error) {
+      setCategoryFunds([]);
+      setCategoryError((error as Error).message || 'Unable to load category funds.');
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
+  const toggleCategorySelection = (fund: CategoryFundRow) => {
+    if (!fund.is_supported) return;
+    const code = String(fund.scheme_code || '').trim();
+    if (!code) return;
+    setSelectedCategoryCodes((current) => {
+      if (current.includes(code)) return current.filter((item) => item !== code);
+      if (current.length >= 3) return current;
+      return [...current, code];
+    });
+  };
+
+  const compareSelectedCategoryFunds = async () => {
+    if (!activeCategory || selectedCategoryCodes.length < 2 || selectedCategoryCodes.length > 3) return;
+    setCategoryCompareLoading(true);
+    setCategoryCompareError(null);
+    try {
+      const res = await fetch('/api/funds/category/compare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: activeCategory, scheme_codes: selectedCategoryCodes }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.detail || payload?.error || 'Unable to compare selected funds.');
+      setCategoryCompare(payload);
+    } catch (error) {
+      setCategoryCompare(null);
+      setCategoryCompareError((error as Error).message || 'Unable to compare selected funds.');
+    } finally {
+      setCategoryCompareLoading(false);
+    }
+  };
+
+  const categoryCompareCanvasPayload = categoryCompare ? { quant_data: { category_compare: categoryCompare } } : null;
+
+  const openCategoryCompareCanvas = () => {
+    if (!categoryCompare || !categoryCompareCanvasPayload) return;
+    setIds(categoryCompare.selected_funds.map((fund) => String(fund.scheme_code)));
+    setView('CATEGORY_COMPARE', categoryCompareCanvasPayload);
+    openCanvas(categoryCompareCanvasPayload);
+  };
+
+  const useCategoryCompareInChat = () => {
+    if (!categoryCompare?.selected_funds?.length) return;
+    const names = categoryCompare.selected_funds.map((fund) => compactFundName(fund.scheme_name));
+    const last = names.pop();
+    const joined = names.length ? `${names.join(', ')} and ${last}` : last;
+    handleOverviewQuery(`Compare ${joined} from the ${categoryCompare.category} bucket. Focus on returns, risk, cost, holdings overlap, and portfolio fit.`);
+  };
+
   const renderOverview = () => {
     return (
       <div className="space-y-6">
@@ -517,30 +605,172 @@ export default function DashboardLayout() {
 
             {/* Market / Category Snapshot */}
             <div>
-              <h3 className="font-serif text-xl font-medium text-white mb-4">Explore Categories</h3>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-serif text-xl font-medium text-white">Explore Categories</h3>
+                  <p className="mt-1 text-xs text-slate-400">List funds by bucket, select 2-3 supported funds, then compare metrics and portfolios.</p>
+                </div>
+                {selectedCategoryCodes.length > 0 && (
+                  <span className="rounded-full border border-[#66a3ff]/25 bg-[#66a3ff]/10 px-3 py-1 text-xs text-[#cce0ff]">
+                    {selectedCategoryCodes.length}/3 selected
+                  </span>
+                )}
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {[
-                  { title: 'Large Cap', desc: 'Top 100 companies', icon: Landmark, q: 'Show me top large cap funds' },
-                  { title: 'Mid Cap', desc: 'High growth potential', icon: TrendingUp, q: 'Analyze mid cap funds performance' },
-                  { title: 'Small Cap', desc: 'Aggressive growth', icon: ChartSpline, q: 'What are the risks of small cap funds?' },
-                  { title: 'Flexi Cap', desc: 'Dynamic allocation', icon: PieChart, q: 'Explain flexi cap funds vs multi cap' },
-                  { title: 'Index Funds', desc: 'Low cost tracking', icon: Database, q: 'Compare popular Nifty 50 index funds' },
-                  { title: 'ELSS', desc: 'Tax saving funds', icon: ShieldCheck, q: 'What are ELSS funds and their benefits?' },
-                ].map((cat, i) => {
+                {CATEGORY_CARDS.map((cat) => {
                   const CatIcon = cat.icon;
                   return (
-                    <div
-                      key={i}
-                      onClick={() => handleOverviewQuery(cat.q)}
-                      className="backdrop-blur-md bg-[#1f2833]/40 border border-white/10 rounded-lg p-3 hover:border-[#66a3ff]/30 hover:bg-white/5 transition-all cursor-pointer group"
+                    <button
+                      type="button"
+                      key={cat.key}
+                      onClick={() => loadCategoryFunds(cat.key)}
+                      className={`text-left backdrop-blur-md bg-[#1f2833]/40 border rounded-lg p-3 transition-all cursor-pointer group ${
+                        activeCategory === cat.key
+                          ? 'border-[#66a3ff]/60 bg-[#66a3ff]/10'
+                          : 'border-white/10 hover:border-[#66a3ff]/30 hover:bg-white/5'
+                      }`}
                     >
                       <CatIcon className="text-[#66a3ff] h-4 w-4 mb-2 opacity-80 group-hover:opacity-100 transition-opacity" />
                       <div className="text-sm font-medium text-white mb-0.5">{cat.title}</div>
                       <div className="text-[11px] text-slate-400">{cat.desc}</div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
+
+              {activeCategory && (
+                <div className="mt-4 rounded-xl border border-white/10 bg-[#101827]/70 p-4">
+                  <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h4 className="text-sm font-semibold text-white">
+                        {CATEGORY_CARDS.find((item) => item.key === activeCategory)?.title || 'Category'} funds
+                      </h4>
+                      <p className="mt-1 text-xs text-slate-400">Unsupported AMCs are visible but disabled until their pipeline is ready.</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={compareSelectedCategoryFunds}
+                        disabled={selectedCategoryCodes.length < 2 || selectedCategoryCodes.length > 3 || categoryCompareLoading}
+                        className="rounded-lg bg-[#66a3ff] px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-[#66a3ff]/85 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {categoryCompareLoading ? 'Comparing...' : 'Compare Selected'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCategoryCodes([]);
+                          setCategoryCompare(null);
+                        }}
+                        disabled={selectedCategoryCodes.length === 0}
+                        className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-[#66a3ff]/40 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  {categoryLoading && <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">Loading funds...</div>}
+                  {categoryError && <div className="rounded-lg border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-100">{categoryError}</div>}
+                  {!categoryLoading && !categoryError && categoryFunds.length === 0 && (
+                    <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">No funds found for this bucket.</div>
+                  )}
+                  {!categoryLoading && !categoryError && categoryFunds.length > 0 && (
+                    <div className="max-h-96 overflow-y-auto rounded-lg border border-white/10">
+                      <table className="min-w-full text-left text-xs">
+                        <thead className="sticky top-0 bg-[#172033] text-[#8ea7cd]">
+                          <tr>
+                            <th className="px-3 py-2 font-semibold">Select</th>
+                            <th className="px-3 py-2 font-semibold">Fund</th>
+                            <th className="px-3 py-2 font-semibold">AMC</th>
+                            <th className="px-3 py-2 font-semibold">3Y</th>
+                            <th className="px-3 py-2 font-semibold">AUM</th>
+                            <th className="px-3 py-2 font-semibold">Expense</th>
+                            <th className="px-3 py-2 font-semibold">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/10">
+                          {categoryFunds.map((fund) => {
+                            const code = String(fund.scheme_code || '');
+                            const selected = selectedCategoryCodes.includes(code);
+                            const disabled = !fund.is_supported;
+                            return (
+                              <tr key={code || fund.scheme_name} className={disabled ? 'bg-white/[0.015] text-slate-500 opacity-60' : 'text-[#d7e4fb] hover:bg-white/[0.03]'}>
+                                <td className="px-3 py-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleCategorySelection(fund)}
+                                    disabled={disabled || (!selected && selectedCategoryCodes.length >= 3)}
+                                    className={`grid h-6 w-6 place-items-center rounded-md border transition ${
+                                      selected
+                                        ? 'border-[#66a3ff] bg-[#66a3ff] text-slate-950'
+                                        : 'border-white/15 bg-white/[0.03] text-slate-300 disabled:cursor-not-allowed'
+                                    }`}
+                                    aria-label={`Select ${fund.scheme_name}`}
+                                  >
+                                    {selected && <Check className="h-3.5 w-3.5" />}
+                                  </button>
+                                </td>
+                                <td className="max-w-64 px-3 py-3 font-medium text-white">
+                                  <div className="line-clamp-2">{compactFundName(fund.scheme_name)}</div>
+                                  <div className="mt-1 text-[10px] text-slate-500">{fund.category || 'Category unavailable'}</div>
+                                </td>
+                                <td className="px-3 py-3">{fund.amc_name || 'N/A'}</td>
+                                <td className="px-3 py-3 font-mono">{formatPercent(fund.return_3y)}</td>
+                                <td className="px-3 py-3 font-mono">{formatAum(fund.aum)}</td>
+                                <td className="px-3 py-3 font-mono">{formatPercent(fund.expense_ratio)}</td>
+                                <td className="px-3 py-3">
+                                  {disabled ? (
+                                    <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-[10px] font-semibold text-amber-200">Coming Soon</span>
+                                  ) : (
+                                    <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[10px] font-semibold text-emerald-200">Ready</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {categoryCompareError && <div className="mt-3 rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-100">{categoryCompareError}</div>}
+                  {categoryCompare && (
+                    <div className="mt-4 rounded-xl border border-[#66a3ff]/20 bg-[#66a3ff]/[0.06] p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <h4 className="text-sm font-semibold text-white">{categoryCompare.category} comparison ready</h4>
+                          <p className="mt-1 text-xs text-slate-300">{categoryCompare.insights?.headline || categoryCompare.research_note}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={openCategoryCompareCanvas}
+                            className="rounded-lg border border-[#66a3ff]/35 bg-[#66a3ff]/10 px-3 py-1.5 text-xs font-semibold text-[#cce0ff] transition hover:bg-[#66a3ff]/15"
+                          >
+                            Open in Canvas
+                          </button>
+                          <button
+                            type="button"
+                            onClick={useCategoryCompareInChat}
+                            className="rounded-lg bg-[#66a3ff] px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-[#66a3ff]/85"
+                          >
+                            Use in Chat
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                        {categoryCompare.selected_funds.map((fund) => (
+                          <div key={String(fund.scheme_code)} className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
+                            <div className="line-clamp-2 text-xs font-semibold text-white">{compactFundName(fund.scheme_name)}</div>
+                            <div className="mt-2 text-[11px] text-slate-400">3Y {formatPercent(fund.return_3y)} · TER {formatPercent(fund.expense_ratio)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             
           </div>
@@ -621,6 +851,10 @@ export default function DashboardLayout() {
             auxiliaryData={auxiliaryData}
           />
         );
+      case 'PORTFOLIO_REVIEW':
+        return <PortfolioReviewView auxiliaryData={auxiliaryData} />;
+      case 'CATEGORY_COMPARE':
+        return <CategoryCompareView auxiliaryData={auxiliaryData} />;
       default:
         return <CanvasPlaceholder />;
     }

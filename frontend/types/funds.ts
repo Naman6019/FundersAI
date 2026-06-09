@@ -105,6 +105,52 @@ export interface CanvasPayload {
   [key: string]: unknown;
 }
 
+export interface CategoryFundRow {
+  scheme_code: string | number;
+  scheme_name: string;
+  amc_name?: string | null;
+  category?: string | null;
+  bucket?: string | null;
+  return_1y?: number | string | null;
+  return_3y?: number | string | null;
+  return_5y?: number | string | null;
+  aum?: number | string | null;
+  expense_ratio?: number | string | null;
+  alpha?: number | string | null;
+  beta?: number | string | null;
+  sharpe_ratio?: number | string | null;
+  volatility_1y?: number | string | null;
+  max_drawdown_1y?: number | string | null;
+  nav_date?: string | null;
+  last_updated?: string | null;
+  is_supported?: boolean;
+  disabled_reason?: string | null;
+  top_holdings?: Array<Record<string, unknown>>;
+  sector_allocation?: Array<Record<string, unknown>>;
+  holdings_as_of_date?: string | null;
+}
+
+export interface CategoryComparePayload {
+  category_key: string;
+  category: string;
+  selected_funds: CategoryFundRow[];
+  metric_groups?: Record<string, string[]>;
+  holdings?: Record<string, Array<Record<string, unknown>>>;
+  sectors?: Record<string, Array<Record<string, unknown>>>;
+  overlap?: Record<string, unknown>;
+  insights?: {
+    headline?: string;
+    overlap_level?: string;
+    review_points?: string[];
+    overlap_read?: string[];
+    watchpoints?: string[];
+    next_questions?: string[];
+  };
+  score?: number;
+  label?: string;
+  research_note?: string;
+}
+
 export interface FundMetrics {
   returns: FundReturns;
   cagr: FundCagrReturns;

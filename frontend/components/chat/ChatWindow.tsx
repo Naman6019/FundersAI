@@ -6,7 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Send, Sparkles, Trash2 } from 'lucide-react';
 import { useCanvasStore } from '@/store/useCanvasStore';
-import { AssetType, ComparisonViewMode, initialMessages, Message, ResearchDepth, useChatStore } from '@/store/useChatStore';
+import { AssetType, ComparisonViewMode, ConversationContext, initialMessages, Message, ResearchDepth, useChatStore } from '@/store/useChatStore';
 import { hasSupabaseBrowserEnv, supabaseBrowser } from '@/lib/supabaseBrowser';
 import Magnetic from '@/components/ui/Magnetic';
 
@@ -41,6 +41,16 @@ const markdownComponents = {
   hr: (props: React.ComponentProps<'hr'>) => <hr className="my-3 border-white/10" {...props} />,
 };
 
+function contextFromMessageMetadata(messages: Message[]): ConversationContext {
+  for (const message of [...messages].reverse()) {
+    const context = message.metadata?.conversation_context;
+    if (context && typeof context === 'object' && ('last_compare' in context || 'last_portfolio' in context)) {
+      return context as ConversationContext;
+    }
+  }
+  return {};
+}
+
 export default function ChatWindow() {
   const searchParams = useSearchParams();
   const { setView, setIds, openCanvas, closeCanvas } = useCanvasStore();
@@ -50,11 +60,13 @@ export default function ChatWindow() {
   const assetType = useChatStore((state) => state.assetType);
   const researchDepth = useChatStore((state) => state.researchDepth);
   const comparisonViewMode = useChatStore((state) => state.comparisonViewMode);
+  const conversationContext = useChatStore((state) => state.conversationContext);
   const setInput = useChatStore((state) => state.setInput);
   const setIsProcessing = useChatStore((state) => state.setIsProcessing);
   const setAssetType = useChatStore((state) => state.setAssetType);
   const setResearchDepth = useChatStore((state) => state.setResearchDepth);
   const setComparisonViewMode = useChatStore((state) => state.setComparisonViewMode);
+  const setConversationContext = useChatStore((state) => state.setConversationContext);
   const setMessages = useChatStore((state) => state.setMessages);
   const addMessage = useChatStore((state) => state.addMessage);
   const resetMessages = useChatStore((state) => state.resetMessages);
@@ -132,11 +144,13 @@ export default function ChatWindow() {
                 id: message.id,
                 role: message.role,
                 content: message.content,
+                metadata: message.metadata || null,
               }))
           : [];
 
         if (!ignore && savedMessages.length > 0) {
           setMessages([...initialMessages, ...savedMessages]);
+          setConversationContext(contextFromMessageMetadata(savedMessages));
         }
       } catch (error) {
         console.error('Chat history load failed:', error);
@@ -153,7 +167,7 @@ export default function ChatWindow() {
     return () => {
       ignore = true;
     };
-  }, [getAccessToken, setMessages]);
+  }, [getAccessToken, setConversationContext, setMessages]);
 
   const sendQuery = useCallback(async (
     queryText: string,
@@ -194,6 +208,7 @@ export default function ChatWindow() {
           research_depth: selectedResearchDepth,
           comparison_view_mode: selectedComparisonViewMode,
           history: requestHistory,
+          conversation_context: conversationContext,
         }),
       });
 
@@ -209,14 +224,31 @@ export default function ChatWindow() {
           closeCanvas();
         }
       }
+      if (data.system_action?.type === 'PORTFOLIO_REVIEW') {
+        setIds([]);
+        setView('PORTFOLIO_REVIEW', data);
+        openCanvas(data);
+      }
 
-      addMessage({ id: Date.now().toString(), role: 'system', content: data.answer });
+      const nextConversationContext = data.conversation_context
+        ? { ...conversationContext, ...data.conversation_context }
+        : conversationContext;
+      if (data.conversation_context) {
+        setConversationContext(nextConversationContext);
+      }
+
+      addMessage({
+        id: Date.now().toString(),
+        role: 'system',
+        content: data.answer,
+        metadata: data.conversation_context ? { conversation_context: nextConversationContext } : null,
+      });
     } catch {
       addMessage({ id: Date.now().toString(), role: 'system', content: 'Error: Unable to reach FundersAI core. Make sure the server is running.' });
     } finally {
       setIsProcessing(false);
     }
-  }, [addMessage, assetType, closeCanvas, comparisonViewMode, getAccessToken, messages, openCanvas, researchDepth, setIds, setInput, setIsProcessing, setView]);
+  }, [addMessage, assetType, closeCanvas, comparisonViewMode, conversationContext, getAccessToken, messages, openCanvas, researchDepth, setConversationContext, setIds, setInput, setIsProcessing, setView]);
 
   useEffect(() => {
     if (!isHistoryReady) return;

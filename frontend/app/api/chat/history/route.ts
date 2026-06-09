@@ -6,6 +6,7 @@ type ChatMessageRow = {
   role: 'user' | 'system';
   content: string;
   created_at: string;
+  metadata?: Record<string, unknown> | null;
 };
 
 export async function GET(request: Request) {
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
   const { user, supabaseAdmin } = auth.context;
   const { data, error } = await supabaseAdmin
     .from('chat_messages')
-    .select('id,role,content,created_at')
+    .select('id,role,content,created_at,metadata')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(80);

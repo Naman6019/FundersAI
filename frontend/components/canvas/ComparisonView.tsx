@@ -28,6 +28,8 @@ interface QuantPriceRow {
 interface QuantResponsePayload {
   comparison?: Record<string, ComparisonMetric>;
   why_better?: WhyBetterPayload;
+  comparison_summary?: ComparisonSummaryPayload;
+  holdings_overlap?: HoldingsOverlapPayload;
   verdict_context?: string;
   profiles?: Record<string, QuantRecord>;
   ratios?: Record<string, QuantRecord>;
@@ -36,6 +38,38 @@ interface QuantResponsePayload {
   price_history?: Record<string, QuantPriceRow[]>;
   available?: string[];
 }
+
+type ComparisonSummaryPayload = {
+  headline?: string;
+  verdict_cards?: Array<{ label?: string; value?: string; note?: string }>;
+  key_differences?: string[];
+  missing_data?: Array<{ entity?: string; fields?: string[] }>;
+};
+
+type HoldingsOverlapPayload = {
+  coverage_status?: string;
+  reason?: string;
+  entities?: string[];
+  as_of_date?: string | null;
+  common_holding_count?: number;
+  total_overlap_weight?: number;
+  fund_a_top_concentration?: number;
+  fund_b_top_concentration?: number;
+  top_common_holdings?: Array<{
+    name?: string;
+    isin?: string | null;
+    sector?: string | null;
+    weight_a?: number;
+    weight_b?: number;
+    overlap_weight?: number;
+  }>;
+  sector_overlap?: Array<{
+    sector?: string;
+    weight_a?: number;
+    weight_b?: number;
+    overlap_weight?: number;
+  }>;
+};
 
 type StockComparisonMetric = ComparisonMetric & {
   source_summary?: { stale?: boolean };
@@ -102,6 +136,24 @@ type MFComparisonRecord = {
   alpha_vs_nifty?: string | number | null;
   sharpe_ratio?: string | number | null;
   max_drawdown_1y?: string | number | null;
+};
+
+type FundCoverage = Record<string, unknown> & {
+  supports?: Record<string, boolean | undefined>;
+  supports_1y?: boolean;
+  supports_3y?: boolean;
+  supports_5y?: boolean;
+  history_points?: string | number | null;
+  last_nav_date?: string | null;
+};
+
+const supportsFundPeriod = (coverage: FundCoverage | undefined, period: Period) => {
+  if (!coverage) return false;
+  if (period === '1D' || period === '6M') return true;
+  if (period === '1Y') return Boolean(coverage.supports_1y ?? coverage.supports?.['1Y']);
+  if (period === '3Y') return Boolean(coverage.supports_3y ?? coverage.supports?.['3Y']);
+  if (period === '5Y') return Boolean(coverage.supports_5y ?? coverage.supports?.['5Y']);
+  return true;
 };
 
 const formatValue = (value: MetricValue) => {
@@ -712,7 +764,12 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
 
   const loading = fundA.loading || fundB.loading;
   const error = fundA.error || fundB.error;
+  const mfQuant = auxiliaryData?.quant_data && typeof auxiliaryData.quant_data === 'object'
+    ? auxiliaryData.quant_data as QuantResponsePayload
+    : undefined;
   const mfWhyBetter = getWhyBetter(auxiliaryData?.quant_data);
+  const comparisonSummary = mfQuant?.comparison_summary;
+  const holdingsOverlap = mfQuant?.holdings_overlap;
   const periods: Period[] = ['1D', '6M', '1Y', '3Y', '5Y'];
   const comparisonMap =
     auxiliaryData?.quant_data && typeof auxiliaryData.quant_data === 'object'
@@ -767,7 +824,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
     </div>
   );
 
-  const Skeleton = () => (
+  const renderSkeleton = () => (
     <div className="flex-1 space-y-6 overflow-hidden animate-pulse max-w-7xl mx-auto w-full p-3 sm:p-6">
       <div className="h-24 rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5 space-y-3">
         <div className="h-6 w-1/3 rounded bg-white/[0.05]" />
@@ -837,17 +894,10 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
           {periods.map(p => {
             const isSupported = (() => {
                if (p === '1D' || p === '6M') return true;
-               const aCov = fundA.coverage as any;
-               const bCov = fundB.coverage as any;
+               const aCov = fundA.coverage as FundCoverage | undefined;
+               const bCov = fundB.coverage as FundCoverage | undefined;
                if (!aCov || !bCov) return true;
-               
-               const aSup = aCov.supports_1y !== undefined ? aCov : (aCov.supports || {});
-               const bSup = bCov.supports_1y !== undefined ? bCov : (bCov.supports || {});
-               
-               if (p === '1Y') return (aSup.supports_1y ?? aSup['1Y']) && (bSup.supports_1y ?? bSup['1Y']);
-               if (p === '3Y') return (aSup.supports_3y ?? aSup['3Y']) && (bSup.supports_3y ?? bSup['3Y']);
-               if (p === '5Y') return (aSup.supports_5y ?? aSup['5Y']) && (bSup.supports_5y ?? bSup['5Y']);
-               return true;
+               return supportsFundPeriod(aCov, p) && supportsFundPeriod(bCov, p);
             })();
 
             return (
@@ -867,7 +917,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
         </div>
       </div>
 
-      {loading && <Skeleton />}
+      {loading && renderSkeleton()}
 
       {error && (
         <div className="flex-1 flex flex-col items-center justify-center p-8 bg-red-500/10 rounded-3xl border border-red-500/20 mx-4">
@@ -920,8 +970,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
             const aDrawdown = normalizePercent(aRecord?.max_drawdown_1y ?? fundA.riskMetrics?.maxDrawdown);
             const bDrawdown = normalizePercent(bRecord?.max_drawdown_1y ?? fundB.riskMetrics?.maxDrawdown);
 
-            const aCov = fundA.coverage as Record<string, unknown> | undefined;
-            const bCov = fundB.coverage as Record<string, unknown> | undefined;
+            const aCov = fundA.coverage as FundCoverage | undefined;
+            const bCov = fundB.coverage as FundCoverage | undefined;
 
             const formatStringOrNA = (val: unknown) => {
               if (val === null || val === undefined || val === '') return 'N/A';
@@ -970,9 +1020,9 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                        ) : (
                           <span className="rounded bg-amber-500/10 px-2 py-1 text-[10px] font-medium text-amber-300 border border-amber-500/20">Stale NAV</span>
                        )}
-                       {(aCov as any)?.supports?.['5Y'] || (aCov as any)?.supports_5y ? (
+                       {supportsFundPeriod(aCov, '5Y') ? (
                           <span className="rounded bg-[#66a3ff]/10 px-2 py-1 text-[10px] font-medium text-[#66a3ff] border border-[#66a3ff]/20">5Y+ Data</span>
-                       ) : (aCov as any)?.supports?.['3Y'] || (aCov as any)?.supports_3y ? (
+                       ) : supportsFundPeriod(aCov, '3Y') ? (
                           <span className="rounded bg-[#66a3ff]/10 px-2 py-1 text-[10px] font-medium text-[#66a3ff] border border-[#66a3ff]/20">3Y Data</span>
                        ) : (
                           <span className="rounded bg-slate-500/10 px-2 py-1 text-[10px] font-medium text-slate-300 border border-slate-500/20">Limited Data</span>
@@ -988,9 +1038,9 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                        ) : (
                           <span className="rounded bg-amber-500/10 px-2 py-1 text-[10px] font-medium text-amber-300 border border-amber-500/20">Stale NAV</span>
                        )}
-                       {(bCov as any)?.supports?.['5Y'] || (bCov as any)?.supports_5y ? (
+                       {supportsFundPeriod(bCov, '5Y') ? (
                           <span className="rounded bg-[#66a3ff]/10 px-2 py-1 text-[10px] font-medium text-[#66a3ff] border border-[#66a3ff]/20">5Y+ Data</span>
-                       ) : (bCov as any)?.supports?.['3Y'] || (bCov as any)?.supports_3y ? (
+                       ) : supportsFundPeriod(bCov, '3Y') ? (
                           <span className="rounded bg-[#66a3ff]/10 px-2 py-1 text-[10px] font-medium text-[#66a3ff] border border-[#66a3ff]/20">3Y Data</span>
                        ) : (
                           <span className="rounded bg-slate-500/10 px-2 py-1 text-[10px] font-medium text-slate-300 border border-slate-500/20">Limited Data</span>
@@ -998,6 +1048,33 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                     </div>
                   </div>
                 </div>
+
+                {comparisonSummary && (
+                  <div className="rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5">
+                    <h3 className="mb-2 text-sm font-semibold text-[#d7e4fb]">Comparison snapshot</h3>
+                    {comparisonSummary.headline && (
+                      <p className="text-sm leading-relaxed text-[#c8d8f6]">{comparisonSummary.headline}</p>
+                    )}
+                    {Array.isArray(comparisonSummary.verdict_cards) && comparisonSummary.verdict_cards.length > 0 && (
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        {comparisonSummary.verdict_cards.slice(0, 4).map((card) => (
+                          <div key={`${card.label}-${card.value}`} className="rounded-2xl border border-white/10 bg-[#15233d] p-4">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">{card.label || 'Signal'}</p>
+                            <p className="mt-2 text-lg font-semibold text-white">{card.value || 'N/A'}</p>
+                            <p className="mt-1 text-xs leading-relaxed text-[#c8d8f6]">{card.note || 'No note available.'}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {Array.isArray(comparisonSummary.key_differences) && comparisonSummary.key_differences.length > 0 && (
+                      <ul className="mt-4 list-disc space-y-1 pl-5 text-xs leading-relaxed text-[#c8d8f6]">
+                        {comparisonSummary.key_differences.slice(0, 5).map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
 
                 <div className="rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5">
                   <h3 className="mb-2 text-sm font-semibold text-[#d7e4fb]">Research verdict</h3>
@@ -1008,6 +1085,89 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                   </p>
                 </div>
 
+                {holdingsOverlap && (
+                  <div className="rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-[#d7e4fb]">Holdings overlap</h3>
+                        <p className="mt-1 text-xs text-[#8ea7cd]">
+                          {holdingsOverlap.coverage_status === 'available'
+                            ? `Latest holdings: ${holdingsOverlap.as_of_date || 'date unavailable'}`
+                            : holdingsOverlap.reason || 'Holdings overlap unavailable.'}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-[#15233d] px-4 py-3 text-right">
+                        <p className="text-[11px] uppercase tracking-[0.12em] text-[#8ea7cd]">Overlap weight</p>
+                        <p className="text-xl font-semibold text-white">{formatPercent(toNumber(holdingsOverlap.total_overlap_weight), 2)}</p>
+                      </div>
+                    </div>
+
+                    {holdingsOverlap.coverage_status === 'available' ? (
+                      <div className="mt-4 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+                        <div className="overflow-hidden rounded-2xl border border-white/10">
+                          <table className="min-w-full text-left text-xs">
+                            <thead className="bg-white/[0.05] text-[#8ea7cd]">
+                              <tr>
+                                <th className="px-3 py-2 font-semibold">Common holding</th>
+                                <th className="px-3 py-2 font-semibold">{aLabel}</th>
+                                <th className="px-3 py-2 font-semibold">{bLabel}</th>
+                                <th className="px-3 py-2 font-semibold">Overlap</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/10 text-[#d7e4fb]">
+                              {(holdingsOverlap.top_common_holdings || []).slice(0, 8).map((item) => (
+                                <tr key={`${item.isin || item.name}-${item.overlap_weight}`}>
+                                  <td className="px-3 py-2">
+                                    <div className="font-medium text-white">{item.name || 'N/A'}</div>
+                                    <div className="text-[10px] text-[#8ea7cd]">{item.sector || item.isin || 'Unclassified'}</div>
+                                  </td>
+                                  <td className="px-3 py-2">{formatPercent(toNumber(item.weight_a), 2)}</td>
+                                  <td className="px-3 py-2">{formatPercent(toNumber(item.weight_b), 2)}</td>
+                                  <td className="px-3 py-2">{formatPercent(toNumber(item.overlap_weight), 2)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-[#15233d] p-4">
+                          <h4 className="text-xs font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">Sector overlap</h4>
+                          <div className="mt-3 space-y-2">
+                            {(holdingsOverlap.sector_overlap || []).slice(0, 6).map((sector) => (
+                              <div key={sector.sector} className="flex items-center justify-between gap-3 text-xs text-[#d7e4fb]">
+                                <span className="truncate">{sector.sector || 'Unclassified'}</span>
+                                <span className="font-mono text-white">{formatPercent(toNumber(sector.overlap_weight), 2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <p className="text-[#8ea7cd]">{aLabel} top 10</p>
+                              <p className="font-semibold text-white">{formatPercent(toNumber(holdingsOverlap.fund_a_top_concentration), 2)}</p>
+                            </div>
+                            <div>
+                              <p className="text-[#8ea7cd]">{bLabel} top 10</p>
+                              <p className="font-semibold text-white">{formatPercent(toNumber(holdingsOverlap.fund_b_top_concentration), 2)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-4 rounded-2xl border border-white/10 bg-[#15233d] p-4 text-sm text-[#c8d8f6]">
+                        Holdings overlap will appear when both selected funds have latest holdings data.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <h3 className="font-serif-display text-xl font-bold text-white tracking-tight">Detailed Metric Comparison</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {renderGroupedTable('Returns & Performance', pGroup)}
+                    {renderGroupedTable('Risk & Volatility Indicators', rGroup)}
+                    {renderGroupedTable('Costs, Scale & Data Quality', dGroup)}
+                  </div>
+                </div>
+
                 <div className="rounded-3xl border border-[#2d3b55] bg-[#0e182b] p-5">
                   <FundComparisonChart
                     schemeCodeA={ids[0]}
@@ -1016,15 +1176,6 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                     nameB={fundB.meta.scheme_name}
                     period={period}
                   />
-                </div>
-
-                <div className="space-y-4 mt-6">
-                  <h3 className="font-serif-display text-xl font-bold text-white tracking-tight">Detailed Metric Comparison</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {renderGroupedTable('Returns & Performance', pGroup)}
-                    {renderGroupedTable('Risk & Volatility Indicators', rGroup)}
-                    {renderGroupedTable('Costs, Scale & Data Quality', dGroup)}
-                  </div>
                 </div>
 
                 <div className="rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5">

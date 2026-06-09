@@ -973,6 +973,28 @@ class ChatHistoryMessage(BaseModel):
     role: Literal["user", "system"]
     content: str
 
+class LastCompareContext(BaseModel):
+    asset_type: Literal["stock", "mutual_fund"] = "mutual_fund"
+    entities: list[str] = Field(default_factory=list)
+    ids: list[str] = Field(default_factory=list)
+    query: str | None = None
+    last_focus: str | None = None
+    available_topics: list[str] = Field(default_factory=list)
+
+class LastPortfolioContext(BaseModel):
+    query: str | None = None
+    score: int | None = None
+    label: str | None = None
+    holdings: list[dict[str, Any]] = Field(default_factory=list)
+    buckets: dict[str, float] = Field(default_factory=dict)
+    overlap: dict[str, Any] = Field(default_factory=dict)
+    insights: dict[str, Any] = Field(default_factory=dict)
+    available_topics: list[str] = Field(default_factory=list)
+
+class ConversationContext(BaseModel):
+    last_compare: LastCompareContext | None = None
+    last_portfolio: LastPortfolioContext | None = None
+
 
 class ChatRequest(BaseModel):
     query: str
@@ -980,6 +1002,11 @@ class ChatRequest(BaseModel):
     research_depth: Literal["standard", "deep"] = "standard"
     comparison_view_mode: Literal["canvas", "chat"] = "canvas"
     history: list[ChatHistoryMessage] = Field(default_factory=list)
+    conversation_context: ConversationContext | None = None
+
+class CategoryCompareRequest(BaseModel):
+    category: str
+    scheme_codes: list[str] = Field(default_factory=list)
 
 CATEGORY_SEARCH_CONFIG = {
     "large_cap": {"label": "Large Cap", "match": "large cap", "scheme_match": "large cap"},
@@ -990,9 +1017,26 @@ CATEGORY_SEARCH_CONFIG = {
     "elss": {"label": "ELSS", "match": "elss", "scheme_match": "elss"},
 }
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-GROQ_BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL = "llama-3.1-8b-instant"
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "OPENROUTER_API_KEY_PLACEHOLDER")
+OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1/chat/completions")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
+OPENROUTER_SITE_URL = os.getenv("OPENROUTER_SITE_URL", "http://localhost:3000")
+OPENROUTER_APP_NAME = os.getenv("OPENROUTER_APP_NAME", "FundersAI")
+CONTROLLED_WEB_CONTEXT_ENABLED = os.getenv("CONTROLLED_WEB_CONTEXT_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+APPROVED_WEB_SOURCE_NAMES = (
+    "amfi",
+    "sebi",
+    "valueresearch",
+    "value research",
+    "moneycontrol",
+    "mint",
+    "economic times",
+    "business standard",
+    "morningstar",
+    "personalfn",
+    "upstox",
+    "et mutual funds",
+)
 IST = pytz.timezone('Asia/Kolkata')
 QUANT_CACHE: Dict[str, Any] = {}
 QUANT_CACHE_TTL_SECONDS = int(os.getenv("QUANT_CACHE_TTL_SECONDS", "600"))
@@ -1003,14 +1047,14 @@ DEBUG_MF_RESOLUTION = os.getenv("DEBUG_MF_RESOLUTION", "0").strip().lower() in {
 MF_COMPARE_MIN_NAV_POINTS = max(int(os.getenv("MF_COMPARE_MIN_NAV_POINTS", "252")), 1)
 
 async def function_ollama_chat(messages, format="json", max_retries=2):
-    groq_key = os.environ.get("GROQ_API_KEY")
-    if not groq_key:
-        logger.error("Missing GROQ_API_KEY in environment!")
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY") or OPENROUTER_API_KEY
+    if not openrouter_key or openrouter_key == "OPENROUTER_API_KEY_PLACEHOLDER":
+        logger.error("Missing OPENROUTER_API_KEY in environment.")
         return None
         
     req_messages = [dict(m) for m in messages]
     payload = {
-        "model": GROQ_MODEL,
+        "model": OPENROUTER_MODEL,
     }
     
     if format == "json":
@@ -1021,18 +1065,20 @@ async def function_ollama_chat(messages, format="json", max_retries=2):
     payload["messages"] = req_messages
             
     headers = {
-        "Authorization": f"Bearer {groq_key}",
-        "Content-Type": "application/json"
+        "Authorization": f"Bearer {openrouter_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": OPENROUTER_SITE_URL,
+        "X-Title": OPENROUTER_APP_NAME,
     }
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
-            response = await client.post(GROQ_BASE_URL, headers=headers, json=payload)
+            response = await client.post(OPENROUTER_BASE_URL, headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()
             return data["choices"][0]["message"]["content"]
         except Exception as e:
-            logger.error(f"Groq API Error: {e}")
+            logger.error(f"OpenRouter API Error: {e}")
             return None
 
 async def route_query(query: str, asset_type: str = "auto") -> dict:
@@ -1510,22 +1556,36 @@ Return exactly in this JSON format:
     for n in news_items: n["sentiment"] = "NEUTRAL"
     return news_items
 
+def _is_approved_web_source(source: Any, url: Any = None) -> bool:
+    source_text = str(source or "").lower()
+    url_text = str(url or "").lower()
+    return any(name in source_text or name in url_text for name in APPROVED_WEB_SOURCE_NAMES)
+
 def fetch_news(query: str, ticker: str, sentiment_flag: bool = False) -> list:
-    """Agent 3: News Parser"""
+    """Controlled web context: approved source headlines only."""
+    if not CONTROLLED_WEB_CONTEXT_ENABLED:
+        return []
     search_term = ticker.replace('.NS', '').replace('.BO', '') if ticker else query
     encoded_term = search_term.replace(' ', '+')
-    rss_url = f"https://news.google.com/rss/search?q={encoded_term}+India+Stock+Market&hl=en-IN&gl=IN&ceid=IN:en"
+    rss_url = f"https://news.google.com/rss/search?q={encoded_term}+India+mutual+fund+stock+market&hl=en-IN&gl=IN&ceid=IN:en"
     
     try:
         feed = feedparser.parse(rss_url)
         news_items = []
-        for entry in feed.entries[:6]: 
+        for entry in feed.entries[:12]:
+            source = entry.source.title if hasattr(entry, 'source') else "News Source"
+            url = getattr(entry, "link", None)
+            if not _is_approved_web_source(source, url):
+                continue
             news_items.append({
                 "title": entry.title,
-                "source": entry.source.title if hasattr(entry, 'source') else "News Source",
+                "source": source,
                 "published": entry.published,
-                "url": getattr(entry, "link", None),
+                "url": url,
+                "context_type": "controlled_web_headline",
             })
+            if len(news_items) >= 6:
+                break
         return news_items
     except Exception as e:
         logger.error(f"News Error: {e}")
@@ -1836,6 +1896,169 @@ def _dashboard_tool_intent(query: str, asset_type: str = "auto") -> dict[str, An
         }
     return None
 
+def _normalize_compare_entity_name(entity: str) -> str:
+    text = " ".join(str(entity or "").replace("-", " ").replace(",", " ").split())
+    text = re.sub(r"\b(?:and\s+)?(?:why|how|what|which|explain|show|tell)\b.*$", "", text, flags=re.IGNORECASE).strip()
+    low = text.lower()
+    if "parag" in low or "ppfas" in low:
+        if "flexi" in low or "flexi cap" in low:
+            return "Parag Parikh Flexi Cap"
+    if "hdfc" in low and "flexi" in low:
+        return "HDFC Flexi Cap"
+    if "icici" in low and "multi" in low:
+        return "ICICI Multi Asset"
+    if "sbi" in low and "blue" in low:
+        return "SBI Bluechip"
+    if "flexi" in low and "cap" not in low:
+        return f"{text} Cap"
+    return text
+
+def _extract_compare_followup_question(query: str) -> str | None:
+    text = " ".join(str(query or "").strip().split())
+    if not text:
+        return None
+    match = re.search(r"\b(?:and|,)\s+((?:why|how|what|which|explain|show|tell)\b.+)$", text, flags=re.IGNORECASE)
+    if match:
+        return match.group(1).strip(" ?") + "?"
+    if re.match(r"^(why|how|what|which|explain|show|tell)\b", text, flags=re.IGNORECASE):
+        return text
+    return None
+
+def _deterministic_compare_intent(query: str, asset_type: str = "auto") -> dict[str, Any] | None:
+    if asset_type == "stock":
+        return None
+
+    text = " ".join(str(query or "").strip().split())
+    low = text.lower()
+    if "compare" not in low:
+        return None
+    if not any(token in low for token in ("fund", "flexi", "cap", "ppfas", "parag", "hdfc", "icici", "sbi")):
+        return None
+
+    cleaned = re.sub(r"^compare\s+", "", text, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\b(for|over)\s+(the\s+)?(long\s*term|short\s*term|medium\s*term).*$", "", cleaned, flags=re.IGNORECASE).strip()
+    parts = re.split(r"\s+(?:and|vs\.?|versus)\s+", cleaned, maxsplit=1, flags=re.IGNORECASE)
+    if len(parts) < 2:
+        return None
+
+    entities = [_normalize_compare_entity_name(part) for part in parts[:2]]
+    entities = [entity for entity in entities if entity]
+    if len(entities) < 2:
+        return None
+
+    intent = {
+        "intent": "compare",
+        "ticker": None,
+        "historical_period": "5y" if "long" in low else "1mo",
+        "sentiment_flag": False,
+        "downside_focus": any(token in low for token in ("downside", "drawdown", "fall", "crash")),
+        "compare_entities": entities,
+        "asset_type": "mutual_fund",
+        "deterministic_router": True,
+    }
+    followup_question = _extract_compare_followup_question(query)
+    if followup_question:
+        intent["followup_question"] = followup_question
+    return intent
+
+def _is_compare_followup_query(query: str) -> bool:
+    low = str(query or "").lower()
+    if "compare" in low:
+        return False
+    has_reference = any(token in low for token in ("both", "these", "them", "those", "their", "the two"))
+    has_metric = any(token in low for token in (
+        "return", "returns", "differ", "difference", "risk", "expense", "aum",
+        "drawdown", "volatility", "sharpe", "alpha", "beta", "nav", "performance",
+        "safer", "steadier", "winner", "better", "portfolio", "holdings",
+    ))
+    asks_question = bool(re.match(r"^\s*(why|how|what|which|explain|show|tell)\b", low))
+    return has_metric and (has_reference or asks_question)
+
+def _detect_followup_topic(query: str) -> str | None:
+    low = str(query or "").lower()
+    if any(token in low for token in ("holding", "holdings", "overlap", "same stocks", "common stocks")):
+        return "holdings"
+    if any(token in low for token in ("sector", "allocation", "portfolio mix")):
+        return "sectors"
+    if any(token in low for token in ("risk", "safer", "drawdown", "volatility", "sharpe", "steadier")):
+        return "risk"
+    if any(token in low for token in ("expense", "cost", "aum", "size")):
+        return "cost"
+    if any(token in low for token in ("return", "returns", "performance", "differ", "difference")):
+        return "returns"
+    if any(token in low for token in ("fresh", "missing", "available", "data quality", "nav date")):
+        return "data_quality"
+    return None
+
+def _last_compare_intent_from_history(history: list[Any], asset_type: str = "auto") -> dict[str, Any] | None:
+    for message in reversed(_history_payload(history)):
+        if message.get("role") != "user":
+            continue
+        intent = _deterministic_compare_intent(message.get("content", ""), asset_type)
+        if intent and len(intent.get("compare_entities") or []) >= 2:
+            return intent
+    return None
+
+def _last_compare_intent_from_context(context: Any) -> dict[str, Any] | None:
+    last_compare = getattr(context, "last_compare", None) if context is not None else None
+    if isinstance(context, dict):
+        last_compare = context.get("last_compare")
+    if not last_compare:
+        return None
+
+    if isinstance(last_compare, dict):
+        entities = last_compare.get("entities") or []
+        ids = last_compare.get("ids") or []
+        context_asset_type = last_compare.get("asset_type") or "mutual_fund"
+        source_query = last_compare.get("query")
+        last_focus = last_compare.get("last_focus")
+    else:
+        entities = getattr(last_compare, "entities", []) or []
+        ids = getattr(last_compare, "ids", []) or []
+        context_asset_type = getattr(last_compare, "asset_type", "mutual_fund")
+        source_query = getattr(last_compare, "query", None)
+        last_focus = getattr(last_compare, "last_focus", None)
+
+    clean_entities = [str(entity).strip() for entity in entities if str(entity or "").strip()]
+    if len(clean_entities) < 2:
+        return None
+
+    return {
+        "intent": "compare",
+        "ticker": None,
+        "historical_period": "1mo",
+        "sentiment_flag": False,
+        "downside_focus": False,
+        "compare_entities": clean_entities[:2],
+        "compare_ids": [str(item).strip() for item in ids if str(item or "").strip()][:2],
+        "asset_type": context_asset_type,
+        "source_query": source_query,
+        "last_focus": last_focus,
+        "context_router": True,
+    }
+
+def _followup_compare_intent(
+    query: str,
+    history: list[Any],
+    asset_type: str = "auto",
+    conversation_context: Any = None,
+) -> dict[str, Any] | None:
+    if not _is_compare_followup_query(query):
+        return None
+    previous = _last_compare_intent_from_context(conversation_context) or _last_compare_intent_from_history(history, asset_type)
+    if not previous:
+        return None
+    if asset_type == "stock" and previous.get("asset_type") != "stock":
+        return None
+    intent = dict(previous)
+    if "long" in str(query or "").lower():
+        intent["historical_period"] = "5y"
+    intent["followup_question"] = _extract_compare_followup_question(query) or str(query).strip()
+    intent["followup_topic"] = _detect_followup_topic(query) or intent.get("last_focus")
+    intent["followup_from_context"] = bool(previous.get("context_router"))
+    intent["followup_from_history"] = not bool(previous.get("context_router"))
+    return intent
+
 RISK_QUIZ_QUESTIONS = [
     {
         "question": "1. If your portfolio fell 15% in a month, what would you most likely do?",
@@ -1866,8 +2089,12 @@ RISK_QUIZ_QUESTIONS = [
 def _history_payload(history: list[Any]) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = []
     for item in history[-20:]:
-        role = getattr(item, "role", None)
-        content = getattr(item, "content", None)
+        if isinstance(item, dict):
+            role = item.get("role")
+            content = item.get("content")
+        else:
+            role = getattr(item, "role", None)
+            content = getattr(item, "content", None)
         if role in {"user", "system"} and str(content or "").strip():
             messages.append({"role": str(role), "content": str(content).strip()})
     return messages
@@ -1992,6 +2219,7 @@ def _fund_search_pattern(search_term: str) -> str:
     cleaned = (
         search_term.lower()
         .replace("felxi", "flexi")
+        .replace("bluechip", "blue chip")
         .replace(" fund", "")
         .replace(" growth", "")
         .replace(".", " ")
@@ -2001,6 +2229,127 @@ def _fund_search_pattern(search_term: str) -> str:
     words = [word for word in cleaned.split() if word]
     return f"%{'%'.join(words)}%" if words else "%"
 
+def _normalize_portfolio_fund_name(name: str) -> str:
+    text = " ".join(str(name or "").replace("-", " ").split())
+    low = text.lower()
+    if ("parag" in low or "ppfas" in low) and "flexi" in low:
+        return "Parag Parikh Flexi Cap"
+    if "hdfc" in low and "mid" in low and "cap" in low:
+        return "HDFC Mid Cap Opportunities"
+    if "hdfc" in low and "flexi" in low:
+        return "HDFC Flexi Cap"
+    if "hdfc" in low and "large" in low and "cap" in low:
+        return "HDFC Large Cap"
+    if "sbi" in low and ("blue" in low or "bluechip" in low):
+        return "SBI Blue Chip"
+    if "sbi" in low and "large" in low and "cap" in low:
+        return "SBI Large Cap"
+    if "sbi" in low and "flexi" in low:
+        return "SBI Flexicap"
+    if "icici" in low and "large" in low and "cap" in low:
+        return "ICICI Prudential Large Cap"
+    if "icici" in low and "multi" in low:
+        return "ICICI Prudential Multi Asset"
+    if "icici" in low and "flexi" in low:
+        return "ICICI Prudential Flexicap"
+    return text
+
+def _portfolio_amc_terms(name: str) -> list[str]:
+    low = str(name or "").lower()
+    if "hdfc" in low:
+        return ["hdfc"]
+    if "sbi" in low:
+        return ["sbi"]
+    if "icici" in low:
+        return ["icici", "prudential"]
+    if "parag" in low or "ppfas" in low:
+        return ["parag", "ppfas"]
+    return []
+
+def _portfolio_bucket_hint(name: str) -> str | None:
+    text = _normalize_fund_text(str(name or ""))
+    if "small cap" in text or "smallcap" in text:
+        return "Small Cap"
+    if "mid cap" in text or "midcap" in text:
+        return "Mid Cap"
+    if "large cap" in text or "largecap" in text or "blue chip" in text or "bluechip" in text:
+        return "Large Cap"
+    if "flexi" in text or "multi cap" in text:
+        return "Flexi/Multi Cap"
+    if "index" in text:
+        return "Index"
+    if "elss" in text:
+        return "ELSS"
+    return None
+
+def _row_matches_portfolio_bucket(row: dict[str, Any], bucket: str) -> bool:
+    if _portfolio_bucket(row.get("category")) == bucket:
+        return True
+    text = _normalize_fund_text(" ".join(str(row.get(field) or "") for field in ("scheme_name", "category")))
+    if bucket == "Small Cap":
+        return "small cap" in text
+    if bucket == "Mid Cap":
+        return "mid cap" in text
+    if bucket == "Large Cap":
+        return "large cap" in text or "blue chip" in text or "bluechip" in text
+    if bucket == "Flexi/Multi Cap":
+        return "flexi" in text or "multi cap" in text
+    if bucket == "Index":
+        return "index" in text
+    if bucket == "ELSS":
+        return "elss" in text
+    return False
+
+def _portfolio_bucket_candidates(name: str, fields: str) -> list[dict[str, Any]]:
+    if not supabase:
+        return []
+    search_name = _normalize_portfolio_fund_name(name)
+    bucket = _portfolio_bucket_hint(search_name) or _portfolio_bucket_hint(name)
+    amc_terms = _portfolio_amc_terms(search_name) or _portfolio_amc_terms(name)
+    if not bucket or not amc_terms:
+        return []
+
+    rows: list[dict[str, Any]] = []
+    seen_codes: set[str] = set()
+
+    def add_rows(next_rows: list[dict[str, Any]]) -> None:
+        for row in next_rows:
+            code = str(row.get("scheme_code") or row.get("scheme_name") or "")
+            if code in seen_codes:
+                continue
+            seen_codes.add(code)
+            rows.append(row)
+
+    for term in amc_terms:
+        try:
+            add_rows(
+                supabase.table("mutual_fund_core_snapshot")
+                .select(fields)
+                .ilike("scheme_name", f"%{term}%")
+                .limit(100)
+                .execute()
+                .data
+                or []
+            )
+        except Exception:
+            pass
+        try:
+            add_rows(
+                supabase.table("mutual_fund_core_snapshot")
+                .select(fields)
+                .ilike("amc_name", f"%{term}%")
+                .limit(100)
+                .execute()
+                .data
+                or []
+            )
+        except Exception:
+            pass
+
+    supported_rows = [row for row in rows if _is_supported_mf_row(row)]
+    bucket_rows = [row for row in (supported_rows or rows) if _row_matches_portfolio_bucket(row, bucket)]
+    return bucket_rows
+
 def _portfolio_review_started(history: list[dict[str, str]]) -> bool:
     return any(message["role"] == "user" and _is_portfolio_review_start(message["content"]) for message in history) or _system_history_contains(history, "paste your mutual fund holdings")
 
@@ -2008,19 +2357,32 @@ def _parse_portfolio_holdings(query: str) -> list[dict[str, Any]]:
     text = str(query or "").strip()
     holdings: list[dict[str, Any]] = []
     amount_pattern = r"(?:rs\.?|inr|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?\s*(?:k|lakh|lac|cr|crore)?)"
+
+    def _clean_holding_name(value: str) -> str:
+        return re.sub(r"\s+", " ", value).strip(" .:-")
+
     for match in re.finditer(rf"{amount_pattern}\s+(?:in|into|for)\s+([^,\n;]+)", text, flags=re.IGNORECASE):
         amount = _money_token_to_float(match.group(1))
-        name = re.sub(r"\s+", " ", match.group(2)).strip(" .")
+        name = _clean_holding_name(match.group(2))
         if amount and len(name) >= 3:
             holdings.append({"input_name": name, "amount": amount})
     if holdings:
         return holdings
 
-    for part in re.split(r"[,;\n]+", text):
+    normalized_text = re.sub(
+        r"((?:rs\.?|inr|₹)?\s*[0-9][0-9,]*(?:\.[0-9]+)?\s*(?:k|lakh|lac|cr|crore)?)\s+(?:and|&)\s+",
+        r"\1, ",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    for part in re.split(r"[,;\n]+", normalized_text):
         match = re.search(rf"(.+?)\s*[:=-]\s*{amount_pattern}", part, flags=re.IGNORECASE)
         if not match:
+            match = re.search(rf"(.+?)\s+{amount_pattern}\s*$", part.strip(), flags=re.IGNORECASE)
+        if not match:
             continue
-        name = re.sub(r"\s+", " ", match.group(1)).strip(" .")
+        name = _clean_holding_name(match.group(1))
         amount = _money_token_to_float(match.group(2))
         if amount and len(name) >= 3:
             holdings.append({"input_name": name, "amount": amount})
@@ -2029,22 +2391,37 @@ def _parse_portfolio_holdings(query: str) -> list[dict[str, Any]]:
 def _resolve_portfolio_fund(name: str) -> dict[str, Any] | None:
     if not supabase:
         return None
+    search_name = _normalize_portfolio_fund_name(name)
     try:
         fields = "scheme_code,scheme_name,amc_name,category,return_3y,aum,expense_ratio,nav_date"
         rows = (
             supabase.table("mutual_fund_core_snapshot")
             .select(fields)
-            .ilike("scheme_name", _fund_search_pattern(name))
+            .ilike("scheme_name", _fund_search_pattern(search_name))
             .limit(25)
             .execute()
             .data
             or []
         )
+        if not rows and search_name != name:
+            rows = (
+                supabase.table("mutual_fund_core_snapshot")
+                .select(fields)
+                .ilike("scheme_name", _fund_search_pattern(name))
+                .limit(25)
+                .execute()
+                .data
+                or []
+        )
         supported_rows = [row for row in rows if _is_supported_mf_row(row)]
         candidates = supported_rows or rows
-        if not candidates:
+        if candidates:
+            return _pick_best_fund_match(search_name, candidates, nav_history_cache={}, min_history_points=0)
+
+        bucket_candidates = _portfolio_bucket_candidates(name, fields)
+        if not bucket_candidates:
             return None
-        return _pick_best_fund_match(name, candidates, nav_history_cache={}, min_history_points=0)
+        return _pick_best_fund_match(search_name, bucket_candidates, nav_history_cache={}, min_history_points=0)
     except Exception as exc:
         logger.error("Portfolio fund match failed for %s: %s", name, exc)
         return None
@@ -2069,6 +2446,382 @@ def _portfolio_bucket(category: Any) -> str:
         return "ELSS"
     return "Unclassified"
 
+def _load_latest_fund_holdings(scheme_code_value: Any) -> tuple[list[dict[str, Any]], str | None]:
+    if not supabase or scheme_code_value in (None, ""):
+        return [], None
+    scheme_code = str(scheme_code_value)
+    try:
+        rows = (
+            supabase.table("mutual_fund_holdings")
+            .select("as_of_date,security_name,isin,sector,weight_pct,source,provider_payload")
+            .eq("scheme_code", int(scheme_code) if scheme_code.isdigit() else scheme_code)
+            .order("as_of_date", desc=True)
+            .order("weight_pct", desc=True)
+            .limit(500)
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        return [], None
+
+    latest_as_of = None
+    holdings: list[dict[str, Any]] = []
+    for row in rows:
+        as_of = row.get("as_of_date")
+        if latest_as_of is None:
+            latest_as_of = as_of
+        if as_of != latest_as_of:
+            continue
+        holdings.append(
+            {
+                "security_name": row.get("security_name"),
+                "isin": row.get("isin"),
+                "sector": row.get("sector"),
+                "weight_pct": row.get("weight_pct"),
+                "as_of_date": as_of,
+                "source": row.get("source"),
+                "provider_payload": row.get("provider_payload"),
+            }
+        )
+    holdings.sort(key=lambda item: _holding_weight(item), reverse=True)
+    return holdings, latest_as_of
+
+def _build_portfolio_overlap(resolved: list[dict[str, Any]]) -> dict[str, Any]:
+    matched = [item for item in resolved if item.get("matched")]
+    if len(matched) < 2:
+        return {"coverage_status": "unavailable", "reason": "Need at least two matched funds for portfolio overlap."}
+
+    exposure_by_key: dict[str, dict[str, Any]] = {}
+    sector_exposure: dict[str, dict[str, float]] = {}
+    loaded_funds = 0
+    as_of_dates: list[str] = []
+
+    for item in matched:
+        fund = item.get("matched") or {}
+        fund_name = _safe_value(fund.get("scheme_name"))
+        scheme_code = fund.get("scheme_code")
+        holdings, as_of = _load_latest_fund_holdings(scheme_code)
+        if not holdings:
+            continue
+        loaded_funds += 1
+        if as_of:
+            as_of_dates.append(str(as_of))
+        fund_weight = float(item.get("weight") or 0.0)
+        for row in holdings:
+            if not isinstance(row, dict):
+                continue
+            key = _holding_key(row)
+            holding_weight = _holding_weight(row)
+            if not key or holding_weight <= 0:
+                continue
+            exposure = fund_weight * holding_weight
+            existing = exposure_by_key.setdefault(
+                key,
+                {
+                    "name": row.get("security_name") or "N/A",
+                    "isin": row.get("isin"),
+                    "sector": row.get("sector"),
+                    "fund_exposures": [],
+                },
+            )
+            existing["fund_exposures"].append({"fund": fund_name, "exposure": round(exposure, 4)})
+            sector = str(row.get("sector") or "Unclassified").strip() or "Unclassified"
+            sector_exposure.setdefault(sector, {})[fund_name] = sector_exposure.setdefault(sector, {}).get(fund_name, 0.0) + exposure
+
+    if loaded_funds < 2:
+        return {
+            "coverage_status": "unavailable",
+            "reason": "Holdings data is unavailable for enough matched funds.",
+            "matched_fund_count": len(matched),
+            "funds_with_holdings": loaded_funds,
+        }
+
+    common_holdings = []
+    for row in exposure_by_key.values():
+        exposures = row["fund_exposures"]
+        if len(exposures) < 2:
+            continue
+        total_exposure = sum(float(item["exposure"]) for item in exposures)
+        largest_single = max(float(item["exposure"]) for item in exposures)
+        common_holdings.append(
+            {
+                "name": row.get("name"),
+                "isin": row.get("isin"),
+                "sector": row.get("sector"),
+                "fund_count": len(exposures),
+                "funds": [item["fund"] for item in exposures],
+                "portfolio_exposure": round(total_exposure, 4),
+                "overlap_exposure": round(total_exposure - largest_single, 4),
+            }
+        )
+    common_holdings.sort(key=lambda row: row["overlap_exposure"], reverse=True)
+
+    sector_overlap = []
+    for sector, exposures in sector_exposure.items():
+        if len(exposures) < 2:
+            continue
+        total_exposure = sum(exposures.values())
+        largest_single = max(exposures.values())
+        sector_overlap.append(
+            {
+                "sector": sector,
+                "fund_count": len(exposures),
+                "portfolio_exposure": round(total_exposure, 4),
+                "overlap_exposure": round(total_exposure - largest_single, 4),
+            }
+        )
+    sector_overlap.sort(key=lambda row: row["overlap_exposure"], reverse=True)
+
+    return {
+        "coverage_status": "available",
+        "matched_fund_count": len(matched),
+        "funds_with_holdings": loaded_funds,
+        "as_of_date": " / ".join(sorted(set(as_of_dates))) if as_of_dates else None,
+        "common_holding_count": len(common_holdings),
+        "total_overlap_exposure": round(sum(row["overlap_exposure"] for row in common_holdings), 4),
+        "top_common_holdings": common_holdings[:10],
+        "sector_overlap": sector_overlap[:10],
+    }
+
+def _build_portfolio_review_insights(
+    resolved: list[dict[str, Any]],
+    bucket_totals: dict[str, float],
+    overlap: dict[str, Any],
+    score: int,
+    label: str,
+    total_amount: float,
+) -> dict[str, Any]:
+    matched = [item for item in resolved if item.get("matched")]
+    unmatched = [item for item in resolved if not item.get("matched")]
+    top_fund = max(resolved, key=lambda item: float(item.get("weight") or 0), default=None)
+    bucket_rows = sorted(bucket_totals.items(), key=lambda pair: pair[1], reverse=True)
+    largest_bucket, largest_bucket_amount = bucket_rows[0] if bucket_rows else ("N/A", 0.0)
+    largest_bucket_pct = (largest_bucket_amount / total_amount * 100) if total_amount else 0.0
+    overlap_value = _to_float_or_none(overlap.get("total_overlap_exposure")) or 0.0
+    common_count = int(overlap.get("common_holding_count") or 0)
+
+    if overlap.get("coverage_status") != "available":
+        overlap_level = "Unknown"
+        headline = "The review can read allocation, but holdings-level overlap is limited by missing holdings data."
+    elif overlap_value >= 15:
+        overlap_level = "High"
+        headline = "The portfolio has meaningful duplicated stock exposure, so fund count may overstate diversification."
+    elif overlap_value >= 7:
+        overlap_level = "Moderate"
+        headline = "The portfolio is diversified by category, but a few underlying stocks and sectors repeat across funds."
+    elif common_count > 0:
+        overlap_level = "Low"
+        headline = "The portfolio has some shared holdings, but duplicated stock exposure is not dominant."
+    else:
+        overlap_level = "Low"
+        headline = "The matched funds do not show meaningful common stock overlap in the latest holdings data."
+
+    review_points = [
+        f"Overall label is {label} with a score of {score}/100, based on match coverage, category spread, largest holding weight, and overlap data.",
+        f"Largest allocation bucket is {largest_bucket} at {_format_percent(largest_bucket_pct)} of the pasted amount.",
+    ]
+    if top_fund:
+        review_points.append(
+            f"Largest fund weight is {_format_percent(float(top_fund.get('weight') or 0) * 100)} in {_safe_value(top_fund.get('input_name'))}; this matters more than the number of funds held."
+        )
+    if overlap.get("coverage_status") == "available":
+        review_points.append(
+            f"Duplicated stock exposure is {_format_percent(overlap_value)} across {common_count} common holdings."
+        )
+
+    overlap_read: list[str] = []
+    if overlap.get("coverage_status") == "available":
+        top_common = overlap.get("top_common_holdings") if isinstance(overlap.get("top_common_holdings"), list) else []
+        top_sectors = overlap.get("sector_overlap") if isinstance(overlap.get("sector_overlap"), list) else []
+        if top_common:
+            names = ", ".join(_safe_value(item.get("name")) for item in top_common[:3])
+            overlap_read.append(f"Main repeated holdings: {names}. These stocks can drive similar short-term movement across multiple funds.")
+        if top_sectors:
+            sector = top_sectors[0]
+            overlap_read.append(
+                f"Biggest repeated sector exposure is {_safe_value(sector.get('sector'))} at {_format_percent(sector.get('overlap_exposure'))} duplicated exposure."
+            )
+        if overlap_value >= 7:
+            overlap_read.append("This overlap is not automatically bad, but it reduces the benefit of holding multiple funds if the repeated stocks or sectors move together.")
+        elif common_count > 0:
+            overlap_read.append("The overlap exists, but it is small enough that allocation and fund mandate differences still matter more.")
+    else:
+        overlap_read.append(f"Holdings overlap could not be reviewed fully: {_safe_value(overlap.get('reason'))}.")
+
+    watchpoints: list[str] = []
+    if unmatched:
+        watchpoints.append(f"{len(unmatched)} submitted holding(s) were unmatched, so the review may understate concentration or overlap.")
+    if largest_bucket_pct >= 50:
+        watchpoints.append(f"{largest_bucket} is at {_format_percent(largest_bucket_pct)}, so this bucket dominates the submitted portfolio.")
+    if top_fund and float(top_fund.get("weight") or 0) >= 0.35:
+        watchpoints.append(f"{_safe_value(top_fund.get('input_name'))} is above 35% of the pasted portfolio, making it the main driver of outcomes.")
+    if overlap_value >= 7:
+        watchpoints.append("Repeated exposure is worth checking against your reason for holding each fund; two funds may still behave similarly if they own the same banks, IT names, or market leaders.")
+    if not watchpoints:
+        watchpoints.append("No single deterministic red flag appears from the submitted allocation and latest holdings overlap.")
+
+    next_questions = [
+        "Ask: Which common holding contributes most to duplicated exposure?",
+        "Ask: Is the sector overlap concentrated in banks, IT, or another sector?",
+        "Ask: Which fund is driving most of the portfolio risk?",
+    ]
+
+    return {
+        "headline": headline,
+        "overlap_level": overlap_level,
+        "review_points": review_points,
+        "overlap_read": overlap_read,
+        "watchpoints": watchpoints,
+        "next_questions": next_questions,
+    }
+
+def _portfolio_review_insights_markdown(insights: dict[str, Any]) -> str:
+    if not insights:
+        return ""
+    lines = ["### Review Interpretation"]
+    if insights.get("headline"):
+        lines.append(_safe_value(insights.get("headline")))
+    lines.append("")
+    lines.append("| Review Area | Read |")
+    lines.append("| --- | --- |")
+    lines.append(f"| Overlap level | {_safe_value(insights.get('overlap_level'))} |")
+    for item in (insights.get("review_points") or [])[:4]:
+        lines.append(f"| Portfolio read | {_safe_value(item)} |")
+    for item in (insights.get("overlap_read") or [])[:3]:
+        lines.append(f"| Overlap read | {_safe_value(item)} |")
+    for item in (insights.get("watchpoints") or [])[:4]:
+        lines.append(f"| Watchpoint | {_safe_value(item)} |")
+    next_questions = insights.get("next_questions") if isinstance(insights.get("next_questions"), list) else []
+    if next_questions:
+        lines.append("")
+        lines.append("### Follow-up Questions")
+        lines.extend(f"- {question}" for question in next_questions[:3])
+    return "\n".join(lines)
+
+def _portfolio_context_payload(query: str, review: dict[str, Any]) -> dict[str, Any]:
+    payload = (review.get("quant_data") or {}).get("portfolio_review") if isinstance(review, dict) else {}
+    if not isinstance(payload, dict) or not payload.get("holdings"):
+        return {}
+    holdings = []
+    for item in (payload.get("holdings") or [])[:12]:
+        if not isinstance(item, dict):
+            continue
+        matched = item.get("matched") if isinstance(item.get("matched"), dict) else {}
+        holdings.append(
+            {
+                "input_name": item.get("input_name"),
+                "amount": item.get("amount"),
+                "weight": item.get("weight"),
+                "matched_fund": matched.get("scheme_name") if matched else None,
+                "bucket": item.get("bucket"),
+            }
+        )
+    return {
+        "last_portfolio": {
+            "query": query,
+            "score": payload.get("score"),
+            "label": payload.get("label"),
+            "holdings": holdings,
+            "buckets": payload.get("buckets") or {},
+            "overlap": payload.get("overlap") or {},
+            "insights": payload.get("insights") or {},
+            "available_topics": ["allocation", "holdings_overlap", "sector_overlap", "concentration", "unmatched", "review_points"],
+        }
+    }
+
+def _last_portfolio_from_context(context: Any) -> dict[str, Any] | None:
+    if context is None:
+        return None
+    portfolio = context.get("last_portfolio") if isinstance(context, dict) else getattr(context, "last_portfolio", None)
+    if portfolio is None:
+        return None
+    if isinstance(portfolio, dict):
+        return portfolio
+    return {
+        "query": getattr(portfolio, "query", None),
+        "score": getattr(portfolio, "score", None),
+        "label": getattr(portfolio, "label", None),
+        "holdings": getattr(portfolio, "holdings", []) or [],
+        "buckets": getattr(portfolio, "buckets", {}) or {},
+        "overlap": getattr(portfolio, "overlap", {}) or {},
+        "insights": getattr(portfolio, "insights", {}) or {},
+        "available_topics": getattr(portfolio, "available_topics", []) or [],
+    }
+
+def _build_portfolio_followup_response(query: str, conversation_context: Any) -> dict[str, Any] | None:
+    portfolio = _last_portfolio_from_context(conversation_context)
+    if not portfolio:
+        return None
+    low = query.lower()
+    followup_terms = (
+        "overlap", "common", "same stock", "same holding", "holding", "sector",
+        "allocation", "concentration", "divers", "risk", "unmatched", "bucket",
+        "review", "interpret", "summary", "good", "bad", "points", "which fund", "what about", "why",
+    )
+    if not any(term in low for term in followup_terms):
+        return None
+
+    overlap = portfolio.get("overlap") if isinstance(portfolio.get("overlap"), dict) else {}
+    holdings = portfolio.get("holdings") if isinstance(portfolio.get("holdings"), list) else []
+    buckets = portfolio.get("buckets") if isinstance(portfolio.get("buckets"), dict) else {}
+    insights = portfolio.get("insights") if isinstance(portfolio.get("insights"), dict) else {}
+    lines = ["### Portfolio Follow-up"]
+
+    if any(term in low for term in ("review", "interpret", "summary", "good", "bad", "powerup", "points")) and insights:
+        if insights.get("headline"):
+            lines.append(f"- {_safe_value(insights.get('headline'))}")
+        for item in (insights.get("review_points") or [])[:3]:
+            lines.append(f"- {_safe_value(item)}")
+        for item in (insights.get("watchpoints") or [])[:3]:
+            lines.append(f"- Watchpoint: {_safe_value(item)}")
+
+    if any(term in low for term in ("overlap", "common", "same stock", "same holding", "holding")):
+        if overlap.get("coverage_status") == "available":
+            lines.append(f"- Duplicated stock exposure is {_format_percent(overlap.get('total_overlap_exposure'))} across {overlap.get('common_holding_count', 0)} common holdings.")
+            for item in (overlap.get("top_common_holdings") or [])[:5]:
+                lines.append(
+                    f"- {_safe_value(item.get('name'))}: {_format_percent(item.get('portfolio_exposure'))} total portfolio exposure, {_format_percent(item.get('overlap_exposure'))} duplicated exposure across {item.get('fund_count', 0)} funds."
+                )
+        else:
+            lines.append(f"- Holdings overlap is unavailable: {_safe_value(overlap.get('reason'))}.")
+
+    if "sector" in low:
+        sectors = overlap.get("sector_overlap") if isinstance(overlap.get("sector_overlap"), list) else []
+        if sectors:
+            lines.append("- Sector overlap:")
+            for item in sectors[:5]:
+                lines.append(f"  - {_safe_value(item.get('sector'))}: {_format_percent(item.get('overlap_exposure'))} duplicated sector exposure.")
+        else:
+            lines.append("- Sector overlap needs holdings-level sector data across at least two matched funds.")
+
+    if any(term in low for term in ("allocation", "bucket", "divers", "concentration", "risk")):
+        total = sum(float(value or 0) for value in buckets.values()) if buckets else 0
+        if buckets and total:
+            lines.append("- Category allocation:")
+            for bucket, amount in sorted(buckets.items(), key=lambda pair: float(pair[1] or 0), reverse=True):
+                lines.append(f"  - {bucket}: {_format_percent(float(amount or 0) / total * 100)} of pasted amount.")
+        if holdings:
+            largest = max(holdings, key=lambda item: float(item.get("weight") or 0))
+            lines.append(f"- Largest fund weight is {_format_percent(float(largest.get('weight') or 0) * 100)} in {_safe_value(largest.get('input_name'))}.")
+
+    if "unmatched" in low:
+        unmatched = [item for item in holdings if str(item.get("bucket") or "").lower() == "unmatched"]
+        if unmatched:
+            lines.append("- Unmatched entries: " + ", ".join(_safe_value(item.get("input_name")) for item in unmatched) + ".")
+        else:
+            lines.append("- All submitted holdings were matched in the last portfolio review.")
+
+    lines.append("")
+    lines.append("This is based on the submitted portfolio review in this chat, not a new suitability recommendation.")
+    return {
+        "answer": "\n".join(lines),
+        "debug_intent": {"intent": "portfolio_followup", "source": "conversation_context"},
+        "quant_data": {"portfolio_review": portfolio},
+        "conversation_context": {"last_portfolio": portfolio},
+        "system_action": {"type": "PORTFOLIO_REVIEW"},
+    }
+
 def _build_portfolio_review_response(query: str, history: list[dict[str, str]]) -> dict[str, Any] | None:
     holdings = _parse_portfolio_holdings(query)
     if not holdings:
@@ -2090,11 +2843,14 @@ Example: `50k in Parag Parikh Flexi Cap, 20k in HDFC Mid-Cap, 30k in SBI Bluechi
         match = _resolve_portfolio_fund(item["input_name"])
         amount = float(item["amount"])
         category = match.get("category") if match else None
+        db_bucket = _portfolio_bucket(category) if match else "Unmatched"
+        input_bucket = _portfolio_bucket_hint(item["input_name"])
+        bucket = input_bucket if match and db_bucket in {"Unclassified", "Unmatched"} and input_bucket else db_bucket
         resolved.append({
             **item,
             "weight": amount / total_amount if total_amount else 0,
             "matched": match,
-            "bucket": _portfolio_bucket(category) if match else "Unmatched",
+            "bucket": bucket,
         })
 
     bucket_totals: dict[str, float] = {}
@@ -2132,6 +2888,32 @@ Example: `50k in Parag Parikh Flexi Cap, 20k in HDFC Mid-Cap, 30k in SBI Bluechi
     if unmatched:
         notes.append(f"Unmatched entries: {', '.join(unmatched)}.")
 
+    overlap = _build_portfolio_overlap(resolved)
+    insights = _build_portfolio_review_insights(resolved, bucket_totals, overlap, score, label, total_amount)
+    insights_section = _portfolio_review_insights_markdown(insights)
+    if overlap.get("coverage_status") == "available":
+        overlap_rows = [
+            [
+                _safe_value(item.get("name")),
+                _safe_value(item.get("sector")),
+                str(item.get("fund_count") or 0),
+                _format_percent(item.get("portfolio_exposure")),
+                _format_percent(item.get("overlap_exposure")),
+            ]
+            for item in (overlap.get("top_common_holdings") or [])[:5]
+        ]
+        overlap_section = f"""### Portfolio Overlap
+| Metric | Result |
+| --- | --- |
+| Funds with holdings data | {overlap.get("funds_with_holdings")}/{overlap.get("matched_fund_count")} |
+| Common holdings | {overlap.get("common_holding_count")} |
+| Duplicated stock exposure | {_format_percent(overlap.get("total_overlap_exposure"))} |
+
+{_markdown_table(["Common Holding", "Sector", "Funds", "Portfolio Exposure", "Duplicated Exposure"], overlap_rows) if overlap_rows else "No common stock holdings were found across the matched funds."}"""
+    else:
+        overlap_section = f"""### Portfolio Overlap
+Holdings overlap unavailable: {_safe_value(overlap.get("reason"))}"""
+
     answer = f"""### Portfolio Health Check
 | Metric | Result |
 | --- | --- |
@@ -2145,20 +2927,30 @@ Example: `50k in Parag Parikh Flexi Cap, 20k in HDFC Mid-Cap, 30k in SBI Bluechi
 ### Category Allocation
 {_markdown_table(["Bucket", "Amount", "Weight"], bucket_rows)}
 
+{insights_section}
+
+{overlap_section}
+
 ### Research Notes
 {chr(10).join(f"- {note}" for note in notes)}
 
 This is a diversification snapshot from pasted text, not a complete suitability review or investment advice.
 
 {DISCLAIMER}"""
-    return {
+    response = {
         "answer": answer,
         "debug_intent": {"intent": "portfolio_review", "step": "complete", "score": score, "label": label},
-        "quant_data": {"portfolio_review": {"score": score, "label": label, "holdings": resolved, "buckets": bucket_totals}},
+        "quant_data": {"portfolio_review": {"score": score, "label": label, "holdings": resolved, "buckets": bucket_totals, "overlap": overlap, "insights": insights}},
     }
+    response["conversation_context"] = _portfolio_context_payload(query, response)
+    response["system_action"] = {"type": "PORTFOLIO_REVIEW"}
+    return response
 
-def _build_deferred_dashboard_response(query: str, history: list[Any]) -> dict[str, Any] | None:
+def _build_deferred_dashboard_response(query: str, history: list[Any], conversation_context: Any = None) -> dict[str, Any] | None:
     history_messages = _history_payload(history)
+    portfolio_followup = _build_portfolio_followup_response(query, conversation_context)
+    if portfolio_followup:
+        return portfolio_followup
     risk_response = _build_risk_quiz_response(query, history_messages)
     if risk_response:
         return risk_response
@@ -2171,16 +2963,67 @@ def _is_supported_mf_row(row: dict[str, Any]) -> bool:
     )
     return any(marker in text for markers in SUPPORTED_MF_AMC_MARKERS.values() for marker in markers)
 
-def _read_category_rows(category_key: str) -> list[dict[str, Any]]:
+def _category_key_from_value(value: str) -> str | None:
+    normalized = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "large": "large_cap",
+        "largecap": "large_cap",
+        "large_cap": "large_cap",
+        "mid": "mid_cap",
+        "midcap": "mid_cap",
+        "mid_cap": "mid_cap",
+        "small": "small_cap",
+        "smallcap": "small_cap",
+        "small_cap": "small_cap",
+        "flexi": "flexi_cap",
+        "flexicap": "flexi_cap",
+        "flexi_cap": "flexi_cap",
+        "index": "index",
+        "index_funds": "index",
+        "elss": "elss",
+    }
+    return aliases.get(normalized) or (normalized if normalized in CATEGORY_SEARCH_CONFIG else None)
+
+def _category_row_matches(row: dict[str, Any], category_key: str) -> bool:
+    config = CATEGORY_SEARCH_CONFIG[category_key]
+    category_text = _normalize_fund_text(str(row.get("category") or ""))
+    scheme_text = _normalize_fund_text(str(row.get("scheme_name") or ""))
+    match_text = _normalize_fund_text(str(config["match"]))
+    scheme_match = _normalize_fund_text(str(config.get("scheme_match") or config["match"]))
+    if match_text and match_text in category_text:
+        return True
+    if category_text in {"", "unclassified", "n a", "na", "none", "null"} and scheme_match in scheme_text:
+        return True
+    if category_key == "index" and "index" in scheme_text:
+        return True
+    return False
+
+def _decorate_category_row(row: dict[str, Any]) -> dict[str, Any]:
+    is_supported = _is_supported_mf_row(row)
+    return {
+        **row,
+        "is_supported": is_supported,
+        "disabled_reason": None if is_supported else "Coming Soon",
+    }
+
+def _category_sort_key(row: dict[str, Any]) -> tuple[int, int, float]:
+    has_return = _to_float_or_none(row.get("return_3y")) is not None
+    ranking_value = _to_float_or_none(row.get("return_3y")) if has_return else _to_float_or_none(row.get("aum"))
+    return (0 if row.get("is_supported") else 1, 0 if has_return else 1, -(ranking_value or 0.0))
+
+def _category_snapshot_fields() -> str:
+    return (
+        "scheme_code,scheme_name,amc_name,category,return_1y,return_3y,return_5y,aum,"
+        "expense_ratio,nav_date,last_updated,alpha,beta,sharpe_ratio,volatility_1y,max_drawdown_1y"
+    )
+
+def _read_category_rows(category_key: str, include_unsupported: bool = False, limit: int = 100) -> list[dict[str, Any]]:
     if not supabase:
         logger.error("Supabase client not initialized")
         return []
 
     config = CATEGORY_SEARCH_CONFIG[category_key]
-    fields = (
-        "scheme_code,scheme_name,amc_name,category,return_3y,aum,"
-        "expense_ratio,nav_date,last_updated"
-    )
+    fields = _category_snapshot_fields()
     rows: list[dict[str, Any]] = []
     try:
         res = (
@@ -2191,7 +3034,7 @@ def _read_category_rows(category_key: str) -> list[dict[str, Any]]:
             .execute()
         )
         rows = res.data or []
-        if not rows and config.get("scheme_match"):
+        if config.get("scheme_match"):
             res = (
                 supabase.table("mutual_fund_core_snapshot")
                 .select(fields)
@@ -2199,13 +3042,22 @@ def _read_category_rows(category_key: str) -> list[dict[str, Any]]:
                 .limit(100)
                 .execute()
             )
-            rows = res.data or []
+            seen = {str(row.get("scheme_code") or row.get("scheme_name")) for row in rows}
+            for row in res.data or []:
+                key = str(row.get("scheme_code") or row.get("scheme_name"))
+                if key not in seen:
+                    seen.add(key)
+                    rows.append(row)
     except Exception as exc:
         logger.error("Category search DB error: %s", exc)
         return []
 
-    supported_rows = [row for row in rows if _is_supported_mf_row(row)]
-    return supported_rows
+    matched_rows = [_decorate_category_row(row) for row in rows if _category_row_matches(row, category_key)]
+    if not matched_rows:
+        matched_rows = [_decorate_category_row(row) for row in rows]
+    if not include_unsupported:
+        matched_rows = [row for row in matched_rows if row.get("is_supported")]
+    return sorted(matched_rows, key=_category_sort_key)[:limit]
 
 def _build_category_search_response(intent_info: dict[str, Any]) -> dict[str, Any]:
     category_key = intent_info["category_key"]
@@ -2263,6 +3115,163 @@ This is a category snapshot based on available FundersAI data, not a recommendat
             }
         },
     }
+
+def _category_list_payload(category_key: str) -> dict[str, Any]:
+    rows = _read_category_rows(category_key, include_unsupported=True, limit=100)
+    has_returns = any(_to_float_or_none(row.get("return_3y")) is not None for row in rows)
+    ranking_label = "Top by 3Y return" if has_returns else "Largest by AUM"
+    return {
+        "category_key": category_key,
+        "category": CATEGORY_SEARCH_CONFIG[category_key]["label"],
+        "ranking": ranking_label,
+        "rows": rows,
+    }
+
+def _read_snapshot_rows_by_scheme_codes(scheme_codes: list[str]) -> list[dict[str, Any]]:
+    if not supabase:
+        return []
+    fields = _category_snapshot_fields()
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for code in scheme_codes:
+        code_str = str(code or "").strip()
+        if not code_str or code_str in seen:
+            continue
+        seen.add(code_str)
+        try:
+            res = (
+                supabase.table("mutual_fund_core_snapshot")
+                .select(fields)
+                .eq("scheme_code", int(code_str) if code_str.isdigit() else code_str)
+                .limit(1)
+                .execute()
+            )
+            if res.data:
+                rows.append(_decorate_category_row(res.data[0]))
+        except Exception as exc:
+            logger.error("Category compare row lookup failed for %s: %s", code_str, exc)
+    return rows
+
+def _category_fund_metrics(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "scheme_code": row.get("scheme_code"),
+        "scheme_name": row.get("scheme_name"),
+        "amc_name": row.get("amc_name"),
+        "category": row.get("category"),
+        "return_1y": row.get("return_1y"),
+        "return_3y": row.get("return_3y"),
+        "return_5y": row.get("return_5y"),
+        "aum": row.get("aum"),
+        "expense_ratio": row.get("expense_ratio"),
+        "alpha": row.get("alpha"),
+        "beta": row.get("beta"),
+        "sharpe_ratio": row.get("sharpe_ratio"),
+        "volatility_1y": row.get("volatility_1y"),
+        "max_drawdown_1y": row.get("max_drawdown_1y"),
+        "nav_date": row.get("nav_date"),
+        "last_updated": row.get("last_updated"),
+    }
+
+def _sector_exposure_from_holdings(holdings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    sectors: dict[str, float] = {}
+    for row in holdings:
+        sector = str(row.get("sector") or "Unclassified").strip() or "Unclassified"
+        sectors[sector] = sectors.get(sector, 0.0) + _holding_weight(row)
+    return [
+        {"sector": sector, "weight_pct": round(weight, 4)}
+        for sector, weight in sorted(sectors.items(), key=lambda pair: pair[1], reverse=True)
+    ][:10]
+
+def _build_category_compare_payload(category_key: str, scheme_codes: list[str]) -> dict[str, Any]:
+    category_key = _category_key_from_value(category_key) or category_key
+    if category_key not in CATEGORY_SEARCH_CONFIG:
+        raise HTTPException(status_code=400, detail="Unsupported category.")
+
+    clean_codes = [str(code or "").strip() for code in scheme_codes if str(code or "").strip()]
+    clean_codes = list(dict.fromkeys(clean_codes))
+    if len(clean_codes) < 2 or len(clean_codes) > 3:
+        raise HTTPException(status_code=400, detail="Select 2 to 3 supported funds.")
+
+    rows = _read_snapshot_rows_by_scheme_codes(clean_codes)
+    rows_by_code = {str(row.get("scheme_code")): row for row in rows}
+    missing = [code for code in clean_codes if code not in rows_by_code]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Fund data not found for: {', '.join(missing)}")
+
+    unsupported = [row for row in rows if not row.get("is_supported")]
+    if unsupported:
+        names = ", ".join(_safe_value(row.get("scheme_name")) for row in unsupported)
+        raise HTTPException(status_code=400, detail=f"Coming Soon funds cannot be compared yet: {names}")
+
+    equal_amount = 100.0 / len(rows)
+    resolved: list[dict[str, Any]] = []
+    selected_funds: list[dict[str, Any]] = []
+    holdings_by_code: dict[str, list[dict[str, Any]]] = {}
+    sectors_by_code: dict[str, list[dict[str, Any]]] = {}
+
+    for row in rows:
+        code = str(row.get("scheme_code"))
+        holdings, holdings_as_of = _load_latest_fund_holdings(row.get("scheme_code"))
+        holdings_by_code[code] = holdings[:25]
+        sectors_by_code[code] = _sector_exposure_from_holdings(holdings)
+        bucket = _portfolio_bucket(row.get("category"))
+        resolved.append(
+            {
+                "input_name": row.get("scheme_name"),
+                "amount": equal_amount,
+                "weight": 1 / len(rows),
+                "matched": row,
+                "bucket": bucket if bucket != "Unclassified" else (_portfolio_bucket_hint(row.get("scheme_name")) or bucket),
+            }
+        )
+        selected_funds.append(
+            {
+                **_category_fund_metrics(row),
+                "bucket": resolved[-1]["bucket"],
+                "holdings_as_of_date": holdings_as_of,
+                "top_holdings": holdings[:10],
+                "sector_allocation": sectors_by_code[code],
+            }
+        )
+
+    bucket_totals: dict[str, float] = {}
+    for item in resolved:
+        bucket_totals[item["bucket"]] = bucket_totals.get(item["bucket"], 0.0) + float(item["amount"])
+
+    overlap = _build_portfolio_overlap(resolved)
+    score = 100 - max((max(item["weight"] for item in resolved) * 100) - 35, 0) + min(len(bucket_totals), 4) * 3
+    score = max(0, min(100, round(score)))
+    label = "Good" if score >= 75 else "Fair" if score >= 55 else "Needs review"
+    insights = _build_portfolio_review_insights(resolved, bucket_totals, overlap, score, label, 100.0)
+
+    return {
+        "category_key": category_key,
+        "category": CATEGORY_SEARCH_CONFIG[category_key]["label"],
+        "selected_funds": selected_funds,
+        "metric_groups": {
+            "returns": ["return_1y", "return_3y", "return_5y"],
+            "risk": ["volatility_1y", "max_drawdown_1y", "sharpe_ratio", "alpha", "beta"],
+            "cost_scale": ["expense_ratio", "aum", "nav_date"],
+        },
+        "holdings": holdings_by_code,
+        "sectors": sectors_by_code,
+        "overlap": overlap,
+        "insights": insights,
+        "score": score,
+        "label": label,
+        "research_note": "Category comparison uses an equal-weighted selected set for overlap math. This is research only, not investment advice.",
+    }
+
+@app.get("/api/funds/category")
+def category_funds_endpoint(category: str):
+    category_key = _category_key_from_value(category)
+    if not category_key:
+        raise HTTPException(status_code=400, detail="Unsupported category.")
+    return _category_list_payload(category_key)
+
+@app.post("/api/funds/category/compare")
+def category_funds_compare_endpoint(req: CategoryCompareRequest):
+    return _build_category_compare_payload(req.category, req.scheme_codes)
 
 def _stock_metric_rows(data: dict) -> list[tuple[str, str]]:
     period = _risk_period(data)
@@ -2537,6 +3546,287 @@ def _compare_direct_answer_markdown(quant_data: Any) -> str:
 
     return "\n".join(lines)
 
+def _comparison_valid_items(comparison: Any) -> list[tuple[str, dict[str, Any]]]:
+    if not isinstance(comparison, dict):
+        return []
+    return [
+        (name, data)
+        for name, data in comparison.items()
+        if isinstance(data, dict) and not _is_unavailable_entity(data)
+    ]
+
+def _metric_label_winner(valid: list[tuple[str, dict[str, Any]]], key: str, lower_is_better: bool = False) -> tuple[str, str] | None:
+    if len(valid) < 2:
+        return None
+    values = []
+    for name, data in valid[:2]:
+        value = _to_float_or_none(data.get(key))
+        if value is not None:
+            values.append((name, value))
+    if len(values) < 2 or values[0][1] == values[1][1]:
+        return None
+    winner = min(values, key=lambda item: item[1]) if lower_is_better else max(values, key=lambda item: item[1])
+    loser = values[1] if winner == values[0] else values[0]
+    diff = abs(winner[1] - loser[1])
+    return winner[0], f"{winner[0]} leads by {diff:.2f} pts ({_format_percent(winner[1])} vs {_format_percent(loser[1])})."
+
+def _build_comparison_summary(quant_data: Any) -> dict[str, Any]:
+    comparison = quant_data.get("comparison") if isinstance(quant_data, dict) else None
+    valid = _comparison_valid_items(comparison)
+    if len(valid) < 2:
+        return {
+            "headline": "Structured comparison is limited because one or more funds could not be matched.",
+            "verdict_cards": [],
+            "key_differences": ["Data coverage is insufficient for a decisive research snapshot."],
+            "missing_data": [],
+        }
+
+    (name_a, data_a), (name_b, data_b) = valid[:2]
+    return_winner = _metric_label_winner(valid, "return_3y")
+    risk_winner = _metric_label_winner(valid, "volatility_1y", lower_is_better=True)
+    cost_winner = _metric_label_winner(valid, "expense_ratio", lower_is_better=True)
+    drawdown_winner = _metric_label_winner(valid, "max_drawdown_1y")
+
+    if return_winner:
+        headline = f"{return_winner[0]} has the stronger available 3Y return, but risk, cost, and data coverage should be read alongside it."
+    else:
+        headline = "No clear return leader is available from the current structured data."
+
+    def _card(label: str, winner: tuple[str, str] | None, fallback: str) -> dict[str, str]:
+        return {
+            "label": label,
+            "value": winner[0] if winner else "No clear edge",
+            "note": winner[1] if winner else fallback,
+        }
+
+    missing_data = []
+    for name, data in valid[:2]:
+        missing = [
+            label
+            for label, key in (
+                ("1Y return", "return_1y"),
+                ("3Y return", "return_3y"),
+                ("5Y return", "return_5y"),
+                ("expense ratio", "expense_ratio"),
+                ("AUM", "aum"),
+                ("volatility", "volatility_1y"),
+                ("drawdown", "max_drawdown_1y"),
+                ("Sharpe", "sharpe_ratio"),
+            )
+            if _is_missing(data.get(key))
+        ]
+        if missing:
+            missing_data.append({"entity": name, "fields": missing})
+
+    key_differences = []
+    for item in (return_winner, risk_winner, cost_winner, drawdown_winner):
+        if item:
+            key_differences.append(item[1])
+    if not key_differences:
+        key_differences.append("Current structured metrics do not show a strong deterministic edge.")
+
+    return {
+        "headline": headline,
+        "verdict_cards": [
+            _card("Return profile", return_winner, "3Y return is missing or too close to call."),
+            _card("Risk profile", risk_winner, "Volatility is missing or too close to call."),
+            _card("Cost profile", cost_winner, "Expense ratio is missing or too close to call."),
+            {
+                "label": "Data quality",
+                "value": "Complete" if not missing_data else "Partial",
+                "note": "Core comparison fields are available." if not missing_data else "Some fields are missing; use the data notes before reading the verdict.",
+            },
+        ],
+        "key_differences": key_differences[:5],
+        "missing_data": missing_data,
+    }
+
+def _holding_key(row: dict[str, Any]) -> str | None:
+    isin = str(row.get("isin") or "").strip().upper()
+    if isin and isin not in {"N/A", "NA", "NONE", "NULL"}:
+        return f"isin:{isin}"
+    name = re.sub(r"[^a-z0-9]+", " ", str(row.get("security_name") or "").lower()).strip()
+    return f"name:{name}" if name else None
+
+def _holding_weight(row: dict[str, Any]) -> float:
+    return _to_float_or_none(row.get("weight_pct")) or 0.0
+
+def _build_holdings_overlap(comparison: Any) -> dict[str, Any]:
+    valid = _comparison_valid_items(comparison)
+    if len(valid) < 2:
+        return {"coverage_status": "unavailable", "reason": "Need two matched funds for holdings overlap."}
+
+    (name_a, data_a), (name_b, data_b) = valid[:2]
+    holdings_a = data_a.get("holdings") if isinstance(data_a.get("holdings"), list) else []
+    holdings_b = data_b.get("holdings") if isinstance(data_b.get("holdings"), list) else []
+    if not holdings_a or not holdings_b:
+        return {
+            "coverage_status": "unavailable",
+            "reason": "Holdings data is unavailable for one or both funds.",
+            "entities": [name_a, name_b],
+            "common_holdings": [],
+            "top_common_holdings": [],
+            "total_overlap_weight": 0,
+        }
+
+    map_a = {_holding_key(row): row for row in holdings_a if isinstance(row, dict) and _holding_key(row)}
+    map_b = {_holding_key(row): row for row in holdings_b if isinstance(row, dict) and _holding_key(row)}
+    common = []
+    for key in sorted(set(map_a).intersection(map_b)):
+        row_a = map_a[key]
+        row_b = map_b[key]
+        weight_a = _holding_weight(row_a)
+        weight_b = _holding_weight(row_b)
+        common.append({
+            "name": row_a.get("security_name") or row_b.get("security_name") or "N/A",
+            "isin": row_a.get("isin") or row_b.get("isin"),
+            "sector": row_a.get("sector") or row_b.get("sector"),
+            "weight_a": round(weight_a, 4),
+            "weight_b": round(weight_b, 4),
+            "overlap_weight": round(min(weight_a, weight_b), 4),
+        })
+    common.sort(key=lambda row: row["overlap_weight"], reverse=True)
+
+    def _top_concentration(rows: list[dict[str, Any]], limit: int = 10) -> float:
+        weights = sorted((_holding_weight(row) for row in rows if isinstance(row, dict)), reverse=True)
+        return round(sum(weights[:limit]), 4)
+
+    def _sector_map(rows: list[dict[str, Any]]) -> dict[str, float]:
+        sectors: dict[str, float] = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            sector = str(row.get("sector") or "Unclassified").strip() or "Unclassified"
+            sectors[sector] = sectors.get(sector, 0.0) + _holding_weight(row)
+        return sectors
+
+    sectors_a = _sector_map(holdings_a)
+    sectors_b = _sector_map(holdings_b)
+    sector_overlap = [
+        {
+            "sector": sector,
+            "weight_a": round(sectors_a.get(sector, 0.0), 4),
+            "weight_b": round(sectors_b.get(sector, 0.0), 4),
+            "overlap_weight": round(min(sectors_a.get(sector, 0.0), sectors_b.get(sector, 0.0)), 4),
+        }
+        for sector in sorted(set(sectors_a).intersection(sectors_b))
+    ]
+    sector_overlap.sort(key=lambda row: row["overlap_weight"], reverse=True)
+
+    dates = [
+        row.get("as_of_date")
+        for row in [*(holdings_a[:1] or []), *(holdings_b[:1] or [])]
+        if isinstance(row, dict) and row.get("as_of_date")
+    ]
+
+    return {
+        "coverage_status": "available",
+        "entities": [name_a, name_b],
+        "as_of_date": " / ".join(str(date) for date in dates) if dates else None,
+        "common_holding_count": len(common),
+        "total_overlap_weight": round(sum(row["overlap_weight"] for row in common), 4),
+        "fund_a_top_concentration": _top_concentration(holdings_a),
+        "fund_b_top_concentration": _top_concentration(holdings_b),
+        "common_holdings": common,
+        "top_common_holdings": common[:10],
+        "sector_overlap": sector_overlap[:10],
+    }
+
+def _comparison_summary_markdown(summary: Any) -> str:
+    if not isinstance(summary, dict):
+        return ""
+    lines = []
+    headline = summary.get("headline")
+    if headline:
+        lines.append(str(headline))
+    cards = summary.get("verdict_cards")
+    if isinstance(cards, list) and cards:
+        lines.append("")
+        for card in cards[:4]:
+            if not isinstance(card, dict):
+                continue
+            lines.append(f"- **{_safe_value(card.get('label'))}:** {_safe_value(card.get('value'))} — {_safe_value(card.get('note'))}")
+    differences = summary.get("key_differences")
+    if isinstance(differences, list) and differences:
+        lines.append("")
+        lines.extend([f"- {item}" for item in differences[:5]])
+    return "\n".join(lines).strip()
+
+def _comparison_followup_answer_markdown(quant_data: Any, question: str | None) -> str:
+    if not question or not isinstance(quant_data, dict):
+        return ""
+    comparison = quant_data.get("comparison")
+    if not isinstance(comparison, dict) or len(comparison) < 2:
+        return ""
+
+    valid = [(name, data) for name, data in comparison.items() if isinstance(data, dict) and not _is_unavailable_entity(data)]
+    if len(valid) < 2:
+        return ""
+
+    (name_a, data_a), (name_b, data_b) = valid[:2]
+    low = question.lower()
+    lines: list[str] = []
+
+    def _metric_pair(label: str, key: str, formatter=_safe_value) -> str | None:
+        a_val = data_a.get(key)
+        b_val = data_b.get(key)
+        if _is_missing(a_val) and _is_missing(b_val):
+            return None
+        return f"{label}: {name_a} {formatter(a_val)} vs {name_b} {formatter(b_val)}"
+
+    if any(token in low for token in ("return", "returns", "differ", "difference", "performance")):
+        for label, key in (("1Y return", "return_1y"), ("3Y return", "return_3y"), ("5Y return", "return_5y")):
+            line = _metric_pair(label, key, _format_percent)
+            if line:
+                lines.append(f"- {line}.")
+        lines.append(
+            "- Return gaps usually come from different portfolio composition, category exposure, cash levels, stock selection, and how much volatility each fund took during the same period."
+        )
+
+    if any(token in low for token in ("risk", "safer", "steadier", "drawdown", "volatility", "sharpe")):
+        for label, key, formatter in (
+            ("Volatility", "volatility_1y", _format_percent),
+            ("Max drawdown", "max_drawdown_1y", _format_percent),
+            ("Sharpe ratio", "sharpe_ratio", _safe_value),
+        ):
+            line = _metric_pair(label, key, formatter)
+            if line:
+                lines.append(f"- {line}.")
+
+    if any(token in low for token in ("expense", "cost", "aum", "size")):
+        for label, key, formatter in (
+            ("Expense ratio", "expense_ratio", _safe_value),
+            ("AUM", "aum", _format_inr_market_cap),
+        ):
+            line = _metric_pair(label, key, formatter)
+            if line:
+                lines.append(f"- {line}.")
+
+    overlap = quant_data.get("holdings_overlap") if isinstance(quant_data.get("holdings_overlap"), dict) else {}
+    if any(token in low for token in ("holding", "holdings", "overlap", "same stocks", "common stocks")):
+        if overlap.get("coverage_status") == "available":
+            lines.append(f"- Holdings overlap weight is {_format_percent(overlap.get('total_overlap_weight'))} across {overlap.get('common_holding_count', 0)} common holdings.")
+            for item in (overlap.get("top_common_holdings") or [])[:3]:
+                if isinstance(item, dict):
+                    lines.append(f"- Common holding: {_safe_value(item.get('name'))} with overlap {_format_percent(item.get('overlap_weight'))}.")
+        else:
+            lines.append(f"- Holdings overlap is unavailable: {_safe_value(overlap.get('reason'))}.")
+
+    if any(token in low for token in ("sector", "allocation", "portfolio mix")):
+        if overlap.get("coverage_status") == "available" and overlap.get("sector_overlap"):
+            for item in (overlap.get("sector_overlap") or [])[:3]:
+                if isinstance(item, dict):
+                    lines.append(f"- Sector overlap: {_safe_value(item.get('sector'))} at {_format_percent(item.get('overlap_weight'))}.")
+        else:
+            lines.append("- Sector overlap needs holdings-level sector data for both funds.")
+
+    if not lines:
+        lines.append(
+            "- The useful comparison points are returns, volatility, drawdown, Sharpe ratio, expense ratio, AUM, and portfolio/sector exposure where available."
+        )
+
+    return "\n".join(lines[:7])
+
 async def run_stock_screen(filters: dict) -> list:
     """Stock screening against the local stock universe."""
     if not supabase:
@@ -2617,6 +3907,8 @@ Use clear language, practical examples, and no buy/sell advice."""
     subject = _summary_subject(query, intent_info, quant_data)
     snapshot = _snapshot_line(intent, quant_data)
     compare_direct_answer = _compare_direct_answer_markdown(quant_data) if intent == "compare" else ""
+    followup_answer = _comparison_followup_answer_markdown(quant_data, intent_info.get("followup_question")) if intent == "compare" else ""
+    comparison_summary = _comparison_summary_markdown(quant_data.get("comparison_summary")) if intent == "compare" and isinstance(quant_data, dict) else ""
 
     system_prompt = """You are FundersAI, a research-only Indian market analyst.
 Write only the Trend Observation paragraph.
@@ -2650,7 +3942,7 @@ Structured Data Table:
 Data Notes:
 {notes_context}
 
-News Data:
+Controlled Web Context:
 {news_markdown}
 """
 
@@ -2690,8 +3982,16 @@ News Data:
     analysis_heading = "Deep Research Analysis" if deep_research else "Trend Observation"
 
     if intent == "compare" and comparison_view_mode == "canvas":
+        long_term_read = compare_direct_answer or (
+            "Use the canvas metrics to compare long-term returns, volatility, drawdown, Sharpe ratio, expense ratio, AUM, and data freshness side by side. A stronger long-term fit should show consistent returns with controlled downside and reasonable costs, not only a higher point-to-point return."
+        )
         return f"""### {subject} — {title}
 > Detailed comparison metrics are visible in the canvas panel.
+
+### Long-Term Read
+{long_term_read}
+{"\n\n### Comparison Snapshot\n" + comparison_summary if comparison_summary else ""}
+{"\n\n### Follow-up Answer\n" + followup_answer if followup_answer else ""}
 
 ### News & Announcements *(last 48-72 hrs)*
 {news_markdown}
@@ -2699,6 +3999,11 @@ News Data:
 ### {analysis_heading}
 
 {trend}
+
+### Follow-up Questions
+- Compare downside protection and max drawdown.
+- Show expense ratio and AUM differences.
+- Explain which fund looks steadier over 3Y and 5Y.
 
 {DISCLAIMER}"""
 
@@ -2799,6 +4104,7 @@ def _normalize_fund_text(text: str) -> str:
         .replace("smallcap", "small cap")
         .replace("midcap", "mid cap")
         .replace("largecap", "large cap")
+        .replace("bluechip", "blue chip")
         .replace("-", " ")
         .split()
     )
@@ -3220,12 +4526,20 @@ async def get_mutual_fund_details(scheme_code: int):
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest):
     asset_type = req.asset_type
-    deferred_response = _build_deferred_dashboard_response(req.query, req.history)
+    deferred_response = _build_deferred_dashboard_response(req.query, req.history, req.conversation_context)
     if deferred_response:
         return deferred_response
 
+    deterministic_compare = _deterministic_compare_intent(req.query, asset_type)
+    followup_compare = None if deterministic_compare else _followup_compare_intent(
+        req.query,
+        req.history,
+        asset_type,
+        req.conversation_context,
+    )
+
     dashboard_intent = _dashboard_tool_intent(req.query, asset_type)
-    if dashboard_intent:
+    if dashboard_intent and not followup_compare:
         if dashboard_intent["intent"] == "sip_calculator":
             sip_response = _build_sip_calculator_response(req.query)
             if sip_response:
@@ -3233,7 +4547,7 @@ async def chat_endpoint(req: ChatRequest):
         if dashboard_intent["intent"] == "category_search":
             return _build_category_search_response(dashboard_intent)
 
-    intent_info = await route_query(req.query, asset_type)
+    intent_info = deterministic_compare or followup_compare or await route_query(req.query, asset_type)
     intent = intent_info.get("intent", "general")
     ticker = intent_info.get("ticker")
     period = intent_info.get("historical_period", "1mo")
@@ -3573,6 +4887,8 @@ To experience FundersAI's advanced research capabilities, please try:
                     "data_quality": {name: (payload.get("data_quality") or {}) for name, payload in comparison_results.items()},
                     "asset_type": "mutual_fund",
                 }
+                quant_data["holdings_overlap"] = _build_holdings_overlap(comparison_results)
+                quant_data["comparison_summary"] = _build_comparison_summary(quant_data)
     
     # Handle single quant lookup (or forced single comparison)
     if intent in ["quant", "both"]:
@@ -3657,6 +4973,17 @@ To experience FundersAI's advanced research capabilities, please try:
     if intent == "compare":
         entities = intent_info.get("compare_entities", [])
         if len(entities) >= 2:
+            compare_context = {
+                "last_compare": {
+                    "asset_type": intent_info.get("asset_type") or (quant_data.get("asset_type") if isinstance(quant_data, dict) else None) or ("stock" if asset_type == "stock" else "mutual_fund"),
+                    "entities": [str(entity) for entity in entities[:2]],
+                    "ids": [],
+                    "query": intent_info.get("source_query") or req.query,
+                    "last_focus": intent_info.get("followup_topic") or _detect_followup_topic(req.query),
+                    "available_topics": ["returns", "risk", "cost", "holdings", "sectors", "data_quality"],
+                }
+            }
+            response_json["conversation_context"] = compare_context
             resolved_ids = []
             seen_ids = set()
             nav_history_cache_for_ids: dict[str, dict[str, Any]] = {}
@@ -3732,7 +5059,13 @@ To experience FundersAI's advanced research capabilities, please try:
                     _append_resolved_id(ticker_clean); resolved = True
             
             if len(resolved_ids) >= 2:
-                response_json["system_action"] = {"type": "COMPARE", "ids": resolved_ids[:2]}
+                compare_context["last_compare"]["ids"] = resolved_ids[:2]
+                response_json["system_action"] = {
+                    "type": "COMPARE",
+                    "ids": resolved_ids[:2],
+                    "entities": [str(entity) for entity in entities[:2]],
+                    "asset_type": compare_context["last_compare"]["asset_type"],
+                }
                 
     return response_json
 
