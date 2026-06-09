@@ -15,7 +15,12 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 ## Implemented
 - Supabase-auth dashboard (`/dashboard`) with `/auth` sign-in/sign-up.
   - Current implementation is one authenticated client workspace powered by `DashboardLayout`.
+  - `/dashboard` now opens the Overview tab by default.
   - `DashboardLayout` owns the Overview / Research tab state and keeps the chat + comparison canvas flow in the same shell.
+  - Dashboard CTAs hand off into existing chat/canvas state instead of using `/dashboard/research` or `/dashboard/compare` routes.
+- Supabase Google OAuth callback flow:
+  - Google and email verification redirects use `/auth/callback`.
+  - The callback exchanges the Supabase OAuth code and returns users to stored `next` path or `/dashboard`.
 - Research-oriented landing page at `/`.
 - Deterministic compare responses with `why_better`, structured winner context, and data limitation/freshness metadata.
 - Source-neutral stock data model and scheduled stock workflows.
@@ -51,13 +56,15 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - billing subscription/event tables
   - webhook-only tier activation
   - tier-aware request limits
+  - Standard Checkout order creation and signature verification routes
+- Admin Data Coverage actions for parse triage:
+  - reparse
+  - resolve
+  - skip
+- Mutual-fund AUM/TER data health diagnostics read `mutual_fund_core_snapshot` enrichment rows and report AUM rows, TER rows, both, and supported AMC coverage.
 
 ## In Progress
-- Dashboard-first onboarding flow:
-  - users should land on the dashboard Overview first
-  - AI Research should remain inside the same `/dashboard` shell for V1
-  - dashboard CTAs should hand off into the existing chat/canvas state instead of creating new `/dashboard/research` or `/dashboard/compare` routes
-- Increase mutual-fund field coverage depth beyond holdings for PPFAS, ICICI, HDFC, SBI (AUM/TER/benchmark/risk/ratios completeness).
+- Increase mutual-fund field coverage depth beyond AUM/TER/holdings for PPFAS, ICICI, HDFC, SBI (benchmark/risk/ratios completeness).
 - Reduce historical `needs_review` backlog in `mf_raw_documents` and `mf_parse_review_queue`.
 - Improve admin Data Coverage status interpretation for historical parser failures vs latest-run health.
 - Monitor scheduled parser retry outcomes for rows that remain in review after cooldown retries.
@@ -75,6 +82,7 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 - MF parse pipeline uses explicit states (`pending`, `downloaded`, `needs_reparse`, `parsed`, `needs_review`, `failed`, `skipped_not_supported`) to support reliability triage.
 - `retry-mf-parser-actions.yml` retries cooled-down `needs_review` / `failed` parser rows every 6 hours; it does not replace parser fixes or admin skips for invalid source documents.
 - Current parser reliability baseline uses local golden fixtures from the `AMC Data` set plus live April 2026 reparses for HDFC, SBI, and ICICI; PPFAS April 2026 was already clean in live ingestion.
+- Cleanup and parser triage classification now recognizes known irrelevant documents, including ICICI quant files and legacy PPFAS pre-2026 `.xls` portfolio rows.
 
 ## Workflows In Use
 - `sync-stock-universe.yml`

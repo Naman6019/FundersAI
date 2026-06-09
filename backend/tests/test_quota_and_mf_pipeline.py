@@ -214,56 +214,6 @@ def test_mfapi_nav_sync_preserves_equal_or_fresher_existing_nav():
     assert nav_date == "2026-05-11"
 
 
-def test_mfdata_enrichment_normalization(monkeypatch):
-    from app.services import mfdata_service
-
-    def fake_request(path, params=None, scheme_code=None):
-        if path == "/schemes/120503":
-            return {
-                "ok": True,
-                "data": {
-                    "status": "success",
-                    "data": {
-                        "scheme_code": 120503,
-                        "scheme_name": "Fund A",
-                        "amc": "AMC A",
-                        "category": "Flexi Cap",
-                        "nav": 123.45,
-                        "nav_date": "2026-05-10",
-                        "aum_cr": 1000,
-                        "expense_ratio": 0.5,
-                        "returns": {"1y": {"value": 12.3}},
-                        "ratios": {"beta": 0.9, "sharpe": 1.1},
-                        "family_id": 99,
-                    },
-                },
-            }
-        if path == "/families/99/holdings":
-            return {
-                "ok": True,
-                "data": {
-                    "status": "success",
-                    "data": {
-                        "month": "2026-04",
-                        "equity": [{"name": "HDFC Bank Ltd.", "sector": "Financial Services", "weight_pct": 8.5}],
-                    },
-                },
-            }
-        return {"ok": False, "error": "unknown", "data": None}
-
-    monkeypatch.setattr(mfdata_service, "_request", fake_request)
-
-    details = mfdata_service.get_scheme_details("120503")
-    holdings = mfdata_service.get_family_holdings(99, scheme_code="120503")
-
-    assert details["data"]["scheme_code"] == "120503"
-    assert details["data"]["aum"] == 1000
-    assert details["data"]["return_1y"] == 12.3
-    assert details["data"]["beta"] == 0.9
-    assert holdings["data"][0]["as_of_date"] == "2026-04-01"
-    assert holdings["data"][0]["security_name"] == "HDFC Bank Ltd."
-
-
 def test_mf_metrics_compute_and_null_safety():
     from app.services.mf_metrics_service import compute_nav_metrics
 
@@ -288,71 +238,6 @@ def test_mf_metrics_compute_and_null_safety():
     assert short_metrics["return_1m"] is None
     assert short_metrics["return_3m"] is None
     assert short_metrics["volatility_1y"] is None
-
-
-def test_mf_enrichment_merge_preserves_nav_owned_fields_and_amc_trace():
-    from app.jobs import sync_mf_enrichment
-
-    existing = {
-        "scheme_code": "120503",
-        "nav": 123.45,
-        "nav_date": "2026-05-10",
-        "return_1y": 10.2,
-        "expense_ratio": None,
-        "provider_payload": {"amc_trace": {"holdings": {"source_document_id": "doc-1"}}, "legacy": True},
-        "data_source": "mfapi+amc_disclosure",
-    }
-    incoming = {
-        "scheme_code": "120503",
-        "nav": 111.11,
-        "nav_date": "2026-05-01",
-        "return_1y": 2.0,
-        "expense_ratio": 0.52,
-        "provider_payload": {"family_id": 99},
-        "data_source": "mfdata",
-    }
-
-    merged = sync_mf_enrichment._merge_snapshot(existing, incoming)
-
-    assert merged["nav"] == 123.45
-    assert merged["nav_date"] == "2026-05-10"
-    assert merged["return_1y"] == 10.2
-    assert merged["expense_ratio"] == 0.52
-    assert merged["provider_payload"]["amc_trace"]["holdings"]["source_document_id"] == "doc-1"
-    assert merged["provider_payload"]["family_id"] == 99
-    assert merged["data_source"] == "mfapi+amc_disclosure+mfdata"
-
-
-def test_mfdata_fallback_does_not_overwrite_existing_enrichment_fields():
-    from app.jobs import sync_mf_enrichment
-
-    existing = {
-        "scheme_code": "120503",
-        "scheme_name": "Fund A",
-        "aum": 1000,
-        "expense_ratio": 0.52,
-        "benchmark": "Nifty 500 TRI",
-        "data_source": "mfapi+AMFI TER API+AMFI AUM API",
-        "provider_payload": {},
-    }
-    incoming = {
-        "scheme_code": "120503",
-        "scheme_name": "Fund A New",
-        "aum": 900,
-        "expense_ratio": 0.75,
-        "benchmark": "Other Index",
-        "fund_manager": "Jane Doe",
-        "data_source": "mfdata",
-        "provider_payload": {"family_id": 99},
-    }
-
-    merged = sync_mf_enrichment._merge_snapshot(existing, incoming)
-
-    assert merged["scheme_name"] == "Fund A"
-    assert merged["aum"] == 1000
-    assert merged["expense_ratio"] == 0.52
-    assert merged["benchmark"] == "Nifty 500 TRI"
-    assert merged["fund_manager"] == "Jane Doe"
 
 
 def test_amfi_metadata_source_trace_merges_existing_payload():

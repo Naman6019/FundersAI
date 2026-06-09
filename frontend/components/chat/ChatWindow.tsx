@@ -174,6 +174,13 @@ export default function ChatWindow() {
     setIsProcessing(true);
 
     try {
+      const requestHistory = messages
+        .filter((message) => message.id !== '1' && (message.role === 'user' || message.role === 'system') && message.content.trim())
+        .slice(-12)
+        .map((message) => ({
+          role: message.role,
+          content: message.content.slice(0, 4000),
+        }));
       const token = await getAccessToken();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
@@ -186,6 +193,7 @@ export default function ChatWindow() {
           asset_type: selectedAssetType,
           research_depth: selectedResearchDepth,
           comparison_view_mode: selectedComparisonViewMode,
+          history: requestHistory,
         }),
       });
 
@@ -208,7 +216,7 @@ export default function ChatWindow() {
     } finally {
       setIsProcessing(false);
     }
-  }, [addMessage, assetType, closeCanvas, comparisonViewMode, getAccessToken, openCanvas, researchDepth, setIds, setInput, setIsProcessing, setView]);
+  }, [addMessage, assetType, closeCanvas, comparisonViewMode, getAccessToken, messages, openCanvas, researchDepth, setIds, setInput, setIsProcessing, setView]);
 
   useEffect(() => {
     if (!isHistoryReady) return;

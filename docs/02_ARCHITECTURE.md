@@ -52,7 +52,7 @@ FundersAI is a split web architecture:
 - Runtime reads are Supabase-first.
 - Stock prices are NSE bhavcopy-first in scheduled jobs.
 - FinEdge is the primary fundamentals/corporate-events job source.
-- MFdata enrichment remains optional/manual fallback.
+- Mutual-fund enrichment uses AMFI + AMC disclosures only.
 - IndianAPI endpoints are optional and quota-aware.
 
 ## Auth Model

@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { Check, Loader2 } from 'lucide-react';
 import { MONTHLY_TIERS, PaidTier, UserTier } from '@/lib/billing/tiers';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
-import StandardCheckoutPanel from './StandardCheckoutPanel';
 
 type RazorpayCheckoutOptions = {
   key: string;
@@ -15,8 +14,17 @@ type RazorpayCheckoutOptions = {
   prefill?: { email?: string };
   notes?: Record<string, string>;
   theme?: { color?: string };
-  handler?: () => void;
+  handler?: (response: RazorpaySubscriptionCheckoutResponse) => void;
   modal?: { ondismiss?: () => void };
+  order_id?: unknown;
+  amount?: unknown;
+  currency?: unknown;
+};
+
+type RazorpaySubscriptionCheckoutResponse = {
+  razorpay_payment_id?: string;
+  razorpay_subscription_id?: string;
+  razorpay_signature?: string;
 };
 
 type BillingStatus = {
@@ -110,10 +118,32 @@ export default function BillingPage() {
     }
 
     const checkout = payload.checkout as RazorpayCheckoutOptions;
-    const razorpay = new window.Razorpay({
-      ...checkout,
+
+    if ('order_id' in checkout) {
+      setBusyTier(null);
+      throw new Error('subscription_checkout_received_order_id');
+    }
+
+    if (!checkout.subscription_id?.startsWith('sub_')) {
+      setBusyTier(null);
+      throw new Error('invalid_subscription_id');
+    }
+
+    const checkoutOptions: RazorpayCheckoutOptions = {
+      key: checkout.key,
+      subscription_id: checkout.subscription_id,
+      name: checkout.name,
+      description: checkout.description,
+      prefill: checkout.prefill,
+      notes: checkout.notes,
       theme: { color: '#66a3ff' },
-      handler: () => {
+      handler: (response: RazorpaySubscriptionCheckoutResponse) => {
+        console.info('[razorpay:checkout:success]', {
+          payment_id: response.razorpay_payment_id,
+          subscription_id: response.razorpay_subscription_id,
+          has_signature: Boolean(response.razorpay_signature),
+        });
+
         setMessage('Payment authorised. Your tier updates after Razorpay confirms the subscription.');
         setBusyTier(null);
         void refreshBilling();
@@ -121,7 +151,15 @@ export default function BillingPage() {
       modal: {
         ondismiss: () => setBusyTier(null),
       },
-    } as unknown as Record<string, unknown>);
+    };
+
+    console.info('[razorpay:checkout:subscription]', {
+      key_mode: checkout.key?.startsWith('rzp_test_') ? 'test' : checkout.key?.startsWith('rzp_live_') ? 'live' : 'unknown',
+      subscription_id: checkout.subscription_id,
+      options: { ...checkoutOptions, key: '[redacted]' },
+    });
+
+    const razorpay = new window.Razorpay(checkoutOptions as unknown as Record<string, unknown>);
     razorpay.open();
   };
 
@@ -217,7 +255,6 @@ export default function BillingPage() {
           </section>
         ) : null}
 
-        <StandardCheckoutPanel />
       </div>
     </main>
   );

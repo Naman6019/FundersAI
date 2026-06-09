@@ -52,13 +52,19 @@ test('Razorpay webhook signature helper validates raw body HMAC', () => {
 test('billing API routes enforce auth, tier validation, and webhook-only activation', () => {
   const subscriptionRoute = readFileSync(resolve('app/api/billing/subscriptions/route.ts'), 'utf8');
   const webhookRoute = readFileSync(resolve('app/api/billing/webhook/route.ts'), 'utf8');
+  const razorpayHelpers = readFileSync(resolve('lib/billing/razorpay.ts'), 'utf8');
 
   assert.match(subscriptionRoute, /getUserContext\(request\)/);
   assert.match(subscriptionRoute, /status: 401/);
   assert.match(subscriptionRoute, /isPaidTier\(tier\)/);
   assert.match(subscriptionRoute, /status: 400/);
   assert.match(subscriptionRoute, /createRazorpaySubscription/);
+  assert.match(razorpayHelpers, /\.subscriptions\.create/);
+  assert.doesNotMatch(razorpayHelpers, /\/v1\/subscriptions/);
   assert.doesNotMatch(subscriptionRoute, /user_profiles'\)\.update\(\{ tier/);
+  assert.doesNotMatch(subscriptionRoute, /amount: tierConfig\.amountPaise/);
+  assert.doesNotMatch(subscriptionRoute, /currency: 'INR'/);
+  assert.doesNotMatch(subscriptionRoute, /order_id/);
 
   assert.match(webhookRoute, /verifyRazorpayWebhookSignature/);
   assert.match(webhookRoute, /billing_events/);
@@ -76,7 +82,26 @@ test('billing UI renders tiers and opens checkout with returned subscription id'
   assert.match(billingPage, /checkout\.razorpay\.com\/v1\/checkout\.js/);
   assert.match(billingPage, /new window\.Razorpay/);
   assert.match(billingPage, /subscription_id/);
+  assert.match(billingPage, /subscription_checkout_received_order_id/);
+  assert.match(billingPage, /invalid_subscription_id/);
+  assert.match(billingPage, /\[razorpay:checkout:subscription\]/);
+  assert.match(billingPage, /\[razorpay:checkout:success\]/);
   assert.match(billingPage, /Payment authorised/);
+  assert.doesNotMatch(billingPage, /StandardCheckoutPanel/);
+});
+
+test('Razorpay subscription helpers reject invalid plan and subscription identifiers', () => {
+  process.env.RAZORPAY_KEY_ID = 'rzp_test_key';
+  process.env.RAZORPAY_KEY_SECRET = 'secret_test';
+  const restore = installTsLoader();
+  const helpers = require(resolve('lib/billing/razorpay.ts'));
+  restore();
+
+  assert.doesNotThrow(() => helpers.assertRazorpayPlanId('plan_test'));
+  assert.throws(() => helpers.assertRazorpayPlanId('pro'), /invalid_razorpay_plan_id/);
+  assert.doesNotThrow(() => helpers.assertRazorpaySubscription({ id: 'sub_test', status: 'created' }));
+  assert.throws(() => helpers.assertRazorpaySubscription({ id: 'order_test', status: 'created' }), /invalid_razorpay_subscription_id/);
+  assert.throws(() => helpers.assertRazorpaySubscription({ id: 'sub_test' }), /invalid_razorpay_subscription_status:missing/);
 });
 
 test('standard checkout creates orders and verifies payment signatures server-side', () => {

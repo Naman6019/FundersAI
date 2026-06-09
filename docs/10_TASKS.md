@@ -4,7 +4,6 @@
 - [x] Add a dedicated `/api/quant` backend endpoint to separate stock lookup from chat synthesis.
 - [x] Add rate limiting for frontend proxy routes (`/api/chat`, `/api/cron/sync-mf`).
 - [ ] Improve Data Coverage parser status logic to distinguish latest-run failures from historical failures.
-- [ ] Add admin action flow for parse-review triage (`needs_review` -> approved/reparse) from UI.
 
 ## Future Features
 - [ ] Advanced charting: add richer stock/fund chart controls, date ranges, indicators, and mobile-friendly comparison views before considering WebGL.
@@ -165,15 +164,10 @@
 - Do not make database-destructive changes.
 
 ## In Progress
-- [ ] Dashboard-first onboarding flow.
-  - `/dashboard` opens Overview first.
-  - Overview has clear Compare, Ask AI, and Portfolio Review CTAs.
-  - CTAs hand off to existing AI Research/chat/canvas state.
-  - No dashboard route split in V1.
 - [ ] Expanding stock coverage beyond the current Nifty-focused list.
 - [ ] Testing `NIFTY500` vs `NIFTYTOTALMARKET`.
 - [ ] Tuning `STOCK_INFO_ENRICH_LIMIT` and `STOCK_YFINANCE_FALLBACK_LIMIT`.
-- [ ] Fill mutual fund missing data gaps beyond holdings for PPFAS, ICICI, HDFC, SBI (AUM/TER/benchmark/risk/ratios).
+- [ ] Fill mutual fund missing data gaps beyond AUM/TER/holdings for PPFAS, ICICI, HDFC, SBI (benchmark/risk/ratios).
 - [ ] Reduce historical `mf_raw_documents` + `mf_parse_review_queue` backlog (`needs_review` and failed rows).
 
 ## Done
@@ -184,6 +178,13 @@
 - [x] Made April 2026 AMC holdings parsing production-ready for HDFC, SBI, PPFAS, and ICICI with golden fixture tests and live clean reparses.
 - [x] Added MF raw migration and MF storage compaction workflows.
 - [x] Added Data Coverage "Needs Review Entries" section for parser triage visibility.
+- [x] Added admin Data Coverage actions for parser triage: reparse, resolve, and skip.
+- [x] Dashboard-first onboarding flow.
+  - `/dashboard` opens Overview first.
+  - Overview CTAs hand off to existing AI Research/chat/canvas state.
+  - No dashboard route split in V1.
+- [x] Added Google/email auth callback at `/auth/callback`.
+- [x] Added Razorpay Standard Checkout order creation and signature verification routes.
 - [x] Quota-aware fundamentals cadence: monthly NIFTY500, weekly watched stocks, and on-demand compared symbols.
 - [x] AI chat with asset mode toggle: `Auto`, `Stocks`, `Mutual Funds`.
 - [x] Mutual fund comparison canvas with NAV charts, returns, alpha, beta, Sharpe.

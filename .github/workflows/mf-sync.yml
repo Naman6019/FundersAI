@@ -41,9 +41,8 @@ jobs:
           ENABLE_MF_NAV_SYNC: "true"
         run: python -m backend.app.jobs.sync_mf_nav
 
-      - name: Sync MF Enrichment (AMFI + optional MFdata fallback)
+      - name: Sync MF Enrichment (AMFI + AMC disclosures)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          ENABLE_MFDATA_FALLBACK_SYNC: "false"
         run: python -m backend.app.jobs.sync_mf_enrichment_unified

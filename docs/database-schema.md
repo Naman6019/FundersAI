@@ -16,6 +16,8 @@ psql "$DATABASE_URL" -f backend/migrations/20260515_add_r2_storage_and_compactio
 psql "$DATABASE_URL" -f backend/migrations/20260519_add_user_profiles_admin_roles.sql
 ```
 
+Note: `20260513_add_mfdata_enrichment_tables.sql` is a historical filename. The active mutual-fund enrichment flow no longer calls MFdata and uses AMFI + AMC disclosures.
+
 ## Active Table Families
 
 ### Stock

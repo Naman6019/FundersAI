@@ -172,5 +172,7 @@ def test_mf_workflow_does_not_schedule_indianapi_or_mf_engine_for_mutual_funds()
     workflow = Path(".github/workflows/mf-sync.yml").read_text()
 
     assert "sync_mf_enrichment_unified" in workflow
+    assert "mfdata" not in workflow.lower()
+    assert "MFDATA" not in workflow
     assert "sync_mf_engine_enrichment" not in workflow
     assert "sync_mf_from_indianapi" not in workflow

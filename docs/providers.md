@@ -16,12 +16,7 @@ INDIANAPI_ENABLE_SCHEDULED_SYNC=true
 ENABLE_STOCK_FUNDAMENTALS_SYNC=true
 ENABLE_STOCK_PRICE_SYNC=true
 ENABLE_MF_NAV_SYNC=true
-ENABLE_MF_ENRICHMENT_SYNC=false
-ENABLE_MFDATA_FALLBACK_SYNC=false
 ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS=true
-MFDATA_BASE_URL=https://mfdata.in/api/v1
-MFDATA_SYNC_SCHEME_LIMIT=200
-MFDATA_REQUEST_SLEEP_SECONDS=6.5
 ENABLE_ANALYST_DATA=false
 ENABLE_STOCK_NEWS=false
 ENABLE_SHAREHOLDING_SYNC=false
@@ -43,8 +38,7 @@ STOCK_YFINANCE_FALLBACK_LIMIT=150
 - `indianapi`: paid gap-filler for targeted stock research only (`INDIANAPI_KEY` required), not a scheduled mutual-fund source.
 - `mfapi`: primary mutual fund NAV/history provider (`https://api.mfapi.in`).
 - `amfi`: official mutual fund NAV, TER, AUM, and scheme-wise disclosure source.
-- `amc_disclosure`: AMC factsheets and portfolio disclosures stored raw in R2, parsed only for missing fields.
-- `mfdata`: optional monthly mutual fund enrichment fallback for blanks (`https://mfdata.in/api/v1`).
+- `amc_disclosure`: AMC factsheets and portfolio disclosures stored raw in R2, parsed for holdings and missing metadata fields.
 
 IndianAPI v1 base URL defaults to `https://stock.indianapi.in` and can be overridden with `INDIANAPI_BASE_URL`.
 Fundamentals refresh uses `sync_fundamentals --scope watchlist|full|all-active` or `--symbols TCS,RELIANCE`. Weekly watchlist refresh defaults to 100 symbols; monthly full refresh defaults to `NIFTY500` and 500 symbols.
@@ -53,7 +47,7 @@ NSE EOD history uses `https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_C
 IndianAPI `/historical_data`, analyst endpoints, and corporate-event fallback are feature-flagged off by default. IndianAPI is not used for scheduled mutual fund ingestion.
 Scheduled daily/history price workflows use NSE CM-UDiFF bhavcopy and do not consume IndianAPI quota.
 Scheduled stock fundamentals/universe workflows use FinEdge and do not consume IndianAPI quota.
-Daily MF NAV/history uses AMFI and MFapi. AMFI enrichment fills TER, AUM, and holdings before AMC parsers run. Monthly MFdata enrichment remains an optional fallback and respects public rate limits.
+Daily MF NAV/history uses AMFI and MFapi. MF enrichment is AMFI + AMC disclosures only: AMFI fills TER/AUM/official metadata, AMC sheets fill holdings and missing metadata fields, and existing core snapshot values are preserved when a fresh official row is blank or unmatched.
 All provider attempts are logged in `provider_usage_logs` with cache-hit and quota-skip markers.
 
 If a selected paid provider is unavailable, backend code logs a warning and falls back to `manual`.

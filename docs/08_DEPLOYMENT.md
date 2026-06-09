@@ -20,6 +20,35 @@
   - `RATE_LIMIT_ENABLED=true`
   - `UPSTASH_REDIS_REST_URL`
   - `UPSTASH_REDIS_REST_TOKEN`
+  - `RAZORPAY_KEY_ID`
+  - `RAZORPAY_KEY_SECRET`
+  - `NEXT_PUBLIC_RAZORPAY_KEY_ID`
+  - `RAZORPAY_WEBHOOK_SECRET`
+  - `RAZORPAY_PLAN_PRO_MONTHLY_ID`
+  - `RAZORPAY_PLAN_ULTRA_MONTHLY_ID`
+
+## Auth Provider Configuration
+- Supabase Site URL should be the production app origin, for example `https://www.fundersai.co.in`.
+- Supabase Redirect URLs should include:
+  - `http://localhost:3000/auth/callback`
+  - `https://www.fundersai.co.in/auth/callback`
+  - `https://fundersai.co.in/auth/callback`
+- Google OAuth authorized redirect URI should use the Supabase provider callback URL:
+  - `https://<supabase-project-ref>.supabase.co/auth/v1/callback`
+- Google OAuth client id and client secret are configured in Supabase Auth provider settings, not in frontend code.
+
+## Razorpay Configuration
+- Use Razorpay Dashboard API keys:
+  - `RAZORPAY_KEY_ID`: server routes
+  - `RAZORPAY_KEY_SECRET`: server routes only
+  - `NEXT_PUBLIC_RAZORPAY_KEY_ID`: browser Checkout key id only
+- Create monthly subscription plans in Razorpay first, then set:
+  - `RAZORPAY_PLAN_PRO_MONTHLY_ID`
+  - `RAZORPAY_PLAN_ULTRA_MONTHLY_ID`
+- Webhook endpoint:
+  - `https://www.fundersai.co.in/api/billing/webhook`
+- Webhook secret goes in `RAZORPAY_WEBHOOK_SECRET`.
+- Never expose `RAZORPAY_KEY_SECRET` or `RAZORPAY_WEBHOOK_SECRET` in `NEXT_PUBLIC_*` env vars.
 
 ## Backend (Render)
 - Local dev entry: `uvicorn app.main:app --reload --port 8000`
@@ -73,3 +102,6 @@ Add/update a row in `user_profiles`:
   - unauthenticated -> redirect to `/auth`
   - non-admin -> access denied
   - admin -> dashboard loads
+- Verify `/auth/callback` works for Google sign-in and email verification.
+- Verify `/api/create-order` returns a Razorpay order when Razorpay env vars are set.
+- Verify `/api/verify-payment` rejects bad signatures.

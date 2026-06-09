@@ -18,7 +18,7 @@ GitHub Actions runs stock and mutual-fund sync jobs from `.github/workflows/`.
 | Workflow file | Schedule (UTC) | Steps |
 |---|---|---|
 | `mf-sync.yml` | `30 17 * * 1-5` | `sync_mf.py` -> `sync_mf_history.py` -> `python -m backend.app.jobs.sync_mf_nav` -> `python -m backend.app.jobs.sync_mf_enrichment_unified` |
-| `sync-mf-enrichment.yml` | Manual only | `python -m backend.app.jobs.sync_mf_enrichment_unified` (AMFI first, optional MFdata fallback) |
+| `sync-mf-enrichment.yml` | Manual only | `python -m backend.app.jobs.sync_mf_enrichment_unified` (AMFI + AMC disclosures) |
 | `sync-mf-disclosures.yml` | `30 4 * * 1-5`, plus manual | `ingest_latest_amc_docs` + `parse_pending_documents` for `ppfas,icici,hdfc,sbi` (R2-first) |
 | `retry-mf-parser-actions.yml` | `15 */6 * * *`, plus manual | `reparse_needs_review` for cooled-down `needs_review` / `failed` docs, default order `sbi,hdfc,icici,ppfas` |
 | `migrate-mf-raw-to-r2.yml` | Manual | `migrate_mf_raw_to_r2` |
@@ -31,7 +31,7 @@ GitHub Actions runs stock and mutual-fund sync jobs from `.github/workflows/`.
 - Stock universe and fundamentals jobs are FinEdge-first and write source-neutral `stocks`, `financial_statements`, `ratios_snapshot`, and optional `shareholding_pattern`.
 - MF disclosures workflow is strict by design (`--strict --fail-on-needs-review`), so `needs_review` rows can fail the run.
 - MF parser retry is cooldown-based (`--min-age-hours`, default 6) and non-blocking for rows that still need review; true parser/classification issues still need code fixes or admin skip.
-- MF enrichment is AMFI-first. Optional MFdata fallback fills blanks only and must not replace AMFI/AMC/MFapi values.
+- MF enrichment is AMFI + AMC disclosures only. It must not call unofficial fallback APIs for mutual-fund enrichment.
 - MF disclosure ingestion is configured for R2-first storage (`MF_REQUIRE_R2_FOR_RAW_STORAGE=true`), while Supabase stores structured/query-critical rows and manifests.
 
 ## MF Storage Reduction Runbook

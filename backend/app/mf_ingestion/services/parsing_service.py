@@ -1229,6 +1229,14 @@ def _merge_parse_outcomes(primary: dict[str, Any], secondary: dict[str, Any]) ->
 
 
 def _irrelevant_document_issue(document: dict[str, Any]) -> str | None:
+    icici_quant_issue = _icici_quant_file_issue(document)
+    if icici_quant_issue:
+        return icici_quant_issue
+
+    ppfas_legacy_issue = _legacy_ppfas_xls_issue(document)
+    if ppfas_legacy_issue:
+        return ppfas_legacy_issue
+
     month_mismatch = _report_month_mismatch_issue(document)
     if month_mismatch:
         return month_mismatch
@@ -1261,6 +1269,43 @@ def _irrelevant_document_issue(document: dict[str, Any]) -> str | None:
     return None
 
 
+def _icici_quant_file_issue(document: dict[str, Any]) -> str | None:
+    amc_code = str(document.get("amc_code") or "").strip().lower()
+    if amc_code != "icici":
+        return None
+    values = [
+        document.get("source_url"),
+        document.get("file_name"),
+        document.get("storage_key"),
+        document.get("storage_path"),
+    ]
+    text = " ".join(str(value or "").lower() for value in values)
+    if "quants" in text or "quant" in text:
+        return "skipped_irrelevant_document:icici_quant_file"
+    return None
+
+
+def _legacy_ppfas_xls_issue(document: dict[str, Any]) -> str | None:
+    amc_code = str(document.get("amc_code") or "").strip().lower()
+    document_type = str(document.get("document_type") or "").strip().lower()
+    if amc_code != "ppfas" or document_type != "portfolio_disclosure":
+        return None
+    values = [
+        document.get("source_url"),
+        document.get("file_name"),
+        document.get("storage_key"),
+        document.get("storage_path"),
+    ]
+    text = " ".join(str(value or "").lower() for value in values)
+    normalized_text = unquote(text).replace("_", " ")
+    if ".xls" not in text or ".xlsx" in text or "monthly portfolio report" not in normalized_text:
+        return None
+    source_month = _source_month_from_text(text)
+    if source_month and source_month.year < 2026:
+        return "skipped_irrelevant_document:legacy_ppfas_xls_before_supported_window"
+    return None
+
+
 def _report_month_mismatch_issue(document: dict[str, Any]) -> str | None:
     report_month = _to_date_or_none(document.get("report_month"))
     if not report_month:
@@ -1283,7 +1328,7 @@ def _report_month_mismatch_issue(document: dict[str, Any]) -> str | None:
 
 
 def _source_month_from_text(text: str) -> date | None:
-    text = unquote(str(text or "")).lower()
+    text = unquote(str(text or "")).lower().replace("_", " ")
     month_names = {
         "jan": 1,
         "january": 1,
@@ -1314,12 +1359,16 @@ def _source_month_from_text(text: str) -> date | None:
 
     for match in re.finditer(rf"\b\d{{1,2}}[-_\s]+({name_pattern})[-_\s]+(20\d{{2}})\b", text):
         return date(int(match.group(2)), month_names[match.group(1)], 1)
+    for match in re.finditer(rf"\b({name_pattern})[-_\s]+\d{{1,2}}[-_\s]+(20\d{{2}})\b", text):
+        return date(int(match.group(2)), month_names[match.group(1)], 1)
     for match in re.finditer(rf"\b({name_pattern})[-_\s]+(20\d{{2}})\b", text):
         return date(int(match.group(2)), month_names[match.group(1)], 1)
     for match in re.finditer(r"\b(20\d{2})[-_/](0[1-9]|1[0-2])\b", text):
         return date(int(match.group(1)), int(match.group(2)), 1)
     for match in re.finditer(r"\b(0[1-9]|1[0-2])[-_/](20\d{2})\b", text):
         return date(int(match.group(2)), int(match.group(1)), 1)
+    for match in re.finditer(r"\b(0[1-9]|[12]\d|3[01])(0[1-9]|1[0-2])(20\d{2})\b", text):
+        return date(int(match.group(3)), int(match.group(2)), 1)
     return None
 
 

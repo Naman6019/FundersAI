@@ -1,5 +1,5 @@
--- Schema-only patch for MFdata enrichment.
--- Keep this additive so it can run on the existing legacy mutual_fund_holdings table.
+-- Schema-only patch for mutual-fund enrichment tables.
+-- Historical filename is kept for migration ordering; active enrichment uses AMFI + AMC disclosures.
 
 create table if not exists public.mutual_fund_holdings (
   id uuid primary key default gen_random_uuid(),

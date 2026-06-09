@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, BackgroundTasks, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import httpx
 import yfinance as yf
 import feedparser
@@ -178,6 +178,50 @@ def _count_mf_raw_documents(*, status: str | None = None) -> int:
         query = query.eq("parse_status", status)
     response = query.execute()
     return int(response.count or 0)
+
+
+def _has_metric_value(value: Any) -> bool:
+    return value not in (None, "")
+
+
+SUPPORTED_MF_AMC_MARKERS = {
+    "HDFC": ("hdfc",),
+    "SBI": ("sbi",),
+    "ICICI": ("icici",),
+    "PPFAS": ("ppfas", "parag parikh"),
+}
+
+
+def _core_snapshot_enrichment_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    aum_rows = [row for row in rows if _has_metric_value(row.get("aum"))]
+    ter_rows = [row for row in rows if _has_metric_value(row.get("expense_ratio"))]
+    both_rows = [row for row in rows if _has_metric_value(row.get("aum")) and _has_metric_value(row.get("expense_ratio"))]
+    enriched_rows = [row for row in rows if _has_metric_value(row.get("aum")) or _has_metric_value(row.get("expense_ratio"))]
+
+    def covered_amcs(field: str) -> set[str]:
+        covered: set[str] = set()
+        for row in rows:
+            if not _has_metric_value(row.get(field)):
+                continue
+            amc_name = str(row.get("amc_name") or "").lower()
+            for label, markers in SUPPORTED_MF_AMC_MARKERS.items():
+                if any(marker in amc_name for marker in markers):
+                    covered.add(label)
+        return covered
+
+    latest_dt = max(
+        [dt for dt in (_to_utc_datetime(row.get("last_updated")) for row in enriched_rows) if dt is not None],
+        default=None,
+    )
+    return {
+        "aum_count": len(aum_rows),
+        "ter_count": len(ter_rows),
+        "both_count": len(both_rows),
+        "supported_total": len(SUPPORTED_MF_AMC_MARKERS),
+        "supported_aum_count": len(covered_amcs("aum")),
+        "supported_ter_count": len(covered_amcs("expense_ratio")),
+        "latest_updated_at": latest_dt,
+    }
 
 
 def _latest_mf_doc_timestamp(*, status: str | None, field: str) -> datetime | None:
@@ -373,6 +417,19 @@ def data_health():
             ],
         }
 
+    try:
+        enrichment_rows = (
+            supabase.table("mutual_fund_core_snapshot")
+            .select("scheme_code,amc_name,last_updated,aum,expense_ratio")
+            .limit(10000)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:
+        logger.warning("Data health enrichment coverage read failed: %s", exc)
+        enrichment_rows = core_rows
+
     latest_nav_dt = max(
         [dt for dt in (_to_utc_datetime(row.get("nav_date")) for row in core_rows) if dt is not None],
         default=None,
@@ -387,20 +444,25 @@ def data_health():
         else:
             metrics[0].update(status="Stale", note=f"Latest NAV age {_fmt_age(nav_age_days)}.", last_updated=latest_nav_dt.isoformat())
 
-    aum_ter_rows = [row for row in core_rows if row.get("aum") not in (None, "") and row.get("expense_ratio") not in (None, "")]
-    latest_aum_ter_dt = max(
-        [dt for dt in (_to_utc_datetime(row.get("last_updated")) for row in aum_ter_rows) if dt is not None],
-        default=None,
-    )
+    enrichment = _core_snapshot_enrichment_summary(enrichment_rows)
+    latest_aum_ter_dt = enrichment["latest_updated_at"]
     aum_ter_age_days = _age_days(latest_aum_ter_dt, now_utc)
+    aum_ter_note = (
+        f"AUM rows={enrichment['aum_count']}, TER rows={enrichment['ter_count']}, "
+        f"both={enrichment['both_count']}, supported_amcs_aum={enrichment['supported_aum_count']}/"
+        f"{enrichment['supported_total']}, supported_amcs_ter={enrichment['supported_ter_count']}/"
+        f"{enrichment['supported_total']}"
+    )
     if latest_aum_ter_dt:
         enrich_is_fresh = cache_policy.is_fresh(latest_aum_ter_dt.isoformat(), "mutual_fund_enrichment", now=now_utc)
-        if enrich_is_fresh:
-            metrics[1].update(status="Synced", note=f"Latest AUM/TER age {_fmt_age(aum_ter_age_days)}.", last_updated=latest_aum_ter_dt.isoformat())
+        if not enrichment["aum_count"] or not enrichment["ter_count"]:
+            metrics[1].update(status="Partial", note=f"{aum_ter_note}. Latest enrichment age {_fmt_age(aum_ter_age_days)}.", last_updated=latest_aum_ter_dt.isoformat())
+        elif enrich_is_fresh:
+            metrics[1].update(status="Synced", note=f"{aum_ter_note}. Latest enrichment age {_fmt_age(aum_ter_age_days)}.", last_updated=latest_aum_ter_dt.isoformat())
         elif aum_ter_age_days is not None and aum_ter_age_days <= 60:
-            metrics[1].update(status="Lagging", note=f"Latest AUM/TER age {_fmt_age(aum_ter_age_days)}.", last_updated=latest_aum_ter_dt.isoformat())
+            metrics[1].update(status="Lagging", note=f"{aum_ter_note}. Latest enrichment age {_fmt_age(aum_ter_age_days)}.", last_updated=latest_aum_ter_dt.isoformat())
         else:
-            metrics[1].update(status="Stale", note=f"Latest AUM/TER age {_fmt_age(aum_ter_age_days)}.", last_updated=latest_aum_ter_dt.isoformat())
+            metrics[1].update(status="Stale", note=f"{aum_ter_note}. Latest enrichment age {_fmt_age(aum_ter_age_days)}.", last_updated=latest_aum_ter_dt.isoformat())
 
     def _risk_row_ready(row: dict[str, Any]) -> bool:
         # Treat NAV-derived risk signals as valid coverage even when
@@ -907,11 +969,26 @@ def provider_usage_dashboard():
         "month_window": dashboard.get("month_window"),
     }
 
+class ChatHistoryMessage(BaseModel):
+    role: Literal["user", "system"]
+    content: str
+
+
 class ChatRequest(BaseModel):
     query: str
     asset_type: Literal["auto", "stock", "mutual_fund"] = "auto"
     research_depth: Literal["standard", "deep"] = "standard"
     comparison_view_mode: Literal["canvas", "chat"] = "canvas"
+    history: list[ChatHistoryMessage] = Field(default_factory=list)
+
+CATEGORY_SEARCH_CONFIG = {
+    "large_cap": {"label": "Large Cap", "match": "large cap", "scheme_match": "large cap"},
+    "mid_cap": {"label": "Mid Cap", "match": "mid cap", "scheme_match": "mid cap"},
+    "small_cap": {"label": "Small Cap", "match": "small cap", "scheme_match": "small cap"},
+    "flexi_cap": {"label": "Flexi Cap", "match": "flexi cap", "scheme_match": "flexi cap"},
+    "index": {"label": "Index", "match": "index", "scheme_match": "index"},
+    "elss": {"label": "ELSS", "match": "elss", "scheme_match": "elss"},
+}
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 GROQ_BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -1566,6 +1643,149 @@ def _format_inr_market_cap(value: Any) -> str:
         return f"₹{amount / 1_00_00_000:.2f} crore"
     return f"₹{amount:,.0f}"
 
+def _format_inr_amount(value: Any) -> str:
+    if _is_missing(value):
+        return "N/A"
+    try:
+        return f"INR {float(value):,.0f}"
+    except (TypeError, ValueError):
+        return _safe_value(value)
+
+def _to_float_or_none(value: Any) -> float | None:
+    if _is_missing(value):
+        return None
+    try:
+        return float(str(value).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+
+def _money_token_to_float(value: str) -> float | None:
+    raw = str(value or "").strip().lower().replace(",", "")
+    match = re.match(r"^([0-9]+(?:\.[0-9]+)?)\s*(k|lakh|lac|cr|crore)?$", raw)
+    if not match:
+        return None
+    amount = float(match.group(1))
+    suffix = match.group(2)
+    if suffix == "k":
+        return amount * 1_000
+    if suffix in {"lakh", "lac"}:
+        return amount * 1_00_000
+    if suffix in {"cr", "crore"}:
+        return amount * 1_00_00_000
+    return amount
+
+def _parse_sip_inputs(query: str) -> dict[str, Any] | None:
+    text = str(query or "").lower()
+    if "sip" not in text and "systematic investment" not in text:
+        return None
+
+    amount = None
+    amount_patterns = [
+        r"(?:rs\.?|inr|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?\s*(?:k|lakh|lac|cr|crore)?)\s*(?:per\s*month|/month|monthly|pm)",
+        r"(?:sip|invest|investment|contribute)\D{0,25}(?:rs\.?|inr|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?\s*(?:k|lakh|lac|cr|crore)?)",
+    ]
+    for pattern in amount_patterns:
+        match = re.search(pattern, text)
+        if match:
+            amount = _money_token_to_float(match.group(1))
+            if amount:
+                break
+
+    if amount is None:
+        for match in re.finditer(r"([0-9][0-9,]*(?:\.[0-9]+)?\s*(?:k|lakh|lac|cr|crore)?)", text):
+            end = match.end()
+            nearby = text[end:end + 12]
+            before = text[max(0, match.start() - 4):match.start()]
+            if "%" in nearby or "percent" in nearby or "year" in nearby or "yr" in nearby or "%" in before:
+                continue
+            amount = _money_token_to_float(match.group(1))
+            if amount:
+                break
+
+    years = None
+    year_match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*(?:years?|yrs?)", text)
+    if year_match:
+        years = float(year_match.group(1))
+    else:
+        month_match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*(?:months?|mos?)", text)
+        if month_match:
+            years = float(month_match.group(1)) / 12
+
+    rate = None
+    rate_match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*(?:%|percent)", text)
+    if rate_match:
+        rate = float(rate_match.group(1))
+    else:
+        at_rate_match = re.search(r"(?:at|return|returns|rate)\D{0,12}([0-9]+(?:\.[0-9]+)?)", text)
+        if at_rate_match:
+            candidate = float(at_rate_match.group(1))
+            if candidate <= 100:
+                rate = candidate
+
+    if amount is None or years is None:
+        return None
+
+    return {
+        "amount": amount,
+        "years": years,
+        "annual_rate": 12.0 if rate is None else rate,
+        "rate_defaulted": rate is None,
+    }
+
+def _calculate_sip_projection(amount: float, years: float, annual_rate: float) -> dict[str, float]:
+    months = int(round(years * 12))
+    monthly_rate = (annual_rate / 100) / 12
+    invested = amount * months
+    if monthly_rate == 0:
+        future_value = invested
+    else:
+        future_value = amount * ((((1 + monthly_rate) ** months - 1) / monthly_rate) * (1 + monthly_rate))
+    return {
+        "monthly_amount": amount,
+        "years": years,
+        "months": months,
+        "annual_rate": annual_rate,
+        "total_invested": invested,
+        "estimated_value": future_value,
+        "estimated_gain": future_value - invested,
+    }
+
+def _build_sip_calculator_response(query: str) -> dict[str, Any] | None:
+    parsed = _parse_sip_inputs(query)
+    if not parsed:
+        return None
+
+    projection = _calculate_sip_projection(
+        parsed["amount"],
+        parsed["years"],
+        parsed["annual_rate"],
+    )
+    rows = [
+        ["Monthly SIP", _format_inr_amount(projection["monthly_amount"])],
+        ["Duration", f"{projection['months']} months ({projection['years']:.1f} years)"],
+        ["Expected annual return", f"{projection['annual_rate']:.2f}%"],
+        ["Total invested", _format_inr_amount(projection["total_invested"])],
+        ["Estimated gain", _format_inr_amount(projection["estimated_gain"])],
+        ["Estimated value", _format_inr_amount(projection["estimated_value"])],
+    ]
+    assumption = (
+        "\n\nAssumption: expected annual return defaults to 12.00% because no rate was provided."
+        if parsed["rate_defaulted"]
+        else ""
+    )
+    answer = f"""### SIP Calculator
+{_markdown_table(["Metric", "Value"], rows)}
+{assumption}
+
+This is a mathematical projection, not a guaranteed return or investment advice.
+
+{DISCLAIMER}"""
+    return {
+        "answer": answer,
+        "debug_intent": {"intent": "sip_calculator", **parsed},
+        "quant_data": {"sip_projection": projection},
+    }
+
 def _risk_period(data: dict) -> str:
     period = str(data.get("risk_period") or data.get("historical_period") or "").strip()
     return period.split()[0].upper() if period else "period"
@@ -1590,6 +1810,459 @@ def _markdown_table(headers: list[str], rows: list[list[str]]) -> str:
     divider = "| " + " | ".join(["---"] * len(headers)) + " |"
     body = ["| " + " | ".join(row) + " |" for row in rows]
     return "\n".join([header, divider, *body])
+
+def _dashboard_category_key(query: str) -> str | None:
+    text = " ".join(str(query or "").lower().replace("-", " ").split())
+    if "fund" not in text and "elss" not in text:
+        return None
+    for key, config in CATEGORY_SEARCH_CONFIG.items():
+        if config["match"] in text:
+            return key
+    if "nifty 50" in text and "index" in text:
+        return "index"
+    return None
+
+def _dashboard_tool_intent(query: str, asset_type: str = "auto") -> dict[str, Any] | None:
+    sip_inputs = _parse_sip_inputs(query)
+    if sip_inputs:
+        return {"intent": "sip_calculator", **sip_inputs}
+
+    category_key = _dashboard_category_key(query)
+    if category_key and asset_type != "stock":
+        return {
+            "intent": "category_search",
+            "category_key": category_key,
+            "category_label": CATEGORY_SEARCH_CONFIG[category_key]["label"],
+        }
+    return None
+
+RISK_QUIZ_QUESTIONS = [
+    {
+        "question": "1. If your portfolio fell 15% in a month, what would you most likely do?",
+        "options": [
+            ("A", "Reduce risk quickly"),
+            ("B", "Wait and review calmly"),
+            ("C", "Consider adding more after research"),
+        ],
+    },
+    {
+        "question": "2. When do you expect to use this money?",
+        "options": [
+            ("A", "Within 3 years"),
+            ("B", "In 3-5 years"),
+            ("C", "After 5 years"),
+        ],
+    },
+    {
+        "question": "3. What matters most to you?",
+        "options": [
+            ("A", "Capital stability"),
+            ("B", "Balanced growth with controlled swings"),
+            ("C", "Higher long-term growth even with sharper swings"),
+        ],
+    },
+]
+
+def _history_payload(history: list[Any]) -> list[dict[str, str]]:
+    messages: list[dict[str, str]] = []
+    for item in history[-20:]:
+        role = getattr(item, "role", None)
+        content = getattr(item, "content", None)
+        if role in {"user", "system"} and str(content or "").strip():
+            messages.append({"role": str(role), "content": str(content).strip()})
+    return messages
+
+def _is_risk_quiz_start(query: str) -> bool:
+    text = str(query or "").lower()
+    return "risk profile" in text or "risk quiz" in text
+
+def _is_portfolio_review_start(query: str) -> bool:
+    text = str(query or "").lower()
+    return "portfolio review" in text or "review my portfolio" in text or "portfolio health" in text
+
+def _system_history_contains(history: list[dict[str, str]], text: str) -> bool:
+    needle = text.lower()
+    return any(message["role"] == "system" and needle in message["content"].lower() for message in history)
+
+def _risk_quiz_started(history: list[dict[str, str]]) -> bool:
+    return any(message["role"] == "user" and _is_risk_quiz_start(message["content"]) for message in history) or _system_history_contains(history, "risk quiz")
+
+def _risk_quiz_completed(history: list[dict[str, str]]) -> bool:
+    return _system_history_contains(history, "risk profile result")
+
+def _risk_answer_score(text: str, question_index: int) -> int | None:
+    cleaned = str(text or "").strip().lower()
+    match = re.search(r"\b([abc])\b", cleaned)
+    if match:
+        return {"a": 0, "b": 1, "c": 2}.get(match.group(1))
+    if question_index == 0:
+        if any(token in cleaned for token in ("reduce", "sell", "exit", "switch")):
+            return 0
+        if any(token in cleaned for token in ("wait", "hold", "review", "calm")):
+            return 1
+        if any(token in cleaned for token in ("add", "more", "accumulate")):
+            return 2
+    if question_index == 1:
+        if any(token in cleaned for token in ("short", "within 3", "1 year", "2 year", "3 year")):
+            return 0
+        if any(token in cleaned for token in ("3-5", "3 to 5", "medium")):
+            return 1
+        if any(token in cleaned for token in ("long", "5 year", "after 5", "10 year")):
+            return 2
+    if question_index == 2:
+        if any(token in cleaned for token in ("stability", "capital", "safe")):
+            return 0
+        if any(token in cleaned for token in ("balanced", "controlled")):
+            return 1
+        if any(token in cleaned for token in ("growth", "higher", "aggressive")):
+            return 2
+    return None
+
+def _risk_quiz_answers(history: list[dict[str, str]], current_query: str) -> list[int]:
+    sequence = [*history, {"role": "user", "content": current_query}]
+    start_index = None
+    for index, message in enumerate(sequence):
+        if message["role"] == "user" and _is_risk_quiz_start(message["content"]):
+            start_index = index
+    if start_index is None:
+        return []
+
+    answers: list[int] = []
+    for message in sequence[start_index + 1:]:
+        if message["role"] != "user":
+            continue
+        score = _risk_answer_score(message["content"], len(answers))
+        if score is not None:
+            answers.append(score)
+        if len(answers) == len(RISK_QUIZ_QUESTIONS):
+            break
+    return answers
+
+def _risk_question_markdown(question_index: int) -> str:
+    item = RISK_QUIZ_QUESTIONS[question_index]
+    options = "\n".join([f"- {letter}. {label}" for letter, label in item["options"]])
+    return f"""### Risk Quiz
+{item["question"]}
+
+{options}
+
+Reply with A, B, or C."""
+
+def _build_risk_quiz_response(query: str, history: list[dict[str, str]]) -> dict[str, Any] | None:
+    if not _is_risk_quiz_start(query) and (not _risk_quiz_started(history) or _risk_quiz_completed(history)):
+        return None
+
+    answers = _risk_quiz_answers(history, query)
+    if len(answers) < len(RISK_QUIZ_QUESTIONS):
+        answer = _risk_question_markdown(len(answers))
+        return {
+            "answer": answer,
+            "debug_intent": {"intent": "risk_quiz", "step": len(answers) + 1, "answers": answers},
+            "quant_data": {"risk_quiz": {"step": len(answers) + 1, "answers": answers}},
+        }
+
+    score = sum(answers)
+    if score <= 2:
+        profile = "Conservative"
+        fit = "lower volatility research buckets such as debt-oriented, conservative hybrid, and large-cap categories"
+    elif score <= 4:
+        profile = "Moderate"
+        fit = "balanced research buckets such as large cap, flexi cap, balanced advantage, and index categories"
+    else:
+        profile = "Aggressive"
+        fit = "higher volatility research buckets such as mid cap, small cap, flexi cap, and sector-review categories"
+
+    answer = f"""### Risk Profile Result
+| Metric | Result |
+| --- | --- |
+| Score | {score}/6 |
+| Profile | {profile} |
+| Research fit | {fit} |
+
+Use this as a starting point for research only. It is not a suitability assessment or investment advice.
+
+{DISCLAIMER}"""
+    return {
+        "answer": answer,
+        "debug_intent": {"intent": "risk_quiz", "step": "complete", "score": score, "profile": profile},
+        "quant_data": {"risk_quiz": {"score": score, "profile": profile, "answers": answers}},
+    }
+
+def _fund_search_pattern(search_term: str) -> str:
+    cleaned = (
+        search_term.lower()
+        .replace("felxi", "flexi")
+        .replace(" fund", "")
+        .replace(" growth", "")
+        .replace(".", " ")
+        .replace(",", " ")
+        .strip()
+    )
+    words = [word for word in cleaned.split() if word]
+    return f"%{'%'.join(words)}%" if words else "%"
+
+def _portfolio_review_started(history: list[dict[str, str]]) -> bool:
+    return any(message["role"] == "user" and _is_portfolio_review_start(message["content"]) for message in history) or _system_history_contains(history, "paste your mutual fund holdings")
+
+def _parse_portfolio_holdings(query: str) -> list[dict[str, Any]]:
+    text = str(query or "").strip()
+    holdings: list[dict[str, Any]] = []
+    amount_pattern = r"(?:rs\.?|inr|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?\s*(?:k|lakh|lac|cr|crore)?)"
+    for match in re.finditer(rf"{amount_pattern}\s+(?:in|into|for)\s+([^,\n;]+)", text, flags=re.IGNORECASE):
+        amount = _money_token_to_float(match.group(1))
+        name = re.sub(r"\s+", " ", match.group(2)).strip(" .")
+        if amount and len(name) >= 3:
+            holdings.append({"input_name": name, "amount": amount})
+    if holdings:
+        return holdings
+
+    for part in re.split(r"[,;\n]+", text):
+        match = re.search(rf"(.+?)\s*[:=-]\s*{amount_pattern}", part, flags=re.IGNORECASE)
+        if not match:
+            continue
+        name = re.sub(r"\s+", " ", match.group(1)).strip(" .")
+        amount = _money_token_to_float(match.group(2))
+        if amount and len(name) >= 3:
+            holdings.append({"input_name": name, "amount": amount})
+    return holdings
+
+def _resolve_portfolio_fund(name: str) -> dict[str, Any] | None:
+    if not supabase:
+        return None
+    try:
+        fields = "scheme_code,scheme_name,amc_name,category,return_3y,aum,expense_ratio,nav_date"
+        rows = (
+            supabase.table("mutual_fund_core_snapshot")
+            .select(fields)
+            .ilike("scheme_name", _fund_search_pattern(name))
+            .limit(25)
+            .execute()
+            .data
+            or []
+        )
+        supported_rows = [row for row in rows if _is_supported_mf_row(row)]
+        candidates = supported_rows or rows
+        if not candidates:
+            return None
+        return _pick_best_fund_match(name, candidates, nav_history_cache={}, min_history_points=0)
+    except Exception as exc:
+        logger.error("Portfolio fund match failed for %s: %s", name, exc)
+        return None
+
+def _portfolio_bucket(category: Any) -> str:
+    text = str(category or "").lower()
+    if "small" in text:
+        return "Small Cap"
+    if "mid" in text:
+        return "Mid Cap"
+    if "large" in text:
+        return "Large Cap"
+    if "flexi" in text or "multi cap" in text:
+        return "Flexi/Multi Cap"
+    if "index" in text:
+        return "Index"
+    if "debt" in text or "liquid" in text or "income" in text:
+        return "Debt"
+    if "hybrid" in text or "balanced" in text:
+        return "Hybrid"
+    if "elss" in text:
+        return "ELSS"
+    return "Unclassified"
+
+def _build_portfolio_review_response(query: str, history: list[dict[str, str]]) -> dict[str, Any] | None:
+    holdings = _parse_portfolio_holdings(query)
+    if not holdings:
+        if _is_portfolio_review_start(query) or _portfolio_review_started(history):
+            answer = """### Portfolio Review
+Paste your mutual fund holdings with amounts.
+
+Example: `50k in Parag Parikh Flexi Cap, 20k in HDFC Mid-Cap, 30k in SBI Bluechip`"""
+            return {
+                "answer": answer,
+                "debug_intent": {"intent": "portfolio_review", "step": "awaiting_holdings"},
+                "quant_data": {"portfolio_review": {"holdings": []}},
+            }
+        return None
+
+    resolved: list[dict[str, Any]] = []
+    total_amount = sum(float(item["amount"]) for item in holdings)
+    for item in holdings:
+        match = _resolve_portfolio_fund(item["input_name"])
+        amount = float(item["amount"])
+        category = match.get("category") if match else None
+        resolved.append({
+            **item,
+            "weight": amount / total_amount if total_amount else 0,
+            "matched": match,
+            "bucket": _portfolio_bucket(category) if match else "Unmatched",
+        })
+
+    bucket_totals: dict[str, float] = {}
+    for item in resolved:
+        bucket_totals[item["bucket"]] = bucket_totals.get(item["bucket"], 0.0) + float(item["amount"])
+
+    matched_amount = sum(float(item["amount"]) for item in resolved if item["matched"])
+    matched_pct = (matched_amount / total_amount * 100) if total_amount else 0
+    top_weight = max((item["weight"] for item in resolved), default=0) * 100
+    bucket_count = len([bucket for bucket in bucket_totals if bucket != "Unmatched"])
+    score = 100 - max(top_weight - 35, 0) - (100 - matched_pct) * 0.5 + min(bucket_count, 4) * 3
+    score = max(0, min(100, round(score)))
+    label = "Good" if score >= 75 else "Fair" if score >= 55 else "Needs review"
+
+    holding_rows = [
+        [
+            _safe_value(item["input_name"]),
+            _format_inr_amount(item["amount"]),
+            f"{item['weight'] * 100:.1f}%",
+            _safe_value((item["matched"] or {}).get("scheme_name")),
+            item["bucket"],
+        ]
+        for item in resolved
+    ]
+    bucket_rows = [
+        [bucket, _format_inr_amount(amount), f"{(amount / total_amount * 100 if total_amount else 0):.1f}%"]
+        for bucket, amount in sorted(bucket_totals.items(), key=lambda pair: pair[1], reverse=True)
+    ]
+    unmatched = [item["input_name"] for item in resolved if not item["matched"]]
+    notes = [
+        f"Matched coverage: {matched_pct:.1f}% of pasted amount.",
+        f"Largest single holding weight: {top_weight:.1f}%.",
+        f"Detected category buckets: {bucket_count}.",
+    ]
+    if unmatched:
+        notes.append(f"Unmatched entries: {', '.join(unmatched)}.")
+
+    answer = f"""### Portfolio Health Check
+| Metric | Result |
+| --- | --- |
+| Health score | {score}/100 |
+| Label | {label} |
+| Total pasted amount | {_format_inr_amount(total_amount)} |
+
+### Holdings
+{_markdown_table(["Input", "Amount", "Weight", "Matched Fund", "Bucket"], holding_rows)}
+
+### Category Allocation
+{_markdown_table(["Bucket", "Amount", "Weight"], bucket_rows)}
+
+### Research Notes
+{chr(10).join(f"- {note}" for note in notes)}
+
+This is a diversification snapshot from pasted text, not a complete suitability review or investment advice.
+
+{DISCLAIMER}"""
+    return {
+        "answer": answer,
+        "debug_intent": {"intent": "portfolio_review", "step": "complete", "score": score, "label": label},
+        "quant_data": {"portfolio_review": {"score": score, "label": label, "holdings": resolved, "buckets": bucket_totals}},
+    }
+
+def _build_deferred_dashboard_response(query: str, history: list[Any]) -> dict[str, Any] | None:
+    history_messages = _history_payload(history)
+    risk_response = _build_risk_quiz_response(query, history_messages)
+    if risk_response:
+        return risk_response
+    return _build_portfolio_review_response(query, history_messages)
+
+def _is_supported_mf_row(row: dict[str, Any]) -> bool:
+    text = " ".join(
+        str(row.get(field) or "").lower()
+        for field in ("scheme_name", "amc_name", "fund_house")
+    )
+    return any(marker in text for markers in SUPPORTED_MF_AMC_MARKERS.values() for marker in markers)
+
+def _read_category_rows(category_key: str) -> list[dict[str, Any]]:
+    if not supabase:
+        logger.error("Supabase client not initialized")
+        return []
+
+    config = CATEGORY_SEARCH_CONFIG[category_key]
+    fields = (
+        "scheme_code,scheme_name,amc_name,category,return_3y,aum,"
+        "expense_ratio,nav_date,last_updated"
+    )
+    rows: list[dict[str, Any]] = []
+    try:
+        res = (
+            supabase.table("mutual_fund_core_snapshot")
+            .select(fields)
+            .ilike("category", f"%{config['match']}%")
+            .limit(100)
+            .execute()
+        )
+        rows = res.data or []
+        if not rows and config.get("scheme_match"):
+            res = (
+                supabase.table("mutual_fund_core_snapshot")
+                .select(fields)
+                .ilike("scheme_name", f"%{config['scheme_match']}%")
+                .limit(100)
+                .execute()
+            )
+            rows = res.data or []
+    except Exception as exc:
+        logger.error("Category search DB error: %s", exc)
+        return []
+
+    supported_rows = [row for row in rows if _is_supported_mf_row(row)]
+    return supported_rows
+
+def _build_category_search_response(intent_info: dict[str, Any]) -> dict[str, Any]:
+    category_key = intent_info["category_key"]
+    label = intent_info["category_label"]
+    rows = _read_category_rows(category_key)
+    if not rows:
+        answer = f"""### {label} Funds
+No matching {label} fund data is available in FundersAI's supported AMC snapshot yet.
+
+This category view is limited to available FundersAI data and is not investment advice.
+
+{DISCLAIMER}"""
+        return {
+            "answer": answer,
+            "debug_intent": intent_info,
+            "quant_data": {"category_search": {"category": label, "rows": []}},
+        }
+
+    has_returns = any(_to_float_or_none(row.get("return_3y")) is not None for row in rows)
+    if has_returns:
+        sorted_rows = sorted(
+            rows,
+            key=lambda row: (_to_float_or_none(row.get("return_3y")) is None, -(_to_float_or_none(row.get("return_3y")) or -1e18)),
+        )
+        ranking_label = "Top by 3Y return"
+    else:
+        sorted_rows = sorted(rows, key=lambda row: _to_float_or_none(row.get("aum")) or 0, reverse=True)
+        ranking_label = "Largest by AUM"
+
+    table_rows = [
+        [
+            _safe_value(row.get("scheme_name")),
+            _safe_value(row.get("category")),
+            _format_percent(row.get("return_3y")),
+            _format_inr_market_cap(row.get("aum")),
+            _format_percent(row.get("expense_ratio")),
+            _safe_value(row.get("nav_date")),
+        ]
+        for row in sorted_rows[:5]
+    ]
+    answer = f"""### {label} Funds - {ranking_label}
+{_markdown_table(["Fund", "Category", "3Y Return", "AUM", "Expense Ratio", "NAV Date"], table_rows)}
+
+This is a category snapshot based on available FundersAI data, not a recommendation.
+
+{DISCLAIMER}"""
+    return {
+        "answer": answer,
+        "debug_intent": intent_info,
+        "quant_data": {
+            "category_search": {
+                "category": label,
+                "ranking": ranking_label,
+                "rows": sorted_rows[:5],
+            }
+        },
+    }
 
 def _stock_metric_rows(data: dict) -> list[tuple[str, str]]:
     period = _risk_period(data)
@@ -2547,6 +3220,19 @@ async def get_mutual_fund_details(scheme_code: int):
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest):
     asset_type = req.asset_type
+    deferred_response = _build_deferred_dashboard_response(req.query, req.history)
+    if deferred_response:
+        return deferred_response
+
+    dashboard_intent = _dashboard_tool_intent(req.query, asset_type)
+    if dashboard_intent:
+        if dashboard_intent["intent"] == "sip_calculator":
+            sip_response = _build_sip_calculator_response(req.query)
+            if sip_response:
+                return sip_response
+        if dashboard_intent["intent"] == "category_search":
+            return _build_category_search_response(dashboard_intent)
+
     intent_info = await route_query(req.query, asset_type)
     intent = intent_info.get("intent", "general")
     ticker = intent_info.get("ticker")

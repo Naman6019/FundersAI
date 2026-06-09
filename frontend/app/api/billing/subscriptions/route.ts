@@ -72,7 +72,7 @@ export async function POST(request: Request) {
         provider: 'razorpay',
         tier,
         billing_period: tierConfig.billingPeriod,
-        status: subscription.status || 'created',
+        status: subscription.status,
         provider_plan_id: subscription.plan_id || '',
         provider_subscription_id: subscription.id,
         provider_customer_id: subscription.customer_id || null,
@@ -93,8 +93,6 @@ export async function POST(request: Request) {
         subscription_id: subscription.id,
         name: 'FundersAI',
         description: `${tierConfig.name} subscription`,
-        amount: tierConfig.amountPaise,
-        currency: 'INR',
         prefill: { email: context.user.email || '' },
         notes: {
           user_id: context.user.id,
@@ -104,7 +102,7 @@ export async function POST(request: Request) {
       },
       subscription: {
         id: subscription.id,
-        status: subscription.status || 'created',
+        status: subscription.status,
         short_url: subscription.short_url || null,
       },
     });

@@ -183,19 +183,20 @@ def update_funds(supabase, updates: list[dict[str, Any]], source_name: str) -> i
                 )
                 core_batch.append(
                     {
-                    "scheme_code": str(row["scheme_code"]),
-                    "scheme_name": row.get("scheme_name"),
-                    "amc_name": row.get("fund_house"),
-                    "category": row.get("category"),
-                    "sub_category": row.get("sub_category"),
-                    "nav": row.get("nav"),
-                    "nav_date": row.get("nav_date"),
-                    "expense_ratio": row.get("expense_ratio"),
-                    "aum": row.get("aum"),
-                    "benchmark": row.get("benchmark"),
-                    "data_source": _merge_sources(existing.get("data_source"), source_name),
-                    "provider_payload": provider_payload,
-                    "last_updated": utc_now(),
+                        "scheme_code": str(row["scheme_code"]),
+                        "scheme_name": _merge_core_value(row, existing, "scheme_name"),
+                        "amc_name": _merge_core_value(row, existing, "fund_house", existing_key="amc_name"),
+                        "category": _merge_core_value(row, existing, "category"),
+                        "sub_category": _merge_core_value(row, existing, "sub_category"),
+                        "nav": _merge_core_value(row, existing, "nav"),
+                        "nav_date": _merge_core_value(row, existing, "nav_date"),
+                        "expense_ratio": _merge_core_value(row, existing, "expense_ratio"),
+                        "aum": _merge_core_value(row, existing, "aum"),
+                        "benchmark": _merge_core_value(row, existing, "benchmark"),
+                        "fund_manager": _merge_core_value(row, existing, "fund_manager"),
+                        "data_source": _merge_sources(existing.get("data_source"), source_name),
+                        "provider_payload": provider_payload,
+                        "last_updated": utc_now(),
                     }
                 )
             supabase.table("mutual_fund_core_snapshot").upsert(core_batch, on_conflict="scheme_code").execute()
@@ -212,7 +213,10 @@ def _load_existing_core_rows(supabase, batch: list[dict[str, Any]]) -> dict[str,
     try:
         res = (
             supabase.table("mutual_fund_core_snapshot")
-            .select("scheme_code,data_source,provider_payload")
+            .select(
+                "scheme_code,scheme_name,amc_name,category,sub_category,nav,nav_date,"
+                "expense_ratio,aum,benchmark,fund_manager,data_source,provider_payload"
+            )
             .in_("scheme_code", codes)
             .execute()
         )
@@ -220,6 +224,35 @@ def _load_existing_core_rows(supabase, batch: list[dict[str, Any]]) -> dict[str,
         logger.warning("Existing MF core lookup failed before %s upsert: %s", batch[0].get("scheme_code"), exc)
         return {}
     return {str(row.get("scheme_code")): row for row in (res.data or []) if row.get("scheme_code") is not None}
+
+
+def _merge_core_value(
+    row: dict[str, Any],
+    existing: dict[str, Any],
+    row_key: str,
+    *,
+    existing_key: str | None = None,
+) -> Any:
+    existing_key = existing_key or row_key
+    value = row.get(row_key)
+    if _is_real_core_value(row_key, value):
+        return value
+    return existing.get(existing_key)
+
+
+def _is_real_core_value(field: str, value: Any) -> bool:
+    if value in (None, ""):
+        return False
+    if isinstance(value, str) and not value.strip():
+        return False
+    if field in {"category", "sub_category", "fund_house"} and str(value).strip().lower() == "unknown":
+        return False
+    if field == "nav":
+        try:
+            return float(value) > 0
+        except (TypeError, ValueError):
+            return False
+    return True
 
 
 def _merge_sources(*values: object) -> str:
@@ -253,6 +286,16 @@ def _source_key(source_name: str) -> str:
     return "_".join(str(source_name or "").strip().lower().replace("-", " ").split())
 
 
+def _new_match_stats() -> dict[str, Any]:
+    return {"seen": 0, "matched": 0, "skipped": 0, "unmatched_sample": []}
+
+
+def _record_unmatched(stats: dict[str, Any], scheme_name: str) -> None:
+    sample = stats["unmatched_sample"]
+    if len(sample) < 10 and scheme_name not in sample:
+        sample.append(scheme_name)
+
+
 def build_fund_update(fund: dict[str, Any], values: dict[str, Any]) -> dict[str, Any]:
     return {
         "scheme_code": int(fund["scheme_code"]),
@@ -274,6 +317,7 @@ def sync_amfi_ter_api(supabase, funds: list[dict[str, Any]], session) -> int:
         return 0
 
     updates_by_code: dict[int, dict[str, Any]] = {}
+    stats = _new_match_stats()
     for page in range(1, AMFI_TER_MAX_PAGES + 1):
         payload = amfi_get_json(
             session,
@@ -292,13 +336,17 @@ def sync_amfi_ter_api(supabase, funds: list[dict[str, Any]], session) -> int:
             break
 
         for row in rows:
+            stats["seen"] += 1
             scheme_name = clean_scheme_name(row.get("Scheme_Name"))
             expense_ratio = parse_number(row.get("D_TER")) or parse_number(row.get("R_TER"))
             if not scheme_name or expense_ratio is None:
+                stats["skipped"] += 1
                 continue
             fund = match_fund(scheme_name, funds)
             if not fund:
+                _record_unmatched(stats, scheme_name)
                 continue
+            stats["matched"] += 1
             updates_by_code[int(fund["scheme_code"])] = build_fund_update(
                 fund,
                 {"expense_ratio": expense_ratio},
@@ -308,12 +356,13 @@ def sync_amfi_ter_api(supabase, funds: list[dict[str, Any]], session) -> int:
             break
 
     written = update_funds(supabase, list(updates_by_code.values()), "AMFI TER API")
-    logger.info("AMFI TER API updated %s schemes from month %s.", written, month)
+    logger.info("AMFI TER API updated %s schemes from month %s. stats=%s", written, month, stats)
     return written
 
 
 def sync_ter_sources(supabase, funds: list[dict[str, Any]], registry: dict, session) -> int:
     updates_by_code: dict[int, dict[str, Any]] = {}
+    stats = _new_match_stats()
 
     for source in registry["ter"]:
         for raw_df in read_tables_from_url(source, session):
@@ -327,20 +376,24 @@ def sync_ter_sources(supabase, funds: list[dict[str, Any]], registry: dict, sess
                 continue
 
             for _, row in df.iterrows():
+                stats["seen"] += 1
                 scheme_name = clean_scheme_name(row.get(scheme_col))
                 expense_ratio = parse_number(row.get(ter_col))
                 if not scheme_name or expense_ratio is None:
+                    stats["skipped"] += 1
                     continue
                 fund = match_fund(scheme_name, funds)
                 if not fund:
+                    _record_unmatched(stats, scheme_name)
                     continue
+                stats["matched"] += 1
                 updates_by_code[int(fund["scheme_code"])] = build_fund_update(
                     fund,
                     {"expense_ratio": expense_ratio},
                 )
 
     written = update_funds(supabase, list(updates_by_code.values()), "TER")
-    logger.info("TER sync updated %s schemes.", written)
+    logger.info("TER sync updated %s schemes. stats=%s", written, stats)
     return written
 
 
@@ -383,26 +436,32 @@ def sync_amfi_aum_api(supabase, funds: list[dict[str, Any]], session) -> int:
     groups = payload.get("data", []) if isinstance(payload, dict) else []
     funds_by_code = {int(f["scheme_code"]): f for f in funds if f.get("scheme_code") is not None}
     updates = []
+    stats = _new_match_stats()
 
     for group in groups:
         for scheme in group.get("schemes", []) or []:
+            stats["seen"] += 1
             scheme_code = parse_number(scheme.get("AMFI_Code"))
             aum_values = scheme.get("AverageAumForTheMonth") or {}
             raw_aum = parse_number(aum_values.get("ExcludingFundOfFundsDomesticButIncludingFundOfFundsOverseas"))
             if scheme_code is None or raw_aum is None:
+                stats["skipped"] += 1
                 continue
             fund = funds_by_code.get(int(scheme_code))
             if not fund:
+                _record_unmatched(stats, str(scheme.get("SchemeName") or scheme_code))
                 continue
+            stats["matched"] += 1
             updates.append(build_fund_update(fund, {"aum": round(raw_aum / 100, 2)}))
 
     written = update_funds(supabase, updates, "AMFI AUM API")
-    logger.info("AMFI AUM API updated %s schemes for fyId=%s periodId=%s.", written, fy_id, period_id)
+    logger.info("AMFI AUM API updated %s schemes for fyId=%s periodId=%s. stats=%s", written, fy_id, period_id, stats)
     return written
 
 
 def sync_aum_sources(supabase, funds: list[dict[str, Any]], registry: dict, session) -> int:
     updates_by_code: dict[int, dict[str, Any]] = {}
+    stats = _new_match_stats()
 
     for source in registry["aum"]:
         for raw_df in read_tables_from_url(source, session):
@@ -417,22 +476,26 @@ def sync_aum_sources(supabase, funds: list[dict[str, Any]], registry: dict, sess
 
             aum_in_lakhs = "lakh" in aum_col.lower()
             for _, row in df.iterrows():
+                stats["seen"] += 1
                 scheme_name = clean_scheme_name(row.get(scheme_col))
                 aum = parse_number(row.get(aum_col))
                 if not scheme_name or aum is None:
+                    stats["skipped"] += 1
                     continue
                 if aum_in_lakhs:
                     aum = aum / 100
                 fund = match_fund(scheme_name, funds)
                 if not fund:
+                    _record_unmatched(stats, scheme_name)
                     continue
+                stats["matched"] += 1
                 updates_by_code[int(fund["scheme_code"])] = build_fund_update(
                     fund,
                     {"aum": round(aum, 2)},
                 )
 
     written = update_funds(supabase, list(updates_by_code.values()), "AUM")
-    logger.info("AUM sync updated %s schemes.", written)
+    logger.info("AUM sync updated %s schemes. stats=%s", written, stats)
     return written
 
 

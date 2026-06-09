@@ -41,7 +41,6 @@ backend/
       calculate_ratios.py
       sync_corporate_events.py
       sync_mf_nav.py
-      sync_mf_enrichment.py
       sync_mf_enrichment_unified.py
   scripts/
     sync_mf.py
@@ -74,7 +73,6 @@ backend/
 - `ENABLE_STOCK_FUNDAMENTALS_SYNC`
 - `ENABLE_STOCK_PRICE_SYNC`
 - `ENABLE_MF_NAV_SYNC`
-- `ENABLE_MFDATA_FALLBACK_SYNC`
 - `ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS`
 - `ENABLE_SHAREHOLDING_SYNC`
 - `ENABLE_CORPORATE_ACTIONS_SYNC`

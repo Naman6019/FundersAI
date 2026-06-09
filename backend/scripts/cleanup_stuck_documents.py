@@ -63,10 +63,10 @@ def main():
             total_junk_updated += 1
     print(f"Updated {total_junk_updated} junk documents.")
 
-    # 3. Mark old ICICI Excel files (pre-2023) that failed parsing to skipped_not_supported
-    print("\n3. Setting status of pre-2023 ICICI Excel files that failed parsing to 'skipped_not_supported'...")
+    # 3. Mark old ICICI quant files as skipped_not_supported
+    print("\n3. Setting status of ICICI quant files to 'skipped_not_supported'...")
     res_icici_old = supabase.table("mf_raw_documents")\
-        .select("id, file_name, downloaded_at")\
+        .select("id, file_name, source_url, downloaded_at")\
         .eq("amc_code", "ICICI")\
         .eq("parse_status", "needs_review")\
         .eq("document_type", "portfolio_disclosure")\
@@ -76,19 +76,42 @@ def main():
     icici_old_docs = res_icici_old.data or []
     total_icici_old_updated = 0
     for doc in icici_old_docs:
-        # Check if downloaded_at is before 2023-01-01
+        source_text = f"{doc.get('file_name') or ''} {doc.get('source_url') or ''}".lower()
         dl_at = doc.get("downloaded_at") or ""
-        if dl_at and dl_at < "2023-01-01":
+        if "quant" in source_text or (dl_at and dl_at < "2023-01-01"):
             print(f"Marking old ICICI document: {doc['id']} ({doc['file_name']})")
             supabase.table("mf_raw_documents").update({
                 "parse_status": "skipped_not_supported",
-                "validation_issues": ["unsupported_historical_document"]
+                "validation_issues": ["skipped_irrelevant_document:icici_quant_file"]
             }).eq("id", doc["id"]).execute()
             total_icici_old_updated += 1
     print(f"Updated {total_icici_old_updated} old ICICI documents.")
 
-    # 4. Set valid disclosures that are currently stuck in needs_review to needs_reparse
-    print("\n4. Resetting valid stuck documents to 'needs_reparse' for reparsing...")
+    # 4. Mark legacy PPFAS 2025 .xls portfolio rows as skipped_not_supported
+    print("\n4. Setting status of legacy PPFAS 2025 .xls portfolio rows to 'skipped_not_supported'...")
+    res_ppfas_legacy = supabase.table("mf_raw_documents")\
+        .select("id, file_name, source_url")\
+        .eq("amc_code", "PPFAS")\
+        .eq("parse_status", "failed")\
+        .eq("document_type", "portfolio_disclosure")\
+        .ilike("file_name", "%Monthly_Portfolio_Report%")\
+        .execute()
+
+    ppfas_legacy_docs = res_ppfas_legacy.data or []
+    total_ppfas_legacy_updated = 0
+    for doc in ppfas_legacy_docs:
+        source_text = f"{doc.get('file_name') or ''} {doc.get('source_url') or ''}".lower()
+        if ".xls" in source_text and "2025" in source_text:
+            print(f"Marking legacy PPFAS document: {doc['id']} ({doc['file_name']})")
+            supabase.table("mf_raw_documents").update({
+                "parse_status": "skipped_not_supported",
+                "validation_issues": ["skipped_irrelevant_document:legacy_ppfas_xls_before_supported_window"]
+            }).eq("id", doc["id"]).execute()
+            total_ppfas_legacy_updated += 1
+    print(f"Updated {total_ppfas_legacy_updated} legacy PPFAS documents.")
+
+    # 5. Set valid disclosures that are currently stuck in needs_review to needs_reparse
+    print("\n5. Resetting valid stuck documents to 'needs_reparse' for reparsing...")
     res_stuck = supabase.table("mf_raw_documents")\
         .select("id, amc_code, file_name, parse_status")\
         .eq("parse_status", "needs_review")\

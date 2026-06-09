@@ -2,15 +2,6 @@ name: Sync MF Enrichment
 
 on:
   workflow_dispatch:
-    inputs:
-      scheme_codes:
-        description: 'Comma-separated AMFI scheme codes'
-        required: false
-        default: ''
-      limit:
-        description: 'Max schemes to enrich'
-        required: false
-        default: '200'
 
 jobs:
   sync:
@@ -31,22 +22,10 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          ENABLE_MFDATA_FALLBACK_SYNC: "true"
-          MFDATA_TIMEOUT_SECONDS: "30"
-          MFDATA_MAX_RETRIES: "4"
-          MFDATA_RETRY_BACKOFF_SECONDS: "1.2"
-          MFDATA_REQUEST_SLEEP_SECONDS: "6.5"
-          DISPATCH_SCHEME_CODES: ${{ inputs.scheme_codes }}
-          DISPATCH_LIMIT: ${{ inputs.limit }}
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
             echo "Error: Missing SUPABASE_URL or SUPABASE_KEY"
             exit 1
           fi
 
-          args=(--limit "${DISPATCH_LIMIT:-200}")
-          if [ -n "${DISPATCH_SCHEME_CODES:-}" ]; then
-            args+=(--scheme-codes "$DISPATCH_SCHEME_CODES")
-          fi
-
-          python -m backend.app.jobs.sync_mf_enrichment_unified "${args[@]}"
+          python -m backend.app.jobs.sync_mf_enrichment_unified

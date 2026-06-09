@@ -58,6 +58,30 @@ function razorpayClient() {
   });
 }
 
+export function razorpayKeyMode(keyId = razorpayKeyId()): 'test' | 'live' | 'unknown' {
+  if (keyId.startsWith('rzp_test_')) return 'test';
+  if (keyId.startsWith('rzp_live_')) return 'live';
+  return 'unknown';
+}
+
+export function assertRazorpayPlanId(planId: string) {
+  if (!planId.startsWith('plan_')) {
+    throw new Error('invalid_razorpay_plan_id');
+  }
+}
+
+export function assertRazorpaySubscription(subscription: RazorpaySubscription) {
+  if (!subscription.id?.startsWith('sub_')) {
+    throw new Error('invalid_razorpay_subscription_id');
+  }
+
+  const status = String(subscription.status || '');
+
+  if (!['created', 'authenticated', 'active'].includes(status)) {
+    throw new Error(`invalid_razorpay_subscription_status:${status || 'missing'}`);
+  }
+}
+
 export function planIdForTier(tier: PaidTier): string {
   const envName = tier === 'pro' ? 'RAZORPAY_PLAN_PRO_MONTHLY_ID' : 'RAZORPAY_PLAN_ULTRA_MONTHLY_ID';
   return requiredEnv(envName);
@@ -76,38 +100,39 @@ export function unixToIso(value: unknown): string | null {
 }
 
 export async function createRazorpaySubscription(input: CreateSubscriptionInput): Promise<RazorpaySubscription> {
-  const keyId = razorpayKeyId();
-  const keySecret = requiredEnv('RAZORPAY_KEY_SECRET');
   const planId = planIdForTier(input.tier);
-  const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
   const tier = MONTHLY_TIERS[input.tier];
 
-  const response = await fetch('https://api.razorpay.com/v1/subscriptions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Basic ${auth}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      plan_id: planId,
-      total_count: 1200,
-      quantity: 1,
-      customer_notify: true,
-      notes: {
-        user_id: input.userId,
-        tier: input.tier,
-        billing_period: tier.billingPeriod,
-        email: input.email || '',
-      },
-    }),
-    cache: 'no-store',
+  assertRazorpayPlanId(planId);
+
+  console.info('[razorpay:subscription:create]', {
+    key_mode: razorpayKeyMode(),
+    plan_id: planId,
   });
 
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(`razorpay_create_subscription_failed:${response.status}:${JSON.stringify(payload)}`);
-  }
-  return payload as RazorpaySubscription;
+  const subscription = await razorpayClient().subscriptions.create({
+    plan_id: planId,
+    total_count: 12,
+    customer_notify: 1,
+    quantity: 1,
+    notes: {
+      user_id: input.userId,
+      tier: input.tier,
+      billing_period: tier.billingPeriod,
+      email: input.email || '',
+    },
+  });
+  const normalized = subscription as unknown as RazorpaySubscription;
+
+  assertRazorpaySubscription(normalized);
+
+  console.info('[razorpay:subscription:created]', {
+    subscription_id: normalized.id,
+    status: normalized.status,
+    plan_id: normalized.plan_id,
+  });
+
+  return normalized;
 }
 
 export async function createRazorpayOrder(input: CreateOrderInput): Promise<RazorpayOrder> {

@@ -21,6 +21,21 @@
 - `GET /api/search`: search across stock/fund entities.
 - `GET /api/cron/sync-mf`: protected trigger route.
 
+### Billing And Payments
+- `POST /api/create-order`: Razorpay Standard Checkout order creation.
+  - Request: `{ "amount": number, "currency"?: string, "receipt"?: string }`
+  - Amount is paise and must be at least `100`.
+  - Returns `{ "order_id": string, "amount": number, "currency": string }`.
+- `POST /api/verify-payment`: Razorpay Standard Checkout HMAC verification.
+  - Requires `razorpay_payment_id`, `razorpay_order_id`, and `razorpay_signature`.
+  - Returns success only when `HMAC_SHA256(order_id + "|" + payment_id, RAZORPAY_KEY_SECRET)` matches.
+- `GET /api/billing/subscriptions`: authenticated user's current billing state.
+- `POST /api/billing/subscriptions`: create Razorpay subscription checkout payload for `pro` or `ultra`.
+- `POST /api/billing/webhook`: Razorpay subscription webhook receiver.
+  - Verifies raw-body webhook signature.
+  - Stores event ids for idempotency.
+  - Updates `billing_subscriptions` and paid tier state only from verified events.
+
 ### Admin Routes (`/api/admin/*`, admin-role enforced server-side)
 - `GET /api/admin/session`
 - `GET /api/admin/overview`
@@ -30,6 +45,9 @@
 - `GET /api/admin/nav-sync`
 - `GET /api/admin/resolver-debug`
 - `GET /api/admin/ops-overview` (proxy to backend admin ops endpoint)
+- `POST /api/admin/data-coverage/documents/[documentId]/reparse`
+- `POST /api/admin/data-coverage/documents/[documentId]/resolve`
+- `POST /api/admin/data-coverage/documents/[documentId]/skip`
 
 Auth behavior:
 - Missing bearer token -> `401`

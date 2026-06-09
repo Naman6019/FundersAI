@@ -155,6 +155,56 @@ def test_parse_pending_documents_skips_report_month_mismatch(monkeypatch):
     ]
 
 
+def test_parse_pending_documents_skips_icici_quant_files(monkeypatch):
+    fake_doc = {
+        "id": "doc-icici-quant-1",
+        "amc_code": "ICICI",
+        "document_type": "portfolio_disclosure",
+        "report_month": "2024-12-01",
+        "source_url": "https://www.icicipruamc.com/blob/downloads/Files/Monthly%20Portfolio%20Disclosures/2020/ipru-liq-quants--30042020.xlsx",
+        "file_name": "ipru-liq-quants--30042020.xlsx",
+        "storage_path": "ignored",
+        "parse_status": "pending",
+    }
+    fake_supabase = _FakeSupabase([fake_doc])
+    monkeypatch.setattr(parsing_service, "supabase", fake_supabase)
+
+    service = ParsingService()
+    result = service.parse_pending_documents(limit=1, amc_code="ICICI")
+
+    assert result["processed"][0]["status"] == "skipped"
+    _, eq_filters, update_payload = fake_supabase.updated_rows[0]
+    assert eq_filters["id"] == "doc-icici-quant-1"
+    assert update_payload["parse_status"] == "skipped_not_supported"
+    assert update_payload["validation_issues"] == ["skipped_irrelevant_document:icici_quant_file"]
+
+
+def test_parse_pending_documents_skips_legacy_ppfas_xls_before_supported_window(monkeypatch):
+    fake_doc = {
+        "id": "doc-ppfas-legacy-1",
+        "amc_code": "PPFAS",
+        "document_type": "portfolio_disclosure",
+        "report_month": "2025-05-01",
+        "source_url": "https://amc.ppfas.com/downloads/portfolio-disclosure/2025/PPFAS_Monthly_Portfolio_Report_May_31_2025.xls",
+        "file_name": "PPFAS_Monthly_Portfolio_Report_May_31_2025.xls",
+        "storage_path": "ignored",
+        "parse_status": "pending",
+    }
+    fake_supabase = _FakeSupabase([fake_doc])
+    monkeypatch.setattr(parsing_service, "supabase", fake_supabase)
+
+    service = ParsingService()
+    result = service.parse_pending_documents(limit=1, amc_code="PPFAS")
+
+    assert result["processed"][0]["status"] == "skipped"
+    _, eq_filters, update_payload = fake_supabase.updated_rows[0]
+    assert eq_filters["id"] == "doc-ppfas-legacy-1"
+    assert update_payload["parse_status"] == "skipped_not_supported"
+    assert update_payload["validation_issues"] == [
+        "skipped_irrelevant_document:legacy_ppfas_xls_before_supported_window"
+    ]
+
+
 def test_source_month_prefers_explicit_file_date_over_storage_folder():
     text = (
         "https://files.hdfcfund.com/s3fs-public/2026-05/"
