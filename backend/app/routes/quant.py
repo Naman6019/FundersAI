@@ -2,6 +2,9 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import Optional, Any
 from datetime import datetime, timezone
 from dataclasses import asdict
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.repositories.stock_repository import StockRepository
 from app.models.stock_models import StockProfile, FinancialStatement, StockPriceDaily, RatioSnapshot
@@ -73,6 +76,7 @@ def compare_stocks(symbols: str = Query(..., description="Comma separated symbol
     try:
         return build_stock_compare(symbols)
     except Exception as exc:
+        logger.exception("Unexpected error during stock comparison for symbols: %s", symbols)
         raise HTTPException(status_code=500, detail="Unexpected error during comparison")
 
 @router.get("/stocks/nifty50/ticker")
@@ -104,7 +108,8 @@ def get_nifty50_ticker():
             "items": items,
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
-    except Exception:
+    except Exception as exc:
+        logger.exception("Unexpected error in get_nifty50_ticker")
         raise HTTPException(status_code=500, detail="Unexpected error")
 
 @router.get("/stocks/{symbol}/profile")
@@ -113,7 +118,8 @@ def get_stock_profile(symbol: str):
         return build_stock_profile(symbol)
     except HTTPException:
         raise
-    except Exception:
+    except Exception as exc:
+        logger.exception("Unexpected error in get_stock_profile for symbol: %s", symbol)
         raise HTTPException(status_code=500, detail="Unexpected error")
 
 @router.get("/stocks/{symbol}/financials")
@@ -124,7 +130,8 @@ def get_stock_financials(symbol: str, period_type: Optional[str] = None):
             key = period_type.strip().lower()
             return data.get(key, [])
         return data
-    except Exception:
+    except Exception as exc:
+        logger.exception("Unexpected error in get_stock_financials for symbol: %s", symbol)
         raise HTTPException(status_code=500, detail="Unexpected error")
 
 @router.get("/stocks/{symbol}/price-history")
@@ -133,7 +140,8 @@ def get_stock_price_history(symbol: str, start_date: Optional[str] = None, end_d
         # Current service API is day-count based and Supabase-first.
         history = get_stock_price_history_service(symbol, days=365)
         return history
-    except Exception:
+    except Exception as exc:
+        logger.exception("Unexpected error in get_stock_price_history for symbol: %s", symbol)
         raise HTTPException(status_code=500, detail="Unexpected error")
 
 @router.get("/providers/status")
@@ -145,5 +153,6 @@ def get_provider_status():
         return status
     except HTTPException:
         raise
-    except Exception:
+    except Exception as exc:
+        logger.exception("Unexpected error in get_provider_status")
         raise HTTPException(status_code=500, detail="Unexpected error")

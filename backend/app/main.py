@@ -5,6 +5,7 @@ import asyncio
 import sys
 import time
 import re
+import hmac
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, List, Literal
 from dotenv import load_dotenv
@@ -242,7 +243,7 @@ def _latest_mf_doc_timestamp(*, status: str | None, field: str) -> datetime | No
 
 def _require_admin_key(x_admin_key: str | None) -> None:
     expected_admin_key = os.getenv("MF_INTERNAL_ADMIN_KEY", "").strip()
-    if not expected_admin_key or x_admin_key != expected_admin_key:
+    if not expected_admin_key or not x_admin_key or not hmac.compare_digest(x_admin_key, expected_admin_key):
         raise HTTPException(status_code=403, detail="admin_auth_required")
 
 

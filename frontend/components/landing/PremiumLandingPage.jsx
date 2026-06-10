@@ -624,15 +624,15 @@ export default function FundersAILandingPage() {
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease }}
-          className="sticky top-4 z-40 mx-auto w-full max-w-7xl px-5 py-5 sm:px-8 lg:px-10"
+          className="sticky top-0 z-40 w-full"
         >
-          <div className="flex items-center justify-between rounded-full border border-white/10 bg-[#090d18]/70 px-3 py-2 shadow-2xl shadow-black/25 backdrop-blur-2xl sm:px-4">
+          <div className="flex items-center justify-between border-b border-white/[0.05] bg-[#090d18]/90 px-6 py-3 shadow-md backdrop-blur-xl sm:px-12">
             <a href="#" className="flex items-center gap-3" aria-label="FundersAI home">
               <motion.img
                 whileHover={{ scale: 1.05 }}
                 src="/logo.png"
                 alt="FundersAI Logo"
-                className="h-10 w-auto object-contain"
+                className="h-10 md:h-12 w-auto object-contain origin-left"
               />
             </a>
 
@@ -654,7 +654,7 @@ export default function FundersAILandingPage() {
           </div>
         </motion.nav>
 
-        <div className="mx-auto w-full max-w-7xl px-5 pb-24 pt-14 sm:px-8 sm:pt-24 lg:px-10">
+        <div className="mx-auto w-full max-w-full px-5 pb-24 pt-14 sm:px-8 sm:pt-24 lg:px-10">
           <div className="grid gap-12 lg:grid-cols-12 lg:items-center">
             <motion.div
               variants={stagger}
@@ -782,7 +782,7 @@ export default function FundersAILandingPage() {
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-5 py-16 sm:px-8 lg:px-10">
+      <section className="mx-auto w-full max-w-full px-5 py-16 sm:px-8 lg:px-10">
         <motion.div
           initial={{ opacity: 0, y: 28, filter: "blur(10px)" }}
           whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
@@ -824,7 +824,7 @@ export default function FundersAILandingPage() {
         </motion.div>
       </section>
 
-      <section id="compare" className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-10">
+      <section id="compare" className="mx-auto w-full max-w-full px-5 py-24 sm:px-8 lg:px-10">
         <SectionHeading
           eyebrow="Deep Screening"
           title="Unbiased research. Zero noise."
@@ -833,7 +833,7 @@ export default function FundersAILandingPage() {
         <FundPairCard />
       </section>
 
-      <section id="features" className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-10">
+      <section id="features" className="mx-auto w-full max-w-full px-5 py-24 sm:px-8 lg:px-10">
         <div className="flex flex-col gap-12">
           <SectionHeading
             align="left"
@@ -845,7 +845,7 @@ export default function FundersAILandingPage() {
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-10">
+      <section className="mx-auto w-full max-w-full px-5 py-24 sm:px-8 lg:px-10">
         <motion.div
           initial={{ opacity: 0, y: 30, filter: "blur(10px)" }}
           whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
@@ -890,7 +890,7 @@ export default function FundersAILandingPage() {
         </motion.div>
       </section>
 
-      <section id="how" className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-10">
+      <section id="how" className="mx-auto w-full max-w-full px-5 py-24 sm:px-8 lg:px-10">
         <SectionHeading
           eyebrow="Workflow"
           title="From fund factsheets to explainable comparison."
@@ -940,7 +940,7 @@ export default function FundersAILandingPage() {
         </motion.div>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-10">
+      <section className="mx-auto w-full max-w-full px-5 py-24 sm:px-8 lg:px-10">
         <SectionHeading
           eyebrow="Use cases"
           title="Ask anything. Research instantly."
@@ -949,7 +949,7 @@ export default function FundersAILandingPage() {
         <MarqueePrompts />
       </section>
 
-      <section id="trust" className="mx-auto w-full max-w-7xl px-5 py-24 sm:px-8 lg:px-10">
+      <section id="trust" className="mx-auto w-full max-w-full px-5 py-24 sm:px-8 lg:px-10">
         <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
           <SectionHeading
             align="left"
@@ -974,7 +974,7 @@ export default function FundersAILandingPage() {
         </div>
       </section>
 
-      <section id="disclaimer" className="mx-auto w-full max-w-7xl px-5 py-12 sm:px-8 lg:px-10">
+      <section id="disclaimer" className="mx-auto w-full max-w-full px-5 py-12 sm:px-8 lg:px-10">
         <div className="rounded-[2rem] border border-amber-300/20 bg-amber-300/[0.055] p-6 text-center sm:p-8">
           <h2 className="text-2xl font-semibold text-white">Research-only disclaimer</h2>
           <p className="mx-auto mt-4 max-w-4xl leading-8 text-amber-50/80">
@@ -983,7 +983,7 @@ export default function FundersAILandingPage() {
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-5 pb-24 pt-12 sm:px-8 lg:px-10">
+      <section className="mx-auto w-full max-w-full px-5 pb-24 pt-12 sm:px-8 lg:px-10">
         <motion.div
           initial={{ opacity: 0, y: 28, filter: "blur(10px)" }}
           whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
@@ -1005,6 +1005,59 @@ export default function FundersAILandingPage() {
           </div>
         </motion.div>
       </section>
+      {/* Footer Section - Tresmares Inspired */}
+      <footer className="bg-[#020611] pt-24 pb-12 mt-16 border-t border-white/[0.03]">
+        <div className="mx-auto w-full max-w-7xl px-6 sm:px-12 lg:px-16">
+          
+          <div className="grid grid-cols-1 gap-16 md:grid-cols-12 lg:gap-12 mb-20">
+            {/* Logo and Contact */}
+            <div className="col-span-1 md:col-span-5 lg:col-span-6 flex flex-col justify-between">
+              <div>
+                <img src="/FUNDERSAI-nobackground.png" alt="FundersAI Logo" className="h-10 w-auto object-contain mb-8 opacity-90" />
+                <p className="text-[13px] uppercase tracking-[0.1em] text-slate-500 font-medium mb-2">
+                  Contact Us
+                </p>
+                <a href="mailto:contact@fundersai.co.in" className="text-lg text-slate-200 hover:text-white transition-colors">
+                  contact@fundersai.co.in
+                </a>
+              </div>
+            </div>
+            
+            {/* Quick Links */}
+            <div className="col-span-1 md:col-span-3 lg:col-span-2">
+              <h3 className="text-[11px] uppercase tracking-[0.2em] font-semibold text-[#66a3ff] mb-6">Legal</h3>
+              <ul className="flex flex-col gap-4 text-sm text-slate-400">
+                <li><a href="#" className="hover:text-white transition-colors">Terms and Conditions</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Privacy Policy</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Cookie Policy</a></li>
+              </ul>
+            </div>
+
+            {/* Strict Disclaimer */}
+            <div className="col-span-1 md:col-span-4 lg:col-span-4">
+              <h3 className="text-[11px] uppercase tracking-[0.2em] font-semibold text-amber-500 mb-6">Strict Disclaimer</h3>
+              <div className="border-l border-amber-500/30 pl-4 py-1">
+                <p className="text-xs leading-relaxed text-slate-400">
+                  <strong className="text-slate-200 font-medium">FundersAI is strictly a research and educational platform.</strong> We do not provide financial advice, investment recommendations, or buy/sell signals. 
+                  <br /><br />
+                  <span className="text-amber-100/70">Please consult a SEBI registered advisor before making any investment decisions.</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Bar */}
+          <div className="flex flex-col-reverse items-center justify-between border-t border-white/[0.05] pt-8 md:flex-row gap-6">
+            <p className="text-[11px] tracking-wider uppercase text-slate-600">
+              © {new Date().getFullYear()} FundersAI. All rights reserved.
+            </p>
+            <div className="flex gap-8 text-[11px] tracking-widest uppercase font-medium text-slate-500">
+              <a href="#" className="hover:text-white transition-colors">X (Twitter)</a>
+              <a href="#" className="hover:text-white transition-colors">LinkedIn</a>
+            </div>
+          </div>
+        </div>
+      </footer>
     </main>
   );
 }

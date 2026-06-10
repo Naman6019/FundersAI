@@ -23,7 +23,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import styles from "./page.module.css";
 
-const logoUrl = "/logo.png";
+const logoUrl = "/logo-vertical.png";
 
 const funds = [
   { name: "PPFAS Flexi Cap", oneY: "+22.45%", ter: "0.65%", risk: "MOD" },

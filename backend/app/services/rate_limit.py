@@ -92,11 +92,17 @@ def _hash(value: str) -> str:
 def client_identifier_from_request(request: Request, override: str | None = None) -> str:
     if override:
         return _hash(str(override))
-    forwarded = str(request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+        
+    cf_ip = str(request.headers.get("cf-connecting-ip") or "").strip()
+    real_ip = str(request.headers.get("x-real-ip") or "").strip()
+    
+    forwarded_ips = str(request.headers.get("x-forwarded-for") or "").split(",")
+    forwarded = forwarded_ips[-1].strip() if forwarded_ips and forwarded_ips[0] else ""
+
     raw = (
-        forwarded
-        or str(request.headers.get("x-real-ip") or "").strip()
-        or str(request.headers.get("cf-connecting-ip") or "").strip()
+        cf_ip
+        or real_ip
+        or forwarded
         or (request.client.host if request.client else "")
         or "unknown"
     )

@@ -29,7 +29,7 @@ const AUTH_NEXT_STORAGE_KEY = 'fundersai_auth_next';
     setIsGoogleLoading(true);
     setMessage('');
 
-    const redirectPath = nextPath.startsWith('/') ? nextPath : '/dashboard';
+    const redirectPath = nextPath.startsWith('/') && !nextPath.startsWith('//') ? nextPath : '/dashboard';
     window.localStorage.setItem(AUTH_NEXT_STORAGE_KEY, redirectPath);
     const { error } = await supabaseBrowser.auth.signInWithOAuth({
       provider: 'google',
@@ -74,7 +74,8 @@ const AUTH_NEXT_STORAGE_KEY = 'fundersai_auth_next';
       return;
     }
 
-    router.replace(nextPath);
+    const safeNextPath = nextPath.startsWith('/') && !nextPath.startsWith('//') ? nextPath : '/dashboard';
+    router.replace(safeNextPath);
     router.refresh();
   };
 
@@ -82,7 +83,7 @@ const AUTH_NEXT_STORAGE_KEY = 'fundersai_auth_next';
     <main className="auth-page">
       <section className="auth-panel">
         <Link href="/" className="auth-brand" style={{ gap: '0px' }}>
-          <img src="/logo.png" alt="FundersAI Logo" className="h-8 w-auto object-contain" />
+          <img src="/logo-vertical.png" alt="FundersAI Logo" className="h-12 w-auto object-contain" />
         </Link>
 
         <div className="auth-heading">
