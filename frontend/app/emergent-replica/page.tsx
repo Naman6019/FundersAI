@@ -23,8 +23,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import styles from "./page.module.css";
 
-const logoUrl =
-  "https://static.prod-images.emergentagent.com/jobs/94040b74-0cf9-4d68-b6df-f18cf6e1227a/images/f03ef0b008e8bc48b02eb9268e536f7695bc473b5e8f9134d8b01bc321835426.png";
+const logoUrl = "/logo.png";
 
 const funds = [
   { name: "PPFAS Flexi Cap", oneY: "+22.45%", ter: "0.65%", risk: "MOD" },

@@ -81,9 +81,8 @@ const AUTH_NEXT_STORAGE_KEY = 'fundersai_auth_next';
   return (
     <main className="auth-page">
       <section className="auth-panel">
-        <Link href="/" className="auth-brand">
-          <span>M</span>
-          FundersAI
+        <Link href="/" className="auth-brand" style={{ gap: '0px' }}>
+          <img src="/logo.png" alt="FundersAI Logo" className="h-8 w-auto object-contain" />
         </Link>
 
         <div className="auth-heading">

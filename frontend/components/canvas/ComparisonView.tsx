@@ -136,6 +136,7 @@ type MFComparisonRecord = {
   alpha_vs_nifty?: string | number | null;
   sharpe_ratio?: string | number | null;
   max_drawdown_1y?: string | number | null;
+  risk_level?: string | null;
 };
 
 type FundCoverage = Record<string, unknown> & {
@@ -405,6 +406,11 @@ const formatExpense = (value: unknown) => {
   const parsed = toNumber(value);
   if (parsed === null) return 'N/A';
   return `${parsed.toFixed(2)}%`;
+};
+
+const formatRiskLabel = (value: unknown) => {
+  const label = typeof value === 'string' ? value.trim() : '';
+  return label || 'Risk label unavailable';
 };
 
 const compactSchemeName = (name: string | null | undefined) => {
@@ -969,6 +975,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
             const bBeta = bBetaRaw ?? bFallback.beta;
             const aDrawdown = normalizePercent(aRecord?.max_drawdown_1y ?? fundA.riskMetrics?.maxDrawdown);
             const bDrawdown = normalizePercent(bRecord?.max_drawdown_1y ?? fundB.riskMetrics?.maxDrawdown);
+            const aRiskLabel = formatRiskLabel(aRecord?.risk_level ?? fundA.details?.risk_level);
+            const bRiskLabel = formatRiskLabel(bRecord?.risk_level ?? fundB.details?.risk_level);
 
             const aCov = fundA.coverage as FundCoverage | undefined;
             const bCov = fundB.coverage as FundCoverage | undefined;
@@ -991,6 +999,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
             ];
 
             const rGroup = [
+              { label: 'Official Risk Label', a: aRiskLabel, b: bRiskLabel, winner: null },
               { label: 'Volatility (1Y)', a: formatPercent(aVol), b: formatPercent(bVol), winner: getWinner('Volatility', aVol, bVol) },
               { label: 'Sharpe Ratio', a: formatPlain(aSharpe), b: formatPlain(bSharpe), winner: getWinner('Sharpe', aSharpe, bSharpe) },
               { label: 'Beta', a: formatPlain(aBeta), b: formatPlain(bBeta), winner: getWinner('Beta', aBeta, bBeta) },

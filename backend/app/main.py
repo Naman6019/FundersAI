@@ -80,6 +80,8 @@ def _rate_limit_group_for_request(path: str, method: str) -> str | None:
         return "quant"
     if path.startswith("/api/mf/"):
         return "mf-detail"
+    if path.startswith("/api/funds/category"):
+        return "category-funds"
     if path == "/api/data-health":
         return "data-health"
     if path == "/api/trigger-fetch":
@@ -2754,10 +2756,14 @@ def _build_portfolio_followup_response(query: str, conversation_context: Any) ->
     if not portfolio:
         return None
     low = query.lower()
+    wants_risk = any(term in low for term in ("risk", "risky", "volatile", "volatility", "aggressive", "most risk"))
+    wants_balance = any(term in low for term in ("balance", "rebalance", "balanced", "change", "changes", "adjust", "improve", "reduce", "increase"))
     followup_terms = (
         "overlap", "common", "same stock", "same holding", "holding", "sector",
         "allocation", "concentration", "divers", "risk", "unmatched", "bucket",
         "review", "interpret", "summary", "good", "bad", "points", "which fund", "what about", "why",
+        "risky", "volatile", "volatility", "aggressive", "balance", "rebalance", "balanced",
+        "change", "changes", "adjust", "improve", "reduce", "increase",
     )
     if not any(term in low for term in followup_terms):
         return None
@@ -2767,6 +2773,42 @@ def _build_portfolio_followup_response(query: str, conversation_context: Any) ->
     buckets = portfolio.get("buckets") if isinstance(portfolio.get("buckets"), dict) else {}
     insights = portfolio.get("insights") if isinstance(portfolio.get("insights"), dict) else {}
     lines = ["### Portfolio Follow-up"]
+    top_fund = max(holdings, key=lambda item: float(item.get("weight") or 0), default=None)
+    bucket_rows = sorted(buckets.items(), key=lambda pair: float(pair[1] or 0), reverse=True) if buckets else []
+    bucket_total = sum(float(value or 0) for value in buckets.values()) if buckets else 0
+    largest_bucket, largest_bucket_amount = bucket_rows[0] if bucket_rows else (None, 0)
+    largest_bucket_pct = float(largest_bucket_amount or 0) / bucket_total * 100 if bucket_total else 0
+
+    if wants_risk:
+        if top_fund:
+            lines.append(
+                f"- Main fund-level risk driver by submitted weight: {_safe_value(top_fund.get('input_name'))} at {_format_percent(float(top_fund.get('weight') or 0) * 100)}."
+            )
+        if largest_bucket:
+            lines.append(f"- Main category concentration: {_safe_value(largest_bucket)} at {_format_percent(largest_bucket_pct)} of pasted amount.")
+        if overlap.get("coverage_status") == "available":
+            lines.append(
+                f"- Holdings overlap risk: duplicated stock exposure is {_format_percent(overlap.get('total_overlap_exposure'))} across {overlap.get('common_holding_count', 0)} common holdings."
+            )
+            top_common = overlap.get("top_common_holdings") if isinstance(overlap.get("top_common_holdings"), list) else []
+            if top_common:
+                item = top_common[0]
+                lines.append(f"- Largest repeated holding: {_safe_value(item.get('name'))} at {_format_percent(item.get('portfolio_exposure'))} total portfolio exposure.")
+        elif overlap:
+            lines.append(f"- Holdings overlap risk is unavailable: {_safe_value(overlap.get('reason'))}.")
+
+    if wants_balance:
+        lines.append("- Balance levers to test:")
+        if top_fund:
+            lines.append(f"  - Scenario-check reducing dependence on {_safe_value(top_fund.get('input_name'))}; it has the largest effect because it is the biggest fund weight.")
+        if largest_bucket:
+            lines.append(f"  - Scenario-check lowering {_safe_value(largest_bucket)} concentration if the intent is broader category spread.")
+        existing_buckets = {str(bucket).lower() for bucket, _amount in bucket_rows}
+        if not any("large" in bucket for bucket in existing_buckets):
+            lines.append("  - Large Cap exposure is not visible in the saved bucket mix; compare whether adding it improves stability metrics.")
+        if not any("debt" in bucket for bucket in existing_buckets):
+            lines.append("  - Debt/liquid exposure is not visible in the saved bucket mix; compare separately if lower volatility is the goal.")
+        lines.append("  - Use the fund comparison view to check returns, volatility, expense ratio, and holdings overlap before making any real change.")
 
     if any(term in low for term in ("review", "interpret", "summary", "good", "bad", "powerup", "points")) and insights:
         if insights.get("headline"):
@@ -2796,14 +2838,12 @@ def _build_portfolio_followup_response(query: str, conversation_context: Any) ->
             lines.append("- Sector overlap needs holdings-level sector data across at least two matched funds.")
 
     if any(term in low for term in ("allocation", "bucket", "divers", "concentration", "risk")):
-        total = sum(float(value or 0) for value in buckets.values()) if buckets else 0
-        if buckets and total:
+        if buckets and bucket_total:
             lines.append("- Category allocation:")
-            for bucket, amount in sorted(buckets.items(), key=lambda pair: float(pair[1] or 0), reverse=True):
-                lines.append(f"  - {bucket}: {_format_percent(float(amount or 0) / total * 100)} of pasted amount.")
-        if holdings:
-            largest = max(holdings, key=lambda item: float(item.get("weight") or 0))
-            lines.append(f"- Largest fund weight is {_format_percent(float(largest.get('weight') or 0) * 100)} in {_safe_value(largest.get('input_name'))}.")
+            for bucket, amount in bucket_rows:
+                lines.append(f"  - {bucket}: {_format_percent(float(amount or 0) / bucket_total * 100)} of pasted amount.")
+        if top_fund:
+            lines.append(f"- Largest fund weight is {_format_percent(float(top_fund.get('weight') or 0) * 100)} in {_safe_value(top_fund.get('input_name'))}.")
 
     if "unmatched" in low:
         unmatched = [item for item in holdings if str(item.get("bucket") or "").lower() == "unmatched"]
@@ -3014,7 +3054,7 @@ def _category_sort_key(row: dict[str, Any]) -> tuple[int, int, float]:
 def _category_snapshot_fields() -> str:
     return (
         "scheme_code,scheme_name,amc_name,category,return_1y,return_3y,return_5y,aum,"
-        "expense_ratio,nav_date,last_updated,alpha,beta,sharpe_ratio,volatility_1y,max_drawdown_1y"
+        "expense_ratio,risk_level,nav_date,last_updated,alpha,beta,sharpe_ratio,volatility_1y,max_drawdown_1y"
     )
 
 def _read_category_rows(category_key: str, include_unsupported: bool = False, limit: int = 100) -> list[dict[str, Any]]:
@@ -3094,12 +3134,13 @@ This category view is limited to available FundersAI data and is not investment 
             _format_percent(row.get("return_3y")),
             _format_inr_market_cap(row.get("aum")),
             _format_percent(row.get("expense_ratio")),
+            _safe_value(row.get("risk_level") or "Risk label unavailable"),
             _safe_value(row.get("nav_date")),
         ]
         for row in sorted_rows[:5]
     ]
     answer = f"""### {label} Funds - {ranking_label}
-{_markdown_table(["Fund", "Category", "3Y Return", "AUM", "Expense Ratio", "NAV Date"], table_rows)}
+{_markdown_table(["Fund", "Category", "3Y Return", "AUM", "Expense Ratio", "Risk Label", "NAV Date"], table_rows)}
 
 This is a category snapshot based on available FundersAI data, not a recommendation.
 
@@ -3163,6 +3204,7 @@ def _category_fund_metrics(row: dict[str, Any]) -> dict[str, Any]:
         "return_5y": row.get("return_5y"),
         "aum": row.get("aum"),
         "expense_ratio": row.get("expense_ratio"),
+        "risk_level": row.get("risk_level"),
         "alpha": row.get("alpha"),
         "beta": row.get("beta"),
         "sharpe_ratio": row.get("sharpe_ratio"),
@@ -3250,7 +3292,7 @@ def _build_category_compare_payload(category_key: str, scheme_codes: list[str]) 
         "selected_funds": selected_funds,
         "metric_groups": {
             "returns": ["return_1y", "return_3y", "return_5y"],
-            "risk": ["volatility_1y", "max_drawdown_1y", "sharpe_ratio", "alpha", "beta"],
+            "risk": ["risk_level", "volatility_1y", "max_drawdown_1y", "sharpe_ratio", "alpha", "beta"],
             "cost_scale": ["expense_ratio", "aum", "nav_date"],
         },
         "holdings": holdings_by_code,
@@ -3320,12 +3362,15 @@ def _fund_metric_rows(data: dict) -> list[tuple[str, str]]:
     category = _unwrap_nested_value(data.get("category"), ("category", "schemeType", "name"))
     expense_ratio = _unwrap_nested_value(data.get("expense_ratio"), ("current", "expense_ratio", "expenseRatio", "ratio", "value"))
     aum = _unwrap_nested_value(data.get("aum"), ("aum", "asset_size", "value", "current"))
+    risk_level = str(data.get("risk_level") or "").strip()
     return [
         ("Matched Name", _safe_value(data.get("name"))),
         ("NAV", _format_price(nav)),
         ("NAV Date", _safe_value(nav_date)),
         ("Fund House", _safe_value(fund_house)),
         ("Category", _safe_value(category)),
+        ("Risk Label", risk_level or "Risk label unavailable"),
+        ("Risk Label Source", "Official AMC factsheet" if risk_level else "Unavailable"),
         ("Return (3Y)", _format_percent(data.get("return_3y"))),
         ("Volatility (1Y)", _format_percent(data.get("volatility_1y"))),
         ("Max Drawdown (1Y)", _format_percent(data.get("max_drawdown_1y"))),
@@ -4782,6 +4827,7 @@ To experience FundersAI's advanced research capabilities, please try:
                                     "category": best_match.get('category') or ((legacy_row or {}).get("category") if isinstance(legacy_row, dict) else None),
                                     "benchmark": best_match.get("benchmark") or ((legacy_row or {}).get("benchmark") if isinstance(legacy_row, dict) else None),
                                     "fund_manager": best_match.get("fund_manager") or _trace_value("fund_manager"),
+                                    "risk_level": best_match.get("risk_level") or _trace_value("risk_level"),
                                     "fund_house": best_match.get('amc_name') or best_match.get('fund_house') or ((legacy_row or {}).get("fund_house") if isinstance(legacy_row, dict) else None),
                                     "expense_ratio": best_match.get('expense_ratio') if best_match.get('expense_ratio') not in (None, "") else ((legacy_row or {}).get("expense_ratio") if isinstance(legacy_row, dict) else "N/A"),
                                     "aum": best_match.get('aum') if best_match.get('aum') not in (None, "") else ((legacy_row or {}).get("aum") if isinstance(legacy_row, dict) else "N/A"),

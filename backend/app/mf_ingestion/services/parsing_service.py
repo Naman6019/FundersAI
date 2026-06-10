@@ -84,10 +84,10 @@ class ParsingService:
 
         return {"status": "ok", "processed": processed, "count": len(processed)}
 
-    def _parse_one(self, document: dict[str, Any]) -> dict[str, Any]:
+    def _parse_one(self, document: dict[str, Any], *, bypass_official_coverage: bool = False) -> dict[str, Any]:
         document_id = str(document.get("id"))
         amc_code = str(document.get("amc_code") or "")
-        document_type = str(document.get("document_type") or "").strip().lower()
+        document_type = str(document.get("document_type") or document.get("source_document_type") or "").strip().lower()
         irrelevant_issue = _irrelevant_document_issue(document)
         if irrelevant_issue:
             self._mark_document(document_id, "skipped_not_supported", [irrelevant_issue])
@@ -97,10 +97,11 @@ class ParsingService:
             self._mark_document(document_id, "skipped_not_supported", [issue])
             return {"source_document_id": document_id, "status": "skipped", "reason": issue}
 
-        api_coverage_issue = self._api_coverage_issue(document)
-        if api_coverage_issue:
-            self._mark_document(document_id, "official_source_covered", [api_coverage_issue])
-            return {"source_document_id": document_id, "status": "official_source_covered", "reason": api_coverage_issue}
+        if not bypass_official_coverage:
+            api_coverage_issue = self._api_coverage_issue(document)
+            if api_coverage_issue:
+                self._mark_document(document_id, "official_source_covered", [api_coverage_issue])
+                return {"source_document_id": document_id, "status": "official_source_covered", "reason": api_coverage_issue}
 
         resolved_path, temp_downloaded = self._resolve_document_path(document)
         if not resolved_path:
@@ -345,6 +346,7 @@ class ParsingService:
                 expense_ratio=record.expense_ratio,
                 benchmark=record.benchmark,
                 fund_manager=record.fund_manager,
+                risk_level=record.risk_level,
             )
             if matched:
                 updated += 1
@@ -377,6 +379,7 @@ class ParsingService:
                         "expense_ratio": record.expense_ratio,
                         "benchmark": record.benchmark,
                         "fund_manager": record.fund_manager,
+                        "risk_level": record.risk_level,
                     }
                     for record in records
                 ],
@@ -434,7 +437,7 @@ class ParsingService:
     def _api_coverage_issue(self, document: dict[str, Any]) -> str | None:
         if not _truthy_env("ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS", True):
             return None
-        document_type = str(document.get("document_type") or "").strip().lower()
+        document_type = str(document.get("document_type") or document.get("source_document_type") or "").strip().lower()
         amc_code = str(document.get("amc_code") or "").strip().lower()
         report_month = _to_date_or_none(document.get("report_month"))
         if not document_type or not amc_code or not report_month:
@@ -448,7 +451,7 @@ class ParsingService:
         if document_type in FACTSHEET_SUPPORTED_DOCUMENT_TYPES:
             if amc_code == "hdfc":
                 return None
-            if factsheet_covered:
+            if factsheet_covered and self._official_risk_level_covers_document(amc_code, report_month):
                 return "skipped_official_source_covered:factsheet"
         return None
 
@@ -463,7 +466,7 @@ class ParsingService:
             try:
                 response = (
                     client.table("mutual_fund_core_snapshot")
-                    .select("scheme_code,amc_name,data_source,provider_payload,aum,expense_ratio,benchmark,fund_manager")
+                    .select("scheme_code,amc_name,data_source,provider_payload,aum,expense_ratio,benchmark,fund_manager,risk_level")
                     .ilike("amc_name", pattern)
                     .limit(1000)
                     .execute()
@@ -485,6 +488,18 @@ class ParsingService:
     def _official_factsheet_covers_document(self, amc_code: str, report_month: date) -> bool:
         for row in self._official_core_rows_for_amc(amc_code):
             if any(row.get(field) not in (None, "") for field in ("aum", "expense_ratio", "benchmark", "fund_manager")):
+                return True
+        return False
+
+    def _official_risk_level_covers_document(self, amc_code: str, report_month: date) -> bool:
+        for row in self._official_core_rows_for_amc(amc_code):
+            provider_payload = row.get("provider_payload") if isinstance(row.get("provider_payload"), dict) else {}
+            amc_trace = provider_payload.get("amc_trace") if isinstance(provider_payload.get("amc_trace"), dict) else {}
+            risk_trace = amc_trace.get("risk_level") if isinstance(amc_trace.get("risk_level"), dict) else {}
+            if row.get("risk_level") in (None, "") or risk_trace.get("value") in (None, ""):
+                continue
+            traced_month = _to_date_or_none(risk_trace.get("report_month"))
+            if traced_month and traced_month >= report_month:
                 return True
         return False
 
@@ -767,6 +782,7 @@ class ParsingService:
         expense_ratio: float | None,
         benchmark: str | None,
         fund_manager: str | None,
+        risk_level: str | None,
     ) -> bool:
         scheme_code = self._resolve_scheme_code_for_scheme(scheme_name)
         if not scheme_code:
@@ -788,15 +804,19 @@ class ParsingService:
             "expense_ratio": expense_ratio,
             "benchmark": benchmark,
             "fund_manager": fund_manager,
+            "risk_level": risk_level,
         }
         parsed_fields = {key: value for key, value in field_values.items() if value not in (None, "")}
         if not parsed_fields:
             return False
-        write_fields = {
-            key: value
-            for key, value in parsed_fields.items()
-            if existing.get(key) in (None, "")
-        }
+        write_fields: dict[str, Any] = {}
+        for key, value in parsed_fields.items():
+            if key == "risk_level":
+                if _should_write_risk_level(existing, report_month):
+                    write_fields[key] = value
+                continue
+            if existing.get(key) in (None, ""):
+                write_fields[key] = value
         if not write_fields:
             return True
 
@@ -1062,6 +1082,25 @@ def _to_date_or_none(value: Any) -> date | None:
         return datetime.fromisoformat(raw[:10]).date()
     except ValueError:
         return None
+
+
+def _should_write_risk_level(existing: dict[str, Any], report_month: date | None) -> bool:
+    provider_payload = existing.get("provider_payload") if isinstance(existing.get("provider_payload"), dict) else {}
+    amc_trace = provider_payload.get("amc_trace") if isinstance(provider_payload.get("amc_trace"), dict) else {}
+    risk_trace = amc_trace.get("risk_level") if isinstance(amc_trace.get("risk_level"), dict) else {}
+
+    existing_value = str(existing.get("risk_level") or "").strip()
+    if not existing_value:
+        return True
+
+    traced_value = str(risk_trace.get("value") or "").strip()
+    if not traced_value:
+        return True
+
+    traced_month = _to_date_or_none(risk_trace.get("report_month"))
+    if report_month and traced_month:
+        return report_month >= traced_month
+    return False
 
 
 def _build_ilike_pattern(text: str) -> str:

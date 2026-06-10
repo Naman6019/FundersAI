@@ -175,14 +175,9 @@ function SidebarContent({
   return (
     <div className="flex h-full flex-col rounded-[1.2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.92),rgba(2,8,24,0.94))] p-4 shadow-[0_20px_42px_rgba(0,0,0,0.4)] backdrop-blur-xl">
       <div>
-        <div className="flex items-center gap-2">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-[linear-gradient(135deg,#67b2ff,#3b82f6)] text-white shadow-[0_8px_18px_rgba(59,130,246,0.38)]">
-            <Sparkles className="h-4 w-4" />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold text-white">FundersAI</h1>
-            <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Research terminal</p>
-          </div>
+        <div className="flex flex-col gap-1 items-start">
+          <img src="/logo.png" alt="FundersAI Logo" className="h-8 w-auto object-contain" />
+          <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400 pl-1">Research terminal</p>
         </div>
       </div>
 
@@ -254,7 +249,7 @@ function SidebarContent({
 
 export default function DashboardLayout() {
   const searchParams = useSearchParams();
-  const { activeView, selectedIds, auxiliaryData, isCanvasOpen, toggleCanvas, setView, setIds, openCanvas } = useCanvasStore();
+  const { activeView, selectedIds, auxiliaryData, isCanvasOpen, toggleCanvas } = useCanvasStore();
   const [isMobile, setIsMobile] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -426,6 +421,11 @@ export default function DashboardLayout() {
     return Number.isFinite(num) ? `INR ${Math.round(num).toLocaleString('en-IN')}` : 'N/A';
   };
 
+  const formatRiskLabel = (value: unknown) => {
+    const label = typeof value === 'string' ? value.trim() : '';
+    return label || 'Risk label unavailable';
+  };
+
   const compactFundName = (value: unknown) => String(value || 'N/A')
     .replace(/\s*-\s*Direct Plan\s*-\s*Growth/gi, '')
     .replace(/\s*Direct\s*Growth/gi, '')
@@ -483,15 +483,6 @@ export default function DashboardLayout() {
     }
   };
 
-  const categoryCompareCanvasPayload = categoryCompare ? { quant_data: { category_compare: categoryCompare } } : null;
-
-  const openCategoryCompareCanvas = () => {
-    if (!categoryCompare || !categoryCompareCanvasPayload) return;
-    setIds(categoryCompare.selected_funds.map((fund) => String(fund.scheme_code)));
-    setView('CATEGORY_COMPARE', categoryCompareCanvasPayload);
-    openCanvas(categoryCompareCanvasPayload);
-  };
-
   const useCategoryCompareInChat = () => {
     if (!categoryCompare?.selected_funds?.length) return;
     const names = categoryCompare.selected_funds.map((fund) => compactFundName(fund.scheme_name));
@@ -506,7 +497,7 @@ export default function DashboardLayout() {
         {/* Page Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
           <div>
-            <h2 className="font-serif text-3xl font-semibold text-white tracking-tight">Welcome to MarketMind</h2>
+            <h2 className="font-serif text-3xl font-semibold text-white tracking-tight">Welcome to FundersAI</h2>
             <p className="font-body-sm text-[14px] text-slate-400 mt-1 max-w-2xl">
               Understand, compare, and research mutual funds with confidence.
             </p>
@@ -686,6 +677,7 @@ export default function DashboardLayout() {
                             <th className="px-3 py-2 font-semibold">3Y</th>
                             <th className="px-3 py-2 font-semibold">AUM</th>
                             <th className="px-3 py-2 font-semibold">Expense</th>
+                            <th className="px-3 py-2 font-semibold">Risk</th>
                             <th className="px-3 py-2 font-semibold">Status</th>
                           </tr>
                         </thead>
@@ -720,6 +712,10 @@ export default function DashboardLayout() {
                                 <td className="px-3 py-3 font-mono">{formatAum(fund.aum)}</td>
                                 <td className="px-3 py-3 font-mono">{formatPercent(fund.expense_ratio)}</td>
                                 <td className="px-3 py-3">
+                                  <div className="max-w-32 text-[11px] text-slate-300">{formatRiskLabel(fund.risk_level)}</div>
+                                  {fund.risk_level && <div className="mt-0.5 text-[10px] text-slate-500">Official AMC factsheet</div>}
+                                </td>
+                                <td className="px-3 py-3">
                                   {disabled ? (
                                     <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-[10px] font-semibold text-amber-200">Coming Soon</span>
                                   ) : (
@@ -745,13 +741,6 @@ export default function DashboardLayout() {
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
-                            onClick={openCategoryCompareCanvas}
-                            className="rounded-lg border border-[#66a3ff]/35 bg-[#66a3ff]/10 px-3 py-1.5 text-xs font-semibold text-[#cce0ff] transition hover:bg-[#66a3ff]/15"
-                          >
-                            Open in Canvas
-                          </button>
-                          <button
-                            type="button"
                             onClick={useCategoryCompareInChat}
                             className="rounded-lg bg-[#66a3ff] px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-[#66a3ff]/85"
                           >
@@ -764,6 +753,7 @@ export default function DashboardLayout() {
                           <div key={String(fund.scheme_code)} className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
                             <div className="line-clamp-2 text-xs font-semibold text-white">{compactFundName(fund.scheme_name)}</div>
                             <div className="mt-2 text-[11px] text-slate-400">3Y {formatPercent(fund.return_3y)} · TER {formatPercent(fund.expense_ratio)}</div>
+                            <div className="mt-1 text-[11px] text-slate-400">{formatRiskLabel(fund.risk_level)}</div>
                           </div>
                         ))}
                       </div>
@@ -782,20 +772,20 @@ export default function DashboardLayout() {
             <div className="backdrop-blur-md bg-[#1f2833]/40 border border-white/10 rounded-xl p-5">
               <h3 className="font-serif text-lg font-medium text-white mb-4">Investor Tools</h3>
               <div className="space-y-2">
-                <button onClick={() => handleOverviewQuery("Calculate SIP returns for 10000 per month for 10 years")} className="w-full text-left p-3 rounded-lg border border-white/10 bg-[#080d1a]/50 hover:bg-[#66a3ff]/10 hover:border-[#66a3ff]/30 transition-all cursor-pointer flex items-center justify-between group">
+                <Link href="/dashboard/sip-calculator" className="w-full text-left p-3 rounded-lg border border-white/10 bg-[#080d1a]/50 hover:bg-[#66a3ff]/10 hover:border-[#66a3ff]/30 transition-all cursor-pointer flex items-center justify-between group">
                   <div>
                     <div className="text-[13px] font-medium text-white">SIP Calculator</div>
                     <div className="text-[11px] text-slate-400 mt-0.5">Estimate your future wealth</div>
                   </div>
                   <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-[#66a3ff] transition-colors" />
-                </button>
-                <button onClick={() => handleOverviewQuery("Help me find my risk profile")} className="w-full text-left p-3 rounded-lg border border-white/10 bg-[#080d1a]/50 hover:bg-[#66a3ff]/10 hover:border-[#66a3ff]/30 transition-all cursor-pointer flex items-center justify-between group">
+                </Link>
+                <Link href="/dashboard/risk-quiz" className="w-full text-left p-3 rounded-lg border border-white/10 bg-[#080d1a]/50 hover:bg-[#66a3ff]/10 hover:border-[#66a3ff]/30 transition-all cursor-pointer flex items-center justify-between group">
                   <div>
                     <div className="text-[13px] font-medium text-white">Risk Quiz</div>
                     <div className="text-[11px] text-slate-400 mt-0.5">Find funds that fit you</div>
                   </div>
                   <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-[#66a3ff] transition-colors" />
-                </button>
+                </Link>
               </div>
             </div>
 

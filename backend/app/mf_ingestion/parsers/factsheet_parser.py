@@ -22,6 +22,7 @@ class FactsheetRecord:
     expense_ratio: float | None = None
     benchmark: str | None = None
     fund_manager: str | None = None
+    risk_level: str | None = None
     confidence_score: float = 0.0
 
 
@@ -59,6 +60,7 @@ class FactsheetParser:
                 expense_ratio=fields.get("expense_ratio"),
                 benchmark=fields.get("benchmark"),
                 fund_manager=fields.get("fund_manager"),
+                risk_level=fields.get("risk_level"),
                 confidence_score=float(min(99.0, 60 + (score * 10))),
             )
             current = best_by_scheme.get(scheme_name)
@@ -96,15 +98,51 @@ def _extract_fields(chunk: str) -> dict[str, Any]:
         "expense_ratio": _extract_expense_ratio(chunk),
         "benchmark": _extract_benchmark(chunk),
         "fund_manager": _extract_fund_manager(chunk),
+        "risk_level": _extract_risk_level(chunk),
     }
 
 
 def _score_fields(fields: dict[str, Any]) -> int:
     score = 0
-    for key in ("aum", "expense_ratio", "benchmark", "fund_manager"):
+    for key in ("aum", "expense_ratio", "benchmark", "fund_manager", "risk_level"):
         if fields.get(key) not in (None, ""):
             score += 1
     return score
+
+
+RISK_LABELS = (
+    "Low to Moderate",
+    "Moderately High",
+    "Very High",
+    "Moderate",
+    "High",
+    "Low",
+)
+
+
+def _extract_risk_level(chunk: str) -> str | None:
+    text = " ".join(str(chunk or "").replace("\xa0", " ").split())
+    if not text:
+        return None
+    patterns = (
+        r"(?i)\bRiskometer\s*[:\-]?\s*(Low\s+to\s+Moderate|Moderately\s+High|Very\s+High|Moderate|High|Low)\b",
+        r"(?i)\bThe\s+risk\s+of\s+the\s+scheme\s+is\s+(Low\s+to\s+Moderate|Moderately\s+High|Very\s+High|Moderate|High|Low)\b",
+        r"(?i)\bprincipal\s+will\s+be\s+at\s+(Low\s+to\s+Moderate|Moderately\s+High|Very\s+High|Moderate|High|Low)\s+risk\b",
+        r"(?i)\bprincipal\s+at\s+(Low\s+to\s+Moderate|Moderately\s+High|Very\s+High|Moderate|High|Low)\s+risk\b",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return _normalize_risk_label(match.group(1))
+    return None
+
+
+def _normalize_risk_label(value: str) -> str | None:
+    normalized = " ".join(str(value or "").split()).strip().lower()
+    for label in RISK_LABELS:
+        if normalized == label.lower():
+            return label
+    return None
 
 
 def _extract_aum(chunk: str) -> float | None:

@@ -40,6 +40,10 @@ RATE_LIMIT_GROUPS: dict[str, list[RateLimitWindow]] = {
         RateLimitWindow("minute", 60, 60),
         RateLimitWindow("day", 1000, 86400),
     ],
+    "category-funds": [
+        RateLimitWindow("minute", 60, 60),
+        RateLimitWindow("day", 1000, 86400),
+    ],
     "search": [
         RateLimitWindow("minute", 30, 60),
         RateLimitWindow("day", 500, 86400),

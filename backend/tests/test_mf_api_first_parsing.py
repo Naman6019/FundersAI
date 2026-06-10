@@ -166,6 +166,30 @@ def test_missing_api_coverage_falls_back_to_existing_parser_path(monkeypatch):
     assert fake.tables["mf_raw_documents"][0]["parse_status"] == "failed"
 
 
+def test_factsheet_with_existing_aum_still_parses_when_risk_label_missing(monkeypatch):
+    fake = _FakeSupabase()
+    fake.tables["mutual_fund_core_snapshot"][0]["amc_name"] = "ICICI Prudential Mutual Fund"
+    monkeypatch.setattr(parsing_service, "supabase", fake)
+    service = _service(fake)
+    service.r2_store = None
+    service.config = None
+
+    result = service._parse_one(
+        {
+            "id": "doc-1",
+            "amc_code": "icici",
+            "document_type": "factsheet",
+            "report_month": "2026-04-01",
+            "storage_backend": "local",
+            "storage_path": "missing.pdf",
+        }
+    )
+
+    assert result["status"] == "failed"
+    assert result["reason"] == "raw_file_missing"
+    assert fake.tables["mf_raw_documents"][0]["parse_status"] == "failed"
+
+
 def test_mf_workflow_does_not_schedule_indianapi_or_mf_engine_for_mutual_funds():
     from pathlib import Path
 

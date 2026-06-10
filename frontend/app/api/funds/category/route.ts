@@ -5,7 +5,7 @@ import { enforceRateLimit, getClientIp } from '@/lib/rateLimit';
 export async function GET(req: Request) {
   try {
     const userContext = await getUserContext(req);
-    const limited = await enforceRateLimit(req, 'chat', userContext ? {
+    const limited = await enforceRateLimit(req, 'category-funds', userContext ? {
       identifier: userContext.user.id,
       tier: userContext.profile.tier,
       role: userContext.profile.role,

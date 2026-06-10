@@ -98,6 +98,7 @@ def test_category_search_reads_core_snapshot_and_ranks_by_3y_return(monkeypatch)
                     "return_3y": 12.0,
                     "aum": 1000,
                     "expense_ratio": 0.6,
+                    "risk_level": "Very High",
                     "nav_date": "2026-06-01",
                 },
                 {
@@ -107,6 +108,7 @@ def test_category_search_reads_core_snapshot_and_ranks_by_3y_return(monkeypatch)
                     "return_3y": 15.0,
                     "aum": 900,
                     "expense_ratio": 0.7,
+                    "risk_level": "High",
                     "nav_date": "2026-06-01",
                 },
                 {
@@ -116,6 +118,7 @@ def test_category_search_reads_core_snapshot_and_ranks_by_3y_return(monkeypatch)
                     "return_3y": 40.0,
                     "aum": 5000,
                     "expense_ratio": 1.0,
+                    "risk_level": "Moderate",
                     "nav_date": "2026-06-01",
                 },
             ]
@@ -128,8 +131,11 @@ def test_category_search_reads_core_snapshot_and_ranks_by_3y_return(monkeypatch)
 
     assert intent["intent"] == "category_search"
     assert fake.selected_tables[0][0] == "mutual_fund_core_snapshot"
+    assert "risk_level" in fake.selected_tables[0][1]
     assert response["quant_data"]["category_search"]["ranking"] == "Top by 3Y return"
     assert response["quant_data"]["category_search"]["rows"][0]["scheme_name"] == "SBI Large Cap Fund"
+    assert response["quant_data"]["category_search"]["rows"][0]["risk_level"] == "High"
+    assert "Risk Label" in response["answer"]
     assert "Other Large Cap Fund" not in response["answer"]
 
 
@@ -146,6 +152,7 @@ def test_category_list_includes_unsupported_as_coming_soon(monkeypatch):
                     "category": "Large Cap",
                     "return_3y": 12.0,
                     "aum": 1000,
+                    "risk_level": "High",
                 },
                 {
                     "scheme_code": "2",
@@ -154,6 +161,7 @@ def test_category_list_includes_unsupported_as_coming_soon(monkeypatch):
                     "category": "Large Cap",
                     "return_3y": 16.0,
                     "aum": 2000,
+                    "risk_level": None,
                 },
             ]
         }
@@ -168,6 +176,7 @@ def test_category_list_includes_unsupported_as_coming_soon(monkeypatch):
     assert unsupported["disabled_reason"] == "Coming Soon"
     supported = [row for row in payload["rows"] if row["scheme_name"] == "HDFC Large Cap Fund"][0]
     assert supported["is_supported"] is True
+    assert supported["risk_level"] == "High"
 
 
 def test_category_compare_rejects_unsupported_fund(monkeypatch):
@@ -199,9 +208,9 @@ def test_category_compare_returns_metrics_and_overlap_for_three_funds(monkeypatc
     fake = _FakeSupabase(
         {
             "mutual_fund_core_snapshot": [
-                {"scheme_code": "1", "scheme_name": "HDFC Large Cap Fund", "amc_name": "HDFC Mutual Fund", "category": "Large Cap", "return_3y": 12.0, "expense_ratio": 0.5},
-                {"scheme_code": "2", "scheme_name": "SBI Large Cap Fund", "amc_name": "SBI Mutual Fund", "category": "Large Cap", "return_3y": 11.0, "expense_ratio": 0.6},
-                {"scheme_code": "3", "scheme_name": "ICICI Prudential Large Cap Fund", "amc_name": "ICICI Prudential Mutual Fund", "category": "Large Cap", "return_3y": 10.0, "expense_ratio": 0.7},
+                {"scheme_code": "1", "scheme_name": "HDFC Large Cap Fund", "amc_name": "HDFC Mutual Fund", "category": "Large Cap", "return_3y": 12.0, "expense_ratio": 0.5, "risk_level": "High"},
+                {"scheme_code": "2", "scheme_name": "SBI Large Cap Fund", "amc_name": "SBI Mutual Fund", "category": "Large Cap", "return_3y": 11.0, "expense_ratio": 0.6, "risk_level": "Very High"},
+                {"scheme_code": "3", "scheme_name": "ICICI Prudential Large Cap Fund", "amc_name": "ICICI Prudential Mutual Fund", "category": "Large Cap", "return_3y": 10.0, "expense_ratio": 0.7, "risk_level": None},
             ],
             "mutual_fund_holdings": [
                 {"scheme_code": "1", "as_of_date": "2026-05-31", "security_name": "HDFC Bank", "isin": "INE040A01034", "sector": "Banks", "weight_pct": 7.0},
@@ -217,6 +226,8 @@ def test_category_compare_returns_metrics_and_overlap_for_three_funds(monkeypatc
     assert payload["category"] == "Large Cap"
     assert len(payload["selected_funds"]) == 3
     assert payload["selected_funds"][0]["return_3y"] == 12.0
+    assert payload["selected_funds"][0]["risk_level"] == "High"
+    assert "risk_level" in payload["metric_groups"]["risk"]
     assert payload["overlap"]["coverage_status"] == "available"
     assert payload["overlap"]["common_holding_count"] == 1
     assert payload["insights"]["headline"]
@@ -758,3 +769,13 @@ def test_portfolio_followup_uses_last_portfolio_context():
     review_response = app_main._build_portfolio_followup_response("Can you review this portfolio?", context)
     assert review_response is not None
     assert "Overall label is Good" in review_response["answer"]
+
+    risk_response = app_main._build_portfolio_followup_response("Which fund has the most risk associated with it here?", context)
+    assert risk_response is not None
+    assert "Main fund-level risk driver" in risk_response["answer"]
+    assert "PARAG Flexi" in risk_response["answer"]
+
+    balance_response = app_main._build_portfolio_followup_response("What changes can be made to balance it better?", context)
+    assert balance_response is not None
+    assert "Balance levers to test" in balance_response["answer"]
+    assert "not a new suitability recommendation" in balance_response["answer"]

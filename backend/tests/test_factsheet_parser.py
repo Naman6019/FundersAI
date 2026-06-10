@@ -80,3 +80,48 @@ Closing AUM as on 30-Apr-26 : Rs. 20,936.07 crores
     assert record.scheme_name == "ICICI Prudential Large Cap Fund"
     assert record.expense_ratio == 0.64
     assert record.aum == 20936.07
+
+
+def test_factsheet_parser_extracts_the_risk_of_scheme_label():
+    text = """
+Parag Parikh Flexi Cap Fund
+The risk of the scheme is Very High
+"""
+    records = FactsheetParser().parse_text(text=text, report_month=date(2026, 4, 1))
+
+    assert len(records) == 1
+    assert records[0].risk_level == "Very High"
+
+
+def test_factsheet_parser_extracts_riskometer_label():
+    text = """
+HDFC Large Cap Fund
+Riskometer: Moderate
+"""
+    records = FactsheetParser().parse_text(text=text, report_month=date(2026, 4, 1))
+
+    assert len(records) == 1
+    assert records[0].risk_level == "Moderate"
+
+
+def test_factsheet_parser_extracts_principal_risk_label():
+    text = """
+ICICI Prudential Large Cap Fund
+Investors understand that their principal will be at Very High risk
+"""
+    records = FactsheetParser().parse_text(text=text, report_month=date(2026, 4, 1))
+
+    assert len(records) == 1
+    assert records[0].risk_level == "Very High"
+
+
+def test_factsheet_parser_ignores_malformed_riskometer_text():
+    text = """
+SBI Large Cap Fund
+Riskometer: Banana
+Direct Plan: 0.61%
+"""
+    records = FactsheetParser().parse_text(text=text, report_month=date(2026, 4, 1))
+
+    assert len(records) == 1
+    assert records[0].risk_level is None

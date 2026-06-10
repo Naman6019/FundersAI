@@ -96,6 +96,27 @@ test('route groups use separate buckets', async () => {
   assert.equal(quant.remaining, 19);
 });
 
+test('category fund browsing does not consume chat buckets', async () => {
+  process.env.NODE_ENV = 'test';
+  const limiter = loadRateLimitModule();
+  limiter.resetRateLimitMemoryForTests();
+
+  for (let i = 0; i < 6; i += 1) {
+    const result = await limiter.checkRateLimit(requestFor('203.0.113.16'), 'category-funds', {
+      nowMs: 1000,
+      tier: 'free',
+    });
+    assert.equal(result.allowed, true);
+  }
+
+  const chat = await limiter.checkRateLimit(requestFor('203.0.113.16'), 'chat', {
+    nowMs: 1000,
+    tier: 'free',
+  });
+  assert.equal(chat.allowed, true);
+  assert.equal(chat.remaining, 4);
+});
+
 test('production without Upstash config fails closed', async () => {
   process.env.NODE_ENV = 'production';
   delete process.env.UPSTASH_REDIS_REST_URL;

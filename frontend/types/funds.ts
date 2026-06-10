@@ -40,6 +40,7 @@ export interface FundDetails {
   expense_ratio?: number | string | null;
   exit_load?: string | null;
   benchmark?: string | null;
+  risk_level?: string | null;
   [key: string]: unknown;
 }
 
@@ -116,6 +117,7 @@ export interface CategoryFundRow {
   return_5y?: number | string | null;
   aum?: number | string | null;
   expense_ratio?: number | string | null;
+  risk_level?: string | null;
   alpha?: number | string | null;
   beta?: number | string | null;
   sharpe_ratio?: number | string | null;

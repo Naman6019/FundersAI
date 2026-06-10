@@ -6,7 +6,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const userContext = await getUserContext(req);
-    const limited = await enforceRateLimit(req, 'chat', userContext ? {
+    const limited = await enforceRateLimit(req, 'category-funds', userContext ? {
       identifier: userContext.user.id,
       tier: userContext.profile.tier,
       role: userContext.profile.role,

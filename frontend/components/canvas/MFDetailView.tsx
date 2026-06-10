@@ -4,6 +4,44 @@ import { useEffect, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import type { MFDetailApiResponse } from '@/types/funds';
 
+function MFDetailSkeleton() {
+  return (
+    <div className="flex-1 space-y-6 overflow-hidden">
+      <div className="space-y-3 pb-4 border-b border-white/5">
+        <div className="h-8 w-2/3 rounded-lg bg-white/[0.05] animate-pulse" />
+        <div className="flex gap-2">
+          <div className="h-5 w-24 rounded bg-white/[0.05] animate-pulse" />
+          <div className="h-5 w-20 rounded bg-white/[0.05] animate-pulse" />
+          <div className="h-5 w-28 rounded bg-white/[0.05] animate-pulse" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="bg-white/[0.03] p-4 rounded-xl border border-white/5 space-y-2">
+            <div className="h-4 w-16 rounded bg-white/[0.05] animate-pulse" />
+            <div className="h-7 w-24 rounded bg-white/[0.05] animate-pulse" />
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        <div className="h-6 w-36 rounded bg-white/[0.05] animate-pulse" />
+        <div className="grid grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-16 rounded-lg bg-white/[0.03] border border-white/5 animate-pulse" />
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="h-6 w-44 rounded bg-white/[0.05] animate-pulse" />
+        <div className="h-56 rounded-xl bg-white/[0.02] border border-white/5 animate-pulse" />
+      </div>
+    </div>
+  );
+}
+
 export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
   const [data, setData] = useState<MFDetailApiResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -32,46 +70,13 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
   const navDateLabel = data?.details.nav_date ? new Date(data.details.nav_date).toLocaleDateString() : 'N/A';
   const returns = data?.returns;
   const riskMetrics = data?.riskMetrics ?? null;
-
-  const Skeleton = () => (
-    <div className="flex-1 space-y-6 overflow-hidden">
-      <div className="space-y-3 pb-4 border-b border-white/5">
-        <div className="h-8 w-2/3 rounded-lg bg-white/[0.05] animate-pulse" />
-        <div className="flex gap-2">
-          <div className="h-5 w-24 rounded bg-white/[0.05] animate-pulse" />
-          <div className="h-5 w-20 rounded bg-white/[0.05] animate-pulse" />
-          <div className="h-5 w-28 rounded bg-white/[0.05] animate-pulse" />
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="bg-white/[0.03] p-4 rounded-xl border border-white/5 space-y-2">
-            <div className="h-4 w-16 rounded bg-white/[0.05] animate-pulse" />
-            <div className="h-7 w-24 rounded bg-white/[0.05] animate-pulse" />
-          </div>
-        ))}
-      </div>
-
-      <div className="space-y-3">
-        <div className="h-6 w-36 rounded bg-white/[0.05] animate-pulse" />
-        <div className="grid grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 rounded-lg bg-white/[0.03] border border-white/5 animate-pulse" />
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <div className="h-6 w-44 rounded bg-white/[0.05] animate-pulse" />
-        <div className="h-56 rounded-xl bg-white/[0.02] border border-white/5 animate-pulse" />
-      </div>
-    </div>
-  );
+  const riskLabel = typeof data?.details.risk_level === 'string' && data.details.risk_level.trim()
+    ? data.details.risk_level.trim()
+    : null;
 
   return (
     <div className="mf-detail h-full flex flex-col text-slate-100 overflow-hidden">
-      {loading && <Skeleton />}
+      {loading && <MFDetailSkeleton />}
       {error && (
         <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400">
           Error: {error}
@@ -86,6 +91,12 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
               <span className="bg-white/5 border border-white/10 px-2.5 py-1 rounded text-slate-300">{data.details.fund_house}</span>
               <span className="bg-[#66a3ff]/10 border border-[#66a3ff]/20 text-[#66a3ff] px-2.5 py-1 rounded">{data.details.category}</span>
               <span className="bg-purple-500/10 border border-purple-500/20 text-purple-300 px-2.5 py-1 rounded">{data.details.sub_category}</span>
+              <span className="bg-amber-500/10 border border-amber-500/20 text-amber-200 px-2.5 py-1 rounded">
+                {riskLabel ? `Risk: ${riskLabel}` : 'Risk label unavailable'}
+              </span>
+              {riskLabel && (
+                <span className="bg-white/5 border border-white/10 px-2.5 py-1 rounded text-slate-400">Official AMC factsheet</span>
+              )}
             </div>
           </div>
 

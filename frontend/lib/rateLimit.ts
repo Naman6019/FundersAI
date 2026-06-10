@@ -11,6 +11,7 @@ export type RateLimitGroup =
   | 'chat'
   | 'quant'
   | 'mf-detail'
+  | 'category-funds'
   | 'search'
   | 'data-health'
   | 'cron-sync-mf'
@@ -35,6 +36,10 @@ export const RATE_LIMIT_GROUPS: Record<RateLimitGroup, RateLimitWindow[]> = {
     { name: 'day', limit: 1000, seconds: 86400 },
   ],
   'mf-detail': [
+    { name: 'minute', limit: 60, seconds: 60 },
+    { name: 'day', limit: 1000, seconds: 86400 },
+  ],
+  'category-funds': [
     { name: 'minute', limit: 60, seconds: 60 },
     { name: 'day', limit: 1000, seconds: 86400 },
   ],
@@ -68,6 +73,10 @@ export const RATE_LIMIT_TIERS: Record<UserTier, Partial<Record<RateLimitGroup, R
       { name: 'minute', limit: 20, seconds: 60 },
       { name: 'day', limit: 100, seconds: 86400 },
     ],
+    'category-funds': [
+      { name: 'minute', limit: 30, seconds: 60 },
+      { name: 'day', limit: 300, seconds: 86400 },
+    ],
     search: [
       { name: 'minute', limit: 10, seconds: 60 },
       { name: 'day', limit: 50, seconds: 86400 },
@@ -88,6 +97,10 @@ export const RATE_LIMIT_TIERS: Record<UserTier, Partial<Record<RateLimitGroup, R
       { name: 'day', limit: 3000, seconds: 86400 },
     ],
     'mf-detail': [
+      { name: 'minute', limit: 180, seconds: 60 },
+      { name: 'day', limit: 3000, seconds: 86400 },
+    ],
+    'category-funds': [
       { name: 'minute', limit: 180, seconds: 60 },
       { name: 'day', limit: 3000, seconds: 86400 },
     ],

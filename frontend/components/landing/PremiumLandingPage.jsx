@@ -628,13 +628,12 @@ export default function FundersAILandingPage() {
         >
           <div className="flex items-center justify-between rounded-full border border-white/10 bg-[#090d18]/70 px-3 py-2 shadow-2xl shadow-black/25 backdrop-blur-2xl sm:px-4">
             <a href="#" className="flex items-center gap-3" aria-label="FundersAI home">
-              <motion.div
-                whileHover={{ rotate: -8, scale: 1.08 }}
-                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white text-slate-950"
-              >
-                <TrendUp className="h-5 w-5" />
-              </motion.div>
-              <span className="text-lg font-semibold tracking-tight">FundersAI</span>
+              <motion.img
+                whileHover={{ scale: 1.05 }}
+                src="/logo.png"
+                alt="FundersAI Logo"
+                className="h-10 w-auto object-contain"
+              />
             </a>
 
             <div className="hidden items-center gap-7 text-sm text-slate-400 md:flex">

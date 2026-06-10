@@ -21,6 +21,11 @@ function formatAum(value: unknown): string {
   return `INR ${Math.round(num).toLocaleString('en-IN')}`;
 }
 
+function formatRiskLabel(value: unknown): string {
+  const label = typeof value === 'string' ? value.trim() : '';
+  return label || 'Risk label unavailable';
+}
+
 function getComparePayload(auxiliaryData?: CanvasPayload | null): CategoryComparePayload | null {
   const quant = auxiliaryData?.quant_data;
   if (!quant || typeof quant !== 'object') return null;
@@ -37,6 +42,7 @@ function compactName(name: unknown): string {
 
 function metricValue(fund: CategoryFundRow, key: keyof CategoryFundRow): string {
   if (key === 'aum') return formatAum(fund[key]);
+  if (key === 'risk_level') return formatRiskLabel(fund[key]);
   if (['return_1y', 'return_3y', 'return_5y', 'expense_ratio', 'volatility_1y', 'max_drawdown_1y', 'alpha'].includes(key)) {
     return formatPercent(fund[key]);
   }
@@ -65,6 +71,7 @@ export default function CategoryCompareView({ auxiliaryData }: { auxiliaryData?:
     { label: '5Y Return', key: 'return_5y' },
     { label: 'Expense Ratio', key: 'expense_ratio' },
     { label: 'AUM', key: 'aum' },
+    { label: 'Official Risk Label', key: 'risk_level' },
     { label: 'Volatility 1Y', key: 'volatility_1y' },
     { label: 'Max Drawdown 1Y', key: 'max_drawdown_1y' },
     { label: 'Sharpe', key: 'sharpe_ratio' },
@@ -162,6 +169,10 @@ export default function CategoryCompareView({ auxiliaryData }: { auxiliaryData?:
               {funds.map((fund) => (
                 <div key={String(fund.scheme_code)} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
                   <h4 className="line-clamp-2 text-sm font-semibold text-white">{compactName(fund.scheme_name)}</h4>
+                  <p className="mt-2 text-xs text-[#8ea7cd]">
+                    {formatRiskLabel(fund.risk_level)}
+                    {fund.risk_level ? ' · Official AMC factsheet' : ''}
+                  </p>
                   <div className="mt-3 space-y-2">
                     {(fund.top_holdings || []).slice(0, 6).map((holding) => (
                       <div key={String(holding.isin || holding.security_name)} className="flex items-center justify-between gap-3 text-xs text-[#d7e4fb]">
