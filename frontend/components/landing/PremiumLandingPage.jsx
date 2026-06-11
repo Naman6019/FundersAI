@@ -658,8 +658,9 @@ export default function FundersAILandingPage() {
         </motion.nav>
 
         <div className="relative z-10 mx-auto w-full max-w-full px-5 pb-10 pt-8 sm:px-8 sm:pt-4 lg:px-10">
-          <div className="grid gap-12 lg:grid-cols-12 lg:items-center">
-            <motion.div
+          <div className="flex flex-col justify-center min-h-[calc(100vh-7rem)] pb-8">
+            <div className="grid gap-12 lg:grid-cols-12 lg:items-center">
+              <motion.div
               variants={stagger}
               initial="hidden"
               animate="visible"
@@ -762,8 +763,9 @@ export default function FundersAILandingPage() {
               </div>
             </motion.div>
           </div>
+          </div>
 
-          <div className="mt-24 border-t border-white/10 pt-16">
+          <div className="mt-12 sm:mt-24 border-t border-white/10 pt-16">
             <div className="mb-8 text-center">
               <span className="text-xs font-semibold uppercase text-[#66a3ff]">Workspace walkthrough</span>
               <h3 className="mt-3 text-3xl font-semibold text-white">Detailed Comparison Engine</h3>
