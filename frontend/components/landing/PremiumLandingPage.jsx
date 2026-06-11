@@ -657,7 +657,7 @@ export default function FundersAILandingPage() {
           </div>
         </motion.nav>
 
-        <div className="relative z-10 mx-auto w-full max-w-full px-5 pb-24 pt-8 sm:px-8 sm:pt-6 lg:px-10">
+        <div className="relative z-10 mx-auto w-full max-w-full px-5 pb-10 pt-8 sm:px-8 sm:pt-4 lg:px-10">
           <div className="grid gap-12 lg:grid-cols-12 lg:items-center">
             <motion.div
               variants={stagger}
