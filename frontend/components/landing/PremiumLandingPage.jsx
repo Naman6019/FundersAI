@@ -1,246 +1,254 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import Image from "next/image";
-import { motion, useScroll, useTransform } from "framer-motion";
+import Link from "next/link";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
-  ChartBar,
-  Cpu,
   CheckCircle,
-  Clock,
+  Cpu,
   Database,
-  TrendUp,
   Lock,
   MagnifyingGlass,
   ShieldCheck,
-  Sparkle,
-  Star,
-  Cards
+  TrendUp,
 } from "@phosphor-icons/react";
 
 const ease = [0.22, 1, 0.36, 1];
+const displayStyle = { fontFamily: '"Space Grotesk", var(--font-body-md)' };
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 28, filter: "blur(10px)" },
-  visible: {
-    opacity: 1,
-    y: 0,
-    filter: "blur(0px)",
-    transition: { duration: 0.75, ease },
-  },
-};
+const proofRail = [
+  ["Verified AMCs", "PPFAS, ICICI, HDFC, SBI"],
+  ["Output boundary", "Research-only, no recommendations"],
+  ["Data layer", "Factsheet, NAV, metric snapshots"],
+  ["Next focus", "Broader AMC coverage before stocks"],
+];
 
-const stagger = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.08, delayChildren: 0.06 } },
-};
+const proofStats = [
+  ["04", "validated AMC families", "Coverage is intentionally scoped to PPFAS, ICICI, HDFC, and SBI while expansion continues."],
+  ["0", "advisory outputs", "The product avoids recommendations, buy/sell calls, and portfolio advice."],
+  ["1", "research workspace", "Fund metrics, source freshness, and AI explanations stay visible together."],
+];
 
-const features = [
-  {
-    icon: Cards,
-    title: "Fund-to-fund comparison",
-    eyebrow: "Compare",
-    body: "Compare supported Indian mutual funds across returns, NAV movement, AUM, expense ratio, risk metrics, and consistency. Coverage is expanding across major AMCs.",
-    proof: "Verified: PPFAS, ICICI, HDFC, SBI",
-  },
-  {
-    icon: Cpu,
-    title: "Explainable AI summaries",
-    eyebrow: "Understand",
-    body: "Turn dense fund metrics into clear research notes without hiding the underlying numbers.",
-    proof: "Designed for research, not advice",
-  },
-  {
-    icon: Database,
-    title: "Coverage expansion",
-    eyebrow: "Expanding",
-    body: "We ingest factsheets and portfolio holdings directly. Verified coverage includes PPFAS, ICICI, HDFC, and SBI, with more AMCs being added.",
-    proof: "Direct daily data sync",
-  },
-  {
-    icon: TrendUp,
-    title: "NAV and risk canvas",
-    eyebrow: "Visualize",
-    body: "Review NAV movement, return trends, volatility signals, and risk-adjusted metrics in a cleaner comparison workspace.",
-    proof: "Built for side-by-side review",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Research-only guardrails",
-    eyebrow: "Guardrails",
-    body: "Positioned for education and comparison, not buy/sell calls, recommendations, or advisory output.",
-    proof: "No investment recommendations",
-  },
-  {
-    icon: ChartBar,
-    title: "Stock coverage on the way",
-    eyebrow: "Next module",
-    body: "Indian stock research and comparison will follow after the mutual fund comparison and coverage layer is stronger.",
-    proof: "Planned after fund MVP matures",
-  },
+const terminalFunds = [
+  ["Parag Parikh Flexi Cap", "PPFAS", "+22.4%", "1Y return example"],
+  ["ICICI Pru Multi Asset", "ICICI", "+19.8%", "1Y return example"],
+];
+
+const metricRows = [
+  ["Sharpe ratio", "1.22", "1.08", "Risk-adjusted return"],
+  ["Expense ratio", "0.63%", "1.05%", "Cost visibility"],
+  ["NAV history", "Synced", "Synced", "Freshness check"],
+  ["Source status", "Verified", "Verified", "Factsheet mapped"],
+];
+
+const productPanels = [
+  ["Metric table", "Compare returns, expense ratio, AUM, NAV freshness, alpha, beta, Sharpe, and drawdown signals."],
+  ["AI explanation", "Ask why one fund looks steadier without losing sight of the underlying numbers."],
+  ["Source indicators", "See whether the answer is backed by verified AMC coverage or still awaiting expansion."],
+];
+
+const workflow = [
+  ["01", "Pick funds", "Select supported mutual funds from the comparison workspace."],
+  ["02", "Compare", "Review normalized metrics, ratios, and NAV movement side by side."],
+  ["03", "Ask", "Use FundersAI for a plain-English, research-only explanation."],
+  ["04", "Verify", "Check source freshness and constraints before making independent decisions."],
+];
+
+const trustCards = [
+  [Lock, "No advisory language", "No recommendations, buy/sell calls, portfolio advice, or suitability claims."],
+  [MagnifyingGlass, "Transparent metrics", "AI notes sit beside the data table instead of replacing it."],
+  [Database, "Source freshness", "NAV and factsheet status are part of the product surface."],
+  [ShieldCheck, "Research boundary", "The site repeatedly states that FundersAI is for research and education only."],
+];
+
+const roadmap = [
+  ["Now", "Verified four-AMC mutual fund comparison", "PPFAS, ICICI, HDFC, SBI"],
+  ["Next", "Broader major-AMC coverage", "More factsheets, holdings, and metric mapping"],
+  ["Later", "Stock research module", "Planned after the fund coverage layer is stronger"],
 ];
 
 const promptChips = [
-  "Compare Parag Parikh Flexi Cap vs ICICI Multi Asset Fund",
-  "Which fund has better risk-adjusted returns?",
-  "Explain alpha, beta, and Sharpe in simple terms",
-  "Compare expense ratio and AUM",
-  "Show NAV trend differences",
-  "Which fund has been more consistent?",
-];
-
-const steps = [
-  ["01", "Pick funds", "Select two or more funds from the comparison workspace."],
-  ["02", "Compare metrics", "Review returns, NAV, AUM, TER, alpha, beta, Sharpe, volatility, and drawdowns."],
-  ["03", "Ask FundersAI", "Get a research-only explanation of what the numbers suggest."],
-  ["04", "Review clearly", "Save the comparison and continue deeper research without treating it as advice."],
-  ["Focus", "Coverage expansion", "The primary focus now is adding more AMCs and improving supported mutual fund coverage before stock research becomes a main module."],
+  "Compare Parag Parikh Flexi Cap vs ICICI Multi Asset",
+  "Show expense ratio and risk signals",
+  "Explain Sharpe and beta in simple terms",
+  "Check NAV freshness for both funds",
+  "Summarize source constraints",
+  "Compare HDFC and SBI fund metrics",
 ];
 
 function FineGrid() {
+  const reduceMotion = useReducedMotion();
+
   return (
     <motion.div
       aria-hidden="true"
-      className="absolute inset-0 -z-10 bg-[linear-gradient(to_right,rgba(255,255,255,0.055)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.055)_1px,transparent_1px)] bg-[size:80px_80px] [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_72%)]"
-      animate={{
-        opacity: [0.62, 0.9, 0.62],
-        backgroundPosition: ["0px 0px", "80px 80px"],
-      }}
-      transition={{
-        opacity: { duration: 7, repeat: Infinity, ease: "easeInOut" },
-        backgroundPosition: { duration: 24, repeat: Infinity, ease: "linear" },
-      }}
+      className="absolute inset-0 -z-10 bg-[linear-gradient(to_right,rgba(102,163,255,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(102,163,255,0.07)_1px,transparent_1px)] bg-[size:88px_88px] [mask-image:radial-gradient(ellipse_at_top,black_22%,transparent_74%)]"
+      animate={reduceMotion ? undefined : { backgroundPosition: ["0px 0px", "88px 88px"], opacity: [0.42, 0.62, 0.42] }}
+      transition={reduceMotion ? undefined : { backgroundPosition: { duration: 34, repeat: Infinity, ease: "linear" }, opacity: { duration: 8, repeat: Infinity, ease: "easeInOut" } }}
     />
   );
 }
 
-function PremiumButton({ href, children, variant = "primary" }) {
-  const base = "group inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition duration-300";
-  const styles =
-    variant === "primary"
-      ? "bg-white text-slate-950 shadow-[0_20px_70px_rgba(255,255,255,0.16)] hover:-translate-y-0.5 hover:bg-emerald-100"
-      : "border border-white/12 bg-white/[0.05] text-white backdrop-blur-xl hover:-translate-y-0.5 hover:bg-white/[0.09]";
+function Reveal({ children, className = "", delay = 0 }) {
+  const reduceMotion = useReducedMotion();
 
   return (
-    <motion.a href={href} whileHover={{ y: -3, scale: 1.02 }} whileTap={{ scale: 0.98 }} className={`${base} ${styles}`}>
+    <motion.div
+      initial={reduceMotion ? false : { opacity: 0, y: 22, filter: "blur(8px)" }}
+      whileInView={reduceMotion ? undefined : { opacity: 1, y: 0, filter: "blur(0px)" }}
+      viewport={{ once: true, margin: "-70px" }}
+      transition={{ duration: 0.65, ease, delay }}
+      className={className}
+    >
       {children}
-      {variant === "primary" && <ArrowRight className="ml-2 h-4 w-4 transition group-hover:translate-x-1" />}
+    </motion.div>
+  );
+}
+
+function PremiumButton({ href, children, variant = "primary" }) {
+  const reduceMotion = useReducedMotion();
+  const base = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold transition";
+  const styles =
+    variant === "primary"
+      ? "bg-[#66a3ff] text-[#020617] shadow-[0_18px_60px_rgba(102,163,255,0.22)] hover:bg-[#8bbcff]"
+      : "border border-white/12 bg-white/[0.045] text-white hover:border-[#66a3ff]/45 hover:bg-white/[0.075]";
+
+  return (
+    <motion.a
+      href={href}
+      whileHover={reduceMotion ? undefined : { y: -3 }}
+      whileTap={reduceMotion ? undefined : { scale: 0.98 }}
+      className={`${base} ${styles}`}
+    >
+      {children}
+      {variant === "primary" && <ArrowRight className="h-4 w-4" />}
     </motion.a>
   );
 }
 
-function Badge({ children }) {
+function SectionHeading({ number, eyebrow, title, body }) {
   return (
-    <motion.span
-      variants={fadeUp}
-      whileHover={{ y: -2, borderColor: "rgba(110, 231, 183, 0.32)" }}
-      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.055] px-3 py-1.5 text-xs font-medium text-slate-300 shadow-sm backdrop-blur-xl"
-    >
-      <CheckCircle className="h-3.5 w-3.5 text-emerald-300" weight="fill" />
+    <Reveal className="grid gap-5 border-t border-white/10 pt-7 lg:grid-cols-12 lg:gap-8">
+      <div className="lg:col-span-3">
+        <p className="font-mono text-sm font-semibold text-[#66a3ff]">{number}</p>
+        <p className="mt-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{eyebrow}</p>
+      </div>
+      <div className="lg:col-span-9">
+        <h2 style={displayStyle} className="max-w-5xl text-4xl font-semibold leading-[1.02] tracking-normal text-white sm:text-5xl 2xl:text-6xl">
+          {title}
+        </h2>
+        {body && <p className="mt-5 max-w-3xl text-base leading-7 text-slate-400 sm:text-lg">{body}</p>}
+      </div>
+    </Reveal>
+  );
+}
+
+function DataChip({ children, tone = "blue" }) {
+  const toneClass =
+    tone === "green"
+      ? "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100"
+      : tone === "amber"
+        ? "border-amber-300/25 bg-amber-300/[0.08] text-amber-100"
+        : "border-[#66a3ff]/25 bg-[#66a3ff]/10 text-[#cfe1ff]";
+
+  return (
+    <span className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] ${toneClass}`}>
       {children}
-    </motion.span>
+    </span>
   );
 }
 
-function HeroPreview() {
-  const [data, setData] = useState({ ppfas: null, icici: null });
-
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const [res1, res2] = await Promise.all([
-          fetch('/api/mf/122639').then(r => r.json()).catch(() => null),
-          fetch('/api/mf/101144').then(r => r.json()).catch(() => null)
-        ]);
-        setData({ ppfas: res1, icici: res2 });
-      } catch (e) {
-        console.error("Failed to fetch NAV data", e);
-      }
-    }
-    loadData();
-  }, []);
-
-  const ppfasReturn = data.ppfas?.returns?.['1Y'] ? `+${(data.ppfas.returns['1Y'] * 100).toFixed(1)}%` : "+22.4%";
-  const iciciReturn = data.icici?.returns?.['1Y'] ? `+${(data.icici.returns['1Y'] * 100).toFixed(1)}%` : "+19.8%";
+function Panel({ children, className = "" }) {
+  const reduceMotion = useReducedMotion();
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{
-        opacity: 1,
-        y: [0, -8, 0],
-      }}
-      transition={{
-        opacity: { duration: 0.8, ease },
-        y: { duration: 6, repeat: Infinity, ease: "easeInOut" },
-      }}
-      className="relative mx-auto mt-8 w-full max-w-5xl rounded-2xl border border-white/10 bg-[#0F172A] p-5 shadow-xl"
+      whileHover={reduceMotion ? undefined : { y: -5, borderColor: "rgba(102,163,255,0.34)" }}
+      transition={{ duration: 0.25, ease }}
+      className={`rounded-2xl border border-white/10 bg-white/[0.045] shadow-[0_24px_90px_rgba(0,0,0,0.18)] ${className}`}
     >
-      <div className="mb-4 flex items-center justify-between border-b border-white/5 pb-3">
-        <div className="flex items-center gap-3">
-          <Sparkle className="h-4 w-4 text-emerald-400" weight="fill" />
-          <span className="text-sm font-semibold text-slate-200">FundersAI Chat</span>
+      {children}
+    </motion.div>
+  );
+}
+
+function HeroTerminal() {
+  const reduceMotion = useReducedMotion();
+
+  return (
+    <motion.div
+      initial={reduceMotion ? false : { opacity: 0, y: 18, rotateX: 4 }}
+      animate={reduceMotion ? undefined : { opacity: 1, y: [0, -8, 0], rotateX: 0 }}
+      transition={reduceMotion ? undefined : { opacity: { duration: 0.7, ease }, y: { duration: 7, repeat: Infinity, ease: "easeInOut" }, rotateX: { duration: 0.7, ease } }}
+      className="relative rounded-[18px] border border-white/12 bg-[#07111f]/92 p-2 shadow-[0_34px_120px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
+    >
+      <div className="absolute inset-x-12 -top-px h-px bg-gradient-to-r from-transparent via-[#66a3ff] to-transparent" />
+      <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#07111f]">
+        <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.035] px-5 py-4">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-red-400/80" />
+            <span className="h-2.5 w-2.5 rounded-full bg-amber-300/80" />
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-300/80" />
+          </div>
+          <DataChip tone="green">Workspace online</DataChip>
         </div>
-        <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-slate-400">
-          Fund Comparison
-        </span>
-      </div>
 
-      <div className="flex flex-col gap-5">
-        {/* User Message */}
-        <div className="flex gap-4">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold text-slate-300">
-            U
-          </div>
-          <div className="flex-1 space-y-2 pt-1">
-            <p className="text-sm leading-relaxed text-slate-200">
-              Compare Parag Parikh Flexi Cap vs ICICI Pru Multi Asset. Which one has better risk-adjusted returns over the last year?
-            </p>
-          </div>
-        </div>
-
-        {/* AI Response */}
-        <div className="flex gap-4">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
-            <Sparkle className="h-4 w-4" weight="fill" />
-          </div>
-          <div className="flex-1 space-y-5 pt-1">
-            <p className="text-sm leading-relaxed text-slate-300">
-              Here is a comparison of their core metrics. Parag Parikh appears steadier on risk-adjusted metrics, while ICICI Multi Asset brings a multi-asset allocation profile.
+        <div className="grid gap-0 xl:grid-cols-[0.9fr_1.1fr]">
+          <div className="border-b border-white/10 p-5 xl:border-b-0 xl:border-r">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Comparison query</p>
+            <h3 style={displayStyle} className="mt-4 text-2xl font-semibold leading-tight text-white">
+              Which fund has stronger risk-adjusted metrics?
+            </h3>
+            <p className="mt-3 text-sm leading-6 text-slate-400">
+              FundersAI compares supported funds, explains the signals, and keeps source constraints visible.
             </p>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                <div className="text-xs font-semibold text-slate-400">Parag Parikh Flexi Cap</div>
-                <div className="mt-2 text-2xl font-mono text-emerald-400">{ppfasReturn}</div>
-                <div className="mt-1 text-[10px] uppercase tracking-wider text-slate-500">1Y Return (Live Data)</div>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                <div className="text-xs font-semibold text-slate-400">ICICI Pru Multi Asset</div>
-                <div className="mt-2 text-2xl font-mono text-emerald-400">{iciciReturn}</div>
-                <div className="mt-1 text-[10px] uppercase tracking-wider text-slate-500">1Y Return (Live Data)</div>
-              </div>
+            <div className="mt-6 space-y-3">
+              {terminalFunds.map(([fund, amc, value, label]) => (
+                <div key={fund} className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{fund}</p>
+                      <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">{amc}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono text-lg font-semibold text-emerald-300">{value}</p>
+                      <p className="mt-1 text-[11px] text-slate-500">{label}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
+          </div>
 
-            <div className="rounded-xl border border-white/10 bg-black/20 p-4 font-mono text-xs text-slate-400">
-              <div className="flex justify-between border-b border-white/10 pb-3 font-semibold text-slate-300">
-                <span>Metric</span>
-                <span className="w-20 text-right">PPFAS</span>
-                <span className="w-20 text-right">ICICI</span>
-              </div>
-              <div className="flex justify-between border-b border-white/5 py-3">
-                <span>Sharpe Ratio</span>
-                <span className="w-20 text-emerald-400 text-right">1.22</span>
-                <span className="w-20 text-slate-300 text-right">1.08</span>
-              </div>
-              <div className="flex justify-between py-3">
-                <span>Expense Ratio</span>
-                <span className="w-20 text-slate-300 text-right">0.63%</span>
-                <span className="w-20 text-slate-300 text-right">1.05%</span>
-              </div>
+          <div className="p-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <DataChip>Source mapped</DataChip>
+              <DataChip tone="amber">Research-only</DataChip>
             </div>
-
+            <div className="overflow-hidden rounded-xl border border-white/10">
+              {metricRows.map(([metric, a, b, note], index) => (
+                <div key={metric} className={`grid grid-cols-[1.1fr_0.7fr_0.7fr] gap-3 px-4 py-3 text-sm ${index !== metricRows.length - 1 ? "border-b border-white/8" : ""}`}>
+                  <div>
+                    <p className="font-medium text-slate-200">{metric}</p>
+                    <p className="mt-1 text-xs text-slate-500">{note}</p>
+                  </div>
+                  <p className="self-center text-right font-mono font-semibold text-white">{a}</p>
+                  <p className="self-center text-right font-mono font-semibold text-slate-300">{b}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 rounded-xl border border-[#66a3ff]/20 bg-[#66a3ff]/10 p-4">
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#d7e7ff]">
+                <Cpu className="h-4 w-4 text-[#66a3ff]" />
+                FundersAI explanation
+              </div>
+              <p className="text-sm leading-6 text-slate-300">
+                PPFAS appears stronger on this sample risk-adjusted view. This is a research note, not a recommendation.
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -248,694 +256,329 @@ function HeroPreview() {
   );
 }
 
-function LogoCloud() {
+function ProofRail() {
   return (
-    <motion.div
-      variants={stagger}
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once: true }}
-      className="mx-auto mt-8 grid max-w-5xl grid-cols-2 gap-3 sm:grid-cols-4"
-    >
-      {[
-        "NAV trends",
-        "Expense ratio",
-        "Alpha / Beta",
-        "Sharpe ratio",
-      ].map((item) => (
-        <motion.div
-          key={item}
-          variants={fadeUp}
-          whileHover={{ y: -4, borderColor: "rgba(110, 231, 183, 0.28)" }}
-          className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 text-center text-sm text-slate-300 backdrop-blur"
-        >
-          {item}
-        </motion.div>
+    <Reveal className="mt-8 grid gap-3 border-y border-white/10 py-4 sm:grid-cols-2 xl:grid-cols-4">
+      {proofRail.map(([label, value]) => (
+        <div key={label} className="rounded-xl border border-white/8 bg-white/[0.03] px-4 py-3">
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{label}</p>
+          <p className="mt-2 text-sm font-semibold text-slate-100">{value}</p>
+        </div>
       ))}
-    </motion.div>
+    </Reveal>
   );
 }
 
-function MarqueePrompts() {
+function ProductTerminal() {
   return (
-    <div className="relative mx-auto mt-10 max-w-6xl overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_12%,black_88%,transparent)]">
+    <div className="mt-8 grid gap-5 lg:grid-cols-12">
+      <Panel className="p-5 lg:col-span-7">
+        <div className="mb-5 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-white">Comparison terminal</p>
+            <p className="mt-1 text-xs text-slate-500">Example view for supported mutual funds.</p>
+          </div>
+          <DataChip>Fund comparison</DataChip>
+        </div>
+        <div className="overflow-hidden rounded-xl border border-white/10">
+          <div className="grid grid-cols-[1.1fr_0.8fr_0.8fr] bg-white/[0.04] px-4 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+            <span>Metric</span>
+            <span className="text-right">PPFAS</span>
+            <span className="text-right">ICICI</span>
+          </div>
+          {metricRows.map(([metric, a, b]) => (
+            <div key={metric} className="grid grid-cols-[1.1fr_0.8fr_0.8fr] border-t border-white/8 px-4 py-4 text-sm">
+              <span className="font-medium text-slate-300">{metric}</span>
+              <span className="text-right font-mono text-white">{a}</span>
+              <span className="text-right font-mono text-slate-300">{b}</span>
+            </div>
+          ))}
+        </div>
+      </Panel>
+
+      <div className="grid gap-4 lg:col-span-5">
+        {productPanels.map(([title, body], index) => (
+          <Reveal key={title} delay={index * 0.06}>
+            <Panel className="p-5">
+              <p style={displayStyle} className="text-xl font-semibold text-white">{title}</p>
+              <p className="mt-3 text-sm leading-6 text-slate-400">{body}</p>
+            </Panel>
+          </Reveal>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PromptMarquee() {
+  const reduceMotion = useReducedMotion();
+
+  return (
+    <div className="mt-8 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
       <motion.div
-        className="flex w-max gap-3"
-        animate={{ x: [0, -780] }}
-        transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+        className="flex w-max gap-3 hover:[animation-play-state:paused]"
+        animate={reduceMotion ? undefined : { x: [0, -760] }}
+        transition={reduceMotion ? undefined : { duration: 34, repeat: Infinity, ease: "linear" }}
       >
         {[...promptChips, ...promptChips, ...promptChips].map((prompt, index) => (
-          <button
+          <span
             key={`${prompt}-${index}`}
-            type="button"
-            className="rounded-full border border-white/10 bg-white/[0.045] px-5 py-3 text-sm text-slate-200 transition hover:border-emerald-300/30 hover:bg-emerald-300/10 hover:text-white"
+            className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300"
           >
             {prompt}
-          </button>
+          </span>
         ))}
       </motion.div>
     </div>
   );
 }
 
-function SectionHeading({ eyebrow, title, body, align = "center" }) {
-  return (
-    <motion.div
-      variants={stagger}
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once: true, margin: "-90px" }}
-      className={align === "center" ? "mx-auto max-w-4xl text-center" : "max-w-4xl"}
-    >
-      <motion.p variants={fadeUp} className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">
-        {eyebrow}
-      </motion.p>
-      <motion.h2 variants={fadeUp} className="mt-4 text-4xl font-semibold tracking-[-0.035em] text-white sm:text-5xl 2xl:text-6xl">
-        {title}
-      </motion.h2>
-      {body && <motion.p variants={fadeUp} className="mt-5 text-lg leading-8 text-slate-400">{body}</motion.p>}
-    </motion.div>
-  );
-}
-
-function FeatureCarousel() {
-  const [active, setActive] = useState(0);
-  const [direction, setDirection] = useState(1);
-  const activeFeature = features[active];
-  const Icon = activeFeature.icon;
-
-  const selectFeature = (index) => {
-    setDirection(index >= active ? 1 : -1);
-    setActive(index);
-  };
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setDirection(1);
-      setActive((current) => (current + 1) % features.length);
-    }, 3200);
-
-    return () => window.clearInterval(timer);
-  }, []);
-
-  return (
-    <div className="relative">
-      <div className="mb-5 flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-3 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-2">
-          {features.map((feature, index) => (
-            <button
-              key={feature.title}
-              onClick={() => selectFeature(index)}
-              className={`rounded-full border px-4 py-2 text-xs font-medium transition duration-300 ${
-                active === index
-                  ? "border-emerald-300/40 bg-emerald-300/[0.12] text-emerald-100 shadow-[0_0_24px_rgba(16,185,129,0.12)]"
-                  : "border-white/10 bg-white/[0.035] text-slate-400 hover:bg-white/[0.07] hover:text-white"
-              }`}
-            >
-              {feature.eyebrow}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2 self-start sm:self-auto">
-          {features.map((feature, index) => (
-            <button
-              key={feature.title}
-              aria-label={`View ${feature.title}`}
-              onClick={() => selectFeature(index)}
-              className={`h-2.5 rounded-full transition-[width,background-color] duration-300 ${
-                active === index ? "w-8 bg-white" : "w-2.5 bg-white/25 hover:bg-white/50"
-              }`}
-            />
-          ))}
-        </div>
-      </div>
-
-      <motion.div
-        animate={{ y: [0, -6, 0] }}
-        transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
-        className="relative min-h-[330px] overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.16),transparent_34%),rgba(255,255,255,0.045)] shadow-xl shadow-black/10"
-      >
-        <div className="absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent" />
-        <motion.div
-          key={activeFeature.title}
-          initial={{ opacity: 0, x: direction > 0 ? 72 : -72, filter: "blur(10px)" }}
-          animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
-          exit={{ opacity: 0, x: direction > 0 ? -72 : 72, filter: "blur(10px)" }}
-          transition={{ duration: 0.55, ease }}
-          className="min-h-[300px] p-5 sm:p-7"
-        >
-          <div className="flex h-full flex-col justify-between gap-7">
-            <div>
-                <div className="mb-6 flex items-center justify-between gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-950 shadow-lg">
-                  <Icon className="h-6 w-6" />
-                </div>
-                <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs text-slate-300">
-                  {activeFeature.eyebrow}
-                </span>
-              </div>
-              <h3 className="max-w-xl text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">
-                {activeFeature.title}
-              </h3>
-              <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-400">
-                {activeFeature.body}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.07] px-4 py-3 text-sm text-emerald-100">
-              {activeFeature.proof}
-            </div>
-          </div>
-        </motion.div>
-      </motion.div>
-    </div>
-  );
-}
-
-function FundPairCard() {
-  const rows = [
-    ["Fund type", "Diversified flexi-cap", "Multi-asset allocation"],
-    ["Current role", "Core equity-style comparison example", "Asset allocation comparison example"],
-    ["Expense", "0.63%", "1.05%"],
-    ["3Y Return", "+18.8%", "+16.9%"],
-    ["Review focus", "Consistency and downside control", "Equity, debt, and commodity mix"],
-  ];
-
-  return (
-    <motion.div
-      variants={stagger}
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once: true, margin: "-80px" }}
-      className="mt-8 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] shadow-xl shadow-black/10"
-    >
-      <div className="grid gap-0 lg:grid-cols-[1fr_1fr]">
-        <motion.div variants={fadeUp} className="border-b border-white/10 p-6 lg:border-b-0 lg:border-r">
-          <div className="mb-4 inline-flex rounded-full border border-emerald-300/20 bg-emerald-300/[0.08] px-3 py-1 text-xs font-medium text-emerald-100">
-            Steadier profile
-          </div>
-          <h3 className="text-3xl font-semibold tracking-[-0.035em] text-white sm:text-4xl">
-            Parag Parikh Flexi Cap
-          </h3>
-          <p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">
-            Used as the first supported fund example for long-term consistency and diversified flexi-cap research.
-          </p>
-        </motion.div>
-
-        <motion.div variants={fadeUp} className="p-6">
-          <div className="mb-4 inline-flex rounded-full border border-sky-300/20 bg-sky-300/[0.08] px-3 py-1 text-xs font-medium text-sky-100">
-            Diversified allocation
-          </div>
-          <h3 className="text-3xl font-semibold tracking-[-0.035em] text-white sm:text-4xl">
-            ICICI Multi Asset Fund
-          </h3>
-          <p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">
-            Used as the second supported fund example for multi-asset allocation research across equity, debt, and commodities.
-          </p>
-        </motion.div>
-      </div>
-
-      <div className="border-t border-white/10 bg-slate-950/25 p-4 sm:p-6">
-        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-white">Live comparison preview</p>
-            <p className="mt-1 text-xs text-slate-500">Formatted as a table so long fund names do not break the card layout.</p>
-          </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-slate-300">
-            <Sparkle className="h-3.5 w-3.5 text-emerald-300" weight="fill" />
-            FundersAI explains the difference
-          </div>
-        </div>
-
-        <div className="overflow-hidden rounded-[1.5rem] border border-white/10">
-          {rows.map(([metric, ppfas, icici], index) => {
-            const isValNumeric = (str) => /^[\d%.+-]+$/.test(str.replace(/\s+/g, ''));
-            return (
-              <motion.div
-                key={metric}
-                variants={fadeUp}
-                className={`grid gap-0 text-sm sm:grid-cols-[0.8fr_1fr_1fr] ${index !== rows.length - 1 ? "border-b border-white/10" : ""}`}
-              >
-                <div className="bg-white/[0.035] px-4 py-3 font-medium text-slate-300">{metric}</div>
-                <div className={`border-t border-white/10 px-4 py-3 text-slate-200 sm:border-l sm:border-t-0 ${isValNumeric(ppfas) ? "font-mono text-emerald-300 font-medium" : ""}`}>{ppfas}</div>
-                <div className={`border-t border-white/10 px-4 py-3 text-slate-200 sm:border-l sm:border-t-0 ${isValNumeric(icici) ? "font-mono text-emerald-300 font-medium" : ""}`}>{icici}</div>
-              </motion.div>
-            );
-          })}
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
 export default function FundersAILandingPage() {
-  const { scrollYProgress } = useScroll();
-  const heroGridY = useTransform(scrollYProgress, [0, 0.25], [0, 120]);
-  const heroTextY = useTransform(scrollYProgress, [0, 0.18], [0, -28]);
-
   return (
-    <main className="w-full min-w-0 min-h-screen overflow-hidden scroll-smooth bg-[#020617] text-slate-200">
-      <motion.div
-        aria-hidden="true"
-        className="fixed left-0 top-0 z-50 h-1 bg-emerald-400"
-        style={{ scaleX: scrollYProgress, transformOrigin: "0%" }}
-      />
+    <main className="relative min-h-screen overflow-x-hidden bg-[#020617] text-slate-200" style={{ fontFamily: "var(--font-body-md)" }}>
+      <FineGrid />
+      <div aria-hidden="true" className="absolute left-1/2 top-0 -z-10 h-[560px] w-[92vw] -translate-x-1/2 bg-[radial-gradient(circle,rgba(102,163,255,0.16),transparent_62%)] blur-3xl" />
 
-      <section className="relative isolate w-full min-w-0 overflow-hidden">
-        <motion.div style={{ y: heroGridY }}>
-          <FineGrid />
-        </motion.div>
-
-        <motion.nav
-          initial={{ opacity: 0, y: -16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease }}
-          className="sticky top-4 z-40 mx-auto w-full max-w-[1720px] px-5 py-4 sm:px-10 2xl:px-16"
-        >
-          <div className="flex items-center justify-between rounded-full border border-white/10 bg-[#090d18]/70 px-3 py-2 shadow-xl shadow-black/20 backdrop-blur-2xl sm:px-4">
-            <a href="#" className="flex items-center gap-3" aria-label="FundersAI home">
-              <motion.div
-                whileHover={{ rotate: -8, scale: 1.08 }}
-                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white text-slate-950"
-              >
-                <TrendUp className="h-5 w-5" />
-              </motion.div>
-              <span className="text-lg font-semibold tracking-tight">FundersAI</span>
+      <header className="mx-auto w-full max-w-[1720px] px-5 pt-6 sm:px-10 2xl:px-16">
+        <nav className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#07111f]/78 px-4 py-3 shadow-[0_18px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+          <Link href="/" className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-[#020617]">
+              <TrendUp className="h-5 w-5" weight="bold" />
+            </div>
+            <span style={displayStyle} className="text-lg font-semibold text-white">FundersAI</span>
+          </Link>
+          <div className="hidden items-center gap-8 text-sm font-semibold text-slate-400 lg:flex">
+            <a href="#proof" className="transition hover:text-white">Proof</a>
+            <a href="#product" className="transition hover:text-white">Product</a>
+            <a href="#workflow" className="transition hover:text-white">Workflow</a>
+            <a href="#trust" className="transition hover:text-white">Trust</a>
+            <a href="#roadmap" className="transition hover:text-white">Roadmap</a>
+          </div>
+          <div className="flex items-center gap-2">
+            <a href="/login" className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-white/20 hover:bg-white/[0.05]">
+              Login
             </a>
-
-            <div className="hidden items-center gap-7 text-sm text-slate-400 md:flex">
-              <a href="#compare" className="transition hover:text-white">Compare</a>
-              <a href="#features" className="transition hover:text-white">Features</a>
-              <a href="#how" className="transition hover:text-white">How it works</a>
-              <a href="#trust" className="transition hover:text-white">Trust</a>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <a href="/login" className="hidden rounded-full border border-white/10 bg-white/[0.045] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/[0.09] sm:inline-flex">
-                Login
-              </a>
-              <a href="/dashboard" className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-100">
-                Try FundersAI
-              </a>
-            </div>
+            <a href="/dashboard" className="hidden rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#020617] transition hover:bg-[#dce9ff] sm:inline-flex">
+              Try FundersAI
+            </a>
           </div>
-        </motion.nav>
+        </nav>
+      </header>
 
-        <div className="mx-auto w-full max-w-[1720px] px-5 pb-16 pt-10 sm:px-10 sm:pt-14 2xl:px-16 2xl:pt-16">
-          <div className="grid gap-10 xl:grid-cols-12 xl:items-center 2xl:gap-16">
-            <motion.div
-              variants={stagger}
-              initial="hidden"
-              animate="visible"
-              style={{ y: heroTextY }}
-              className="xl:col-span-7 text-left"
-            >
-              <motion.div variants={fadeUp} className="mb-6 flex justify-start">
-                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm text-slate-300 shadow-sm backdrop-blur-xl">
-                  <Star className="h-4 w-4 text-emerald-300" weight="fill" />
-                  Mutual fund comparison workspace
-                </span>
-              </motion.div>
-              <motion.h1
-                variants={fadeUp}
-                className="max-w-5xl text-balance text-5xl font-semibold tracking-[-0.055em] text-white sm:text-6xl lg:text-7xl 2xl:text-[6.5rem] 2xl:leading-[0.98]"
-              >
-                Mutual fund research, simplified.
-              </motion.h1>
-              <motion.p
-                variants={fadeUp}
-                className="mt-6 max-w-3xl text-pretty text-lg leading-8 text-slate-300 sm:text-xl 2xl:text-2xl 2xl:leading-10"
-              >
-                FundersAI centralizes scattered Indian mutual fund factsheets, risk metrics, and NAV history into a clean workspace. Engineered for working professionals who demand quick, data-backed insights.
-              </motion.p>
-              <motion.div
-                variants={fadeUp}
-                className="mt-7 flex flex-col items-start justify-start gap-3 sm:flex-row"
-              >
-                <PremiumButton href="/dashboard">Try FundersAI</PremiumButton>
-                <PremiumButton href="/login" variant="secondary">Login</PremiumButton>
-              </motion.div>
-              <motion.div variants={stagger} className="mt-6 flex flex-wrap gap-2">
-                <Badge>Factsheet consolidation</Badge>
-                <Badge>Alpha / Beta / Sharpe</Badge>
-                <Badge>Clean side-by-side comparison</Badge>
-                <Badge>Explainable AI research</Badge>
-              </motion.div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, x: 28, rotateY: -6 }}
-              animate={{ opacity: 1, x: 0, rotateY: 0, y: [0, -10, 0] }}
-              transition={{
-                opacity: { duration: 0.95, ease, delay: 0.15 },
-                x: { duration: 0.95, ease, delay: 0.15 },
-                rotateY: { duration: 0.95, ease, delay: 0.15 },
-                y: { duration: 6.5, repeat: Infinity, ease: "easeInOut" },
-              }}
-              className="xl:col-span-5 relative w-full rounded-2xl border border-white/12 bg-[#07111f]/90 p-1 shadow-[0_34px_110px_rgba(0,0,0,0.42)] backdrop-blur-2xl [transform-style:preserve-3d] hover:scale-[1.01] transition-transform duration-300"
-            >
-              <div className="absolute inset-x-10 -top-px h-px bg-gradient-to-r from-transparent via-white/70 to-transparent" />
-              <div className="overflow-hidden rounded-[1.9rem] border border-white/10 bg-[#07111f]">
-                <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.035] px-5 py-4">
-                  <div className="flex items-center gap-2">
-                    <span className="h-3 w-3 rounded-full bg-red-400/80" />
-                    <span className="h-3 w-3 rounded-full bg-yellow-300/80" />
-                    <span className="h-3 w-3 rounded-full bg-emerald-300/80" />
-                  </div>
-                  <div className="text-xs text-emerald-300 font-semibold tracking-wide">Live Workspace</div>
-                </div>
-
-                <div className="p-5 space-y-4">
-                  <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                    <div>
-                      <h4 className="text-sm font-semibold text-white">Parag Parikh Flexi Cap</h4>
-                      <p className="text-xs text-slate-400">Direct Plan - Growth</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-mono text-sm font-semibold text-emerald-300">+22.4%</p>
-                      <p className="text-[10px] text-slate-500">1Y Return</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                    <div>
-                      <h4 className="text-sm font-semibold text-white">ICICI Pru Multi Asset</h4>
-                      <p className="text-xs text-slate-400">Direct Plan - Growth</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-mono text-sm font-semibold text-emerald-300">+19.8%</p>
-                      <p className="text-[10px] text-slate-500">1Y Return</p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.05] p-3 text-xs leading-relaxed text-slate-200">
-                    <div className="flex items-center gap-1.5 font-semibold text-emerald-300 mb-1">
-                      <Sparkle className="h-3.5 w-3.5" weight="fill" />
-                      FundersAI Synthesis
-                    </div>
-                    Parag Parikh Flexi Cap demonstrates superior risk-adjusted performance with a Sharpe Ratio of 1.22.
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-
-          <div className="mt-12 border-t border-white/10 pt-10">
-            <div className="mb-4 text-center">
-              <span className="text-xs uppercase tracking-[0.22em] text-emerald-300 font-semibold">Workspace Walkthrough</span>
-              <h3 className="mt-3 text-3xl font-semibold text-white">Factsheet Comparison Engine</h3>
+      <section className="mx-auto w-full max-w-[1720px] px-5 pb-14 pt-14 sm:px-10 sm:pt-20 2xl:px-16 2xl:pt-24">
+        <div className="grid items-center gap-10 xl:grid-cols-12 2xl:gap-14">
+          <Reveal className="xl:col-span-6">
+            <DataChip tone="blue">
+              <CheckCircle className="h-3.5 w-3.5" weight="fill" />
+              AI mutual fund research workspace
+            </DataChip>
+            <h1 style={displayStyle} className="mt-7 max-w-6xl text-5xl font-semibold leading-[0.96] tracking-normal text-white sm:text-7xl xl:text-8xl 2xl:text-[7.4rem]">
+              AI-orchestrated mutual fund research.
+            </h1>
+            <p className="mt-7 max-w-3xl text-lg leading-8 text-slate-400 sm:text-xl">
+              Compare fund metrics, source freshness, and risk signals in one research workspace. Built for professionals who need clean evidence, not advisory language.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <PremiumButton href="/dashboard">Try FundersAI</PremiumButton>
+              <PremiumButton href="/login" variant="secondary">Login</PremiumButton>
             </div>
-            <HeroPreview />
-          </div>
-          
-          <LogoCloud />
+            <div className="mt-6 flex flex-wrap gap-2">
+              <DataChip tone="green">PPFAS</DataChip>
+              <DataChip tone="green">ICICI</DataChip>
+              <DataChip tone="green">HDFC</DataChip>
+              <DataChip tone="green">SBI</DataChip>
+              <DataChip tone="amber">No recommendations</DataChip>
+            </div>
+          </Reveal>
 
-          <motion.div
-            initial={{ opacity: 0, y: 18, filter: "blur(8px)" }}
-            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-            transition={{ duration: 0.7, ease, delay: 0.55 }}
-            className="mx-auto mt-7 max-w-3xl rounded-full border border-sky-300/20 bg-sky-300/[0.07] px-5 py-3 text-center text-sm text-sky-100/90 backdrop-blur-xl"
-          >
-            <span className="inline-flex items-center justify-center gap-2">
-              <Clock className="h-4 w-4 text-sky-300" />
-              Stock coverage is on the way. FundersAI currently focuses on mutual fund comparison first, with verified PPFAS, ICICI, HDFC, and SBI coverage.
-            </span>
-          </motion.div>
+          <div className="xl:col-span-6">
+            <HeroTerminal />
+          </div>
         </div>
+
+        <ProofRail />
       </section>
 
-      <section className="mx-auto w-full max-w-[1720px] px-5 py-12 sm:px-10 2xl:px-16">
-        <motion.div
-          initial={{ opacity: 0, y: 28, filter: "blur(10px)" }}
-          whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.75, ease }}
-          className="relative overflow-hidden rounded-2xl border border-sky-300/20 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.16),transparent_34%),rgba(255,255,255,0.04)] p-5 sm:p-7"
-        >
-          <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-sky-300">Coming next</p>
-              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.035em] text-white sm:text-5xl">
-                Stock coverage is on the way.
-              </h2>
-              <p className="mt-4 text-base leading-7 text-slate-400">
-                FundersAI starts with verified mutual fund research. PPFAS, ICICI, HDFC, and SBI are the current validated coverage base while broader AMC and stock research modules expand.
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {[
-                ["Current coverage", "PPFAS, ICICI, HDFC, SBI"],
-                ["Next coverage", "Add all major AMCs"],
-                ["Stock module", "Planned after fund MVP"],
-                ["Full launch", "After coverage expansion"],
-              ].map(([title, body], index) => (
-                <motion.div
-                  key={title}
-                  initial={{ opacity: 0, y: 14 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.5, delay: index * 0.08 }}
-                  className="rounded-2xl border border-white/10 bg-slate-950/45 p-4"
-                >
-                  <p className="text-lg font-semibold text-white">{title}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">{body}</p>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-      </section>
-
-      <section id="compare" className="mx-auto w-full max-w-[1720px] px-5 py-16 sm:px-10 2xl:px-16">
+      <section id="proof" className="mx-auto w-full max-w-[1720px] px-5 py-14 sm:px-10 2xl:px-16">
         <SectionHeading
-          eyebrow="Deep Screening"
-          title="Unbiased research. Zero noise."
-          body="Compare funds side-by-side on performance consistency, risk indicators, and costs. FundersAI standardizes scattered disclosures into one unified dashboard."
+          number="01"
+          eyebrow="Proof"
+          title="Validated coverage, stated constraints, visible boundaries."
+          body="The landing page should sound like financial software: concrete, scoped, and clear about what the product can and cannot do today."
         />
-        <FundPairCard />
-      </section>
-
-      <section id="features" className="mx-auto w-full max-w-[1720px] px-5 py-16 sm:px-10 2xl:px-16">
-        <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-start 2xl:gap-16">
-          <SectionHeading
-            align="left"
-            eyebrow="Intelligence"
-            title="Explore mutual fund DNA & risk signals."
-            body="From instant risk-adjusted metrics to natural language explanations, FundersAI gives you the tools to screen and compare Indian mutual funds with speed."
-          />
-          <FeatureCarousel />
-        </div>
-      </section>
-
-      <section className="mx-auto w-full max-w-[1720px] px-5 py-16 sm:px-10 2xl:px-16">
-        <motion.div
-          initial={{ opacity: 0, y: 30, filter: "blur(10px)" }}
-          whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.8, ease }}
-          className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0F172A] p-5 sm:p-8"
-        >
-          <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">Data integrity</p>
-              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.035em] text-white sm:text-5xl">Unified snapshots for deep screening.</h2>
-              <p className="mt-5 text-lg leading-8 text-slate-400">Instantly view essential metrics: NAV freshness, rolling returns, portfolio turnover, and expense ratios. No more digging through confusing PDF disclosures.</p>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {[
-                ["Verified coverage", "PPFAS, ICICI, HDFC, SBI", "Live"],
-                ["Next coverage", "Major AMCs", "Planned"],
-                ["Data scope", "NAV + factsheet", "Expanding"],
-                ["Full launch", "After coverage", "Later"],
-              ].map(([label, title, value], index) => (
-                <motion.div
-                  key={label}
-                  initial={{ opacity: 0, y: 16 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.5, delay: index * 0.07 }}
-                  whileHover={{ y: -6 }}
-                  className="rounded-[1.5rem] border border-white/10 bg-slate-950/45 p-5"
-                >
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p>
-                  <p className="mt-4 text-lg font-semibold text-white">{title}</p>
-                  <p className="mt-2 text-2xl font-semibold text-emerald-300">{value}</p>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-      </section>
-
-      <section id="how" className="mx-auto w-full max-w-[1720px] px-5 py-16 sm:px-10 2xl:px-16">
-        <SectionHeading
-          eyebrow="Workflow"
-          title="From fund factsheets to explainable comparison."
-          body="Discover how FundersAI parses and updates fund details to keep your research workflow seamless."
-        />
-        <motion.div variants={stagger} initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-80px" }} className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {steps.slice(0, 4).map(([number, title, body]) => (
-            <motion.div key={title} variants={fadeUp} whileHover={{ y: -6 }} className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-6">
-              <p className="text-sm text-emerald-300">{number}</p>
-              <h3 className="mt-6 text-xl font-semibold text-white">{title}</h3>
-              <p className="mt-3 text-sm leading-6 text-slate-400">{body}</p>
-            </motion.div>
+        <div className="mt-8 grid gap-4 lg:grid-cols-3">
+          {proofStats.map(([value, title, body], index) => (
+            <Reveal key={title} delay={index * 0.06}>
+              <Panel className="p-6">
+                <p className="font-mono text-5xl font-semibold text-[#66a3ff]">{value}</p>
+                <h3 style={displayStyle} className="mt-5 text-2xl font-semibold text-white">{title}</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-400">{body}</p>
+              </Panel>
+            </Reveal>
           ))}
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 24, filter: "blur(10px)" }}
-          whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.7, ease }}
-          className="mt-5 rounded-2xl border border-white/10 bg-[#0F172A] p-5 sm:p-7"
-        >
-          <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-sky-300">Primary focus now</p>
-              <h3 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-white sm:text-4xl">
-                Coverage expansion comes before the full stock module.
-              </h3>
-              <p className="mt-4 text-sm leading-7 text-slate-400">
-                FundersAI is currently focused on strengthening mutual fund coverage across major AMCs. Stock coverage is planned, but the immediate priority is making the fund comparison dataset broader and more reliable.
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {[
-                ["Now", "PPFAS, ICICI, HDFC, SBI", "Verified coverage"],
-                ["Next", "Major AMCs", "Coverage expansion"],
-                ["Later", "Stock coverage", "Planned module"],
-              ].map(([label, title, body]) => (
-                <div key={label} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p>
-                  <p className="mt-3 font-semibold text-white">{title}</p>
-                  <p className="mt-2 text-xs leading-5 text-slate-400">{body}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-      </section>
-
-      <section className="mx-auto w-full max-w-[1720px] px-5 py-16 sm:px-10 2xl:px-16">
-        <SectionHeading
-          eyebrow="Use cases"
-          title="Ask anything. Research instantly."
-          body="Discover how working professionals and advanced investors query FundersAI to extract key comparison points."
-        />
-        <MarqueePrompts />
-      </section>
-
-      <section id="trust" className="mx-auto w-full max-w-[1720px] px-5 py-16 sm:px-10 2xl:px-16">
-        <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center 2xl:gap-16">
-          <SectionHeading
-            align="left"
-            eyebrow="Safety first"
-            title="Unbiased intelligence. No advisory conflicts."
-            body="FundersAI is engineered strictly for self-directed research and education. We never recommend products, take commissions, or make buy/sell calls."
-          />
-          <motion.div variants={stagger} initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-80px" }} className="grid gap-4 sm:grid-cols-2">
-            {[
-              [Lock, "No advisory language", "Avoids buy/sell calls, portfolio advice, and recommendation phrasing."],
-              [MagnifyingGlass, "Metric visibility", "Keeps source metrics visible beside the AI explanation."],
-              [Database, "Freshness signals", "Makes update status part of the product experience."],
-              [ShieldCheck, "User protection", "Frames output as education and research only."],
-            ].map(([Icon, title, body]) => (
-              <motion.div key={title} variants={fadeUp} whileHover={{ y: -6 }} className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-6">
-                <Icon className="h-6 w-6 text-emerald-300" />
-                <h3 className="mt-5 text-xl font-semibold text-white">{title}</h3>
-                <p className="mt-3 leading-7 text-slate-400">{body}</p>
-              </motion.div>
-            ))}
-          </motion.div>
         </div>
+      </section>
+
+      <section id="product" className="mx-auto w-full max-w-[1720px] px-5 py-14 sm:px-10 2xl:px-16">
+        <SectionHeading
+          number="02"
+          eyebrow="Product"
+          title="A comparison terminal, metric table, and AI explanation in one view."
+          body="FundersAI should feel like a working research console, not a generic marketing grid."
+        />
+        <ProductTerminal />
+        <PromptMarquee />
+      </section>
+
+      <section id="workflow" className="mx-auto w-full max-w-[1720px] px-5 py-14 sm:px-10 2xl:px-16">
+        <SectionHeading
+          number="03"
+          eyebrow="Workflow"
+          title="Pick funds. Compare metrics. Ask questions. Verify sources."
+          body="The core workflow stays simple so a researcher can move from screening to explanation without losing the audit trail."
+        />
+        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {workflow.map(([number, title, body], index) => (
+            <Reveal key={title} delay={index * 0.06}>
+              <Panel className="min-h-56 p-6">
+                <p className="font-mono text-sm font-semibold text-[#66a3ff]">{number}</p>
+                <h3 style={displayStyle} className="mt-8 text-2xl font-semibold text-white">{title}</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-400">{body}</p>
+              </Panel>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      <section id="trust" className="mx-auto w-full max-w-[1720px] px-5 py-14 sm:px-10 2xl:px-16">
+        <SectionHeading
+          number="04"
+          eyebrow="Trust"
+          title="Compliance guardrails are part of the interface."
+          body="Professional financial AI needs restraint: visible assumptions, source-state labels, and consistent research-only language."
+        />
+        <div className="mt-8 grid gap-4 lg:grid-cols-2">
+          {trustCards.map(([Icon, title, body], index) => (
+            <Reveal key={title} delay={index * 0.06}>
+              <Panel className="grid min-h-44 grid-cols-[auto_1fr] gap-5 p-6">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#66a3ff]/25 bg-[#66a3ff]/10">
+                  <Icon className="h-6 w-6 text-[#66a3ff]" />
+                </div>
+                <div>
+                  <h3 style={displayStyle} className="text-2xl font-semibold text-white">{title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-400">{body}</p>
+                </div>
+              </Panel>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      <section id="roadmap" className="mx-auto w-full max-w-[1720px] px-5 py-14 sm:px-10 2xl:px-16">
+        <SectionHeading
+          number="05"
+          eyebrow="Roadmap"
+          title="Broader fund coverage first. Stock research later."
+          body="This keeps the page honest about the current product stage while still giving users a clear expansion path."
+        />
+        <Reveal className="mt-8 overflow-hidden rounded-2xl border border-white/10 bg-[#07111f]/80">
+          {roadmap.map(([stage, title, body], index) => (
+            <div key={stage} className={`grid gap-4 px-5 py-6 lg:grid-cols-[0.22fr_0.9fr_1fr] lg:items-center ${index !== roadmap.length - 1 ? "border-b border-white/10" : ""}`}>
+              <p className="font-mono text-sm font-semibold uppercase tracking-[0.16em] text-[#66a3ff]">{stage}</p>
+              <h3 style={displayStyle} className="text-2xl font-semibold text-white">{title}</h3>
+              <p className="text-sm leading-6 text-slate-400">{body}</p>
+            </div>
+          ))}
+        </Reveal>
       </section>
 
       <section id="disclaimer" className="mx-auto w-full max-w-[1720px] px-5 py-12 sm:px-10 2xl:px-16">
-        <div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.055] p-5 text-center sm:p-7">
-          <h2 className="text-2xl font-semibold text-white">Research-only disclaimer</h2>
-          <p className="mx-auto mt-4 max-w-4xl leading-8 text-amber-50/80">
-            FundersAI is for research and education only. It does not provide financial advice, investment recommendations, portfolio management, or buy/sell calls. Current coverage is limited while the pipeline expands across major AMCs. Always verify data independently before making financial decisions.
-          </p>
-        </div>
+        <Reveal>
+          <div className="rounded-2xl border border-amber-300/25 bg-amber-300/[0.055] p-6 sm:p-8">
+            <DataChip tone="amber">Research-only disclaimer</DataChip>
+            <p className="mt-5 max-w-5xl text-base leading-8 text-amber-50/80">
+              FundersAI is for research and education only. It does not provide financial advice, investment recommendations, portfolio management, or buy/sell calls. Current coverage is limited while the pipeline expands across major AMCs. Always verify data independently before making financial decisions.
+            </p>
+          </div>
+        </Reveal>
       </section>
 
-      <section className="mx-auto w-full max-w-[1720px] px-5 pb-16 pt-8 sm:px-10 2xl:px-16">
-        <motion.div
-          initial={{ opacity: 0, y: 28, filter: "blur(10px)" }}
-          whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.75, ease }}
-          className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0F172A] p-7 text-center shadow-xl shadow-black/20 sm:p-12"
-        >
-          <div className="relative">
-            <h2 className="mx-auto max-w-4xl text-4xl font-semibold tracking-[-0.04em] text-white sm:text-6xl">
-              Start comparing Indian mutual funds with explainable AI.
+      <section className="mx-auto w-full max-w-[1720px] px-5 pb-16 pt-6 sm:px-10 2xl:px-16">
+        <Reveal>
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0f172a] p-7 text-center shadow-[0_30px_100px_rgba(0,0,0,0.24)] sm:p-12">
+            <div aria-hidden="true" className="absolute inset-x-16 top-0 h-px bg-gradient-to-r from-transparent via-[#66a3ff] to-transparent" />
+            <h2 style={displayStyle} className="mx-auto max-w-5xl text-4xl font-semibold leading-tight tracking-normal text-white sm:text-6xl">
+              Compare Indian mutual funds with explainable AI.
             </h2>
-            <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-slate-400">
-              Try FundersAI, compare funds side by side, and turn scattered fund data into a clean research workflow. Major AMC coverage and stock coverage are on the way before full launch.
+            <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-slate-400">
+              Start with verified PPFAS, ICICI, HDFC, and SBI coverage while FundersAI expands the research dataset.
             </p>
-            <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
+            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <PremiumButton href="/dashboard">Try FundersAI</PremiumButton>
               <PremiumButton href="/login" variant="secondary">Login</PremiumButton>
             </div>
           </div>
-        </motion.div>
+        </Reveal>
       </section>
 
-      <footer className="border-t border-white/[0.06] bg-[#020611] pb-10 pt-16">
+      <footer className="border-t border-white/[0.07] bg-[#020611] pb-10 pt-14">
         <div className="mx-auto w-full max-w-[1720px] px-5 sm:px-10 2xl:px-16">
-          <div className="grid gap-12 md:grid-cols-12 lg:gap-10">
-            <div className="md:col-span-5 lg:col-span-6">
+          <div className="grid gap-10 lg:grid-cols-12">
+            <div className="lg:col-span-5">
               <Image
                 src="/FUNDERSAI-vertical.png"
                 alt="FundersAI"
                 width={2000}
                 height={861}
                 unoptimized
-                className="mb-7 h-20 w-auto object-contain opacity-90"
+                className="mb-6 h-16 w-auto object-contain opacity-90"
               />
-              <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
-                Contact Us
+              <p className="max-w-md text-sm leading-6 text-slate-400">
+                Professional AI research workspace for Indian mutual fund comparison. Research-only outputs. No advisory language.
               </p>
-              <a href="mailto:contact@fundersai.co.in" className="text-lg text-slate-200 transition hover:text-white">
+              <a href="mailto:contact@fundersai.co.in" className="mt-5 inline-flex text-sm font-semibold text-[#cfe1ff] transition hover:text-white">
                 contact@fundersai.co.in
               </a>
             </div>
 
-            <div className="md:col-span-3 lg:col-span-2">
-              <h3 className="mb-5 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">
-                Legal
-              </h3>
-              <nav className="flex flex-col gap-4 text-sm text-slate-400">
+            <div className="lg:col-span-2">
+              <h3 className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-[#66a3ff]">Product</h3>
+              <nav className="mt-5 flex flex-col gap-3 text-sm text-slate-400">
+                <a href="#proof" className="transition hover:text-white">Proof</a>
+                <a href="#product" className="transition hover:text-white">Product</a>
+                <a href="#workflow" className="transition hover:text-white">Workflow</a>
+                <a href="#trust" className="transition hover:text-white">Trust</a>
+              </nav>
+            </div>
+
+            <div className="lg:col-span-2">
+              <h3 className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-[#66a3ff]">Legal</h3>
+              <nav className="mt-5 flex flex-col gap-3 text-sm text-slate-400">
                 <a href="#" className="transition hover:text-white">Terms and Conditions</a>
                 <a href="#" className="transition hover:text-white">Privacy Policy</a>
                 <a href="#" className="transition hover:text-white">Cookie Policy</a>
               </nav>
             </div>
 
-            <div className="md:col-span-4">
-              <h3 className="mb-5 text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
-                Strict Disclaimer
-              </h3>
-              <div className="border-l border-amber-300/30 py-1 pl-4">
+            <div className="lg:col-span-3">
+              <h3 className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">Strict disclaimer</h3>
+              <div className="mt-5 border-l border-amber-300/30 pl-4">
                 <p className="text-xs leading-6 text-slate-400">
-                  <strong className="font-medium text-slate-200">FundersAI is strictly a research and educational platform.</strong> We do not provide financial advice, investment recommendations, or buy/sell signals.
+                  <strong className="font-semibold text-slate-200">FundersAI is strictly a research and educational platform.</strong> We do not provide financial advice, investment recommendations, or buy/sell signals.
                 </p>
-                <p className="mt-4 text-xs leading-6 text-amber-100/70">
+                <p className="mt-3 text-xs leading-6 text-amber-100/70">
                   Always verify data independently before making financial decisions.
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="mt-14 flex flex-col-reverse items-start justify-between gap-5 border-t border-white/[0.06] pt-7 md:flex-row md:items-center">
-            <p className="text-xs uppercase tracking-[0.16em] text-slate-600">
-              © {new Date().getFullYear()} FundersAI. All rights reserved.
+          <div className="mt-12 flex flex-col-reverse items-start justify-between gap-5 border-t border-white/[0.07] pt-7 md:flex-row md:items-center">
+            <p className="font-mono text-xs uppercase tracking-[0.14em] text-slate-600">
+              Copyright {new Date().getFullYear()} FundersAI. All rights reserved.
             </p>
-            <div className="flex gap-8 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
-              <a href="#" className="transition hover:text-white">X (Twitter)</a>
+            <div className="flex gap-6 font-mono text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              <a href="#" className="transition hover:text-white">X</a>
               <a href="#" className="transition hover:text-white">LinkedIn</a>
             </div>
           </div>
