@@ -3079,7 +3079,7 @@ def _category_row_matches(row: dict[str, Any], category_key: str) -> bool:
     scheme_match = _normalize_fund_text(str(config.get("scheme_match") or config["match"]))
     if match_text and match_text in category_text:
         return True
-    if category_text in {"", "unclassified", "n a", "na", "none", "null"} and scheme_match in scheme_text:
+    if scheme_match and scheme_match in scheme_text:
         return True
     if category_key == "index" and "index" in scheme_text:
         return True
