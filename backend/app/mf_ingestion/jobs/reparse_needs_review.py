@@ -101,6 +101,7 @@ def reparse_documents(documents: list[dict[str, Any]], service: ParsingService) 
     success_count = 0
     still_actionable_count = 0
     runtime_error_count = 0
+    skipped_duplicate_count = 0
 
     for doc in documents:
         doc_id = doc.get("id")
@@ -109,6 +110,15 @@ def reparse_documents(documents: list[dict[str, Any]], service: ParsingService) 
         logger.info("Processing doc %s (AMC: %s, Month: %s)", doc_id, amc_code, report_month)
 
         try:
+            if amc_code and report_month:
+                existing_parsed = supabase.table("mf_raw_documents").select("id").eq("amc_code", amc_code).eq("report_month", report_month).eq("parse_status", "parsed").limit(1).execute()
+                if existing_parsed.data:
+                    logger.info("Skipping doc %s as duplicate. AMC %s, Month %s already successfully parsed.", doc_id, amc_code, report_month)
+                    supabase.table("mf_raw_documents").update({"parse_status": "skipped_duplicate"}).eq("id", doc_id).execute()
+                    supabase.table("mf_parse_review_queue").delete().eq("source_document_id", doc_id).execute()
+                    skipped_duplicate_count += 1
+                    continue
+
             supabase.table("mf_raw_documents").update({"parse_status": "needs_reparse"}).eq("id", doc_id).execute()
 
             doc_to_parse = dict(doc)
@@ -131,6 +141,7 @@ def reparse_documents(documents: list[dict[str, Any]], service: ParsingService) 
         "success_count": success_count,
         "still_actionable_count": still_actionable_count,
         "runtime_error_count": runtime_error_count,
+        "skipped_duplicate_count": skipped_duplicate_count,
     }
 
 
