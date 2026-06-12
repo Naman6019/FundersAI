@@ -37,12 +37,14 @@ class R2Store:
         self._enabled = bool(self.endpoint and access_key_id and secret_access_key and self.raw_bucket and boto3)
         self._client: BaseClient | None = None
         if self._enabled:
+            from botocore.config import Config  # type: ignore
             self._client = boto3.client(
                 "s3",
                 endpoint_url=self.endpoint,
                 aws_access_key_id=access_key_id,
                 aws_secret_access_key=secret_access_key,
                 region_name="auto",
+                config=Config(signature_version="s3v4"),
             )
 
     @property
