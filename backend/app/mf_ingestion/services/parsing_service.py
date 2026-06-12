@@ -443,16 +443,16 @@ class ParsingService:
         if not document_type or not amc_code or not report_month:
             return None
 
-        factsheet_covered = self._official_factsheet_covers_document(amc_code, report_month)
-        holdings_covered = self._official_holdings_cover_document(amc_code, report_month)
-
         if document_type in HOLDINGS_SUPPORTED_DOCUMENT_TYPES:
             return None
+
         if document_type in FACTSHEET_SUPPORTED_DOCUMENT_TYPES:
             if amc_code == "hdfc":
                 return None
+            factsheet_covered = self._official_factsheet_covers_document(amc_code, report_month)
             if factsheet_covered and self._official_risk_level_covers_document(amc_code, report_month):
                 return "skipped_official_source_covered:factsheet"
+
         return None
 
     def _official_core_rows_for_amc(self, amc_code: str) -> list[dict[str, Any]]:
@@ -503,29 +503,7 @@ class ParsingService:
                 return True
         return False
 
-    def _official_holdings_cover_document(self, amc_code: str, report_month: date) -> bool:
-        client = self.repository.supabase if self.repository else supabase
-        if not client:
-            return False
-        scheme_codes = [str(row.get("scheme_code")) for row in self._official_core_rows_for_amc(amc_code) if row.get("scheme_code")]
-        if not scheme_codes:
-            return False
-        code_values: list[Any] = []
-        for code in scheme_codes:
-            code_values.append(int(code) if code.isdigit() else code)
-        try:
-            response = (
-                client.table("mutual_fund_holdings")
-                .select("scheme_code,source,as_of_date")
-                .eq("as_of_date", report_month.isoformat())
-                .in_("scheme_code", code_values)
-                .limit(50)
-                .execute()
-            )
-            return any(_is_official_holding_source(row.get("source")) for row in (response.data or []))
-        except Exception:
-            logger.exception("event=official_holdings_coverage_lookup_failed amc_code=%s report_month=%s", amc_code, report_month)
-            return False
+
 
     def _mark_document(self, source_document_id: str, status: str, issues: list[str]) -> None:
         supabase.table("mf_raw_documents").update(
@@ -1229,9 +1207,7 @@ def _truthy_env(name: str, default: bool) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _is_official_holding_source(value: object) -> bool:
-    source = str(value or "")
-    return any(marker in source for marker in OFFICIAL_HOLDING_SOURCES)
+
 
 
 def _amc_lookup_patterns(amc_code: str) -> list[str]:
