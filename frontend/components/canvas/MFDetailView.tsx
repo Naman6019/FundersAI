@@ -67,7 +67,7 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
 
   if (!schemeCode) return <div className="p-6">No fund selected.</div>;
 
-  const navDateLabel = data?.details.nav_date ? new Date(data.details.nav_date).toLocaleDateString() : 'N/A';
+  const navDateLabel = data?.details.nav_date ? new Date(data.details.nav_date).toLocaleDateString() : 'Not available';
   const returns = data?.returns;
   const riskMetrics = data?.riskMetrics ?? null;
   const riskLabel = typeof data?.details.risk_level === 'string' && data.details.risk_level.trim()
@@ -94,6 +94,11 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
               <span className="bg-amber-500/10 border border-amber-500/20 text-amber-200 px-2.5 py-1 rounded">
                 {riskLabel ? `Risk: ${riskLabel}` : 'Risk label unavailable'}
               </span>
+              {typeof data.details.fund_manager === 'string' && data.details.fund_manager.trim() && (
+                <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-200 px-2.5 py-1 rounded">
+                  Manager: {data.details.fund_manager.split(';')[0]}
+                </span>
+              )}
               {riskLabel && (
                 <span className="bg-white/5 border border-white/10 px-2.5 py-1 rounded text-slate-400">Official AMC factsheet</span>
               )}
@@ -107,16 +112,16 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
             </div>
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-[#66a3ff]/20 flex flex-col gap-1">
               <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">AUM (Cr)</div>
-              <div className="font-mono text-2xl font-bold text-slate-200">₹{data.details.aum || 'N/A'}</div>
+              <div className="font-mono text-2xl font-bold text-slate-200">{data.details.aum ? `₹${data.details.aum}` : 'Not available'}</div>
             </div>
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-[#66a3ff]/20 flex flex-col gap-1">
               <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Expense Ratio</div>
-              <div className="font-mono text-2xl font-bold text-slate-200">{data.details.expense_ratio ? `${data.details.expense_ratio}%` : 'N/A'}</div>
+              <div className="font-mono text-2xl font-bold text-slate-200">{data.details.expense_ratio ? `${data.details.expense_ratio}%` : 'Not available'}</div>
             </div>
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-[#66a3ff]/20 flex flex-col gap-1">
               <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Exit Load</div>
-              <div className="text-sm font-semibold text-slate-300 truncate mt-auto" title={data.details.exit_load || 'N/A'}>
-                {data.details.exit_load || 'N/A'}
+              <div className="text-sm font-semibold text-slate-300 truncate mt-auto" title={data.details.exit_load || 'Not available'}>
+                {data.details.exit_load || 'Not available'}
               </div>
             </div>
           </div>
@@ -127,19 +132,19 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
                 <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">1 Year</div>
                 <div className={`font-mono font-bold text-2xl ${(returns?.['1Y'] ?? 0) > 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                  {returns?.['1Y'] !== null && returns?.['1Y'] !== undefined ? `${returns['1Y']}%` : 'N/A'}
+                  {returns?.['1Y'] !== null && returns?.['1Y'] !== undefined ? `${returns['1Y']}%` : 'Not available'}
                 </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
                 <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">3 Years</div>
                 <div className={`font-mono font-bold text-2xl ${(returns?.['3Y'] ?? 0) > 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                  {returns?.['3Y'] !== null && returns?.['3Y'] !== undefined ? `${returns['3Y']}%` : 'N/A'}
+                  {returns?.['3Y'] !== null && returns?.['3Y'] !== undefined ? `${returns['3Y']}%` : 'Not available'}
                 </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
                 <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">5 Years</div>
                 <div className={`font-mono font-bold text-2xl ${(returns?.['5Y'] ?? 0) > 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                  {returns?.['5Y'] !== null && returns?.['5Y'] !== undefined ? `${returns['5Y']}%` : 'N/A'}
+                  {returns?.['5Y'] !== null && returns?.['5Y'] !== undefined ? `${returns['5Y']}%` : 'Not available'}
                 </div>
               </div>
             </div>
@@ -155,25 +160,25 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
                   <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Sharpe Ratio</div>
                   <div className={`font-mono font-bold text-2xl ${(riskMetrics.sharpeRatio ?? 0) >= 1 ? 'text-emerald-300' : (riskMetrics.sharpeRatio ?? 0) >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>
-                    {riskMetrics.sharpeRatio ?? 'N/A'}
+                    {riskMetrics.sharpeRatio ?? 'Not available'}
                   </div>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
                   <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Sortino Ratio</div>
                   <div className={`font-mono font-bold text-2xl ${(riskMetrics.sortinoRatio ?? 0) >= 1 ? 'text-emerald-300' : (riskMetrics.sortinoRatio ?? 0) >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>
-                    {riskMetrics.sortinoRatio ?? 'N/A'}
+                    {riskMetrics.sortinoRatio ?? 'Not available'}
                   </div>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
                   <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Std Dev (Ann.)</div>
                   <div className="font-mono font-bold text-2xl text-slate-200">
-                    {typeof riskMetrics.stdDev === 'number' ? `${(riskMetrics.stdDev * 100).toFixed(1)}%` : 'N/A'}
+                    {typeof riskMetrics.stdDev === 'number' ? `${(riskMetrics.stdDev * 100).toFixed(1)}%` : 'Not available'}
                   </div>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
                   <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Max Drawdown</div>
                   <div className="font-mono font-bold text-2xl text-rose-300">
-                    {typeof riskMetrics.maxDrawdown === 'number' ? `-${(riskMetrics.maxDrawdown * 100).toFixed(1)}%` : 'N/A'}
+                    {typeof riskMetrics.maxDrawdown === 'number' ? `-${(riskMetrics.maxDrawdown * 100).toFixed(1)}%` : 'Not available'}
                   </div>
                 </div>
               </div>
@@ -211,8 +216,8 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
           </div>
           
           <div className="text-xs text-slate-400 border-t border-white/10 pt-4 flex flex-col gap-1">
-            <div>Benchmark: {data.details.benchmark || 'N/A'}</div>
-            <div>Data synced from AMFI API. Note: Due to limitations, returns may be indicative.</div>
+            <div>Benchmark: {data.details.benchmark || 'Not available'}</div>
+            <div>Based on stored fund records. Missing or limited fields should be treated as research constraints, not inferred by AI.</div>
           </div>
         </div>
       )}

@@ -27,7 +27,7 @@ export const MONTHLY_TIERS: Record<UserTier, TierDefinition> = {
     amountPaise: 0,
     billingPeriod: 'monthly',
     description: 'Full dashboard access with starter research limits.',
-    features: ['10 chat requests per day', 'Basic search and comparison access', 'Research-only output'],
+    features: ['25k AI tokens per day', '100k AI tokens per month', 'Research-only output'],
   },
   pro: {
     tier: 'pro',
@@ -36,7 +36,7 @@ export const MONTHLY_TIERS: Record<UserTier, TierDefinition> = {
     amountPaise: 9900,
     billingPeriod: 'monthly',
     description: 'Higher limits for regular mutual-fund and stock research.',
-    features: ['100 chat requests per day', 'Higher research route limits', 'Dashboard and canvas access'],
+    features: ['250k AI tokens per day', '2M AI tokens per month', 'Dashboard and canvas access'],
   },
   ultra: {
     tier: 'ultra',
@@ -45,7 +45,7 @@ export const MONTHLY_TIERS: Record<UserTier, TierDefinition> = {
     amountPaise: 14900,
     billingPeriod: 'monthly',
     description: 'Highest limits for heavy research workflows.',
-    features: ['300 chat requests per day', 'Ultra research route limits', 'Priority-sized usage buckets'],
+    features: ['750k AI tokens per day', '6M AI tokens per month', 'Priority token budget'],
   },
 };
 

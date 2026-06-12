@@ -132,6 +132,20 @@
 - Why this matters:
   - Builds top-of-funnel discovery and trust with educational content.
 
+### 11. Scale and System Architecture Upgrades
+- [ ] Data Caching Layer: Implement Redis/Memcached to cache heavy calculations (CAGR, Alpha, Beta) at EOD to reduce DB load.
+- [ ] Message Queues & Workers: Implement Celery/RabbitMQ/Kafka to process PDF parsing and data ingestion asynchronously and in parallel.
+- [ ] Database Read Replicas: Separate read/write queries in PostgreSQL to prevent ingestion pipelines from slowing down user queries.
+- [ ] Search Engine: Implement Elasticsearch/Typesense/Algolia for fast, fuzzy searching across a growing universe of stocks and funds.
+- [ ] Proper Observability & APM: Integrate Datadog/Sentry for application performance monitoring and real-time alerts.
+- [ ] Edge Caching: Utilize Cloudflare/Vercel Edge to cache common API responses physically closer to users.
+- Acceptance Criteria:
+  - System performance remains stable during data ingestion spikes.
+  - Search queries return in under 50ms with typo tolerance.
+  - PDF parsing completes in under 30 minutes utilizing parallel workers.
+- Why this matters:
+  - Ensures the platform remains fast, reliable, and cost-effective as traffic and data volume grows.
+
 ## Recommended Release Order
 
 ### Phase 1: Trust and Clarity

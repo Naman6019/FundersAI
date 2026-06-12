@@ -234,6 +234,121 @@ def _freshness_snapshot(comparison: dict[str, dict[str, Any]]) -> dict[str, Any]
     return snapshot
 
 
+def _risk_item(entity: str, label: str, level: str, evidence: str, confidence: str = "Medium") -> dict[str, Any]:
+    return {
+        "entity": entity,
+        "label": label,
+        "level": level,
+        "evidence": evidence,
+        "confidence": confidence,
+    }
+
+
+def _build_stock_risk_analysis(comparison: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    for entity, payload in comparison.items():
+        fundamentals = payload.get("fundamentals") if isinstance(payload.get("fundamentals"), dict) else {}
+        quality = payload.get("data_quality") if isinstance(payload.get("data_quality"), dict) else {}
+        source = payload.get("source_summary") if isinstance(payload.get("source_summary"), dict) else {}
+
+        debt = _to_float(fundamentals.get("debt_to_equity"))
+        if debt is None:
+            items.append(_risk_item(entity, "Debt risk", "Not available", "Debt/equity is missing.", "Low"))
+        elif debt >= 2:
+            items.append(_risk_item(entity, "Debt risk", "High", f"Debt/equity is {debt:.2f}."))
+        elif debt >= 1:
+            items.append(_risk_item(entity, "Debt risk", "Medium", f"Debt/equity is {debt:.2f}."))
+
+        pe = _to_float(fundamentals.get("pe"))
+        profit_growth = _to_float(fundamentals.get("profit_growth_3y"))
+        if pe is None:
+            items.append(_risk_item(entity, "Valuation risk", "Not available", "P/E ratio is missing.", "Low"))
+        elif pe >= 60:
+            items.append(_risk_item(entity, "Valuation risk", "High", f"P/E ratio is {pe:.2f}."))
+        elif pe >= 35:
+            items.append(_risk_item(entity, "Valuation risk", "Medium", f"P/E ratio is {pe:.2f}."))
+
+        if profit_growth is None:
+            items.append(_risk_item(entity, "Earnings trend", "Not available", "3Y profit growth is missing.", "Low"))
+        elif profit_growth < 0:
+            items.append(_risk_item(entity, "Earnings trend", "High", f"3Y profit growth is {profit_growth:.2f}%."))
+
+        margin = _to_float(fundamentals.get("net_profit_margin") or fundamentals.get("operating_margin"))
+        if margin is not None and margin < 5:
+            items.append(_risk_item(entity, "Margin pressure", "Medium", f"Latest margin is {margin:.2f}%."))
+
+        missing_fields = quality.get("missing_fields") if isinstance(quality.get("missing_fields"), list) else []
+        if missing_fields:
+            items.append(_risk_item(entity, "Data availability", "Medium", f"Missing fields: {', '.join(str(field) for field in missing_fields[:5])}.", "Low"))
+        if source.get("stale"):
+            items.append(_risk_item(entity, "Freshness risk", "Medium", str(source.get("stale_warning") or "Source data may be stale."), "Medium"))
+
+    return {
+        "asset_type": "stock",
+        "items": items,
+        "summary": "Deterministic stock risk flags based on available valuation, debt, growth, freshness, and data coverage fields.",
+    }
+
+
+def _build_mf_risk_analysis(comparison: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    for entity, payload in comparison.items():
+        quality = payload.get("data_quality") if isinstance(payload.get("data_quality"), dict) else {}
+        source = payload.get("source_summary") if isinstance(payload.get("source_summary"), dict) else {}
+
+        risk_level = str(payload.get("risk_level") or "").strip()
+        if risk_level:
+            level = "High" if "high" in risk_level.lower() else "Medium"
+            items.append(_risk_item(entity, "Official risk label", level, f"AMC risk label is {risk_level}.", "High"))
+        else:
+            items.append(_risk_item(entity, "Official risk label", "Not available", "AMC risk label is missing.", "Low"))
+
+        volatility = _to_float(payload.get("volatility_1y"))
+        if volatility is None:
+            items.append(_risk_item(entity, "Volatility", "Not available", "1Y volatility is missing.", "Low"))
+        elif volatility >= 20:
+            items.append(_risk_item(entity, "Volatility", "High", f"1Y volatility is {volatility:.2f}%."))
+        elif volatility >= 12:
+            items.append(_risk_item(entity, "Volatility", "Medium", f"1Y volatility is {volatility:.2f}%."))
+
+        drawdown = _to_float(payload.get("max_drawdown_1y"))
+        if drawdown is None:
+            items.append(_risk_item(entity, "Drawdown", "Not available", "1Y max drawdown is missing.", "Low"))
+        elif drawdown <= -20:
+            items.append(_risk_item(entity, "Drawdown", "High", f"1Y max drawdown is {drawdown:.2f}%."))
+        elif drawdown <= -10:
+            items.append(_risk_item(entity, "Drawdown", "Medium", f"1Y max drawdown is {drawdown:.2f}%."))
+
+        expense = _to_float(payload.get("expense_ratio"))
+        if expense is None:
+            items.append(_risk_item(entity, "Cost risk", "Not available", "Expense ratio is missing.", "Low"))
+        elif expense >= 1.5:
+            items.append(_risk_item(entity, "Cost risk", "High", f"Expense ratio is {expense:.2f}%."))
+        elif expense >= 1:
+            items.append(_risk_item(entity, "Cost risk", "Medium", f"Expense ratio is {expense:.2f}%."))
+
+        return_3y = _to_float(payload.get("return_3y"))
+        if return_3y is None:
+            items.append(_risk_item(entity, "Performance risk", "Not available", "3Y return is missing.", "Low"))
+        elif return_3y < 0:
+            items.append(_risk_item(entity, "Performance risk", "Medium", f"3Y return is {return_3y:.2f}%."))
+
+        if not payload.get("holdings"):
+            items.append(_risk_item(entity, "Concentration risk", "Not available", "Holdings data is missing.", "Low"))
+        if source.get("stale"):
+            items.append(_risk_item(entity, "Freshness risk", "Medium", "Latest NAV or source data may be stale.", "Medium"))
+
+        missing_fields = quality.get("missing_fields") if isinstance(quality.get("missing_fields"), list) else []
+        if missing_fields:
+            items.append(_risk_item(entity, "Data availability", "Medium", f"Missing fields: {', '.join(str(field) for field in missing_fields[:5])}.", "Low"))
+
+    return {
+        "asset_type": "mutual_fund",
+        "items": items,
+        "summary": "Deterministic mutual fund risk flags based on available NAV, risk, cost, holdings, freshness, and data coverage fields.",
+    }
+
+
 def build_stock_why_better(comparison: dict[str, dict[str, Any]]) -> dict[str, Any]:
     entities = list(comparison.keys())
     factors, totals, weights_used = _factor_scores_stock(comparison)
@@ -267,6 +382,7 @@ def build_stock_why_better(comparison: dict[str, dict[str, Any]]) -> dict[str, A
         "tradeoffs": tradeoffs,
         "data_limitations": limitations,
         "source_freshness": _freshness_snapshot(comparison),
+        "risk_analysis": _build_stock_risk_analysis(comparison),
         "verdict_context": verdict_context,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -327,6 +443,7 @@ def build_mf_why_better(comparison: dict[str, dict[str, Any]], downside_focus: b
         "tradeoffs": tradeoffs,
         "data_limitations": limitations,
         "source_freshness": _freshness_snapshot(comparison),
+        "risk_analysis": _build_mf_risk_analysis(comparison),
         "verdict_context": verdict_context,
         "holdings_based_reasoning": holdings_reasoning,
         "generated_at": datetime.now(timezone.utc).isoformat(),

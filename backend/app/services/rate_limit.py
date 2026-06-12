@@ -30,7 +30,6 @@ class RateLimitResult:
 RATE_LIMIT_GROUPS: dict[str, list[RateLimitWindow]] = {
     "chat": [
         RateLimitWindow("minute", 10, 60),
-        RateLimitWindow("day", 100, 86400),
     ],
     "quant": [
         RateLimitWindow("minute", 60, 60),

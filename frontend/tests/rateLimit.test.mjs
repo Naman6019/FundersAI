@@ -36,23 +36,23 @@ function requestFor(ip) {
   });
 }
 
-test('free chat limit blocks after the day bucket is exhausted', async () => {
+test('free chat limit blocks rapid bursts only', async () => {
   process.env.NODE_ENV = 'test';
   delete process.env.UPSTASH_REDIS_REST_URL;
   delete process.env.UPSTASH_REDIS_REST_TOKEN;
   const limiter = loadRateLimitModule();
   limiter.resetRateLimitMemoryForTests();
 
-  for (let i = 0; i < 10; i += 1) {
+  for (let i = 0; i < 5; i += 1) {
     const result = await limiter.checkRateLimit(requestFor('203.0.113.10'), 'chat', {
-      nowMs: 1000 + i * 61000,
+      nowMs: 1000,
       tier: 'free',
     });
     assert.equal(result.allowed, true);
   }
 
   const blocked = await limiter.checkRateLimit(requestFor('203.0.113.10'), 'chat', {
-    nowMs: 1000 + 10 * 61000,
+    nowMs: 1000,
     tier: 'free',
   });
   assert.equal(blocked.allowed, false);

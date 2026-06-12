@@ -11,13 +11,13 @@ function toNumber(value: unknown): number | null {
 
 function formatPercent(value: unknown, digits = 2): string {
   const num = toNumber(value);
-  if (num === null) return 'N/A';
+  if (num === null) return 'Not available';
   return `${num.toFixed(digits)}%`;
 }
 
 function formatAum(value: unknown): string {
   const num = toNumber(value);
-  if (num === null) return 'N/A';
+  if (num === null) return 'Not available';
   return `INR ${Math.round(num).toLocaleString('en-IN')}`;
 }
 
@@ -34,7 +34,7 @@ function getComparePayload(auxiliaryData?: CanvasPayload | null): CategoryCompar
 }
 
 function compactName(name: unknown): string {
-  return String(name || 'N/A')
+  return String(name || 'Not available')
     .replace(/\s*-\s*Direct Plan\s*-\s*Growth/gi, '')
     .replace(/\s*Direct\s*Growth/gi, '')
     .trim();
@@ -47,7 +47,7 @@ function metricValue(fund: CategoryFundRow, key: keyof CategoryFundRow): string 
     return formatPercent(fund[key]);
   }
   const value = fund[key];
-  return value === null || value === undefined || value === '' ? 'N/A' : String(value);
+  return value === null || value === undefined || value === '' ? 'Not available' : String(value);
 }
 
 export default function CategoryCompareView({ auxiliaryData }: { auxiliaryData?: CanvasPayload | null }) {
@@ -87,7 +87,7 @@ export default function CategoryCompareView({ auxiliaryData }: { auxiliaryData?:
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#66a3ff]">Category compare</p>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight text-white">{payload.category} fund comparison</h2>
             <p className="mt-2 max-w-3xl text-sm text-slate-300">
-              Metrics, latest portfolios, and equal-weighted overlap across the selected funds.
+              Metrics, latest portfolios, and overlap from stored records. Missing fields stay visible as limitations.
             </p>
           </div>
           <div className="grid grid-cols-3 gap-3">
@@ -97,7 +97,7 @@ export default function CategoryCompareView({ auxiliaryData }: { auxiliaryData?:
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
               <p className="text-[11px] uppercase tracking-[0.12em] text-slate-400">Label</p>
-              <p className="mt-1 text-xl font-semibold text-white">{payload.label || 'N/A'}</p>
+              <p className="mt-1 text-xl font-semibold text-white">{payload.label || 'Not available'}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
               <p className="text-[11px] uppercase tracking-[0.12em] text-slate-400">Overlap</p>
@@ -176,7 +176,7 @@ export default function CategoryCompareView({ auxiliaryData }: { auxiliaryData?:
                   <div className="mt-3 space-y-2">
                     {(fund.top_holdings || []).slice(0, 6).map((holding) => (
                       <div key={String(holding.isin || holding.security_name)} className="flex items-center justify-between gap-3 text-xs text-[#d7e4fb]">
-                        <span className="truncate">{String(holding.security_name || 'N/A')}</span>
+                        <span className="truncate">{String(holding.security_name || 'Not available')}</span>
                         <span className="font-mono text-white">{formatPercent(holding.weight_pct)}</span>
                       </div>
                     ))}
@@ -199,7 +199,7 @@ export default function CategoryCompareView({ auxiliaryData }: { auxiliaryData?:
             <div className="mt-4 space-y-2">
               {commonHoldings.slice(0, 8).map((item) => (
                 <div key={String(item.isin || item.name)} className="flex items-center justify-between gap-3 text-xs text-[#d7e4fb]">
-                  <span className="truncate">{String(item.name || 'N/A')}</span>
+                  <span className="truncate">{String(item.name || 'Not available')}</span>
                   <span className="font-mono text-white">{formatPercent(item.overlap_exposure)}</span>
                 </div>
               ))}

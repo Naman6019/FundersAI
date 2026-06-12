@@ -29,7 +29,6 @@ export type RateLimitResult = {
 export const RATE_LIMIT_GROUPS: Record<RateLimitGroup, RateLimitWindow[]> = {
   chat: [
     { name: 'minute', limit: 10, seconds: 60 },
-    { name: 'day', limit: 100, seconds: 86400 },
   ],
   quant: [
     { name: 'minute', limit: 60, seconds: 60 },
@@ -63,7 +62,6 @@ export const RATE_LIMIT_TIERS: Record<UserTier, Partial<Record<RateLimitGroup, R
   free: {
     chat: [
       { name: 'minute', limit: 5, seconds: 60 },
-      { name: 'day', limit: 10, seconds: 86400 },
     ],
     quant: [
       { name: 'minute', limit: 20, seconds: 60 },
@@ -90,7 +88,6 @@ export const RATE_LIMIT_TIERS: Record<UserTier, Partial<Record<RateLimitGroup, R
   ultra: {
     chat: [
       { name: 'minute', limit: 30, seconds: 60 },
-      { name: 'day', limit: 300, seconds: 86400 },
     ],
     quant: [
       { name: 'minute', limit: 180, seconds: 60 },

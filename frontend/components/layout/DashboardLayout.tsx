@@ -97,18 +97,18 @@ function CanvasPlaceholder() {
     <div className="flex h-full flex-col rounded-[1.35rem] border border-white/10 bg-[linear-gradient(160deg,rgba(15,23,42,0.95),rgba(2,8,24,0.98))] p-6 shadow-[0_20px_44px_rgba(0,0,0,0.35)]">
       <div>
         <h2 className="text-3xl font-semibold tracking-tight text-white">Comparison canvas</h2>
-        <p className="mt-1 text-sm text-slate-300">Ask FundersAI to compare two funds to open side-by-side metrics here.</p>
+        <p className="mt-1 text-sm text-slate-300">Ask FundersAI to compare funds and open side-by-side metrics from stored data.</p>
         <span className="mt-4 inline-flex rounded-full border border-[#66a3ff]/30 bg-[#66a3ff]/10 px-3 py-1 text-xs text-[#66a3ff]">
-          Waiting for comparison
+          Waiting for data-backed comparison
         </span>
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-4">
         {[
-          { label: 'Returns', value: 'Side-by-side', note: '1Y, 3Y, 5Y' },
-          { label: 'Risk', value: 'Side-by-side', note: 'Volatility, drawdown, Sharpe' },
-          { label: 'Costs', value: 'Side-by-side', note: 'Expense ratio and AUM' },
-          { label: 'Data', value: 'Side-by-side', note: 'NAV date and coverage' },
+          { label: 'Read', value: 'Stored data', note: 'Search and compare use normalized records' },
+          { label: 'Check', value: 'Freshness', note: 'Stale or missing data is flagged' },
+          { label: 'Compare', value: 'Side-by-side', note: 'Returns, risk, costs, and coverage' },
+          { label: 'Explain', value: 'Research-only', note: 'AI explains data without advice' },
         ].map((item) => (
           <div key={item.label} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
             <p className="text-xs text-slate-300">{item.label}</p>
@@ -123,6 +123,9 @@ function CanvasPlaceholder() {
           <path d="M30 210 C110 180, 150 192, 220 160 C270 138, 300 150, 360 122 C410 98, 450 112, 510 86 C560 66, 620 82, 670 72" fill="none" stroke="#66a3ff" strokeWidth="4" strokeLinecap="round"/>
           <path d="M30 224 C105 202, 150 198, 220 188 C280 178, 310 166, 360 172 C412 178, 455 144, 510 150 C560 156, 620 126, 670 132" fill="none" stroke="#007acc" strokeWidth="3" strokeLinecap="round"/>
         </svg>
+      </div>
+      <div className="mt-5 rounded-xl border border-amber-300/20 bg-amber-300/10 p-4 text-xs leading-5 text-amber-100">
+        FundersAI shows &quot;Not available&quot; for missing fields, flags partial or stale data, and keeps AI output as explanation only.
       </div>
     </div>
   );
@@ -223,7 +226,7 @@ function SidebarContent({
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-300">
               <Database className="h-3.5 w-3.5 text-[#007acc] shrink-0" />
-              <span>Supabase-first data</span>
+              <span>Normalized stored data</span>
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-300">
               <ShieldCheck className="h-3.5 w-3.5 text-slate-400 shrink-0" />
@@ -436,12 +439,12 @@ export default function DashboardLayout() {
 
   const formatPercent = (value: unknown) => {
     const num = Number(value);
-    return Number.isFinite(num) ? `${num.toFixed(2)}%` : 'N/A';
+    return Number.isFinite(num) ? `${num.toFixed(2)}%` : 'Not available';
   };
 
   const formatAum = (value: unknown) => {
     const num = Number(value);
-    return Number.isFinite(num) ? `INR ${Math.round(num).toLocaleString('en-IN')}` : 'N/A';
+    return Number.isFinite(num) ? `INR ${Math.round(num).toLocaleString('en-IN')}` : 'Not available';
   };
 
   const formatRiskLabel = (value: unknown) => {
@@ -449,7 +452,7 @@ export default function DashboardLayout() {
     return label || 'Coverage pending';
   };
 
-  const compactFundName = (value: unknown) => String(value || 'N/A')
+  const compactFundName = (value: unknown) => String(value || 'Not available')
     .replace(/\s*-\s*Direct Plan\s*-\s*Growth/gi, '')
     .replace(/\s*Direct\s*Growth/gi, '')
     .trim();
@@ -577,6 +580,42 @@ export default function DashboardLayout() {
               Review holdings structure, concentration, and diversification signals.
             </p>
             <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">Diversification read, not portfolio advice</p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-[#66a3ff]/20 bg-[#66a3ff]/[0.055] p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Database className="h-4 w-4 text-[#66a3ff]" />
+                <h3 className="text-sm font-semibold text-white">How FundersAI keeps answers grounded</h3>
+              </div>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
+                The app reads normalized stored data for search, compare, charts, and detail views. AI explains what is available; it does not fill missing values or make recommendations.
+              </p>
+            </div>
+            <span className="inline-flex w-fit rounded-full border border-amber-300/25 bg-amber-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-100">
+              Research-only
+            </span>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              { icon: CheckCircle2, label: 'Real records', note: 'Collected data is stored before it appears in the UI.' },
+              { icon: Database, label: 'Structured fields', note: 'Messy inputs become normalized records for app reads.' },
+              { icon: Clock3, label: 'Freshness visible', note: 'Stale, partial, or missing data is shown near the result.' },
+              { icon: AlertCircle, label: 'Limits shown', note: 'Unsupported claims stay out of the answer.' },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.label} className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-white">
+                    <Icon className="h-3.5 w-3.5 text-[#66a3ff]" />
+                    {item.label}
+                  </div>
+                  <p className="mt-2 text-[11px] leading-5 text-slate-400">{item.note}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -747,7 +786,7 @@ export default function DashboardLayout() {
                                   <div className="line-clamp-2">{compactFundName(fund.scheme_name)}</div>
                                   <div className="mt-1 text-[10px] text-slate-500">{fund.category || 'Category unavailable'}</div>
                                 </td>
-                                <td className="px-3 py-3">{fund.amc_name || 'N/A'}</td>
+                                <td className="px-3 py-3">{fund.amc_name || 'Not available'}</td>
                                 <td className="px-3 py-3 font-mono">{formatPercent(fund.return_3y)}</td>
                                 <td className="px-3 py-3 font-mono">{formatAum(fund.aum)}</td>
                                 <td className="px-3 py-3 font-mono">{formatPercent(fund.expense_ratio)}</td>

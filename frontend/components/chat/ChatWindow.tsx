@@ -6,7 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Send, Sparkles, Trash2 } from 'lucide-react';
 import { useCanvasStore } from '@/store/useCanvasStore';
-import { AssetType, ComparisonViewMode, ConversationContext, initialMessages, Message, ResearchDepth, useChatStore } from '@/store/useChatStore';
+import { AssetType, ComparisonViewMode, ConversationContext, ExplanationMode, initialMessages, Message, ResearchDepth, useChatStore } from '@/store/useChatStore';
 import { hasSupabaseBrowserEnv, supabaseBrowser } from '@/lib/supabaseBrowser';
 import Magnetic from '@/components/ui/Magnetic';
 
@@ -51,6 +51,165 @@ function contextFromMessageMetadata(messages: Message[]): ConversationContext {
   return {};
 }
 
+type SuggestionTemplate = {
+  id: string;
+  label: string;
+  prompt: string;
+  assetType?: AssetType;
+  explanationMode?: ExplanationMode;
+};
+
+const defaultTemplates: SuggestionTemplate[] = [
+  {
+    id: 'mf-deep-dive',
+    label: 'Mutual Fund Deep Dive',
+    prompt: 'Create a mutual fund deep dive for Parag Parikh Flexi Cap and ICICI Multi Asset Fund with returns, risk, cost, freshness, and missing data.',
+    assetType: 'mutual_fund',
+    explanationMode: 'advanced',
+  },
+  {
+    id: 'risk-analysis',
+    label: 'Risk Analysis',
+    prompt: 'Show the key risks, stale data, missing fields, and confidence limits for this comparison.',
+    explanationMode: 'beginner',
+  },
+  {
+    id: 'sip-fit',
+    label: 'SIP Research Fit',
+    prompt: 'Compare these funds for long-term SIP research fit using return consistency, volatility, drawdown, expense ratio, and source freshness.',
+    assetType: 'mutual_fund',
+    explanationMode: 'beginner',
+  },
+];
+
+const stockTemplates: SuggestionTemplate[] = [
+  {
+    id: 'stock-deep-dive',
+    label: 'Stock Deep Dive',
+    prompt: 'Create a stock deep dive with valuation, growth, profitability, debt risk, price trend, data freshness, and missing fields.',
+    assetType: 'stock',
+    explanationMode: 'advanced',
+  },
+  {
+    id: 'news-impact',
+    label: 'News Impact',
+    prompt: 'Check recent news impact and clearly separate verified data from missing or stale data.',
+    assetType: 'stock',
+    explanationMode: 'beginner',
+  },
+  {
+    id: 'expensive-now',
+    label: 'Expensive Now?',
+    prompt: 'Is this stock expensive based on available valuation metrics, growth, debt, and data confidence? Keep it research-only.',
+    assetType: 'stock',
+    explanationMode: 'beginner',
+  },
+];
+
+function buildSuggestionTemplates(assetType: AssetType, context: ConversationContext): SuggestionTemplate[] {
+  const lastCompare = context.last_compare;
+  if (lastCompare?.entities?.length) {
+    const entities = lastCompare.entities.join(' vs ');
+    return [
+      {
+        id: 'context-risk',
+        label: 'Key Risks',
+        prompt: `Show the key risks for ${entities}, including stale data, missing fields, confidence, and what should be verified next.`,
+        assetType: lastCompare.asset_type,
+        explanationMode: 'beginner',
+      },
+      {
+        id: 'context-benchmark',
+        label: 'Benchmark Compare',
+        prompt: `Compare ${entities} against the relevant benchmark context using available returns, risk, cost, and data freshness.`,
+        assetType: lastCompare.asset_type,
+        explanationMode: 'advanced',
+      },
+      {
+        id: 'context-long-term',
+        label: 'Long-Term View',
+        prompt: `Build a long-term investor research view for ${entities} without recommendation language.`,
+        assetType: lastCompare.asset_type,
+        explanationMode: 'beginner',
+      },
+    ];
+  }
+  return assetType === 'stock' ? stockTemplates : defaultTemplates;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : null;
+}
+
+function MessageMetadataBadges({ metadata, content }: { metadata?: Record<string, unknown> | null; content: string }) {
+  const sourceFreshness = asRecord(metadata?.source_freshness);
+  const confidence = asRecord(metadata?.confidence);
+  const riskAnalysis = asRecord(metadata?.risk_analysis);
+  const dataQuality = asRecord(metadata?.data_quality);
+  const sourceRows = sourceFreshness ? Object.entries(sourceFreshness).slice(0, 2) : [];
+  const riskItems = Array.isArray(riskAnalysis?.items) ? riskAnalysis.items : [];
+  const missingCount = dataQuality
+    ? Object.values(dataQuality).reduce((count, value) => {
+        const row = asRecord(value);
+        const missing = row?.missing_fields;
+        return count + (Array.isArray(missing) ? missing.length : 0);
+      }, 0)
+    : 0;
+
+  if (content.toLowerCase().includes('coverage pending')) {
+    return (
+      <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200">
+        Coverage pending
+      </span>
+    );
+  }
+
+  if (!metadata || (!sourceRows.length && !confidence?.label && !riskItems.length && !missingCount)) {
+    return (
+      <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-300">
+        Source metadata pending
+      </span>
+    );
+  }
+
+  return (
+    <>
+      {confidence?.label ? (
+        <span className="rounded-full border border-[#66a3ff]/20 bg-[#66a3ff]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#cce0ff]">
+          Confidence {String(confidence.label)}
+        </span>
+      ) : null}
+      {sourceRows.map(([entity, raw]) => {
+        const row = asRecord(raw) || {};
+        const stale = Boolean(row.stale);
+        const lastUpdated = row.snapshot_last_updated || row.price_date || row.nav_date;
+        return (
+          <span
+            key={entity}
+            className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+              stale
+                ? 'border-amber-400/20 bg-amber-400/10 text-amber-200'
+                : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
+            }`}
+          >
+            {stale ? 'Stale' : 'Fresh'} {lastUpdated ? String(lastUpdated) : entity}
+          </span>
+        );
+      })}
+      {riskItems.length ? (
+        <span className="rounded-full border border-rose-300/20 bg-rose-300/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-100">
+          {riskItems.length} risk flags
+        </span>
+      ) : null}
+      {missingCount ? (
+        <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200">
+          {missingCount} missing fields
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: boolean }) {
   const searchParams = useSearchParams();
   const { setView, setIds, openCanvas, closeCanvas } = useCanvasStore();
@@ -59,12 +218,14 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
   const isProcessing = useChatStore((state) => state.isProcessing);
   const assetType = useChatStore((state) => state.assetType);
   const researchDepth = useChatStore((state) => state.researchDepth);
+  const explanationMode = useChatStore((state) => state.explanationMode);
   const comparisonViewMode = useChatStore((state) => state.comparisonViewMode);
   const conversationContext = useChatStore((state) => state.conversationContext);
   const setInput = useChatStore((state) => state.setInput);
   const setIsProcessing = useChatStore((state) => state.setIsProcessing);
   const setAssetType = useChatStore((state) => state.setAssetType);
   const setResearchDepth = useChatStore((state) => state.setResearchDepth);
+  const setExplanationMode = useChatStore((state) => state.setExplanationMode);
   const setComparisonViewMode = useChatStore((state) => state.setComparisonViewMode);
   const setConversationContext = useChatStore((state) => state.setConversationContext);
   const setMessages = useChatStore((state) => state.setMessages);
@@ -78,6 +239,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
   const contentRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const initialQuerySentRef = useRef(false);
+  const suggestionTemplates = buildSuggestionTemplates(assetType, conversationContext);
 
   const getAccessToken = useCallback(async () => {
     if (!hasSupabaseBrowserEnv) return null;
@@ -114,8 +276,10 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
     e.target.style.height = `${Math.min(e.target.scrollHeight, 150)}px`;
   };
 
-  const applySuggestion = (text: string) => {
-    setInput(text);
+  const applySuggestion = (template: SuggestionTemplate) => {
+    setInput(template.prompt);
+    if (template.assetType) setAssetType(template.assetType);
+    if (template.explanationMode) setExplanationMode(template.explanationMode);
   };
 
   useEffect(() => {
@@ -173,12 +337,18 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
     queryText: string,
     selectedAssetType: AssetType = assetType,
     selectedResearchDepth: ResearchDepth = researchDepth,
+    selectedExplanationMode: ExplanationMode = explanationMode,
     selectedComparisonViewMode: ComparisonViewMode = comparisonViewMode,
   ) => {
     const text = queryText.trim();
     if (!text) return;
 
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: text };
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: text,
+      metadata: { explanation_mode: selectedExplanationMode },
+    };
     addMessage(userMsg);
     setInput('');
     if (textareaRef.current) {
@@ -206,6 +376,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
           query: text,
           asset_type: selectedAssetType,
           research_depth: selectedResearchDepth,
+          explanation_mode: selectedExplanationMode,
           comparison_view_mode: selectedComparisonViewMode,
           history: requestHistory,
           conversation_context: conversationContext,
@@ -241,14 +412,21 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
         id: Date.now().toString(),
         role: 'system',
         content: data.answer,
-        metadata: data.conversation_context ? { conversation_context: nextConversationContext } : null,
+        metadata: {
+          conversation_context: nextConversationContext,
+          source_freshness: data.source_freshness || null,
+          data_quality: data.data_quality || null,
+          risk_analysis: data.risk_analysis || null,
+          confidence: data.confidence || null,
+          explanation_mode: data.explanation_mode || selectedExplanationMode,
+        },
       });
     } catch {
       addMessage({ id: Date.now().toString(), role: 'system', content: 'Coverage pending: FundersAI core is not reachable. Try again when the research service is running.' });
     } finally {
       setIsProcessing(false);
     }
-  }, [addMessage, assetType, closeCanvas, comparisonViewMode, conversationContext, getAccessToken, messages, openCanvas, researchDepth, setConversationContext, setIds, setInput, setIsProcessing, setView]);
+  }, [addMessage, assetType, closeCanvas, comparisonViewMode, conversationContext, explanationMode, getAccessToken, messages, openCanvas, researchDepth, setConversationContext, setIds, setInput, setIsProcessing, setView]);
 
   useEffect(() => {
     if (!isHistoryReady) return;
@@ -262,11 +440,15 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
       selectedAssetType === 'stock' || selectedAssetType === 'mutual_fund' ? selectedAssetType : 'auto';
     const selectedResearchDepth = searchParams.get('research_depth');
     const nextResearchDepth: ResearchDepth = selectedResearchDepth === 'deep' ? 'deep' : 'standard';
+    const selectedExplanationMode = searchParams.get('explanation_mode');
+    const nextExplanationMode: ExplanationMode =
+      selectedExplanationMode === 'advanced' || nextResearchDepth === 'deep' ? 'advanced' : 'beginner';
 
     setAssetType(nextAssetType);
-    setResearchDepth(nextResearchDepth);
-    void sendQuery(query, nextAssetType, nextResearchDepth, comparisonViewMode);
-  }, [comparisonViewMode, isHistoryReady, searchParams, sendQuery, setAssetType, setResearchDepth]);
+    setExplanationMode(nextExplanationMode);
+    setResearchDepth(nextExplanationMode === 'advanced' ? 'deep' : nextResearchDepth);
+    void sendQuery(query, nextAssetType, nextExplanationMode === 'advanced' ? 'deep' : nextResearchDepth, nextExplanationMode, comparisonViewMode);
+  }, [comparisonViewMode, isHistoryReady, searchParams, sendQuery, setAssetType, setExplanationMode, setResearchDepth]);
 
   useEffect(() => {
     if (pendingQuery) {
@@ -276,7 +458,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
   }, [pendingQuery, sendQuery, setPendingQuery]);
 
   const handleSend = async () => {
-    await sendQuery(input, assetType, researchDepth, comparisonViewMode);
+    await sendQuery(input, assetType, researchDepth, explanationMode, comparisonViewMode);
   };
 
   const handleClearHistory = async () => {
@@ -345,15 +527,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
                   </ReactMarkdown>
                   {msg.id !== '1' && (
                     <div className="mt-3 flex flex-wrap gap-2 border-t border-white/5 pt-3">
-                      {msg.content.toLowerCase().includes('coverage pending') ? (
-                        <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200">Coverage pending</span>
-                      ) : (
-                        <>
-                          <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-300">AMC factsheet</span>
-                          <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-200">NAV synced</span>
-                          <span className="rounded-full border border-[#66a3ff]/20 bg-[#66a3ff]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#cce0ff]">Risk label official</span>
-                        </>
-                      )}
+                      <MessageMetadataBadges metadata={msg.metadata} content={msg.content} />
                     </div>
                   )}
                 </div>
@@ -362,15 +536,16 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
               )}
               {msg.id === '1' && (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Magnetic>
-                    <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white" onClick={() => applySuggestion('Compare two verified funds: Parag Parikh Flexi Cap and ICICI Multi Asset Fund.')}>Compare two verified funds</button>
-                  </Magnetic>
-                  <Magnetic>
-                    <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white" onClick={() => applySuggestion('Explain risk-adjusted return using Sharpe, volatility, and drawdown.')}>Explain risk-adjusted return</button>
-                  </Magnetic>
-                  <Magnetic>
-                    <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white" onClick={() => applySuggestion('Check source freshness for the selected funds before comparing them.')}>Check source freshness</button>
-                  </Magnetic>
+                  {suggestionTemplates.map((template) => (
+                    <Magnetic key={template.id}>
+                      <button
+                        className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white"
+                        onClick={() => applySuggestion(template)}
+                      >
+                        {template.label}
+                      </button>
+                    </Magnetic>
+                  ))}
                 </div>
               )}
             </div>
@@ -431,6 +606,28 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
                         : 'text-slate-400 hover:text-white border border-transparent'
                     }`}
                     onClick={() => setAssetType(option.value as AssetType)}
+                    disabled={isProcessing}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Explanation mode selector */}
+              <div className="inline-flex rounded-full bg-white/[0.03] p-1 border border-white/5 gap-1">
+                {[
+                  { label: 'Beginner', value: 'beginner' },
+                  { label: 'Advanced', value: 'advanced' },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide transition-all ${
+                      explanationMode === option.value
+                        ? 'bg-emerald-400/15 border border-emerald-300/30 text-emerald-100'
+                        : 'text-slate-400 hover:text-white border border-transparent'
+                    }`}
+                    onClick={() => setExplanationMode(option.value as ExplanationMode)}
                     disabled={isProcessing}
                   >
                     {option.label}

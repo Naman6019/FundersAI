@@ -21,7 +21,7 @@ const displayStyle = { fontFamily: '"Space Grotesk", var(--font-body-md)' };
 const proofRail = [
   ["Verified AMCs", "PPFAS, ICICI, HDFC, SBI"],
   ["Output boundary", "Research-only, no recommendations"],
-  ["Data layer", "Factsheet, NAV, metric snapshots"],
+  ["Data layer", "Stored records, freshness, limits"],
   ["Next focus", "Broader AMC coverage before stocks"],
 ];
 
@@ -47,6 +47,15 @@ const productPanels = [
   ["Verified AMC coverage", "PPFAS, ICICI, HDFC, and SBI coverage is stated clearly while broader AMC expansion continues."],
   ["Source freshness", "NAV and factsheet status stay visible beside the metrics so stale data is easier to spot."],
   ["No advisory output", "The interface frames answers as research notes, not recommendations, suitability calls, or buy/sell guidance."],
+];
+
+const dataFlow = [
+  ["Collect", "FundersAI starts from real fund and market records, not generated claims."],
+  ["Store", "Raw files or payloads are retained for audit where needed."],
+  ["Normalize", "Parsers convert messy documents into structured fields the app can read."],
+  ["Validate", "Coverage, freshness, missing fields, and partial records are checked before display."],
+  ["Compare", "Search, charts, detail views, and compare tables read normalized stored data."],
+  ["Explain", "AI explains available data in plain English and shows limits beside the result."],
 ];
 
 const workflow = [
@@ -349,6 +358,7 @@ export default function FundersAILandingPage() {
           </Link>
           <div className="hidden items-center gap-8 text-sm font-semibold text-slate-400 lg:flex">
             <a href="#proof" className="transition hover:text-white">Proof</a>
+            <a href="#data-flow" className="transition hover:text-white">Data flow</a>
             <a href="#product" className="transition hover:text-white">Product</a>
             <a href="#workflow" className="transition hover:text-white">Workflow</a>
             <a href="#trust" className="transition hover:text-white">Trust</a>
@@ -422,9 +432,33 @@ export default function FundersAILandingPage() {
         </div>
       </section>
 
-      <section id="product" className="mx-auto w-full max-w-[1720px] px-5 py-12 sm:px-10 sm:py-16 2xl:px-16">
+      <section id="data-flow" className="mx-auto w-full max-w-[1720px] px-5 py-12 sm:px-10 sm:py-16 2xl:px-16">
         <SectionHeading
           number="02"
+          eyebrow="Data flow"
+          title="Real records become structured research, then plain-English explanations."
+          body="Every product claim should trace back to stored data, visible freshness, and clear limits. Missing values stay missing instead of being filled by AI."
+        />
+        <Reveal className="mt-8 overflow-hidden rounded-2xl border border-white/10 bg-[#07111f]/80">
+          <div className="grid gap-0 md:grid-cols-2 xl:grid-cols-3">
+            {dataFlow.map(([step, body], index) => (
+              <div key={step} className={`min-h-44 p-6 ${index % 3 !== 2 ? "xl:border-r xl:border-white/10" : ""} ${index < 3 ? "xl:border-b xl:border-white/10" : ""} ${index % 2 === 0 ? "md:border-r md:border-white/10 xl:border-r" : ""} ${index < 4 ? "md:border-b md:border-white/10 xl:border-b" : ""}`}>
+                <p className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-[#66a3ff]">{String(index + 1).padStart(2, "0")} / {step}</p>
+                <p className="mt-4 text-sm leading-6 text-slate-300">{body}</p>
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-white/10 bg-white/[0.025] px-6 py-5">
+            <p className="text-sm leading-6 text-slate-400">
+              Trust rule: if data is missing, partial, stale, or not backed by stored records, FundersAI should show that limit beside the answer.
+            </p>
+          </div>
+        </Reveal>
+      </section>
+
+      <section id="product" className="mx-auto w-full max-w-[1720px] px-5 py-12 sm:px-10 sm:py-16 2xl:px-16">
+        <SectionHeading
+          number="03"
           eyebrow="Product"
           title="A comparison terminal, metric table, and AI explanation in one view."
           body="FundersAI should feel like a working research console, not a generic marketing grid."
@@ -435,7 +469,7 @@ export default function FundersAILandingPage() {
 
       <section id="workflow" className="mx-auto w-full max-w-[1720px] px-5 py-12 sm:px-10 sm:py-16 2xl:px-16">
         <SectionHeading
-          number="03"
+          number="04"
           eyebrow="Workflow"
           title="Pick funds. Compare metrics. Ask questions. Verify sources."
           body="The core workflow stays simple so a researcher can move from screening to explanation without losing the audit trail."
@@ -455,7 +489,7 @@ export default function FundersAILandingPage() {
 
       <section id="trust" className="mx-auto w-full max-w-[1720px] px-5 py-12 sm:px-10 sm:py-16 2xl:px-16">
         <SectionHeading
-          number="04"
+          number="05"
           eyebrow="Trust"
           title="Compliance guardrails are part of the interface."
           body="Professional financial AI needs restraint: visible assumptions, source-state labels, and consistent research-only language."
@@ -479,7 +513,7 @@ export default function FundersAILandingPage() {
 
       <section id="roadmap" className="mx-auto w-full max-w-[1720px] px-5 py-12 sm:px-10 sm:py-16 2xl:px-16">
         <SectionHeading
-          number="05"
+          number="06"
           eyebrow="Roadmap"
           title="Broader fund coverage first. Stock research later."
           body="This keeps the page honest about the current product stage while still giving users a clear expansion path."
@@ -551,6 +585,7 @@ export default function FundersAILandingPage() {
               <h3 className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-[#66a3ff]">Product</h3>
               <nav className="mt-5 flex flex-col gap-3 text-sm text-slate-400">
                 <a href="#proof" className="transition hover:text-white">Proof</a>
+                <a href="#data-flow" className="transition hover:text-white">Data flow</a>
                 <a href="#product" className="transition hover:text-white">Product</a>
                 <a href="#workflow" className="transition hover:text-white">Workflow</a>
                 <a href="#trust" className="transition hover:text-white">Trust</a>

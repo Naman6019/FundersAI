@@ -30,6 +30,7 @@ interface QuantPriceRow {
 interface QuantResponsePayload {
   comparison?: Record<string, ComparisonMetric>;
   why_better?: WhyBetterPayload;
+  risk_analysis?: RiskAnalysisPayload;
   comparison_summary?: ComparisonSummaryPayload;
   holdings_overlap?: HoldingsOverlapPayload;
   verdict_context?: string;
@@ -124,6 +125,20 @@ type WhyBetterPayload = {
   }>;
   verdict_context?: string;
   holdings_based_reasoning?: { status?: string; reason?: string | null };
+};
+
+type RiskAnalysisItem = {
+  entity?: string;
+  label?: string;
+  level?: string;
+  evidence?: string;
+  confidence?: string;
+};
+
+type RiskAnalysisPayload = {
+  asset_type?: string;
+  summary?: string;
+  items?: RiskAnalysisItem[];
 };
 
 type MFComparisonRecord = {
@@ -310,6 +325,14 @@ const getWhyBetter = (data: unknown): WhyBetterPayload | null => {
   return why as WhyBetterPayload;
 };
 
+const getRiskAnalysis = (data: unknown): RiskAnalysisPayload | null => {
+  if (!data || typeof data !== 'object') return null;
+  const payload = data as Record<string, unknown>;
+  const risk = payload.risk_analysis;
+  if (!risk || typeof risk !== 'object') return null;
+  return risk as RiskAnalysisPayload;
+};
+
 const computeAlphaBetaFromNav = (
   navData: NavPoint[] | null,
   benchmarkData: Array<{ date: string; close: number }> | null,
@@ -389,24 +412,24 @@ const normalizePercent = (value: unknown, scaleUnitToPercent = true): number | n
 };
 
 const formatPlain = (value: number | null, digits = 2) => {
-  if (value === null) return 'N/A';
+  if (value === null) return 'Not available';
   return value.toFixed(digits);
 };
 
 const formatPercent = (value: number | null, digits = 2) => {
-  if (value === null) return 'N/A';
+  if (value === null) return 'Not available';
   return `${value >= 0 ? '+' : ''}${value.toFixed(digits)}%`;
 };
 
 const formatAum = (value: unknown) => {
   const parsed = toNumber(value);
-  if (parsed === null) return 'N/A';
+  if (parsed === null) return 'Not available';
   return `₹${parsed.toLocaleString('en-IN')} Cr`;
 };
 
 const formatExpense = (value: unknown) => {
   const parsed = toNumber(value);
-  if (parsed === null) return 'N/A';
+  if (parsed === null) return 'Not available';
   return `${parsed.toFixed(2)}%`;
 };
 
@@ -416,7 +439,7 @@ const formatRiskLabel = (value: unknown) => {
 };
 
 const compactSchemeName = (name: string | null | undefined) => {
-  if (!name) return 'N/A';
+  if (!name) return 'Not available';
   return name
     .replace(/\s*-\s*Direct Plan\s*-\s*Growth/gi, '')
     .replace(/\s*-\s*Regular Plan\s*-\s*Growth/gi, '')
@@ -454,21 +477,22 @@ function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
   const factors = payload.factor_results || [];
   const freshness = payload.source_freshness || {};
   const freshnessRows = Object.entries(freshness);
+  const limitations = payload.data_limitations || [];
   const holdingsBlocked = payload.holdings_based_reasoning?.status === 'blocked';
   const isMf = winner?.asset_type === 'mutual_fund';
 
   return (
     <section className="p-2 sm:p-4 mb-6">
-      <h3 className="mb-2 text-sm font-semibold tracking-wide text-[#9ec5ff]">Why this is better?</h3>
+      <h3 className="mb-2 text-sm font-semibold tracking-wide text-[#9ec5ff]">Why this result?</h3>
       <p className="whitespace-pre-line text-sm leading-relaxed text-[#d7e4fb]">
         {payload.summary || 'Deterministic comparison summary unavailable.'}
       </p>
       <div className="mt-3 flex flex-wrap gap-2 text-xs">
         <span className="rounded-md border border-white/20 bg-[#0e182a] px-2 py-1 text-[#d7e4fb]">
-          Winner: {winner?.status === 'winner' ? (winner.entity_name || winner.entity_id || 'N/A') : winner?.status || 'N/A'}
+          Based on available data: {winner?.status === 'winner' ? (winner.entity_name || winner.entity_id || 'Not available') : winner?.status || 'Not available'}
         </span>
         <span className="rounded-md border border-white/20 bg-[#0e182a] px-2 py-1 text-[#d7e4fb]">
-          Confidence: {confidence?.label || 'N/A'} ({typeof confidence?.score === 'number' ? confidence.score.toFixed(2) : 'N/A'})
+          Confidence: {confidence?.label || 'Not available'} ({typeof confidence?.score === 'number' ? confidence.score.toFixed(2) : 'Not available'})
         </span>
         <span className="rounded-md border border-white/20 bg-[#0e182a] px-2 py-1 text-[#d7e4fb]">
           Coverage: {factors.length > 0 && factors.every((f) => (f.coverage ?? 0) >= 1) ? 'Complete' : 'Incomplete'}
@@ -494,7 +518,7 @@ function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
             <div key={`${factor.factor || 'factor'}-${idx}`} className="rounded-md border border-white/15 bg-[#0e182a] p-2 text-xs">
               <div className="font-semibold text-white">{factor.factor || 'Factor'}</div>
               <div className="text-[#c8d8f6]">Winner: {factor.winner || 'No clear edge'}</div>
-              <div className="text-[#8ea7cd]">Coverage: {typeof factor.coverage === 'number' ? `${Math.round(factor.coverage * 100)}%` : 'N/A'}</div>
+              <div className="text-[#8ea7cd]">Coverage: {typeof factor.coverage === 'number' ? `${Math.round(factor.coverage * 100)}%` : 'Not available'}</div>
             </div>
           ))}
         </div>
@@ -504,8 +528,8 @@ function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
           {freshnessRows.map(([entity, meta]) => (
             <div key={entity} className="rounded-md border border-white/15 bg-[#0e182a] p-2 text-xs">
               <div className="font-semibold text-white">{entity}</div>
-              <div className="text-[#c8d8f6]">Source: {meta?.source || 'N/A'}</div>
-              <div className="text-[#c8d8f6]">Last Updated: {meta?.snapshot_last_updated || meta?.price_date || meta?.nav_date || 'N/A'}</div>
+              <div className="text-[#c8d8f6]">Source: {meta?.source || 'Not available'}</div>
+              <div className="text-[#c8d8f6]">Last Updated: {meta?.snapshot_last_updated || meta?.price_date || meta?.nav_date || 'Not available'}</div>
               <div className={meta?.stale ? 'text-amber-200' : 'text-emerald-200'}>
                 {meta?.stale ? 'Stale' : 'Fresh'}
               </div>
@@ -513,7 +537,55 @@ function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
           ))}
         </div>
       )}
+      {limitations.length > 0 && (
+        <div className="mt-3 rounded-md border border-amber-300/35 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
+          <div className="font-semibold">Data limits shown beside this result</div>
+          <ul className="mt-2 list-disc space-y-1 pl-4">
+            {limitations.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {payload.verdict_context && <p className="mt-3 text-xs text-[#8ea7cd]">{payload.verdict_context}</p>}
+    </section>
+  );
+}
+
+function RiskAnalysisPanel({ payload }: { payload: RiskAnalysisPayload | null }) {
+  const items = payload?.items || [];
+  if (!payload || items.length === 0) return null;
+
+  const levelClass = (level: string | undefined) => {
+    const value = String(level || '').toLowerCase();
+    if (value === 'high') return 'border-rose-300/25 bg-rose-300/10 text-rose-100';
+    if (value === 'medium') return 'border-amber-300/25 bg-amber-300/10 text-amber-100';
+    if (value === 'not available') return 'border-slate-300/15 bg-slate-300/10 text-slate-200';
+    return 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100';
+  };
+
+  return (
+    <section className="mb-6 rounded-2xl border border-white/10 bg-[#0e182a] p-4">
+      <div className="mb-3">
+        <h3 className="text-sm font-semibold tracking-wide text-[#9ec5ff]">Risk Analysis</h3>
+        <p className="mt-1 text-xs leading-relaxed text-[#8ea7cd]">
+          {payload.summary || 'Deterministic risk flags based on available data.'}
+        </p>
+      </div>
+      <div className="grid gap-2 md:grid-cols-2">
+        {items.slice(0, 8).map((item, index) => (
+          <div key={`${item.entity || 'entity'}-${item.label || 'risk'}-${index}`} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-white">{item.label || 'Risk flag'}</span>
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${levelClass(item.level)}`}>
+                {item.level || 'Not available'}
+              </span>
+            </div>
+            <p className="mt-1 text-[#c8d8f6]">{item.entity || 'Entity'}: {item.evidence || 'Evidence unavailable.'}</p>
+            <p className="mt-1 text-[#8ea7cd]">Confidence: {item.confidence || 'Not available'}</p>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
@@ -593,6 +665,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
   if (!isMF) {
     const comparison = mapQuantResponse(auxiliaryData?.quant_data) || fetchedComparison;
     const whyBetter = getWhyBetter(auxiliaryData?.quant_data) || fetchedWhyBetter;
+    const riskAnalysis = getRiskAnalysis(auxiliaryData?.quant_data);
     const entities = Object.keys(comparison);
     const colors = ['#5eead4', '#60a5fa', '#f97316', '#a78bfa'];
     const hasFundamentals = entities.some(entity => {
@@ -784,6 +857,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
             </div>
           )}
           <WhyBetterPanel payload={whyBetter} />
+          <RiskAnalysisPanel payload={riskAnalysis} />
           {priceRows.length > 0 && (
             <section className="rounded-2xl bg-[#111] border border-[#222] p-4 shadow-md">
               <h3 className="mb-3 text-sm font-semibold text-[#d7e4fb]">Price History</h3>
@@ -840,6 +914,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
     ? auxiliaryData.quant_data as QuantResponsePayload
     : undefined;
   const mfWhyBetter = getWhyBetter(auxiliaryData?.quant_data);
+  const mfRiskAnalysis = getRiskAnalysis(auxiliaryData?.quant_data);
   const comparisonSummary = mfQuant?.comparison_summary;
   const holdingsOverlap = mfQuant?.holdings_overlap;
   const periods: Period[] = ['1D', '6M', '1Y', '3Y', '5Y'];
@@ -880,7 +955,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
             {row.values.map((val, i) => (
               <div key={i} className={`py-3.5 px-2 text-left ${row.winnerIndex === i ? 'text-[#66a3ff] font-semibold bg-[#66a3ff]/5' : 'text-slate-200'}`}>
                 <span className="flex items-center gap-1.5 font-mono">
-                  {val === 'N/A' || val === null ? <span className="text-slate-500">N/A</span> : val}
+                  {val === 'N/A' || val === null ? <span className="text-slate-500">Not available</span> : val}
                   {row.winnerIndex === i && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#66a3ff] shadow-[0_0_8px_rgba(102,163,255,0.6)]" />}
                 </span>
               </div>
@@ -1128,8 +1203,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
               { label: 'AMC factsheet', values: activeFunds.map(f => f!.riskLabel === 'Coverage pending' ? 'Coverage pending' : 'Mapped'), winnerIndex: null },
               { label: 'Source freshness', values: activeFunds.map(f => freshnessLabel(f!)), winnerIndex: null },
               { label: 'Risk label source', values: activeFunds.map(f => f!.riskLabel === 'Coverage pending' ? 'Coverage pending' : 'Official'), winnerIndex: null },
-              { label: 'NAV points synced', values: activeFunds.map(f => f!.historyPts ? String(f!.historyPts) : 'N/A'), winnerIndex: getWinnerIndex('NAV points', activeFunds.map(f => toNumber(f!.historyPts))) },
-              { label: 'Latest NAV Date', values: activeFunds.map(f => f!.lastNav ? String(f!.lastNav) : 'N/A'), winnerIndex: null },
+              { label: 'NAV points synced', values: activeFunds.map(f => f!.historyPts ? String(f!.historyPts) : 'Not available'), winnerIndex: getWinnerIndex('NAV points', activeFunds.map(f => toNumber(f!.historyPts))) },
+              { label: 'Latest NAV Date', values: activeFunds.map(f => f!.lastNav ? String(f!.lastNav) : 'Not available'), winnerIndex: null },
             ];
 
             const colsClass = ids.length === 2 ? 'sm:grid-cols-2' : ids.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-4';
@@ -1170,6 +1245,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                   ))}
                 </div>
 
+                <RiskAnalysisPanel payload={mfRiskAnalysis} />
+
                 <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
                   <h3 className="mb-2 text-sm font-semibold text-[#d7e4fb]">Decision clarity</h3>
                   <p className="text-sm leading-relaxed text-[#c8d8f6]">
@@ -1180,7 +1257,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                         {comparisonSummary.verdict_cards.slice(0, 4).map((card) => (
                           <div key={`${card.label}-${card.value}`} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">{card.label || 'Signal'}</p>
-                            <p className="mt-2 text-lg font-semibold text-white">{card.value || 'N/A'}</p>
+                            <p className="mt-2 text-lg font-semibold text-white">{card.value || 'Not available'}</p>
                             <p className="mt-1 text-xs leading-relaxed text-[#c8d8f6]">{card.note || 'No note available.'}</p>
                           </div>
                         ))}
@@ -1256,7 +1333,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                               {(holdingsOverlap.top_common_holdings || []).slice(0, 8).map((item) => (
                                 <tr key={`${item.isin || item.name}-${item.overlap_weight}`}>
                                   <td className="px-3 py-2">
-                                    <div className="font-medium text-white">{item.name || 'N/A'}</div>
+                                    <div className="font-medium text-white">{item.name || 'Not available'}</div>
                                     <div className="text-[10px] text-[#8ea7cd]">{item.sector || item.isin || 'Unclassified'}</div>
                                   </td>
                                   <td className="px-3 py-2">{formatPercent(toNumber(item.weight_a), 2)}</td>
@@ -1357,7 +1434,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Coverage: {activeFunds.every(f => f?.historyPts) ? 'Full' : 'Partial'}
                     </span>
                     <span className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Latest NAV: {activeFunds.find(f => f?.lastNav)?.lastNav || 'N/A'}
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Latest NAV: {activeFunds.find(f => f?.lastNav)?.lastNav || 'Not available'}
                     </span>
                     <span className="flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> NAV rows fetched: {Math.max(...activeFunds.map(f => Number(f?.historyPts || 0)))}

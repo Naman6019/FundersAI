@@ -64,8 +64,8 @@ export async function GET(request: Request) {
   }
 
   const usageRowsRes = await supabase
-    .from('provider_usage_logs')
-    .select('user_id,request_cost,created_at')
+    .from('ai_usage_events')
+    .select('user_id,total_tokens,created_at')
     .gte('created_at', monthStart)
     .limit(100000);
   const usageRows = usageRowsRes.data || [];
@@ -75,7 +75,7 @@ export async function GET(request: Request) {
   for (const row of usageRows) {
     const userId = String(row.user_id || '').trim();
     if (!userId) continue;
-    byUserMonthTokens.set(userId, (byUserMonthTokens.get(userId) || 0) + readNumber(row.request_cost));
+    byUserMonthTokens.set(userId, (byUserMonthTokens.get(userId) || 0) + readNumber(row.total_tokens));
     if ((row.created_at || '') >= dayStart) {
       byUserTodayRequests.set(userId, (byUserTodayRequests.get(userId) || 0) + 1);
     }

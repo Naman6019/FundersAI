@@ -29,55 +29,28 @@ export async function GET(request: Request) {
   const dayStart = utcDayStartIso();
   const monthStart = monthStartIso();
 
-  let sourceTable = 'ai_usage_events';
-  let tokenMode: 'actual' | 'proxy' = 'actual';
   let monthRows: UsageEvent[] = [];
   let todayRows: UsageEvent[] = [];
-  const todoNotes: string[] = [];
 
-  try {
-    const monthRes = await supabase
-      .from('ai_usage_events')
-      .select('created_at,provider,model,feature,user_id,success,total_tokens')
-      .gte('created_at', monthStart)
-      .limit(100000);
-    monthRows = (monthRes.data || []) as UsageEvent[];
-
-    const todayRes = await supabase
-      .from('ai_usage_events')
-      .select('created_at,provider,model,feature,user_id,success,total_tokens')
-      .gte('created_at', dayStart)
-      .limit(20000);
-    todayRows = (todayRes.data || []) as UsageEvent[];
-  } catch {
-    sourceTable = 'provider_usage_logs';
-    tokenMode = 'proxy';
-    todoNotes.push('TODO: ai_usage_events table missing; tokens are proxied from request_cost.');
-
-    const monthRes = await supabase
-      .from('provider_usage_logs')
-      .select('created_at,provider,endpoint,user_id,success,request_cost')
-      .gte('created_at', monthStart)
-      .limit(100000);
-    monthRows = (monthRes.data || []).map((row) => ({
-      ...row,
-      feature: row.endpoint || 'unknown',
-      model: 'unknown',
-      total_tokens: readNumber(row.request_cost),
-    })) as UsageEvent[];
-
-    const todayRes = await supabase
-      .from('provider_usage_logs')
-      .select('created_at,provider,endpoint,user_id,success,request_cost')
-      .gte('created_at', dayStart)
-      .limit(20000);
-    todayRows = (todayRes.data || []).map((row) => ({
-      ...row,
-      feature: row.endpoint || 'unknown',
-      model: 'unknown',
-      total_tokens: readNumber(row.request_cost),
-    })) as UsageEvent[];
+  const monthRes = await supabase
+    .from('ai_usage_events')
+    .select('created_at,provider,model,feature,user_id,success,total_tokens')
+    .gte('created_at', monthStart)
+    .limit(100000);
+  if (monthRes.error) {
+    return NextResponse.json({ error: 'ai_usage_events_unavailable' }, { status: 500 });
   }
+  monthRows = (monthRes.data || []) as UsageEvent[];
+
+  const todayRes = await supabase
+    .from('ai_usage_events')
+    .select('created_at,provider,model,feature,user_id,success,total_tokens')
+    .gte('created_at', dayStart)
+    .limit(20000);
+  if (todayRes.error) {
+    return NextResponse.json({ error: 'ai_usage_events_unavailable' }, { status: 500 });
+  }
+  todayRows = (todayRes.data || []) as UsageEvent[];
 
   const requestsToday = todayRows.length;
   const requestsMonth = monthRows.length;
@@ -123,9 +96,9 @@ export async function GET(request: Request) {
   return NextResponse.json({
     status: 'ok',
     checked_at: new Date().toISOString(),
-    source_table: sourceTable,
-    token_mode: tokenMode,
-    todo_notes: todoNotes,
+    source_table: 'ai_usage_events',
+    token_mode: 'actual',
+    todo_notes: [],
     summary: {
       requests_today: requestsToday,
       requests_month: requestsMonth,

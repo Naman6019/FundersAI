@@ -30,8 +30,8 @@ export async function GET(request: Request) {
 
   let activeUsersTodayByUsage = 0;
   const usageTodayRowsRes = await supabase
-    .from('provider_usage_logs')
-    .select('user_id,request_cost,success,created_at')
+    .from('ai_usage_events')
+    .select('user_id,total_tokens,success,created_at')
     .gte('created_at', dayStart)
     .limit(20000);
   const usageTodayRows = usageTodayRowsRes.data || [];
@@ -42,16 +42,16 @@ export async function GET(request: Request) {
   const activeUsersToday = Math.max(activeUsersTodayByProfile, activeUsersTodayByUsage);
 
   const monthUsageRowsRes = await supabase
-    .from('provider_usage_logs')
-    .select('request_cost,success,created_at')
+    .from('ai_usage_events')
+    .select('total_tokens,success,created_at')
     .gte('created_at', monthStart)
     .limit(50000);
   const monthUsageRows = monthUsageRowsRes.data || [];
 
   const aiRequestsToday = usageTodayRows.length;
   const aiRequestsMonth = monthUsageRows.length;
-  const tokensToday = usageTodayRows.reduce((sum, row) => sum + readNumber(row.request_cost), 0);
-  const tokensMonth = monthUsageRows.reduce((sum, row) => sum + readNumber(row.request_cost), 0);
+  const tokensToday = usageTodayRows.reduce((sum, row) => sum + readNumber(row.total_tokens), 0);
+  const tokensMonth = monthUsageRows.reduce((sum, row) => sum + readNumber(row.total_tokens), 0);
   const failedAiCallsToday = usageTodayRows.filter((row) => row.success === false).length;
 
   const fundsRes = await supabase
@@ -152,7 +152,7 @@ export async function GET(request: Request) {
         tokens_today: tokensToday,
         tokens_month: tokensMonth,
         failed_ai_calls_today: failedAiCallsToday,
-        token_note: 'TODO: request_cost is currently used as token proxy from provider_usage_logs.',
+        token_note: 'Real model token totals from ai_usage_events.',
       },
       data: {
         total_funds: totalFunds,

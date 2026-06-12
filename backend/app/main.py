@@ -135,6 +135,7 @@ def read_root():
     return {"message": "FundersAI API is running. Use /health for health checks."}
 
 @app.get("/health")
+@app.head("/health")
 def health():
     return {"status": "ok"}
 
@@ -1003,6 +1004,7 @@ class ChatRequest(BaseModel):
     query: str
     asset_type: Literal["auto", "stock", "mutual_fund"] = "auto"
     research_depth: Literal["standard", "deep"] = "standard"
+    explanation_mode: Literal["beginner", "advanced"] | None = None
     comparison_view_mode: Literal["canvas", "chat"] = "canvas"
     history: list[ChatHistoryMessage] = Field(default_factory=list)
     conversation_context: ConversationContext | None = None
@@ -1025,6 +1027,7 @@ OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/ap
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
 OPENROUTER_SITE_URL = os.getenv("OPENROUTER_SITE_URL", "http://localhost:3000")
 OPENROUTER_APP_NAME = os.getenv("OPENROUTER_APP_NAME", "FundersAI")
+CHAT_INTERNAL_PROXY_KEY = os.getenv("CHAT_INTERNAL_PROXY_KEY", "").strip()
 CONTROLLED_WEB_CONTEXT_ENABLED = os.getenv("CONTROLLED_WEB_CONTEXT_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
 APPROVED_WEB_SOURCE_NAMES = (
     "amfi",
@@ -1049,7 +1052,44 @@ if "INDIANAPI_CHAT_STOCK_ENABLED" not in os.environ:
 DEBUG_MF_RESOLUTION = os.getenv("DEBUG_MF_RESOLUTION", "0").strip().lower() in {"1", "true", "yes", "on"}
 MF_COMPARE_MIN_NAV_POINTS = max(int(os.getenv("MF_COMPARE_MIN_NAV_POINTS", "252")), 1)
 
-async def function_ollama_chat(messages, format="json", max_retries=2):
+def _trusted_chat_proxy(x_internal_proxy_key: str | None) -> bool:
+    return bool(
+        CHAT_INTERNAL_PROXY_KEY
+        and x_internal_proxy_key
+        and hmac.compare_digest(x_internal_proxy_key, CHAT_INTERNAL_PROXY_KEY)
+    )
+
+
+def _append_openrouter_usage(usage_collector: list[dict[str, Any]] | None, data: dict[str, Any]) -> None:
+    if usage_collector is None:
+        return
+    usage = data.get("usage") if isinstance(data, dict) else None
+    if not isinstance(usage, dict):
+        return
+    usage_collector.append(
+        {
+            "provider": "openrouter",
+            "model": data.get("model") or OPENROUTER_MODEL,
+            "prompt_tokens": int(usage.get("prompt_tokens") or 0),
+            "completion_tokens": int(usage.get("completion_tokens") or 0),
+            "total_tokens": int(usage.get("total_tokens") or 0),
+        }
+    )
+
+
+def _summarize_openrouter_usage(usage_collector: list[dict[str, Any]] | None) -> dict[str, Any]:
+    rows = usage_collector or []
+    return {
+        "provider": "openrouter",
+        "model": rows[-1].get("model") if rows else OPENROUTER_MODEL,
+        "prompt_tokens": sum(int(row.get("prompt_tokens") or 0) for row in rows),
+        "completion_tokens": sum(int(row.get("completion_tokens") or 0) for row in rows),
+        "total_tokens": sum(int(row.get("total_tokens") or 0) for row in rows),
+        "calls": len(rows),
+    }
+
+
+async def function_ollama_chat(messages, format="json", max_retries=2, usage_collector: list[dict[str, Any]] | None = None):
     openrouter_key = os.environ.get("OPENROUTER_API_KEY") or OPENROUTER_API_KEY
     if not openrouter_key or openrouter_key == "OPENROUTER_API_KEY_PLACEHOLDER":
         logger.error("Missing OPENROUTER_API_KEY in environment.")
@@ -1079,12 +1119,13 @@ async def function_ollama_chat(messages, format="json", max_retries=2):
             response = await client.post(OPENROUTER_BASE_URL, headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()
+            _append_openrouter_usage(usage_collector, data)
             return data["choices"][0]["message"]["content"]
         except Exception as e:
             logger.error(f"OpenRouter API Error: {e}")
             return None
 
-async def route_query(query: str, asset_type: str = "auto") -> dict:
+async def route_query(query: str, asset_type: str = "auto", usage_collector: list[dict[str, Any]] | None = None) -> dict:
     """Agent 1: Router"""
     def _has_downside_focus(text: str) -> bool:
         q = str(text or "").lower()
@@ -1145,7 +1186,7 @@ Default downside_focus to false unless user explicitly asks downside/fall/crash/
         {"role": "user", "content": query}
     ]
     
-    result = await function_ollama_chat(messages, format="json")
+    result = await function_ollama_chat(messages, format="json", usage_collector=usage_collector)
     if result:
         try:
             payload = json.loads(result)
@@ -1531,7 +1572,7 @@ def fetch_quant_data(ticker: str, period: str = "1mo") -> dict:
             return cache_and_return(local_data)
         return {"error": str(e)}
 
-async def analyze_news_sentiment(news_items: list) -> list:
+async def analyze_news_sentiment(news_items: list, usage_collector: list[dict[str, Any]] | None = None) -> list:
     """Agent: Sentiment Analyzer"""
     if not news_items: return []
     
@@ -1545,7 +1586,7 @@ Return exactly in this JSON format:
         {"role": "user", "content": titles}
     ]
     
-    result = await function_ollama_chat(messages, format="json")
+    result = await function_ollama_chat(messages, format="json", usage_collector=usage_collector)
     if result:
         try:
             evals = json.loads(result).get("evaluations", [])
@@ -3920,12 +3961,15 @@ async def synthesis_response(
     news_data: list,
     screening_results: list = None,
     research_depth: str = "standard",
+    explanation_mode: str | None = None,
     comparison_view_mode: str = "canvas",
+    usage_collector: list[dict[str, Any]] | None = None,
 ) -> str:
     """Synthesis Core"""
     
     intent = intent_info.get("intent")
-    deep_research = research_depth == "deep"
+    deep_research = explanation_mode == "advanced" or research_depth == "deep"
+    beginner_mode = explanation_mode == "beginner" or (explanation_mode is None and not deep_research)
     
     if intent == "general":
         system_prompt_gen = """You are FundersAI, an expert AI stock market research assistant and financial educator.
@@ -3933,6 +3977,11 @@ If the user asks basic educational questions (e.g., 'What is PE ratio?', 'Explai
 Break down metrics like P/E Ratio (valuation), RSI (momentum/overbought/oversold), and moving averages carefully. Use bullet points and analogies if helpful. 
 Do NOT be overly brief when explaining concepts. Provide deep value to the user.
 NEVER give direct financial advice to buy or sell a specific stock."""
+        if beginner_mode:
+            system_prompt_gen = """You are FundersAI, a research-only Indian market explainer.
+Use plain English and define financial terms briefly.
+Keep the same facts, avoid jargon, and never give buy/sell/invest advice.
+Include a short "Terms in plain English" section when financial terms appear."""
         if deep_research:
             system_prompt_gen = """You are FundersAI, an expert AI stock market research assistant and financial educator.
 Answer as a deep research explainer with this structure:
@@ -3946,7 +3995,7 @@ Use clear language, practical examples, and no buy/sell advice."""
             {"role": "system", "content": system_prompt_gen},
             {"role": "user", "content": query}
         ]
-        return await function_ollama_chat(messages, format="text")
+        return await function_ollama_chat(messages, format="text", usage_collector=usage_collector)
 
     table_markdown, data_notes = _data_table_markdown(intent, quant_data, screening_results)
     news_markdown = _news_markdown(news_data)
@@ -3962,6 +4011,12 @@ Use the provided structured facts only. Do not add new numbers.
 Use neutral research language. Do not use advice words or phrases like buy, sell, invest, avoid, investors should, attractive option, or long-term investment.
 If data is unavailable for an entity, mention that the comparison is limited by missing data.
 Keep it to 3-5 concise sentences."""
+    if beginner_mode:
+        system_prompt = """You are FundersAI, a research-only Indian market explainer.
+Use only the provided structured facts. Do not add new numbers.
+Use plain English, short sentences, and define any financial term in one line.
+Do not use advice words or phrases like buy, sell, invest, avoid, investors should, attractive option, or long-term investment.
+Keep it concise and mention missing or stale data when relevant."""
     if deep_research:
         system_prompt = """You are FundersAI, a research-only Indian market analyst.
 Create a deep research note using only the provided facts, with exactly these markdown sections:
@@ -3997,7 +4052,7 @@ Controlled Web Context:
         {"role": "user", "content": context}
     ]
     
-    trend = await function_ollama_chat(messages, format="text")
+    trend = await function_ollama_chat(messages, format="text", usage_collector=usage_collector)
     if not trend:
         if deep_research:
             trend = """### Executive Summary
@@ -4023,6 +4078,9 @@ Controlled Web Context:
     notes_markdown = ""
     if data_notes:
         notes_markdown = "\n\n### Data Notes\n" + "\n".join([f"- {note}" for note in data_notes])
+    glossary_markdown = ""
+    if beginner_mode:
+        glossary_markdown = "\n\n### Terms in Plain English\n- Sharpe ratio: return earned for each unit of risk.\n- Drawdown: how far the value fell from a recent high.\n- Beta: how much the asset tends to move compared with the market.\n- Expense ratio: the yearly fund cost charged as a percentage.\n- Debt/equity: how much debt a company carries compared with shareholder capital."
 
     title = "Deep Research Snapshot" if deep_research else "Snapshot"
     analysis_heading = "Deep Research Analysis" if deep_research else "Trend Observation"
@@ -4045,6 +4103,7 @@ Controlled Web Context:
 ### {analysis_heading}
 
 {trend}
+{glossary_markdown}
 
 ### Follow-up Questions
 - Compare downside protection and max drawdown.
@@ -4066,6 +4125,7 @@ Controlled Web Context:
 ### {analysis_heading}
 
 {trend}
+{glossary_markdown}
 
 {DISCLAIMER}"""
 
@@ -4570,10 +4630,19 @@ async def get_mutual_fund_details(scheme_code: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/chat")
-async def chat_endpoint(req: ChatRequest):
+async def chat_endpoint(
+    req: ChatRequest,
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_user_tier: str | None = Header(default=None, alias="X-User-Tier"),
+    x_internal_proxy_key: str | None = Header(default=None, alias="X-Internal-Proxy-Key"),
+):
+    trusted_proxy = _trusted_chat_proxy(x_internal_proxy_key)
+    usage_collector: list[dict[str, Any]] | None = [] if trusted_proxy else None
     asset_type = req.asset_type
     deferred_response = _build_deferred_dashboard_response(req.query, req.history, req.conversation_context)
     if deferred_response:
+        if trusted_proxy:
+            deferred_response["_usage"] = _summarize_openrouter_usage(usage_collector)
         return deferred_response
 
     deterministic_compare = _deterministic_compare_intent(req.query, asset_type)
@@ -4589,11 +4658,16 @@ async def chat_endpoint(req: ChatRequest):
         if dashboard_intent["intent"] == "sip_calculator":
             sip_response = _build_sip_calculator_response(req.query)
             if sip_response:
+                if trusted_proxy:
+                    sip_response["_usage"] = _summarize_openrouter_usage(usage_collector)
                 return sip_response
         if dashboard_intent["intent"] == "category_search":
-            return _build_category_search_response(dashboard_intent)
+            category_response = _build_category_search_response(dashboard_intent)
+            if trusted_proxy:
+                category_response["_usage"] = _summarize_openrouter_usage(usage_collector)
+            return category_response
 
-    intent_info = deterministic_compare or followup_compare or await route_query(req.query, asset_type)
+    intent_info = deterministic_compare or followup_compare or await route_query(req.query, asset_type, usage_collector=usage_collector)
     intent = intent_info.get("intent", "general")
     ticker = intent_info.get("ticker")
     period = intent_info.get("historical_period", "1mo")
@@ -4648,11 +4722,14 @@ To experience FundersAI's advanced research capabilities, please try:
 - Inspecting sector allocations, risk metrics, or portfolio holdings for these supported funds
 - Asking about NAV trends, expense ratios, or Sharpe/Alpha comparisons across these supported AMCs."""
         
-        return {
+        response = {
             "answer": advisory_message,
             "debug_intent": intent_info,
             "quant_data": {}
         }
+        if trusted_proxy:
+            response["_usage"] = _summarize_openrouter_usage(usage_collector)
+        return response
     
     quant_data = {}
     news_data = []
@@ -4700,6 +4777,7 @@ To experience FundersAI's advanced research capabilities, please try:
                     "verdict_context": stock_payload.get("verdict_context"),
                     "source_freshness": stock_payload.get("source_freshness"),
                     "data_quality": stock_payload.get("data_quality"),
+                    "risk_analysis": stock_payload.get("risk_analysis"),
                     "asset_type": "stock",
                 }
                 intent_info["compare_entities"] = entities
@@ -4932,6 +5010,7 @@ To experience FundersAI's advanced research capabilities, please try:
                     "verdict_context": why_better.get("verdict_context"),
                     "source_freshness": why_better.get("source_freshness"),
                     "data_quality": {name: (payload.get("data_quality") or {}) for name, payload in comparison_results.items()},
+                    "risk_analysis": why_better.get("risk_analysis"),
                     "asset_type": "mutual_fund",
                 }
                 quant_data["holdings_overlap"] = _build_holdings_overlap(comparison_results)
@@ -4993,13 +5072,13 @@ To experience FundersAI's advanced research capabilities, please try:
         if intent in ["news", "both"]:
             news_items = fetch_news(req.query, ticker)
             if sentiment:
-                news_items = await analyze_news_sentiment(news_items)
+                news_items = await analyze_news_sentiment(news_items, usage_collector=usage_collector)
             news_data = news_items
 
     if intent in ["news", "compare"] and not news_data:
         news_items = fetch_news(req.query, ticker)
         if sentiment:
-            news_items = await analyze_news_sentiment(news_items)
+            news_items = await analyze_news_sentiment(news_items, usage_collector=usage_collector)
         news_data = news_items
             
     final_answer = await synthesis_response(
@@ -5009,12 +5088,20 @@ To experience FundersAI's advanced research capabilities, please try:
         news_data,
         screening_results,
         req.research_depth,
+        req.explanation_mode,
         req.comparison_view_mode,
+        usage_collector=usage_collector,
     )
+    why_better_payload = quant_data.get("why_better") if isinstance(quant_data, dict) and isinstance(quant_data.get("why_better"), dict) else {}
     response_json = {
         "answer": final_answer,
         "debug_intent": intent_info,
-        "quant_data": quant_data
+        "quant_data": quant_data,
+        "source_freshness": quant_data.get("source_freshness") if isinstance(quant_data, dict) else None,
+        "data_quality": quant_data.get("data_quality") if isinstance(quant_data, dict) else None,
+        "risk_analysis": quant_data.get("risk_analysis") if isinstance(quant_data, dict) else None,
+        "confidence": why_better_payload.get("confidence"),
+        "explanation_mode": req.explanation_mode or ("advanced" if req.research_depth == "deep" else "beginner"),
     }
     
     if intent == "compare":
@@ -5114,6 +5201,9 @@ To experience FundersAI's advanced research capabilities, please try:
                     "asset_type": compare_context["last_compare"]["asset_type"],
                 }
                 
+    if trusted_proxy:
+        response_json["_usage"] = _summarize_openrouter_usage(usage_collector)
+
     return response_json
 
 if __name__ == "__main__":

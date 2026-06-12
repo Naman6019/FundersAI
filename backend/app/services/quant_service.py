@@ -665,6 +665,7 @@ def build_stock_compare(symbols: list[str] | str) -> dict[str, Any]:
         "data_quality": data_quality,
         "source_summary": source_summary,
         "source_freshness": why_better.get("source_freshness"),
+        "risk_analysis": why_better.get("risk_analysis"),
         "why_better": why_better,
         "verdict_context": why_better.get("verdict_context"),
         "comparison": comparison,
