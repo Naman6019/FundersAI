@@ -438,11 +438,13 @@ export default function DashboardLayout() {
   };
 
   const formatPercent = (value: unknown) => {
+    if (value === null || value === undefined || value === '' || value === 'N/A') return 'Not available';
     const num = Number(value);
     return Number.isFinite(num) ? `${num.toFixed(2)}%` : 'Not available';
   };
 
   const formatAum = (value: unknown) => {
+    if (value === null || value === undefined || value === '' || value === 'N/A') return 'Not available';
     const num = Number(value);
     return Number.isFinite(num) ? `INR ${Math.round(num).toLocaleString('en-IN')}` : 'Not available';
   };

@@ -3117,7 +3117,7 @@ def _read_category_rows(category_key: str, include_unsupported: bool = False, li
             supabase.table("mutual_fund_core_snapshot")
             .select(fields)
             .ilike("category", f"%{config['match']}%")
-            .limit(100)
+            .limit(500)
             .execute()
         )
         rows = res.data or []
@@ -3126,7 +3126,7 @@ def _read_category_rows(category_key: str, include_unsupported: bool = False, li
                 supabase.table("mutual_fund_core_snapshot")
                 .select(fields)
                 .ilike("scheme_name", f"%{config['scheme_match']}%")
-                .limit(100)
+                .limit(500)
                 .execute()
             )
             seen = {str(row.get("scheme_code") or row.get("scheme_name")) for row in rows}
@@ -3142,8 +3142,10 @@ def _read_category_rows(category_key: str, include_unsupported: bool = False, li
     matched_rows = [_decorate_category_row(row) for row in rows if _category_row_matches(row, category_key)]
     if not matched_rows:
         matched_rows = [_decorate_category_row(row) for row in rows]
-    if not include_unsupported:
-        matched_rows = [row for row in matched_rows if row.get("is_supported")]
+    
+    # Filter out funds where AUM is missing so we only show the variants that actually have parsed data
+    matched_rows = [row for row in matched_rows if row.get("aum") is not None]
+    
     return sorted(matched_rows, key=_category_sort_key)[:limit]
 
 def _build_category_search_response(intent_info: dict[str, Any]) -> dict[str, Any]:
@@ -3286,11 +3288,6 @@ def _build_category_compare_payload(category_key: str, scheme_codes: list[str]) 
     missing = [code for code in clean_codes if code not in rows_by_code]
     if missing:
         raise HTTPException(status_code=404, detail=f"Fund data not found for: {', '.join(missing)}")
-
-    unsupported = [row for row in rows if not row.get("is_supported")]
-    if unsupported:
-        names = ", ".join(_safe_value(row.get("scheme_name")) for row in unsupported)
-        raise HTTPException(status_code=400, detail=f"Coming Soon funds cannot be compared yet: {names}")
 
     equal_amount = 100.0 / len(rows)
     resolved: list[dict[str, Any]] = []
@@ -4382,6 +4379,9 @@ def _score_fund_candidates(
         if "fund of funds" in name_norm and not wants_fof:
             value -= 70
             notes.append("fof_mismatch_penalty:-70")
+        if "multi asset" in name_norm and not wants_multi_asset:
+            value -= 80
+            notes.append("multi_asset_mismatch_penalty:-80")
         if wants_direct and "regular" in name_norm:
             value -= 60
             notes.append("direct_requested_regular_penalty:-60")
