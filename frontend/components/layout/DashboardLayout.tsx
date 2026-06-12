@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { motion, useReducedMotion } from 'framer-motion';
 import {
   Bolt,
   ChartSpline,
@@ -34,6 +36,7 @@ import {
   TrendingUp,
   History,
   Check,
+  X,
 } from 'lucide-react';
 import { useCanvasStore } from '@/store/useCanvasStore';
 import { useChatStore, AssetType } from '@/store/useChatStore';
@@ -44,9 +47,10 @@ import MFDetailView from '@/components/canvas/MFDetailView';
 import ComparisonView from '@/components/canvas/ComparisonView';
 import PortfolioReviewView from '@/components/canvas/PortfolioReviewView';
 import CategoryCompareView from '@/components/canvas/CategoryCompareView';
+import FundSearchSelect from '@/components/ui/FundSearchSelect';
 import Magnetic from '@/components/ui/Magnetic';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
-import type { CategoryComparePayload, CategoryFundRow } from '@/types/funds';
+import type { CategoryComparePayload, CategoryFundRow, SearchResultItem } from '@/types/funds';
 import type { UserTier } from '@/lib/billing/tiers';
 
 type DataHealthItem = {
@@ -62,6 +66,14 @@ const DEFAULT_DATA_HEALTH: DataHealthItem[] = [
   { label: 'Risk metrics', status: 'Checking' },
   { label: 'Factsheets', status: 'Checking' },
 ];
+
+const HEADER_HEIGHT = 64;
+const SIDEBAR_WIDTH = 276;
+const MAIN_PADDING = 24;
+const PANEL_GAP = 16;
+const RESIZE_HANDLE_WIDTH = 12;
+const CHAT_MIN_WIDTH = 320;
+const CANVAS_MIN_WIDTH = 420;
 
 const CATEGORY_CARDS = [
   { key: 'large_cap', title: 'Large Cap', desc: 'Top 100 companies', icon: Landmark },
@@ -82,7 +94,7 @@ function statusColorClass(status: string): string {
 
 function CanvasPlaceholder() {
   return (
-    <div className="flex h-full flex-col rounded-[1.35rem] border border-white/10 bg-[linear-gradient(160deg,rgba(15,23,42,0.82),rgba(2,8,24,0.9))] p-5 shadow-[0_20px_44px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+    <div className="flex h-full flex-col rounded-[1.35rem] border border-white/10 bg-[linear-gradient(160deg,rgba(15,23,42,0.95),rgba(2,8,24,0.98))] p-6 shadow-[0_20px_44px_rgba(0,0,0,0.35)]">
       <div>
         <h2 className="text-3xl font-semibold tracking-tight text-white">Comparison canvas</h2>
         <p className="mt-1 text-sm text-slate-300">Ask FundersAI to compare two funds to open side-by-side metrics here.</p>
@@ -123,8 +135,8 @@ function SidebarContent({
   healthCheckedAt,
   currentTier,
 }: {
-  activeTab: 'overview' | 'research';
-  setActiveTab: (tab: 'overview' | 'research') => void;
+  activeTab: 'overview' | 'research' | 'ai_research';
+  setActiveTab: (tab: 'overview' | 'research' | 'ai_research') => void;
   dataHealth: DataHealthItem[];
   healthCheckedAt: string | null;
   currentTier: UserTier;
@@ -161,22 +173,22 @@ function SidebarContent({
       },
     },
     {
-      id: 'research',
+      id: 'ai_research',
       label: 'AI Research',
       icon: Brain,
-      isActive: activeTab === 'research' && assetType === 'auto',
+      isActive: activeTab === 'ai_research',
       onClick: () => {
-        setActiveTab('research');
+        setActiveTab('ai_research');
         setAssetType('auto');
       },
     },
   ];
 
   return (
-    <div className="flex h-full flex-col rounded-[1.2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.92),rgba(2,8,24,0.94))] p-4 shadow-[0_20px_42px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+    <div className="flex h-full flex-col rounded-[1.2rem] border border-white/10 bg-[#07111f] p-5 shadow-[0_20px_42px_rgba(0,0,0,0.4)]">
       <div>
         <div className="flex flex-col gap-1 items-start">
-          <img src="/logo-vertical.png" alt="FundersAI Logo" className="h-8 w-auto object-contain origin-left" />
+          <img src="/FUNDERSAI-vertical.png" alt="FundersAI Logo" className="h-8 w-auto object-contain origin-left" />
           <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400 pl-1">Research terminal</p>
         </div>
       </div>
@@ -224,7 +236,7 @@ function SidebarContent({
           <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400 font-semibold">Data health</p>
           <div className="mt-2.5 space-y-2">
             {dataHealth.slice(0, 3).map(({ label, status, note }) => (
-              <div key={label} className="rounded-lg border border-white/5 bg-[#0f172a]/70 px-2.5 py-1.5 text-[11px]">
+              <div key={label} className="rounded-lg border border-white/5 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)]/70 px-2.5 py-1.5 text-[11px]">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400" title={note || ''}>{label}</span>
                   <span className={`font-semibold ${statusColorClass(status)}`} title={note || ''}>{status}</span>
@@ -247,9 +259,22 @@ function SidebarContent({
   );
 }
 
+function FineGrid() {
+  const reduceMotion = useReducedMotion();
+
+  return (
+    <motion.div
+      aria-hidden="true"
+      className="absolute inset-0 z-0 bg-[linear-gradient(to_right,rgba(102,163,255,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(102,163,255,0.07)_1px,transparent_1px)] bg-[size:88px_88px] [mask-image:radial-gradient(ellipse_at_top,black_22%,transparent_74%)]"
+      animate={reduceMotion ? undefined : { backgroundPosition: ["0px 0px", "88px 88px"], opacity: [0.42, 0.62, 0.42] }}
+      transition={reduceMotion ? undefined : { backgroundPosition: { duration: 34, repeat: Infinity, ease: "linear" }, opacity: { duration: 8, repeat: Infinity, ease: "easeInOut" } }}
+    />
+  );
+}
+
 export default function DashboardLayout() {
   const searchParams = useSearchParams();
-  const { activeView, selectedIds, auxiliaryData, isCanvasOpen, toggleCanvas } = useCanvasStore();
+  const { activeView, selectedIds, auxiliaryData, isCanvasOpen, toggleCanvas, comparisonMode } = useCanvasStore();
   const [isMobile, setIsMobile] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -258,10 +283,10 @@ export default function DashboardLayout() {
   const [dataHealth, setDataHealth] = useState<DataHealthItem[]>(DEFAULT_DATA_HEALTH);
   const [healthCheckedAt, setHealthCheckedAt] = useState<string | null>(null);
   
-  const initialTab = (searchParams?.get('tab') as 'overview' | 'research') || 'overview';
-  const [activeTab, setActiveTab] = useState<'overview' | 'research'>(initialTab);
-  const [compareFund1, setCompareFund1] = useState('');
-  const [compareFund2, setCompareFund2] = useState('');
+  const initialTab = (searchParams?.get('tab') as 'overview' | 'research' | 'ai_research') || 'overview';
+  const [activeTab, setActiveTab] = useState<'overview' | 'research' | 'ai_research'>(initialTab);
+  const [compareFund1, setCompareFund1] = useState<SearchResultItem | null>(null);
+  const [compareFund2, setCompareFund2] = useState<SearchResultItem | null>(null);
   const [assistantInput, setAssistantInput] = useState('');
   const [currentTier, setCurrentTier] = useState<UserTier>('free');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -275,13 +300,12 @@ export default function DashboardLayout() {
   const setPendingQuery = useChatStore((state) => state.setPendingQuery);
   const navStatus = dataHealth.find((item) => item.label === 'MF NAV')?.status || 'Checking';
   const getCanvasBounds = () => {
-    const min = 420;
-    const sidebarWidth = !isSidebarCollapsed ? 276 : 0;
-    const paddingAndGap = 48; // p-6 on main container
-    const availableWidth = window.innerWidth - sidebarWidth - paddingAndGap;
-    // Chat window min width is 320px, and gap is 16px. So max canvas width is availableWidth - 336px
-    const max = Math.max(availableWidth - 336, min);
-    return { min, max };
+    const sidebarWidth = !isSidebarCollapsed ? SIDEBAR_WIDTH : 0;
+    const shellPadding = MAIN_PADDING * 2;
+    const splitChrome = (PANEL_GAP * 2) + RESIZE_HANDLE_WIDTH;
+    const availableWidth = window.innerWidth - sidebarWidth - shellPadding;
+    const max = Math.max(availableWidth - CHAT_MIN_WIDTH - splitChrome, CANVAS_MIN_WIDTH);
+    return { min: CANVAS_MIN_WIDTH, max };
   };
 
   useEffect(() => {
@@ -385,8 +409,7 @@ export default function DashboardLayout() {
 
     const onMouseMove = (event: MouseEvent) => {
       const { min, max } = getCanvasBounds();
-      const rightPadding = 24; // p-6 is 24px padding on the right edge
-      const next = window.innerWidth - rightPadding - event.clientX;
+      const next = window.innerWidth - MAIN_PADDING - event.clientX;
       setCanvasWidth(Math.min(Math.max(next, min), max));
     };
 
@@ -423,7 +446,7 @@ export default function DashboardLayout() {
 
   const formatRiskLabel = (value: unknown) => {
     const label = typeof value === 'string' ? value.trim() : '';
-    return label || 'Risk label unavailable';
+    return label || 'Coverage pending';
   };
 
   const compactFundName = (value: unknown) => String(value || 'N/A')
@@ -485,65 +508,75 @@ export default function DashboardLayout() {
 
   const useCategoryCompareInChat = () => {
     if (!categoryCompare?.selected_funds?.length) return;
+    const { setView, setIds, openCanvas } = useCanvasStore.getState();
+    setIds(selectedCategoryCodes);
+    setView('COMPARISON');
+    openCanvas();
+    setActiveTab('research');
+
+    // Still send a background query for context if needed, but it won't block UI
     const names = categoryCompare.selected_funds.map((fund) => compactFundName(fund.scheme_name));
     const last = names.pop();
     const joined = names.length ? `${names.join(', ')} and ${last}` : last;
-    handleOverviewQuery(`Compare ${joined} from the ${categoryCompare.category} bucket. Focus on returns, risk, cost, holdings overlap, and portfolio fit.`);
+    setPendingQuery(`Compare ${joined} from the ${categoryCompare.category} bucket.`);
   };
 
   const renderOverview = () => {
     return (
       <div className="space-y-6">
         {/* Page Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <h2 className="font-serif text-3xl font-semibold text-white tracking-tight">Welcome to FundersAI</h2>
+            <h2 className="font-serif text-3xl font-semibold text-white tracking-tight">What can I safely do here?</h2>
             <p className="font-body-sm text-[14px] text-slate-400 mt-1 max-w-2xl">
-              Understand, compare, and research mutual funds with confidence.
+              Compare verified funds, ask source-backed research questions, and review portfolio structure without advisory output.
             </p>
           </div>
         </div>
 
         {/* Main Action Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div
             onClick={() => handleOverviewQuery('Compare PPFAS Flexi Cap and HDFC Flexi Cap')}
-            className="backdrop-blur-md bg-[#1f2833]/40 border border-white/10 p-5 rounded-xl hover:border-[#66a3ff]/40 transition-colors cursor-pointer group"
+            className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 p-6 rounded-xl hover:border-[#66a3ff]/40 transition-colors cursor-pointer group shadow-lg"
           >
             <div className="w-10 h-10 rounded-lg bg-[#66a3ff]/10 flex items-center justify-center mb-4 group-hover:bg-[#66a3ff]/20 transition-colors">
               <ArrowLeftRight className="text-[#66a3ff] h-5 w-5" />
             </div>
-            <h3 className="text-lg font-medium text-white mb-2">Compare Funds</h3>
+            <h3 className="font-serif text-lg font-medium text-white mb-2">Compare Funds</h3>
             <p className="text-sm text-slate-400 leading-relaxed">
               Compare returns, risk, expense ratio, AUM, fund category, and consistency side-by-side.
             </p>
+            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">Comparison only, not advice</p>
           </div>
 
           <div
             onClick={() => setActiveTab('research')}
-            className="backdrop-blur-md bg-[#1f2833]/40 border border-[#66a3ff]/20 p-5 rounded-xl hover:border-[#66a3ff]/60 transition-colors cursor-pointer group relative overflow-hidden"
+            className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-[#66a3ff]/20 p-6 rounded-xl hover:border-[#66a3ff]/60 transition-colors cursor-pointer group relative overflow-hidden shadow-lg"
           >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-[#66a3ff]/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[#66a3ff]/5 rounded-full blur-3xl pointer-events-none"></div>
             <div className="w-10 h-10 rounded-lg bg-[#66a3ff]/20 flex items-center justify-center mb-4 group-hover:bg-[#66a3ff]/30 transition-colors relative z-10">
               <Brain className="text-[#66a3ff] h-5 w-5" />
             </div>
-            <h3 className="text-lg font-medium text-white mb-2 relative z-10">AI Fund Research</h3>
+            <h3 className="font-serif text-lg font-medium text-white mb-2 relative z-10">Ask Research Question</h3>
             <p className="text-sm text-slate-400 leading-relaxed relative z-10">
               Ask FundersAI to explain funds, compare strategies, or simplify complex fund data.
             </p>
+            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd] relative z-10">Source-backed explanation, not a recommendation</p>
           </div>
 
           <div
-            onClick={() => handleOverviewQuery('Review my portfolio health')}
-            className="backdrop-blur-md bg-[#1f2833]/40 border border-white/10 p-5 rounded-xl hover:border-[#66a3ff]/40 transition-colors cursor-pointer group"
+            onClick={() => handleOverviewQuery('Review my portfolio diversification')}
+            className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 p-6 rounded-xl hover:border-[#66a3ff]/40 transition-colors cursor-pointer group shadow-lg"
           >
             <div className="w-10 h-10 rounded-lg bg-[#66a3ff]/10 flex items-center justify-center mb-4 group-hover:bg-[#66a3ff]/20 transition-colors">
               <Wallet className="text-[#66a3ff] h-5 w-5" />
             </div>
-            <h3 className="text-lg font-medium text-white mb-2">Portfolio Review</h3>
+            <h3 className="font-serif text-lg font-medium text-white mb-2">Portfolio Review</h3>
             <p className="text-sm text-slate-400 leading-relaxed">
-              Upload your portfolio and get a simple health check and diversification review.
+              Review holdings structure, concentration, and diversification signals.
             </p>
+            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">Diversification read, not portfolio advice</p>
           </div>
         </div>
 
@@ -553,41 +586,48 @@ export default function DashboardLayout() {
           <div className="xl:col-span-2 space-y-6">
             
             {/* Quick Compare Widget */}
-            <div className="backdrop-blur-md bg-[#1f2833]/40 border border-white/10 rounded-xl p-5">
+            <div className="relative z-30 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 rounded-xl p-6 shadow-lg">
               <div className="flex items-center gap-2 mb-4">
                 <ArrowLeftRight className="text-[#66a3ff] h-5 w-5" />
                 <h3 className="font-serif text-xl font-medium text-white">Quick Compare</h3>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 items-center">
                 <div className="flex-1 w-full relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
-                  <input
-                    type="text"
-                    value={compareFund1}
-                    onChange={(e) => setCompareFund1(e.target.value)}
-                    placeholder="E.g. Parag Parikh Flexi Cap"
-                    className="w-full bg-[#080d1a] border border-white/20 rounded-lg py-2.5 pl-10 pr-3 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#66a3ff] focus:border-[#66a3ff] transition-all"
+                  <FundSearchSelect
+                    placeholder="Search Fund 1..."
+                    onSelect={setCompareFund1}
                   />
+                  {compareFund1 && (
+                    <div className="absolute top-full mt-1 left-0 right-0 z-10 px-2 py-1 bg-[#1a2333] border border-emerald-500/30 rounded text-xs text-emerald-200">
+                      Selected: {compareFund1.displayName}
+                    </div>
+                  )}
                 </div>
                 <div className="text-slate-500 font-medium font-serif-display px-2 text-sm">VS</div>
                 <div className="flex-1 w-full relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
-                  <input
-                    type="text"
-                    value={compareFund2}
-                    onChange={(e) => setCompareFund2(e.target.value)}
-                    placeholder="E.g. HDFC Flexi Cap"
-                    className="w-full bg-[#080d1a] border border-white/20 rounded-lg py-2.5 pl-10 pr-3 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#66a3ff] focus:border-[#66a3ff] transition-all"
+                  <FundSearchSelect
+                    placeholder="Search Fund 2..."
+                    onSelect={setCompareFund2}
                   />
+                  {compareFund2 && (
+                    <div className="absolute top-full mt-1 left-0 right-0 z-10 px-2 py-1 bg-[#1a2333] border border-emerald-500/30 rounded text-xs text-emerald-200">
+                      Selected: {compareFund2.displayName}
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => {
                     if (compareFund1 && compareFund2) {
-                      handleOverviewQuery(`Compare ${compareFund1} and ${compareFund2}`);
+                      const { setView, setIds, openCanvas } = useCanvasStore.getState();
+                      setIds([compareFund1.id, compareFund2.id]);
+                      setView('COMPARISON');
+                      openCanvas();
+                      setActiveTab('research');
+                      setPendingQuery(`Compare ${compareFund1.displayName} and ${compareFund2.displayName}`);
                     }
                   }}
                   disabled={!compareFund1 || !compareFund2}
-                  className="w-full sm:w-auto px-6 py-2.5 bg-[#66a3ff] text-slate-950 rounded-lg font-medium text-sm hover:bg-[#66a3ff]/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:w-auto px-6 py-2.5 bg-[#66a3ff] text-slate-950 rounded-lg font-medium text-sm hover:bg-[#66a3ff]/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-4 sm:mt-0"
                 >
                   Compare Now
                 </button>
@@ -595,7 +635,7 @@ export default function DashboardLayout() {
             </div>
 
             {/* Market / Category Snapshot */}
-            <div>
+            <div className="relative z-0">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <h3 className="font-serif text-xl font-medium text-white">Explore Categories</h3>
@@ -615,10 +655,10 @@ export default function DashboardLayout() {
                       type="button"
                       key={cat.key}
                       onClick={() => loadCategoryFunds(cat.key)}
-                      className={`text-left backdrop-blur-md bg-[#1f2833]/40 border rounded-lg p-3 transition-all cursor-pointer group ${
+                      className={`text-left bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border rounded-lg p-4 transition-all cursor-pointer group shadow-sm ${
                         activeCategory === cat.key
-                          ? 'border-[#66a3ff]/60 bg-[#66a3ff]/10'
-                          : 'border-white/10 hover:border-[#66a3ff]/30 hover:bg-white/5'
+                          ? 'border-[#66a3ff]/60 bg-[#66a3ff]/10 shadow-[0_4px_16px_rgba(102,163,255,0.15)]'
+                          : 'border-white/10 hover:border-[#66a3ff]/30 hover:bg-[#1a2333]'
                       }`}
                     >
                       <CatIcon className="text-[#66a3ff] h-4 w-4 mb-2 opacity-80 group-hover:opacity-100 transition-opacity" />
@@ -717,7 +757,7 @@ export default function DashboardLayout() {
                                 </td>
                                 <td className="px-3 py-3">
                                   {disabled ? (
-                                    <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-[10px] font-semibold text-amber-200">Coming Soon</span>
+                                    <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-[10px] font-semibold text-amber-200">Coverage pending</span>
                                   ) : (
                                     <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[10px] font-semibold text-emerald-200">Ready</span>
                                   )}
@@ -744,7 +784,7 @@ export default function DashboardLayout() {
                             onClick={useCategoryCompareInChat}
                             className="rounded-lg bg-[#66a3ff] px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-[#66a3ff]/85"
                           >
-                            Use in Chat
+                            Open Canvas Comparison
                           </button>
                         </div>
                       </div>
@@ -769,20 +809,20 @@ export default function DashboardLayout() {
           <div className="space-y-6">
             
             {/* Beginner Tools Placeholder */}
-            <div className="backdrop-blur-md bg-[#1f2833]/40 border border-white/10 rounded-xl p-5">
+            <div className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 rounded-xl p-6 shadow-lg">
               <h3 className="font-serif text-lg font-medium text-white mb-4">Investor Tools</h3>
               <div className="space-y-2">
-                <Link href="/dashboard/sip-calculator" className="w-full text-left p-3 rounded-lg border border-white/10 bg-[#080d1a]/50 hover:bg-[#66a3ff]/10 hover:border-[#66a3ff]/30 transition-all cursor-pointer flex items-center justify-between group">
+                <Link href="/dashboard/sip-calculator" className="w-full text-left p-3 rounded-lg border border-white/10 bg-black/20 hover:bg-[#66a3ff]/10 hover:border-[#66a3ff]/30 transition-all cursor-pointer flex items-center justify-between group">
                   <div>
                     <div className="text-[13px] font-medium text-white">SIP Calculator</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">Estimate your future wealth</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">Estimate SIP outcomes</div>
                   </div>
                   <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-[#66a3ff] transition-colors" />
                 </Link>
-                <Link href="/dashboard/risk-quiz" className="w-full text-left p-3 rounded-lg border border-white/10 bg-[#080d1a]/50 hover:bg-[#66a3ff]/10 hover:border-[#66a3ff]/30 transition-all cursor-pointer flex items-center justify-between group">
+                <Link href="/dashboard/risk-quiz" className="w-full text-left p-3 rounded-lg border border-white/10 bg-black/20 hover:bg-[#66a3ff]/10 hover:border-[#66a3ff]/30 transition-all cursor-pointer flex items-center justify-between group">
                   <div>
                     <div className="text-[13px] font-medium text-white">Risk Quiz</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">Find funds that fit you</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">Understand risk profile</div>
                   </div>
                   <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-[#66a3ff] transition-colors" />
                 </Link>
@@ -790,11 +830,11 @@ export default function DashboardLayout() {
             </div>
 
             {/* Recent Activity */}
-            <div className="backdrop-blur-md bg-[#1f2833]/40 border border-white/10 rounded-xl p-5">
+            <div className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 rounded-xl p-6 shadow-lg">
               <h3 className="font-serif text-lg font-medium text-white mb-4">Recent Activity</h3>
               <div className="space-y-3">
                 <div onClick={() => handleOverviewQuery('Analyze Parag Parikh Flexi Cap Fund')} className="flex items-center gap-3 cursor-pointer group">
-                  <div className="w-8 h-8 rounded bg-[#0f172a] border border-white/10 flex items-center justify-center shrink-0">
+                  <div className="w-8 h-8 rounded bg-[#111] border border-[#222] flex items-center justify-center shrink-0">
                     <History className="h-3.5 w-3.5 text-slate-400" />
                   </div>
                   <div>
@@ -803,7 +843,7 @@ export default function DashboardLayout() {
                   </div>
                 </div>
                 <div onClick={() => handleOverviewQuery('Compare Nifty 50 vs Next 50')} className="flex items-center gap-3 cursor-pointer group">
-                  <div className="w-8 h-8 rounded bg-[#0f172a] border border-white/10 flex items-center justify-center shrink-0">
+                  <div className="w-8 h-8 rounded bg-[#111] border border-[#222] flex items-center justify-center shrink-0">
                     <History className="h-3.5 w-3.5 text-slate-400" />
                   </div>
                   <div>
@@ -818,7 +858,7 @@ export default function DashboardLayout() {
         </div>
 
         {/* Disclaimer Footer */}
-        <div className="mt-8 pt-6 border-t border-white/10 text-center">
+        <div className="pt-6 border-t border-white/10 text-center">
            <p className="text-[11px] text-slate-500 leading-relaxed max-w-4xl mx-auto">
              <span className="font-semibold text-slate-400">Disclaimer:</span> FundersAI provides educational insights and data-driven research. Mutual fund investments are subject to market risks, read all scheme related documents carefully. The information provided here is not financial advice. Past performance is not indicative of future returns.
            </p>
@@ -851,12 +891,12 @@ export default function DashboardLayout() {
   };
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-[#050913] text-[#e8f0ff] flex flex-col">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_8%,rgba(0,80,158,0.18),transparent_35%),radial-gradient(circle_at_88%_10%,rgba(0,122,204,0.15),transparent_30%)]" />
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:56px_56px]" />
+    <div className="relative h-screen w-screen overflow-hidden bg-[#050A15] text-[#e8f0ff] flex flex-col selection:bg-[#66a3ff]/30 selection:text-white">
+      <FineGrid />
+      <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_0%,rgba(102,163,255,0.06),transparent_65%)]" />
 
-      <div className="relative flex flex-col flex-1 h-full w-full overflow-hidden border border-white/10 bg-[linear-gradient(160deg,rgba(10,18,34,0.92),rgba(3,10,22,0.96))] shadow-[0_28px_80px_rgba(0,0,0,0.5)] backdrop-blur-xl">
-        <header className="h-16 shrink-0 flex items-center justify-between border-b border-white/10 px-4 sm:px-5">
+      <div className="relative z-10 flex flex-col flex-1 h-full w-full overflow-hidden border border-white/10 bg-transparent shadow-[0_28px_80px_rgba(0,0,0,0.5)]">
+        <header className="h-16 shrink-0 flex items-center justify-between border-b border-white/10 px-4 sm:px-6">
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -872,9 +912,12 @@ export default function DashboardLayout() {
             >
               {isMobile || isSidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
             </button>
-            <div className="hidden sm:block">
-              <p className="text-sm font-semibold text-white">FundersAI Research</p>
-              <p className="text-xs text-slate-400">Centered chat + optional canvas</p>
+            <div className="hidden sm:flex items-center gap-3">
+              <Image src="/FUNDERSAI-nobackground.png" alt="FundersAI Logo" width={28} height={28} className="object-contain" />
+              <div>
+                <p className="text-sm font-semibold text-white">FundersAI Research</p>
+                <p className="text-xs text-slate-400">Centered chat + optional canvas</p>
+              </div>
             </div>
           </div>
 
@@ -883,7 +926,7 @@ export default function DashboardLayout() {
             <input
               type="text"
               placeholder="Search tickers, funds, research..."
-              className="w-full bg-[#080d1a] border border-white/10 rounded-lg py-1.5 pl-8 pr-3 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#66a3ff]/50 focus:border-[#66a3ff]/50 transition-all"
+              className="w-full bg-black/20 border border-white/10 rounded-lg py-1.5 pl-8 pr-3 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#66a3ff]/50 focus:border-[#66a3ff]/50 transition-all"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   const target = e.target as HTMLInputElement;
@@ -920,7 +963,7 @@ export default function DashboardLayout() {
           </div>
         </header>
 
-        <div className="flex h-[calc(100vh-64px)] overflow-hidden relative z-10 w-full">
+        <div className="flex overflow-hidden relative z-10 w-full" style={{ height: `calc(100vh - ${HEADER_HEIGHT}px)` }}>
           {!isMobile && !isSidebarCollapsed && (
             <aside className="w-[276px] shrink-0 border-r border-white/10 bg-[#0b1526]/72 p-4 min-h-0 h-full overflow-y-auto">
               <SidebarContent
@@ -938,6 +981,13 @@ export default function DashboardLayout() {
               <div className="h-full w-full overflow-y-auto custom-scrollbar pr-1">
                 {renderOverview()}
               </div>
+            ) : activeTab === 'ai_research' ? (
+              <div className="flex h-full items-center justify-center w-full relative">
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(102,163,255,0.05),transparent_50%)] pointer-events-none" />
+                <div className="h-full w-full max-w-[800px] min-h-0 pt-4 pb-0 relative z-10">
+                  <ChatWindow isFullScreen={true} />
+                </div>
+              </div>
             ) : isMobile ? (
               <div className="flex h-full flex-col gap-4 overflow-y-auto">
                 <div className="h-[450px] shrink-0 min-h-0">
@@ -951,40 +1001,51 @@ export default function DashboardLayout() {
               </div>
             ) : isCanvasOpen ? (
               <div className="flex h-full gap-4 relative">
-                <aside className="flex-1 min-w-[320px] h-full min-h-0">
-                  <ChatWindow />
-                </aside>
+                {comparisonMode === 'llm' && (
+                  <aside className="flex-1 h-full min-h-0" style={{ minWidth: CHAT_MIN_WIDTH }}>
+                    <ChatWindow />
+                  </aside>
+                )}
                 
                 {/* Drag handle styled like Gemini's canvas handle */}
-                <div
-                  onMouseDown={() => setIsResizingCanvas(true)}
-                  className={`w-3 cursor-col-resize self-stretch transition-all duration-150 relative z-20 flex-shrink-0 flex items-center justify-center group`}
-                  title="Drag to resize canvas"
-                >
-                  {/* Central divider line */}
-                  <div className={`w-[2px] h-full transition-all duration-150 ${
-                    isResizingCanvas ? 'bg-[#66a3ff]' : 'bg-white/10 group-hover:bg-[#66a3ff]/50'
-                  }`} />
+                {comparisonMode === 'llm' && (
+                  <div
+                    onMouseDown={() => setIsResizingCanvas(true)}
+                    className="cursor-col-resize self-stretch transition-all duration-150 relative z-20 flex-shrink-0 flex items-center justify-center group"
+                    style={{ width: RESIZE_HANDLE_WIDTH }}
+                    title="Drag to resize canvas"
+                  >
+                    {/* Central divider line */}
+                    <div className={`w-[2px] h-full transition-all duration-150 ${
+                      isResizingCanvas ? 'bg-[#66a3ff]' : 'bg-[#222] group-hover:bg-[#66a3ff]/50'
+                    }`} />
 
-                  {/* Glassmorphic Capsule Handle */}
-                  <div className={`absolute w-5 h-12 rounded-full border bg-slate-950/80 backdrop-blur-md flex flex-col gap-1 items-center justify-center shadow-lg transition-all duration-200 pointer-events-none ${
-                    isResizingCanvas
-                      ? 'border-[#66a3ff]/80 scale-105 opacity-100 shadow-[0_0_12px_rgba(102,163,255,0.3)]'
-                      : 'border-white/10 opacity-40 group-hover:opacity-100 group-hover:border-[#66a3ff]/40'
-                  }`}>
-                    {/* Vertical grip dots */}
-                    <div className="flex flex-col gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-[#66a3ff]" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-[#66a3ff]" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-[#66a3ff]" />
+                    {/* Glassmorphic Capsule Handle - removed blur */}
+                    <div className={`absolute w-5 h-12 rounded-full border bg-[#111] flex flex-col gap-1 items-center justify-center shadow-lg transition-all duration-200 pointer-events-none ${
+                      isResizingCanvas
+                        ? 'border-[#66a3ff]/80 scale-105 opacity-100 shadow-[0_0_12px_rgba(102,163,255,0.3)]'
+                        : 'border-[#222] opacity-40 group-hover:opacity-100 group-hover:border-[#66a3ff]/40'
+                    }`}>
+                      {/* Vertical grip dots */}
+                      <div className="flex flex-col gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-[#66a3ff]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-[#66a3ff]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-[#66a3ff]" />
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 <main 
-                  style={{ width: `${canvasWidth}px` }}
-                  className="min-h-0 min-w-0 h-full overflow-y-auto rounded-[1.2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.85),rgba(2,6,23,0.9))] p-5 backdrop-blur-xl flex-shrink-0"
+                  style={{ width: comparisonMode === 'llm' ? `${canvasWidth}px` : '100%' }}
+                  className="min-h-0 min-w-0 h-full overflow-y-auto rounded-[1.2rem] border border-[#222] bg-[#0a0a0a] p-6 flex-shrink-0 relative"
                 >
+                  <button
+                    onClick={() => { useCanvasStore.getState().closeCanvas(); }}
+                    className="absolute top-4 right-4 p-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors z-50"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                   {renderCanvasContent()}
                 </main>
               </div>

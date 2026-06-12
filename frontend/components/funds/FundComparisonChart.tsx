@@ -222,10 +222,10 @@ export default function FundComparisonChart({ schemeCodeA, schemeCodeB, nameA, n
                 tickFormatter={(val) => val.toFixed(0)}
               />
               <Tooltip content={renderTooltip} />
-              <Area type="monotone" dataKey="assetA" stroke="none" fill="url(#colorA)" />
-              <Area type="monotone" dataKey="assetB" stroke="none" fill="url(#colorB)" />
-              <Line type="monotone" dataKey="assetA" stroke="#3B82F6" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#3B82F6', stroke: '#fff' }} />
-              <Line type="monotone" dataKey="assetB" stroke="#F97316" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#F97316', stroke: '#fff' }} />
+              <Area key="areaA" type="monotone" dataKey="assetA" stroke="none" fill="url(#colorA)" />
+              <Area key="areaB" type="monotone" dataKey="assetB" stroke="none" fill="url(#colorB)" />
+              <Line key="lineA" type="monotone" dataKey="assetA" stroke="#3B82F6" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#3B82F6', stroke: '#fff' }} />
+              <Line key="lineB" type="monotone" dataKey="assetB" stroke="#F97316" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#F97316', stroke: '#fff' }} />
             </LineChart>
           </ResponsiveContainer>
         ) : (

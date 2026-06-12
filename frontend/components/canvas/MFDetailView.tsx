@@ -103,15 +103,15 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-[#66a3ff]/20 flex flex-col gap-1">
               <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">NAV ({navDateLabel})</div>
-              <div className="font-serif-display text-2xl font-bold text-[#66a3ff]">₹{data.details.nav}</div>
+              <div className="font-mono text-2xl font-bold text-[#66a3ff]">₹{data.details.nav}</div>
             </div>
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-[#66a3ff]/20 flex flex-col gap-1">
               <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">AUM (Cr)</div>
-              <div className="font-serif-display text-2xl font-bold text-slate-200">₹{data.details.aum || 'N/A'}</div>
+              <div className="font-mono text-2xl font-bold text-slate-200">₹{data.details.aum || 'N/A'}</div>
             </div>
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-[#66a3ff]/20 flex flex-col gap-1">
               <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Expense Ratio</div>
-              <div className="font-serif-display text-2xl font-bold text-slate-200">{data.details.expense_ratio ? `${data.details.expense_ratio}%` : 'N/A'}</div>
+              <div className="font-mono text-2xl font-bold text-slate-200">{data.details.expense_ratio ? `${data.details.expense_ratio}%` : 'N/A'}</div>
             </div>
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-[#66a3ff]/20 flex flex-col gap-1">
               <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Exit Load</div>
@@ -121,24 +121,24 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-[#0f172a]/60 p-5 shadow-lg backdrop-blur-md">
+          <div className="rounded-2xl border border-white/10 bg-[#0f172a] p-5 shadow-lg">
             <h3 className="text-sm font-semibold text-white tracking-wide mb-4 uppercase">Historical Returns (CAGR)</h3>
             <div className="grid grid-cols-3 gap-4 text-center">
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
                 <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">1 Year</div>
-                <div className={`font-serif-display font-bold text-2xl ${(returns?.['1Y'] ?? 0) > 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                <div className={`font-mono font-bold text-2xl ${(returns?.['1Y'] ?? 0) > 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                   {returns?.['1Y'] !== null && returns?.['1Y'] !== undefined ? `${returns['1Y']}%` : 'N/A'}
                 </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
                 <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">3 Years</div>
-                <div className={`font-serif-display font-bold text-2xl ${(returns?.['3Y'] ?? 0) > 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                <div className={`font-mono font-bold text-2xl ${(returns?.['3Y'] ?? 0) > 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                   {returns?.['3Y'] !== null && returns?.['3Y'] !== undefined ? `${returns['3Y']}%` : 'N/A'}
                 </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
                 <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">5 Years</div>
-                <div className={`font-serif-display font-bold text-2xl ${(returns?.['5Y'] ?? 0) > 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                <div className={`font-mono font-bold text-2xl ${(returns?.['5Y'] ?? 0) > 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                   {returns?.['5Y'] !== null && returns?.['5Y'] !== undefined ? `${returns['5Y']}%` : 'N/A'}
                 </div>
               </div>
@@ -146,7 +146,7 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
           </div>
 
           {riskMetrics && (
-            <div className="rounded-2xl border border-white/10 bg-[#0f172a]/60 p-5 shadow-lg backdrop-blur-md">
+            <div className="rounded-2xl border border-white/10 bg-[#0f172a] p-5 shadow-lg">
               <h3 className="text-sm font-semibold text-white tracking-wide mb-4 flex items-center justify-between">
                 <span>Risk Metrics</span>
                 <span className="text-[10px] text-slate-400 font-normal uppercase tracking-wider">Based on full NAV history (RFR 6%)</span>
@@ -154,25 +154,25 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
                   <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Sharpe Ratio</div>
-                  <div className={`font-serif-display font-bold text-2xl ${(riskMetrics.sharpeRatio ?? 0) >= 1 ? 'text-emerald-300' : (riskMetrics.sharpeRatio ?? 0) >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>
+                  <div className={`font-mono font-bold text-2xl ${(riskMetrics.sharpeRatio ?? 0) >= 1 ? 'text-emerald-300' : (riskMetrics.sharpeRatio ?? 0) >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>
                     {riskMetrics.sharpeRatio ?? 'N/A'}
                   </div>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
                   <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Sortino Ratio</div>
-                  <div className={`font-serif-display font-bold text-2xl ${(riskMetrics.sortinoRatio ?? 0) >= 1 ? 'text-emerald-300' : (riskMetrics.sortinoRatio ?? 0) >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>
+                  <div className={`font-mono font-bold text-2xl ${(riskMetrics.sortinoRatio ?? 0) >= 1 ? 'text-emerald-300' : (riskMetrics.sortinoRatio ?? 0) >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>
                     {riskMetrics.sortinoRatio ?? 'N/A'}
                   </div>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
                   <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Std Dev (Ann.)</div>
-                  <div className="font-serif-display font-bold text-2xl text-slate-200">
+                  <div className="font-mono font-bold text-2xl text-slate-200">
                     {typeof riskMetrics.stdDev === 'number' ? `${(riskMetrics.stdDev * 100).toFixed(1)}%` : 'N/A'}
                   </div>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-1">
                   <div className="text-slate-400 text-[10px] uppercase tracking-wider font-medium">Max Drawdown</div>
-                  <div className="font-serif-display font-bold text-2xl text-rose-300">
+                  <div className="font-mono font-bold text-2xl text-rose-300">
                     {typeof riskMetrics.maxDrawdown === 'number' ? `-${(riskMetrics.maxDrawdown * 100).toFixed(1)}%` : 'N/A'}
                   </div>
                 </div>
@@ -180,7 +180,7 @@ export default function MFDetailView({ schemeCode }: { schemeCode?: string }) {
             </div>
           )}
 
-          <div className="rounded-2xl border border-white/10 bg-[#0f172a]/60 p-5 shadow-lg backdrop-blur-md">
+          <div className="rounded-2xl border border-white/10 bg-[#0f172a] p-5 shadow-lg">
             <h3 className="text-sm font-semibold text-white tracking-wide mb-4">1Y NAV Trend (Rebased)</h3>
             <div className="h-64 w-full bg-black/20 rounded-xl p-2 border border-white/5">
               {data.chartData && data.chartData.length > 0 ? (

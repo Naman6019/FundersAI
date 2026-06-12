@@ -51,7 +51,7 @@ function contextFromMessageMetadata(messages: Message[]): ConversationContext {
   return {};
 }
 
-export default function ChatWindow() {
+export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: boolean }) {
   const searchParams = useSearchParams();
   const { setView, setIds, openCanvas, closeCanvas } = useCanvasStore();
   const messages = useChatStore((state) => state.messages);
@@ -244,7 +244,7 @@ export default function ChatWindow() {
         metadata: data.conversation_context ? { conversation_context: nextConversationContext } : null,
       });
     } catch {
-      addMessage({ id: Date.now().toString(), role: 'system', content: 'Error: Unable to reach FundersAI core. Make sure the server is running.' });
+      addMessage({ id: Date.now().toString(), role: 'system', content: 'Coverage pending: FundersAI core is not reachable. Try again when the research service is running.' });
     } finally {
       setIsProcessing(false);
     }
@@ -290,8 +290,12 @@ export default function ChatWindow() {
   };
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col rounded-[1.3rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.92),rgba(2,8,24,0.95))] shadow-[0_18px_40px_rgba(0,0,0,0.38)] backdrop-blur-xl">
-      <header className="flex items-center justify-between border-b border-white/10 px-4 py-3 sm:px-5">
+    <section className={`flex h-full min-h-0 w-full flex-col ${
+      isFullScreen
+        ? 'bg-transparent border-none'
+        : 'rounded-[1.3rem] border border-white/10 bg-[#07111f] shadow-[0_18px_40px_rgba(0,0,0,0.38)]'
+    }`}>
+      <header className={`flex items-center justify-between border-white/10 px-4 py-3 sm:px-5 ${isFullScreen ? 'border-b-0' : 'border-b'}`}>
         <div className="flex items-center gap-2.5">
           <div className="grid h-7 w-7 place-items-center rounded-md bg-[linear-gradient(135deg,#67b2ff,#3b82f6)] text-white shadow-[0_8px_16px_rgba(59,130,246,0.35)]">
             <Sparkles className="h-3.5 w-3.5" />
@@ -330,8 +334,8 @@ export default function ChatWindow() {
               key={msg.id}
               className={
                 msg.role === 'user'
-                  ? 'ml-auto w-fit max-w-[85%] rounded-2xl border border-[#66a3ff]/40 bg-[linear-gradient(140deg,#003366,#00509e)] px-4 py-3 text-sm text-[#f3f8ff]'
-                  : 'mr-auto max-w-[92%] rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-relaxed text-slate-100'
+                  ? 'ml-auto w-fit max-w-[85%] rounded-2xl border border-[#66a3ff]/30 bg-[#66a3ff]/10 px-4 py-3 text-sm text-[#f3f8ff]'
+                  : 'mr-auto max-w-[92%] rounded-2xl border border-white/10 bg-[#0f172a] px-4 py-3 text-sm leading-relaxed text-slate-100'
               }
             >
               {msg.role === 'system' ? (
@@ -339,6 +343,19 @@ export default function ChatWindow() {
                   <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                     {msg.content}
                   </ReactMarkdown>
+                  {msg.id !== '1' && (
+                    <div className="mt-3 flex flex-wrap gap-2 border-t border-white/5 pt-3">
+                      {msg.content.toLowerCase().includes('coverage pending') ? (
+                        <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200">Coverage pending</span>
+                      ) : (
+                        <>
+                          <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-300">AMC factsheet</span>
+                          <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-200">NAV synced</span>
+                          <span className="rounded-full border border-[#66a3ff]/20 bg-[#66a3ff]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#cce0ff]">Risk label official</span>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 msg.content
@@ -346,13 +363,13 @@ export default function ChatWindow() {
               {msg.id === '1' && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Magnetic>
-                    <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white" onClick={() => applySuggestion('Compare Parag Parikh Flexi Cap and ICICI Multi Asset Fund for long-term consistency.')}>Fund consistency</button>
+                    <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white" onClick={() => applySuggestion('Compare two verified funds: Parag Parikh Flexi Cap and ICICI Multi Asset Fund.')}>Compare two verified funds</button>
                   </Magnetic>
                   <Magnetic>
-                    <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white" onClick={() => applySuggestion('Which of these two funds has lower expense ratio and better Sharpe?')}>Sharpe + cost</button>
+                    <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white" onClick={() => applySuggestion('Explain risk-adjusted return using Sharpe, volatility, and drawdown.')}>Explain risk-adjusted return</button>
                   </Magnetic>
                   <Magnetic>
-                    <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white" onClick={() => applySuggestion('Show NAV trend differences between Parag Parikh Flexi Cap and ICICI Multi Asset Fund.')}>NAV trend</button>
+                    <button className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white" onClick={() => applySuggestion('Check source freshness for the selected funds before comparing them.')}>Check source freshness</button>
                   </Magnetic>
                 </div>
               )}
@@ -364,15 +381,14 @@ export default function ChatWindow() {
           </div>
         </div>
       </div>
-
-      <div className="border-t border-white/10 bg-[#070b19] p-3 sm:p-4">
+      <div className={`${isFullScreen ? 'bg-transparent' : 'border-t border-white/10 bg-[#07111f]'} p-3 sm:p-4 pb-8`}>
         {isProcessing && (
-          <div className="mb-3 rounded-lg border border-[#66a3ff]/20 bg-[#00509e]/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#66a3ff] animate-pulse">
+          <div className="mb-3 rounded-lg border border-[#66a3ff]/20 bg-[#66a3ff]/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#66a3ff] animate-pulse">
             Thinking…
           </div>
         )}
 
-        <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-2 transition-all duration-300 focus-within:border-[#66a3ff]/40 focus-within:bg-white/[0.04] focus-within:ring-4 focus-within:ring-[#66a3ff]/10">
+        <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-[#0f172a] p-2 transition-all duration-300 focus-within:border-[#66a3ff]/40 focus-within:bg-[#0f172a]/80 focus-within:ring-4 focus-within:ring-[#66a3ff]/10">
           <textarea
             ref={textareaRef}
             value={input}

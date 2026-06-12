@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useFundData } from '../../hooks/useFundData';
 import { useBenchmarkData } from '../../hooks/useBenchmarkData';
 import FundComparisonChart, { Period } from '../funds/FundComparisonChart';
+import FundSearchSelect from '../ui/FundSearchSelect';
+import { useCanvasStore } from '@/store/useCanvasStore';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { CanvasPayload, MetricValue as SharedMetricValue } from '@/types/funds';
 import type { NavPoint } from '@/types/funds';
@@ -260,7 +262,7 @@ const mapQuantResponse = (data: unknown): Record<string, StockComparisonMetric> 
     const latest_sh = sh[0] || {};
     const price_hist = payload.price_history?.[sym] || [];
     const latest_price = price_hist.length > 0 ? price_hist[price_hist.length - 1].close : null;
-    
+
     mapped[sym] = {
       price: latest_price,
       market_cap: ratios['market_cap'] as MetricValue,
@@ -410,7 +412,7 @@ const formatExpense = (value: unknown) => {
 
 const formatRiskLabel = (value: unknown) => {
   const label = typeof value === 'string' ? value.trim() : '';
-  return label || 'Risk label unavailable';
+  return label || 'Coverage pending';
 };
 
 const compactSchemeName = (name: string | null | undefined) => {
@@ -456,7 +458,7 @@ function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
   const isMf = winner?.asset_type === 'mutual_fund';
 
   return (
-    <section className="rounded-2xl border border-[#35588f] bg-[#16243a] p-4 sm:p-5">
+    <section className="p-2 sm:p-4 mb-6">
       <h3 className="mb-2 text-sm font-semibold tracking-wide text-[#9ec5ff]">Why this is better?</h3>
       <p className="whitespace-pre-line text-sm leading-relaxed text-[#d7e4fb]">
         {payload.summary || 'Deterministic comparison summary unavailable.'}
@@ -518,14 +520,20 @@ function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
 
 export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
   const [period, setPeriod] = useState<Period>('1Y');
+  const { comparisonMode, setComparisonMode } = useCanvasStore();
 
-  // Heuristic: if IDs are numeric, they are mutual fund scheme codes
-  const idA = ids?.[0] || null;
-  const idB = ids?.[1] || null;
-  const isMF = type === 'MUTUAL_FUND' || Boolean(idA && /^[0-9]+$/.test(idA));
+  const id1 = ids?.[0] || null;
+  const id2 = ids?.[1] || null;
+  const id3 = ids?.[2] || null;
+  const id4 = ids?.[3] || null;
+  const isMF = type === 'MUTUAL_FUND' || Boolean(id1 && /^[0-9]+$/.test(id1));
 
-  const fundA = useFundData(isMF ? idA : null);
-  const fundB = useFundData(isMF ? idB : null);
+  const fund1 = useFundData(isMF ? id1 : null);
+  const fund2 = useFundData(isMF ? id2 : null);
+  const fund3 = useFundData(isMF ? id3 : null);
+  const fund4 = useFundData(isMF ? id4 : null);
+  const fundsData = [fund1, fund2, fund3, fund4].slice(0, Math.max(2, ids.length));
+
   const benchmark = useBenchmarkData();
   const [fetchedComparison, setFetchedComparison] = useState<Record<string, StockComparisonMetric>>({});
   const [fetchedWhyBetter, setFetchedWhyBetter] = useState<WhyBetterPayload | null>(null);
@@ -558,9 +566,29 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
     };
   }, [auxiliaryData, ids, isMF]);
 
-  if (!ids || ids.length < 2) {
+  if (!ids || ids.length < 1) {
     return <div className="p-6 text-gray-400">Insufficient data for comparison.</div>;
   }
+
+  const handleReplaceFund = (index: number, newId: string) => {
+    const store = useCanvasStore.getState();
+    const newIds = [...ids];
+    newIds[index] = newId;
+    store.setIds(newIds);
+  };
+
+  const handleAddFund = (newId: string) => {
+    if (ids.length >= 4) return;
+    const store = useCanvasStore.getState();
+    store.setIds([...ids, newId]);
+  };
+
+  const handleRemoveFund = (index: number) => {
+    if (ids.length <= 2) return;
+    const store = useCanvasStore.getState();
+    const newIds = ids.filter((_, i) => i !== index);
+    store.setIds(newIds);
+  };
 
   if (!isMF) {
     const comparison = mapQuantResponse(auxiliaryData?.quant_data) || fetchedComparison;
@@ -580,8 +608,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
     const staleEntities = entities.filter(entity => Boolean(comparison[entity]?.source_summary?.stale));
 
     const renderBarChart = (title: string, rows: Record<string, string | number | null>[], suffix = '%') => (
-      <section className="rounded-2xl border border-[#2d3b55] bg-[#111b2d] p-4 shadow-md">
-        <h3 className="mb-3 text-sm font-semibold text-[#d7e4fb]">{title}</h3>
+      <section className="mb-6">
+        <h3 className="mb-3 text-[13px] font-bold uppercase tracking-wider text-[#d7e4fb] pl-1">{title}</h3>
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={rows}>
@@ -660,7 +688,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
         if (valA === null || valB === null) return null;
         if (valA === valB) return null;
         const labelLower = label.toLowerCase();
-        
+
         if (labelLower.includes('p/e') || labelLower.includes('p/b') || labelLower.includes('p/s') || labelLower.includes('ev/ebitda') || labelLower.includes('debt/equity')) {
           return valA < valB ? 'a' : 'b';
         }
@@ -668,7 +696,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
       };
 
       return (
-        <div className="rounded-2xl border border-white/10 bg-[#0f172a]/60 overflow-hidden shadow-lg backdrop-blur-md">
+        <div className="rounded-2xl bg-[#111] border border-[#222] overflow-hidden shadow-lg">
           <div className="px-5 py-3.5 border-b border-white/10 bg-white/[0.02]">
             <h4 className="text-sm font-semibold text-white tracking-wide">{title}</h4>
           </div>
@@ -705,11 +733,49 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
 
     return (
       <div className="comparison-detail finance-compare-wrap p-3 sm:p-6 h-full flex flex-col overflow-hidden max-w-7xl mx-auto w-full">
-        <div className="mb-5 rounded-2xl border border-[#2d3b55] bg-[#111b2d] px-5 py-4 shadow-md">
-          <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Stock Comparison Console</h2>
-          <p className="text-sm text-[#a7bad9] mt-1">
-            Source-neutral valuation, growth, quality, and ownership comparison
-          </p>
+        <div className="mb-5 rounded-2xl bg-[#111] border border-[#222] px-5 py-4 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Stock Comparison Workspace</h2>
+            <p className="text-sm text-[#a7bad9] mt-1">
+              Source-neutral valuation, growth, quality, and ownership comparison
+            </p>
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {comparisonMode === 'simple' ? (
+              <button
+                onClick={() => setComparisonMode('llm')}
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#66a3ff] to-[#4f8ff7] px-4 py-2 text-xs font-bold text-slate-950 shadow-lg shadow-[#66a3ff]/20 transition-transform hover:scale-105 active:scale-95 whitespace-nowrap"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Ask AI
+              </button>
+            ) : (
+              <button
+                onClick={() => setComparisonMode('simple')}
+                className="flex items-center gap-2 rounded-xl bg-[#222] border border-[#333] px-4 py-2 text-xs font-bold text-slate-300 hover:bg-[#333] transition-transform hover:scale-105 active:scale-95 whitespace-nowrap"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Hide AI
+              </button>
+            )}
+            <div className="flex-1 sm:w-48">
+              <FundSearchSelect
+                placeholder={ids[0] || "Select Stock 1"}
+                onSelect={(item) => handleReplaceFund(0, item.id)}
+              />
+            </div>
+            <div className="text-slate-500 font-serif font-medium text-xs">VS</div>
+            <div className="flex-1 sm:w-48">
+              <FundSearchSelect
+                placeholder={ids[1] || "Select Stock 2"}
+                onSelect={(item) => handleReplaceFund(1, item.id)}
+              />
+            </div>
+          </div>
         </div>
         <div className="custom-scroll flex-1 space-y-5 overflow-y-auto pr-2 pb-10">
           {staleEntities.length > 0 && (
@@ -719,7 +785,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
           )}
           <WhyBetterPanel payload={whyBetter} />
           {priceRows.length > 0 && (
-            <section className="rounded-2xl border border-[#2d3b55] bg-[#111b2d] p-4 shadow-md">
+            <section className="rounded-2xl bg-[#111] border border-[#222] p-4 shadow-md">
               <h3 className="mb-3 text-sm font-semibold text-[#d7e4fb]">Price History</h3>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
@@ -751,7 +817,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
               {stockError || 'Fundamentals are unavailable because no fundamentals provider has supplied these fields yet.'}
             </div>
           )}
-          
+
           <div className="space-y-4">
             <h3 className="text-base font-bold text-white tracking-tight mt-6 mb-2">Detailed Metric Comparison</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -768,8 +834,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
     );
   }
 
-  const loading = fundA.loading || fundB.loading;
-  const error = fundA.error || fundB.error;
+  const loading = fundsData.some((f, i) => i < ids.length && f.loading);
+  const error = fundsData.find((f, i) => i < ids.length && f.error)?.error || null;
   const mfQuant = auxiliaryData?.quant_data && typeof auxiliaryData.quant_data === 'object'
     ? auxiliaryData.quant_data as QuantResponsePayload
     : undefined;
@@ -782,64 +848,59 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
       ? (auxiliaryData.quant_data as { comparison?: Record<string, unknown> }).comparison
       : auxiliaryData?.comparison;
 
-  const getWinner = (
-    label: string, 
-    valA: number | null, 
-    valB: number | null
-  ): 'a' | 'b' | null => {
-    if (valA === null || valB === null) return null;
-    if (valA === valB) return null;
+  const maxFundSlots = Math.min(ids.length + 1, 4);
+  const totalCols = maxFundSlots + 1; // 1 label + maxFundSlots
+  const colsClass = totalCols === 3 ? 'grid-cols-[1.5fr_1fr_1fr]' :
+                    totalCols === 4 ? 'grid-cols-[1.5fr_1fr_1fr_1fr]' :
+                    'grid-cols-[1.5fr_1fr_1fr_1fr_1fr]';
+
+  const getWinnerIndex = (label: string, values: (number | null)[]): number | null => {
+    const validValues = values.map((v, i) => ({ v, i })).filter(x => x.v !== null);
+    if (validValues.length < 2) return null;
+    const allSame = validValues.every(x => x.v === validValues[0].v);
+    if (allSame) return null;
 
     const labelLower = label.toLowerCase();
-    if (labelLower.includes('expense')) {
-      return valA < valB ? 'a' : 'b';
-    }
-    if (labelLower.includes('drawdown')) {
-      return valA > valB ? 'a' : 'b';
-    }
-    if (labelLower.includes('volatility')) {
-      return valA < valB ? 'a' : 'b';
-    }
-    return valA > valB ? 'a' : 'b';
+    const isLowerBetter = labelLower.includes('expense') || labelLower.includes('drawdown') || labelLower.includes('volatility');
+
+    validValues.sort((a, b) => isLowerBetter ? a.v! - b.v! : b.v! - a.v!);
+    return validValues[0].i;
   };
 
-  const renderGroupedTable = (title: string, rows: Array<{ label: string; a: string | number | null; b: string | number | null; winner: 'a' | 'b' | null }>) => (
-    <div className="rounded-2xl border border-white/10 bg-[#0f172a]/60 overflow-hidden shadow-lg backdrop-blur-md">
-      <div className="px-5 py-3.5 border-b border-white/10 bg-white/[0.02]">
-        <h4 className="text-sm font-semibold text-white tracking-wide">{title}</h4>
+  const renderGroupedTable = (title: string, rows: Array<{ label: string; values: (string | number | null)[]; winnerIndex: number | null }>) => {
+    return (
+    <div className="mb-6">
+      <div className="py-3 px-1 border-b border-white/10 mb-2">
+        <h4 className="text-[13px] font-bold text-white uppercase tracking-wider">{title}</h4>
       </div>
-      <div className="divide-y divide-white/5">
+      <div className="flex flex-col">
         {rows.map((row) => (
-          <div key={row.label} className="grid grid-cols-[1.5fr_1fr_1fr] text-sm items-center hover:bg-white/[0.01] transition-colors">
-            <div className="px-5 py-3 font-medium text-slate-300">{row.label}</div>
-            <div className={`px-5 py-3 text-left ${row.winner === 'a' ? 'text-emerald-300 font-semibold bg-emerald-500/5' : 'text-slate-200'}`}>
-              <span className="flex items-center gap-1.5 font-mono">
-                {row.a === 'N/A' || row.a === null ? <span className="text-slate-500">N/A</span> : row.a}
-                {row.winner === 'a' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />}
-              </span>
-            </div>
-            <div className={`px-5 py-3 text-left ${row.winner === 'b' ? 'text-emerald-300 font-semibold bg-emerald-500/5' : 'text-slate-200'}`}>
-              <span className="flex items-center gap-1.5 font-mono">
-                {row.b === 'N/A' || row.b === null ? <span className="text-slate-500">N/A</span> : row.b}
-                {row.winner === 'b' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />}
-              </span>
-            </div>
+          <div key={row.label} className={`grid ${colsClass} text-[13px] items-center border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors`}>
+            <div className="py-3.5 px-2 font-medium text-slate-400">{row.label}</div>
+            {row.values.map((val, i) => (
+              <div key={i} className={`py-3.5 px-2 text-left ${row.winnerIndex === i ? 'text-[#66a3ff] font-semibold bg-[#66a3ff]/5' : 'text-slate-200'}`}>
+                <span className="flex items-center gap-1.5 font-mono">
+                  {val === 'N/A' || val === null ? <span className="text-slate-500">N/A</span> : val}
+                  {row.winnerIndex === i && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#66a3ff] shadow-[0_0_8px_rgba(102,163,255,0.6)]" />}
+                </span>
+              </div>
+            ))}
           </div>
         ))}
       </div>
     </div>
-  );
+  )};
 
   const renderSkeleton = () => (
-    <div className="flex-1 space-y-6 overflow-hidden animate-pulse max-w-7xl mx-auto w-full p-3 sm:p-6">
-      <div className="h-24 rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5 space-y-3">
+    <div className="flex-1 space-y-6 overflow-hidden animate-pulse w-full p-3 sm:p-6">
+      <div className="h-24 rounded-3xl bg-[#111] border border-[#222] p-5 space-y-3">
         <div className="h-6 w-1/3 rounded bg-white/[0.05]" />
         <div className="h-4 w-1/2 rounded bg-white/[0.05]" />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {[1, 2].map((i) => (
-          <div key={i} className="rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5 space-y-3">
+          <div key={i} className="rounded-3xl bg-[#111] border border-[#222] p-5 space-y-3">
             <div className="h-6 w-1/2 rounded bg-white/[0.05]" />
             <div className="h-4 w-3/4 rounded bg-white/[0.05]" />
             <div className="h-5 w-24 rounded bg-white/[0.05]" />
@@ -847,13 +908,13 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
         ))}
       </div>
 
-      <div className="rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5 space-y-2">
+      <div className="rounded-3xl bg-[#111] border border-[#222] p-5 space-y-2">
         <div className="h-5 w-32 rounded bg-white/[0.05]" />
         <div className="h-4 w-full rounded bg-white/[0.05]" />
         <div className="h-4 w-5/6 rounded bg-white/[0.05]" />
       </div>
 
-      <div className="rounded-3xl border border-[#2d3b55] bg-[#0e182b] p-5 h-72 flex items-end justify-between gap-4">
+      <div className="rounded-3xl bg-[#111] border border-[#222] p-5 h-72 flex items-end justify-between gap-4">
         {[...Array(12)].map((_, i) => (
           <div key={i} className="bg-white/[0.03] rounded-t-lg w-full" style={{ height: `${20 + Math.random() * 60}%` }} />
         ))}
@@ -863,7 +924,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
         <div className="h-6 w-44 rounded bg-white/[0.05]" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[1, 2].map((i) => (
-            <div key={i} className="rounded-2xl border border-white/10 bg-[#0f172a]/60 overflow-hidden">
+            <div key={i} className="rounded-2xl bg-[#111] border border-[#222] overflow-hidden">
               <div className="p-4 border-b border-white/10 bg-white/[0.02]">
                 <div className="h-4 w-32 rounded bg-white/[0.05]" />
               </div>
@@ -884,26 +945,50 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
   );
 
   return (
-    <div className="comparison-detail finance-compare-wrap p-3 sm:p-6 h-full flex flex-col overflow-hidden max-w-7xl mx-auto w-full">
-      <div className="mb-5 flex flex-col gap-4 rounded-3xl border border-[#2f3b57] bg-[#121a2d] px-5 py-5 sm:mb-6 sm:flex-row sm:items-center sm:justify-between shrink-0">
+    <div className="comparison-detail finance-compare-wrap p-3 sm:p-6 h-full flex flex-col overflow-hidden w-full">
+      <div className="mb-5 px-2 py-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="rounded bg-[#1a2740] px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider text-[#8ea7cd] border border-[#2f3b57]">Research-only</span>
+            <span className="rounded bg-[#1a2740] px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider text-[#8ea7cd] border border-[#222]">Research-only</span>
           </div>
-          <h2 className="text-xl font-bold text-white tracking-tight sm:text-2xl">Mutual Fund Comparison</h2>
-          {fundA.meta && fundB.meta && (
-            <p className="text-sm text-[#a7bad9] mt-1">{compactSchemeName(fundA.meta.scheme_name)} vs {compactSchemeName(fundB.meta.scheme_name)}</p>
-          )}
+          <h2 className="text-xl font-bold text-white tracking-tight sm:text-2xl">Mutual Fund Workspace</h2>
+          <p className="text-sm text-[#a7bad9] mt-1">
+            Headline, key differences, tradeoffs, and data limits stay visible before the metric table.
+          </p>
         </div>
+      </div>
 
-        <div className="flex max-w-full overflow-x-auto rounded-xl bg-[#0d1628] p-1.5 border border-white/10 shadow-inner gap-1.5 shrink-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+        {comparisonMode === 'simple' ? (
+          <button
+            onClick={() => setComparisonMode('llm')}
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#66a3ff] to-[#4f8ff7] px-4 py-2 text-xs font-bold text-slate-950 shadow-lg shadow-[#66a3ff]/20 transition-transform hover:scale-105 active:scale-95 whitespace-nowrap"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            Ask AI
+          </button>
+        ) : (
+          <button
+            onClick={() => setComparisonMode('simple')}
+            className="flex items-center gap-2 rounded-xl bg-[#222] border border-[#333] px-5 py-2.5 text-sm font-bold text-slate-300 hover:bg-[#333] transition-transform hover:scale-105 active:scale-95"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Hide AI
+          </button>
+        )}
+        <div className="flex max-w-full overflow-x-auto rounded-xl bg-white/[0.02] p-1 border border-white/5 gap-1.5 shrink-0 self-end ml-auto">
           {periods.map(p => {
             const isSupported = (() => {
                if (p === '1D' || p === '6M') return true;
-               const aCov = fundA.coverage as FundCoverage | undefined;
-               const bCov = fundB.coverage as FundCoverage | undefined;
-               if (!aCov || !bCov) return true;
-               return supportsFundPeriod(aCov, p) && supportsFundPeriod(bCov, p);
+               for (let i = 0; i < ids.length; i++) {
+                 const cov = fundsData[i]?.coverage as FundCoverage | undefined;
+                 if (cov && !supportsFundPeriod(cov, p)) return false;
+               }
+               return true;
             })();
 
             return (
@@ -923,6 +1008,33 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
         </div>
       </div>
 
+      <div className={`sticky top-0 z-30 bg-[#0a0a0a]/95 pb-4 pt-4 mb-6 -mx-3 sm:-mx-6 px-3 sm:px-6`}>
+        <div className={`grid ${colsClass} gap-4 items-center`}>
+          <div className="font-semibold text-[#8ea7cd] text-sm pl-2">Compare</div>
+          {ids.map((id, index) => (
+            <div key={index} className="relative">
+              <FundSearchSelect
+                placeholder={fundsData[index]?.meta?.scheme_name || `Select Fund ${index + 1}`}
+                onSelect={(item) => handleReplaceFund(index, item.id)}
+              />
+              {ids.length > 2 && (
+                <button onClick={() => handleRemoveFund(index)} className="absolute -top-2 -right-2 bg-red-500/20 text-red-500 rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-500/40 text-[10px] z-10 shadow-sm border border-red-500/30">
+                  &times;
+                </button>
+              )}
+            </div>
+          ))}
+          {ids.length < 4 && (
+            <div>
+              <FundSearchSelect
+                placeholder="+ Add Fund..."
+                onSelect={(item) => handleAddFund(item.id)}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
       {loading && renderSkeleton()}
 
       {error && (
@@ -931,7 +1043,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
           <p className="text-red-400 text-center font-medium">{error}</p>
-          <button 
+          <button
             onClick={() => window.location.reload()}
             className="mt-4 px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
           >
@@ -939,163 +1051,180 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
           </button>
         </div>
       )}
-      
-      {!loading && !error && fundA.meta && fundB.meta && (
+
+      {!loading && !error && fundsData.every((f, i) => i >= ids.length || f.meta) && (
         <div className="flex-1 overflow-y-auto pr-2 custom-scroll pb-10">
           {(() => {
-            const aRecord = getMfComparisonRecord(comparisonMap, ids[0], fundA.meta.scheme_name);
-            const bRecord = getMfComparisonRecord(comparisonMap, ids[1], fundB.meta.scheme_name);
-            const aLabel = compactSchemeName(fundA.meta.scheme_name);
-            const bLabel = compactSchemeName(fundB.meta.scheme_name);
+            const getFundData = (i: number) => {
+              const fund = fundsData[i];
+              if (!fund || !fund.meta) return null;
+              const record = getMfComparisonRecord(comparisonMap, ids[i], fund.meta.scheme_name);
 
-            const aReturn1Y = toNumber(fundA.returns?.['1Y']);
-            const bReturn1Y = toNumber(fundB.returns?.['1Y']);
-            const aReturn3Y = toNumber(aRecord?.return_3y ?? fundA.returns?.['3Y']);
-            const bReturn3Y = toNumber(bRecord?.return_3y ?? fundB.returns?.['3Y']);
-            const aReturn5Y = toNumber(fundA.returns?.['5Y']);
-            const bReturn5Y = toNumber(fundB.returns?.['5Y']);
-            
-            const aVol = normalizePercent(aRecord?.volatility_1y ?? fundA.riskMetrics?.stdDev);
-            const bVol = normalizePercent(bRecord?.volatility_1y ?? fundB.riskMetrics?.stdDev);
-            const aSharpe = toNumber(aRecord?.sharpe_ratio ?? fundA.riskMetrics?.sharpeRatio);
-            const bSharpe = toNumber(bRecord?.sharpe_ratio ?? fundB.riskMetrics?.sharpeRatio);
-            const aAlphaRaw = toNumber(aRecord?.alpha_vs_nifty ?? aRecord?.alpha ?? fundA.riskMetrics?.alpha_vs_nifty ?? fundA.riskMetrics?.alpha);
-            const bAlphaRaw = toNumber(bRecord?.alpha_vs_nifty ?? bRecord?.alpha ?? fundB.riskMetrics?.alpha_vs_nifty ?? fundB.riskMetrics?.alpha);
-            const aBetaRaw = toNumber(aRecord?.beta ?? fundA.riskMetrics?.beta);
-            const bBetaRaw = toNumber(bRecord?.beta ?? fundB.riskMetrics?.beta);
-            const aFallback = (aAlphaRaw === null || aBetaRaw === null)
-              ? computeAlphaBetaFromNav(fundA.navData, benchmark.data)
-              : { alpha: null as number | null, beta: null as number | null };
-            const bFallback = (bAlphaRaw === null || bBetaRaw === null)
-              ? computeAlphaBetaFromNav(fundB.navData, benchmark.data)
-              : { alpha: null as number | null, beta: null as number | null };
-            const aAlpha = aAlphaRaw ?? aFallback.alpha;
-            const bAlpha = bAlphaRaw ?? bFallback.alpha;
-            const aBeta = aBetaRaw ?? aFallback.beta;
-            const bBeta = bBetaRaw ?? bFallback.beta;
-            const aDrawdown = normalizePercent(aRecord?.max_drawdown_1y ?? fundA.riskMetrics?.maxDrawdown);
-            const bDrawdown = normalizePercent(bRecord?.max_drawdown_1y ?? fundB.riskMetrics?.maxDrawdown);
-            const aRiskLabel = formatRiskLabel(aRecord?.risk_level ?? fundA.details?.risk_level);
-            const bRiskLabel = formatRiskLabel(bRecord?.risk_level ?? fundB.details?.risk_level);
+              const alphaRaw = toNumber(record?.alpha_vs_nifty ?? record?.alpha ?? fund.riskMetrics?.alpha_vs_nifty ?? fund.riskMetrics?.alpha);
+              const betaRaw = toNumber(record?.beta ?? fund.riskMetrics?.beta);
+              const fallback = (alphaRaw === null || betaRaw === null)
+                ? computeAlphaBetaFromNav(fund.navData, benchmark.data)
+                : { alpha: null as number | null, beta: null as number | null };
 
-            const aCov = fundA.coverage as FundCoverage | undefined;
-            const bCov = fundB.coverage as FundCoverage | undefined;
-
-            const formatStringOrNA = (val: unknown) => {
-              if (val === null || val === undefined || val === '') return 'N/A';
-              return String(val);
+              return {
+                fund,
+                record,
+                label: compactSchemeName(fund.meta.scheme_name),
+                return1Y: toNumber(fund.returns?.['1Y']),
+                return3Y: toNumber(record?.return_3y ?? fund.returns?.['3Y']),
+                return5Y: toNumber(fund.returns?.['5Y']),
+                volatility: normalizePercent(record?.volatility_1y ?? fund.riskMetrics?.stdDev),
+                sharpe: toNumber(record?.sharpe_ratio ?? fund.riskMetrics?.sharpeRatio),
+                alpha: alphaRaw ?? fallback.alpha,
+                beta: betaRaw ?? fallback.beta,
+                drawdown: normalizePercent(record?.max_drawdown_1y ?? fund.riskMetrics?.maxDrawdown),
+                riskLabel: formatRiskLabel(record?.risk_level ?? fund.details?.risk_level),
+                cov: fund.coverage as FundCoverage | undefined,
+                expense: toNumber(record?.expense_ratio ?? fund.details?.expense_ratio),
+                aum: toNumber(record?.aum ?? fund.details?.aum),
+                historyPts: (fund.coverage as FundCoverage | undefined)?.history_points,
+                lastNav: (fund.coverage as FundCoverage | undefined)?.last_nav_date,
+                freshness: fund.freshness as Record<string, unknown> | undefined
+              };
             };
 
-            const aHistoryPts = aCov?.history_points;
-            const bHistoryPts = bCov?.history_points;
-            const aLastNav = aCov?.last_nav_date;
-            const bLastNav = bCov?.last_nav_date;
+            const activeFunds = Array.from({ length: ids.length }).map((_, i) => getFundData(i)).filter(Boolean) as ReturnType<typeof getFundData>[];
+            const freshnessLabel = (fund: NonNullable<ReturnType<typeof getFundData>>) => {
+              if (fund.freshness?.status === 'fresh' || fund.freshness?.stale === false) return 'NAV synced';
+              if (fund.freshness?.status) return String(fund.freshness.status);
+              return fund.lastNav ? 'NAV date available' : 'Coverage pending';
+            };
+            const keyDifferences = comparisonSummary?.key_differences?.length
+              ? comparisonSummary.key_differences
+              : ['Compare returns with risk, cost, and source freshness before interpreting any edge.'];
+            const tradeoffs = mfWhyBetter?.tradeoffs?.length
+              ? mfWhyBetter.tradeoffs
+              : ['Different mandates can make direct return-only comparisons incomplete.'];
+            const dataLimitations = mfWhyBetter?.data_limitations?.length
+              ? mfWhyBetter.data_limitations
+              : ['Coverage is limited to available NAV, factsheet, and mapped risk data.'];
 
             const pGroup = [
-              { label: '1Y Return', a: formatPercent(aReturn1Y), b: formatPercent(bReturn1Y), winner: getWinner('1Y Return', aReturn1Y, bReturn1Y) },
-              { label: '3Y Return', a: formatPercent(aReturn3Y), b: formatPercent(bReturn3Y), winner: getWinner('3Y Return', aReturn3Y, bReturn3Y) },
-              { label: '5Y Return', a: formatPercent(aReturn5Y), b: formatPercent(bReturn5Y), winner: getWinner('5Y Return', aReturn5Y, bReturn5Y) },
-              { label: 'Alpha vs Nifty', a: formatPercent(aAlpha), b: formatPercent(bAlpha), winner: getWinner('Alpha', aAlpha, bAlpha) },
+              { label: '1Y Return', values: activeFunds.map(f => formatPercent(f!.return1Y)), winnerIndex: getWinnerIndex('1Y Return', activeFunds.map(f => f!.return1Y)) },
+              { label: '3Y Return', values: activeFunds.map(f => formatPercent(f!.return3Y)), winnerIndex: getWinnerIndex('3Y Return', activeFunds.map(f => f!.return3Y)) },
+              { label: '5Y Return', values: activeFunds.map(f => formatPercent(f!.return5Y)), winnerIndex: getWinnerIndex('5Y Return', activeFunds.map(f => f!.return5Y)) },
+              { label: 'Alpha vs Nifty', values: activeFunds.map(f => formatPercent(f!.alpha)), winnerIndex: getWinnerIndex('Alpha', activeFunds.map(f => f!.alpha)) },
             ];
 
             const rGroup = [
-              { label: 'Official Risk Label', a: aRiskLabel, b: bRiskLabel, winner: null },
-              { label: 'Volatility (1Y)', a: formatPercent(aVol), b: formatPercent(bVol), winner: getWinner('Volatility', aVol, bVol) },
-              { label: 'Sharpe Ratio', a: formatPlain(aSharpe), b: formatPlain(bSharpe), winner: getWinner('Sharpe', aSharpe, bSharpe) },
-              { label: 'Beta', a: formatPlain(aBeta), b: formatPlain(bBeta), winner: getWinner('Beta', aBeta, bBeta) },
-              { label: 'Max Drawdown', a: formatPercent(aDrawdown), b: formatPercent(bDrawdown), winner: getWinner('Drawdown', aDrawdown, bDrawdown) },
+              { label: 'Official Risk Label', values: activeFunds.map(f => f!.riskLabel), winnerIndex: null },
+              { label: 'Volatility (1Y)', values: activeFunds.map(f => formatPercent(f!.volatility)), winnerIndex: getWinnerIndex('Volatility', activeFunds.map(f => f!.volatility)) },
+              { label: 'Sharpe Ratio', values: activeFunds.map(f => formatPlain(f!.sharpe)), winnerIndex: getWinnerIndex('Sharpe', activeFunds.map(f => f!.sharpe)) },
+              { label: 'Beta', values: activeFunds.map(f => formatPlain(f!.beta)), winnerIndex: getWinnerIndex('Beta', activeFunds.map(f => f!.beta)) },
+              { label: 'Max Drawdown', values: activeFunds.map(f => formatPercent(f!.drawdown)), winnerIndex: getWinnerIndex('Drawdown', activeFunds.map(f => f!.drawdown)) },
             ];
 
             const dGroup = [
-              { label: 'Expense Ratio', a: formatExpense(aRecord?.expense_ratio ?? fundA.details?.expense_ratio), b: formatExpense(bRecord?.expense_ratio ?? fundB.details?.expense_ratio), winner: getWinner('Expense Ratio', toNumber(aRecord?.expense_ratio ?? fundA.details?.expense_ratio), toNumber(bRecord?.expense_ratio ?? fundB.details?.expense_ratio)) },
-              { label: 'AUM', a: formatAum(aRecord?.aum ?? fundA.details?.aum), b: formatAum(bRecord?.aum ?? fundB.details?.aum), winner: getWinner('AUM', toNumber(aRecord?.aum ?? fundA.details?.aum), toNumber(bRecord?.aum ?? fundB.details?.aum)) },
-              { label: 'NAV points synced', a: aHistoryPts ? String(aHistoryPts) : 'N/A', b: bHistoryPts ? String(bHistoryPts) : 'N/A', winner: getWinner('NAV points', toNumber(aHistoryPts), toNumber(bHistoryPts)) },
-              { label: 'Latest NAV Date', a: aLastNav ? String(aLastNav) : 'N/A', b: bLastNav ? String(bLastNav) : 'N/A', winner: null },
+              { label: 'Expense Ratio', values: activeFunds.map(f => formatExpense(f!.expense)), winnerIndex: getWinnerIndex('Expense Ratio', activeFunds.map(f => f!.expense)) },
+              { label: 'AUM', values: activeFunds.map(f => formatAum(f!.aum)), winnerIndex: getWinnerIndex('AUM', activeFunds.map(f => f!.aum)) },
             ];
 
-            const aFreshness = fundA.freshness as Record<string, unknown> | undefined;
-            const bFreshness = fundB.freshness as Record<string, unknown> | undefined;
+            const qGroup = [
+              { label: 'AMC factsheet', values: activeFunds.map(f => f!.riskLabel === 'Coverage pending' ? 'Coverage pending' : 'Mapped'), winnerIndex: null },
+              { label: 'Source freshness', values: activeFunds.map(f => freshnessLabel(f!)), winnerIndex: null },
+              { label: 'Risk label source', values: activeFunds.map(f => f!.riskLabel === 'Coverage pending' ? 'Coverage pending' : 'Official'), winnerIndex: null },
+              { label: 'NAV points synced', values: activeFunds.map(f => f!.historyPts ? String(f!.historyPts) : 'N/A'), winnerIndex: getWinnerIndex('NAV points', activeFunds.map(f => toNumber(f!.historyPts))) },
+              { label: 'Latest NAV Date', values: activeFunds.map(f => f!.lastNav ? String(f!.lastNav) : 'N/A'), winnerIndex: null },
+            ];
+
+            const colsClass = ids.length === 2 ? 'sm:grid-cols-2' : ids.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-4';
 
             return (
               <div className="grid gap-6">
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5">
-                    <h3 className="font-serif-display text-2xl font-bold text-white">{aLabel}</h3>
-                    <p className="text-xs text-[#8ea7cd] mt-1 line-clamp-1" title={fundA.meta.scheme_name}>{fundA.meta.scheme_name}</p>
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                       {aFreshness?.status === 'fresh' || aFreshness?.stale === false ? (
-                          <span className="rounded bg-emerald-500/10 px-2 py-1 text-[10px] font-medium text-emerald-300 border border-emerald-500/20">Fresh NAV</span>
-                       ) : (
-                          <span className="rounded bg-amber-500/10 px-2 py-1 text-[10px] font-medium text-amber-300 border border-amber-500/20">Stale NAV</span>
-                       )}
-                       {supportsFundPeriod(aCov, '5Y') ? (
-                          <span className="rounded bg-[#66a3ff]/10 px-2 py-1 text-[10px] font-medium text-[#66a3ff] border border-[#66a3ff]/20">5Y+ Data</span>
-                       ) : supportsFundPeriod(aCov, '3Y') ? (
-                          <span className="rounded bg-[#66a3ff]/10 px-2 py-1 text-[10px] font-medium text-[#66a3ff] border border-[#66a3ff]/20">3Y Data</span>
-                       ) : (
-                          <span className="rounded bg-slate-500/10 px-2 py-1 text-[10px] font-medium text-slate-300 border border-slate-500/20">Limited Data</span>
-                       )}
+
+                <div className={`grid grid-cols-1 ${colsClass} gap-4`}>
+                  {activeFunds.map((f, index) => (
+                    <div key={index} className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
+                      <h3 className="font-serif-display text-2xl font-bold text-white">{f!.label}</h3>
+                      <p className="text-xs text-[#8ea7cd] mt-1 line-clamp-1" title={f!.fund?.meta?.scheme_name}>{f!.fund?.meta?.scheme_name}</p>
+                      <div className="mt-4 grid gap-2 text-xs">
+                        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">Official risk label</p>
+                          <p className="mt-1 font-medium text-white">{f!.riskLabel}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">Source freshness</p>
+                          <p className="mt-1 font-medium text-white">{freshnessLabel(f!)}</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                         {f!.freshness?.status === 'fresh' || f!.freshness?.stale === false ? (
+                            <span className="rounded bg-emerald-500/10 px-2 py-1 text-[10px] font-medium text-emerald-300 border border-emerald-500/20">Fresh NAV</span>
+                         ) : (
+                            <span className="rounded bg-amber-500/10 px-2 py-1 text-[10px] font-medium text-amber-300 border border-amber-500/20">Stale NAV</span>
+                         )}
+                         {supportsFundPeriod(f!.cov, '5Y') ? (
+                            <span className="rounded bg-[#66a3ff]/10 px-2 py-1 text-[10px] font-medium text-[#66a3ff] border border-[#66a3ff]/20">5Y+ Data</span>
+                         ) : supportsFundPeriod(f!.cov, '3Y') ? (
+                            <span className="rounded bg-[#66a3ff]/10 px-2 py-1 text-[10px] font-medium text-[#66a3ff] border border-[#66a3ff]/20">3Y Data</span>
+                          ) : (
+                            <span className="rounded bg-slate-500/10 px-2 py-1 text-[10px] font-medium text-slate-300 border border-slate-500/20">Coverage pending</span>
+                         )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5">
-                    <h3 className="font-serif-display text-2xl font-bold text-white">{bLabel}</h3>
-                    <p className="text-xs text-[#8ea7cd] mt-1 line-clamp-1" title={fundB.meta.scheme_name}>{fundB.meta.scheme_name}</p>
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                       {bFreshness?.status === 'fresh' || bFreshness?.stale === false ? (
-                          <span className="rounded bg-emerald-500/10 px-2 py-1 text-[10px] font-medium text-emerald-300 border border-emerald-500/20">Fresh NAV</span>
-                       ) : (
-                          <span className="rounded bg-amber-500/10 px-2 py-1 text-[10px] font-medium text-amber-300 border border-amber-500/20">Stale NAV</span>
-                       )}
-                       {supportsFundPeriod(bCov, '5Y') ? (
-                          <span className="rounded bg-[#66a3ff]/10 px-2 py-1 text-[10px] font-medium text-[#66a3ff] border border-[#66a3ff]/20">5Y+ Data</span>
-                       ) : supportsFundPeriod(bCov, '3Y') ? (
-                          <span className="rounded bg-[#66a3ff]/10 px-2 py-1 text-[10px] font-medium text-[#66a3ff] border border-[#66a3ff]/20">3Y Data</span>
-                       ) : (
-                          <span className="rounded bg-slate-500/10 px-2 py-1 text-[10px] font-medium text-slate-300 border border-slate-500/20">Limited Data</span>
-                       )}
-                    </div>
-                  </div>
+                  ))}
                 </div>
 
-                {comparisonSummary && (
-                  <div className="rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5">
-                    <h3 className="mb-2 text-sm font-semibold text-[#d7e4fb]">Comparison snapshot</h3>
-                    {comparisonSummary.headline && (
-                      <p className="text-sm leading-relaxed text-[#c8d8f6]">{comparisonSummary.headline}</p>
-                    )}
-                    {Array.isArray(comparisonSummary.verdict_cards) && comparisonSummary.verdict_cards.length > 0 && (
+                <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
+                  <h3 className="mb-2 text-sm font-semibold text-[#d7e4fb]">Decision clarity</h3>
+                  <p className="text-sm leading-relaxed text-[#c8d8f6]">
+                    {comparisonSummary?.headline || 'Use this view to compare facts, tradeoffs, and coverage limits before making an independent decision.'}
+                  </p>
+                  {Array.isArray(comparisonSummary?.verdict_cards) && comparisonSummary.verdict_cards.length > 0 && (
                       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                         {comparisonSummary.verdict_cards.slice(0, 4).map((card) => (
-                          <div key={`${card.label}-${card.value}`} className="rounded-2xl border border-white/10 bg-[#15233d] p-4">
+                          <div key={`${card.label}-${card.value}`} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">{card.label || 'Signal'}</p>
                             <p className="mt-2 text-lg font-semibold text-white">{card.value || 'N/A'}</p>
                             <p className="mt-1 text-xs leading-relaxed text-[#c8d8f6]">{card.note || 'No note available.'}</p>
                           </div>
                         ))}
                       </div>
-                    )}
-                    {Array.isArray(comparisonSummary.key_differences) && comparisonSummary.key_differences.length > 0 && (
-                      <ul className="mt-4 list-disc space-y-1 pl-5 text-xs leading-relaxed text-[#c8d8f6]">
-                        {comparisonSummary.key_differences.slice(0, 5).map((item) => (
+                  )}
+                  <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">Key differences</p>
+                      <ul className="mt-3 list-disc space-y-1 pl-4 text-xs leading-relaxed text-[#c8d8f6]">
+                        {keyDifferences.slice(0, 4).map((item) => (
                           <li key={item}>{item}</li>
                         ))}
                       </ul>
-                    )}
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">Tradeoffs</p>
+                      <ul className="mt-3 list-disc space-y-1 pl-4 text-xs leading-relaxed text-[#c8d8f6]">
+                        {tradeoffs.slice(0, 4).map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">Data limitations</p>
+                      <ul className="mt-3 list-disc space-y-1 pl-4 text-xs leading-relaxed text-[#c8d8f6]">
+                        {dataLimitations.slice(0, 4).map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
-                )}
+                </div>
 
-                <div className="rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5">
-                  <h3 className="mb-2 text-sm font-semibold text-[#d7e4fb]">Research verdict</h3>
+                <div className="rounded-3xl bg-[#111] border border-[#222] p-5">
+                  <h3 className="mb-2 text-sm font-semibold text-[#d7e4fb]">Research frame</h3>
                   <p className="text-sm leading-relaxed text-[#c8d8f6]">
-                    {(!aCov?.supports_1y || !bCov?.supports_1y) ? "No strong overall winner due to limited NAV history." : 
+                    {activeFunds.some(f => !f!.cov?.supports_1y) ? "No strong overall winner due to limited NAV history." :
                      (mfWhyBetter?.confidence?.score ?? 0) < 0.6 ? "No strong overall winner. Both funds serve different mandates." :
-                     "Directional edge based on available data, but qualitative factors (like asset allocation flexibility) play a major role in overall suitability."}
+                     "Directional edge based on available data. Asset allocation flexibility and mandate differences still need independent review."}
                   </p>
                 </div>
 
                 {holdingsOverlap && (
-                  <div className="rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5">
+                  <div className="rounded-3xl bg-[#111] border border-[#222] p-5">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <h3 className="text-sm font-semibold text-[#d7e4fb]">Holdings overlap</h3>
@@ -1105,7 +1234,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                             : holdingsOverlap.reason || 'Holdings overlap unavailable.'}
                         </p>
                       </div>
-                      <div className="rounded-2xl border border-white/10 bg-[#15233d] px-4 py-3 text-right">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-right">
                         <p className="text-[11px] uppercase tracking-[0.12em] text-[#8ea7cd]">Overlap weight</p>
                         <p className="text-xl font-semibold text-white">{formatPercent(toNumber(holdingsOverlap.total_overlap_weight), 2)}</p>
                       </div>
@@ -1118,8 +1247,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                             <thead className="bg-white/[0.05] text-[#8ea7cd]">
                               <tr>
                                 <th className="px-3 py-2 font-semibold">Common holding</th>
-                                <th className="px-3 py-2 font-semibold">{aLabel}</th>
-                                <th className="px-3 py-2 font-semibold">{bLabel}</th>
+                                <th className="px-3 py-2 font-semibold">{activeFunds[0]?.label}</th>
+                                <th className="px-3 py-2 font-semibold">{activeFunds[1]?.label}</th>
                                 <th className="px-3 py-2 font-semibold">Overlap</th>
                               </tr>
                             </thead>
@@ -1138,7 +1267,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                             </tbody>
                           </table>
                         </div>
-                        <div className="rounded-2xl border border-white/10 bg-[#15233d] p-4">
+                        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                           <h4 className="text-xs font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">Sector overlap</h4>
                           <div className="mt-3 space-y-2">
                             {(holdingsOverlap.sector_overlap || []).slice(0, 6).map((sector) => (
@@ -1150,18 +1279,18 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                           </div>
                           <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
                             <div>
-                              <p className="text-[#8ea7cd]">{aLabel} top 10</p>
+                              <p className="text-[#8ea7cd]">{activeFunds[0]?.label} top 10</p>
                               <p className="font-semibold text-white">{formatPercent(toNumber(holdingsOverlap.fund_a_top_concentration), 2)}</p>
                             </div>
                             <div>
-                              <p className="text-[#8ea7cd]">{bLabel} top 10</p>
+                              <p className="text-[#8ea7cd]">{activeFunds[1]?.label} top 10</p>
                               <p className="font-semibold text-white">{formatPercent(toNumber(holdingsOverlap.fund_b_top_concentration), 2)}</p>
                             </div>
                           </div>
                         </div>
                       </div>
                     ) : (
-                      <div className="mt-4 rounded-2xl border border-white/10 bg-[#15233d] p-4 text-sm text-[#c8d8f6]">
+                      <div className="mt-4 rounded-2xl bg-[#111] border border-[#222] p-4 text-sm text-[#c8d8f6]">
                         Holdings overlap will appear when both selected funds have latest holdings data.
                       </div>
                     )}
@@ -1169,40 +1298,45 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                 )}
 
                 <div className="space-y-4">
-                  <h3 className="font-serif-display text-xl font-bold text-white tracking-tight">Detailed Metric Comparison</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {renderGroupedTable('Returns & Performance', pGroup)}
-                    {renderGroupedTable('Risk & Volatility Indicators', rGroup)}
-                    {renderGroupedTable('Costs, Scale & Data Quality', dGroup)}
+                  <h3 className="font-serif-display text-xl font-bold text-white tracking-tight">Grouped Metric Comparison</h3>
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    {renderGroupedTable('Returns', pGroup)}
+                    {renderGroupedTable('Risk', rGroup)}
+                    {renderGroupedTable('Cost', dGroup)}
+                    {renderGroupedTable('Data quality', qGroup)}
                   </div>
                 </div>
 
-                <div className="rounded-3xl border border-[#2d3b55] bg-[#0e182b] p-5">
-                  <FundComparisonChart
-                    schemeCodeA={ids[0]}
-                    schemeCodeB={ids[1]}
-                    nameA={fundA.meta.scheme_name}
-                    nameB={fundB.meta.scheme_name}
-                    period={period}
-                  />
+                <div className="rounded-3xl bg-[#111] border border-[#222] p-5">
+                  {ids.length === 2 && activeFunds.length === 2 && activeFunds[0] && activeFunds[1] ? (
+                    <FundComparisonChart
+                      schemeCodeA={ids[0]}
+                      schemeCodeB={ids[1]}
+                      nameA={activeFunds[0]?.fund?.meta?.scheme_name ?? 'Fund A'}
+                      nameB={activeFunds[1]?.fund?.meta?.scheme_name ?? 'Fund B'}
+                      period={period}
+                    />
+                  ) : ids.length > 2 ? (
+                    <div className="text-sm text-[#8ea7cd] text-center p-4">Chart comparison currently supports only 2 funds. Please select 2 funds to view the chart.</div>
+                  ) : null}
                 </div>
 
-                <div className="rounded-3xl border border-[#2d3b55] bg-[#101b2d] p-5">
+                <div className="rounded-3xl bg-[#111] border border-[#222] p-5">
                   <h3 className="mb-4 text-base font-semibold text-white">Research notes</h3>
                   <div className="grid gap-4 sm:grid-cols-3">
-                    <div className="rounded-2xl border border-white/5 bg-[#15233d] p-5">
+                    <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
                       <h4 className="text-sm font-semibold text-[#8ea7cd] mb-3">Different fund mandates</h4>
                       <p className="text-xs text-[#d7e4fb] leading-relaxed">
                         Parag Flexi Cap is primarily an equity-oriented fund, so it should be judged on long-term equity returns, downside control, portfolio quality, and consistency versus flexi-cap peers.
                       </p>
                     </div>
-                    <div className="rounded-2xl border border-white/5 bg-[#15233d] p-5">
+                    <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
                       <h4 className="text-sm font-semibold text-[#8ea7cd] mb-3">Multi-asset context</h4>
                       <p className="text-xs text-[#d7e4fb] leading-relaxed">
                         ICICI Multi Asset should be judged differently because it uses multiple asset classes. Its value comes from diversification, allocation decisions, and risk control rather than only maximum equity-like returns.
                       </p>
                     </div>
-                    <div className="rounded-2xl border border-white/5 bg-[#15233d] p-5">
+                    <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
                       <h4 className="text-sm font-semibold text-[#8ea7cd] mb-3">Return-only limitation</h4>
                       <p className="text-xs text-[#d7e4fb] leading-relaxed">
                         A direct return-only comparison may be misleading. A better comparison should include rolling returns, volatility, drawdown, Sharpe ratio, expense ratio, AUM, and asset-allocation history.
@@ -1211,7 +1345,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                   </div>
                 </div>
 
-                <div className="rounded-3xl border border-[#2f3b57] bg-[#0d1628] p-5">
+                <div className="rounded-3xl bg-[#111] border border-[#222] p-5">
                   <p className="text-xs text-[#8ea7cd] leading-relaxed">
                     Deterministic comparison based on available local NAV, risk, cost, and freshness factors for selected funds. Not a universal investment verdict.
                   </p>
@@ -1220,13 +1354,13 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Source: AMFI / Internal API
                     </span>
                     <span className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Coverage: {aHistoryPts && bHistoryPts ? 'Full' : 'Partial'}
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Coverage: {activeFunds.every(f => f?.historyPts) ? 'Full' : 'Partial'}
                     </span>
                     <span className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Latest NAV: {formatStringOrNA(aLastNav ?? bLastNav)}
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Latest NAV: {activeFunds.find(f => f?.lastNav)?.lastNav || 'N/A'}
                     </span>
                     <span className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> NAV rows fetched: {Math.max(Number(aHistoryPts || 0), Number(bHistoryPts || 0))}
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> NAV rows fetched: {Math.max(...activeFunds.map(f => Number(f?.historyPts || 0)))}
                     </span>
                   </div>
                 </div>

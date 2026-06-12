@@ -44,9 +44,9 @@ const metricRows = [
 ];
 
 const productPanels = [
-  ["Metric table", "Compare returns, expense ratio, AUM, NAV freshness, alpha, beta, Sharpe, and drawdown signals."],
-  ["AI explanation", "Ask why one fund looks steadier without losing sight of the underlying numbers."],
-  ["Source indicators", "See whether the answer is backed by verified AMC coverage or still awaiting expansion."],
+  ["Verified AMC coverage", "PPFAS, ICICI, HDFC, and SBI coverage is stated clearly while broader AMC expansion continues."],
+  ["Source freshness", "NAV and factsheet status stay visible beside the metrics so stale data is easier to spot."],
+  ["No advisory output", "The interface frames answers as research notes, not recommendations, suitability calls, or buy/sell guidance."],
 ];
 
 const workflow = [
@@ -130,7 +130,7 @@ function PremiumButton({ href, children, variant = "primary" }) {
 
 function SectionHeading({ number, eyebrow, title, body }) {
   return (
-    <Reveal className="grid gap-5 border-t border-white/10 pt-7 lg:grid-cols-12 lg:gap-8">
+    <Reveal className="grid gap-6 border-t border-white/10 pt-8 lg:grid-cols-12 lg:gap-8">
       <div className="lg:col-span-3">
         <p className="font-mono text-sm font-semibold text-[#66a3ff]">{number}</p>
         <p className="mt-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{eyebrow}</p>
@@ -196,7 +196,7 @@ function HeroTerminal() {
         </div>
 
         <div className="grid gap-0 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="border-b border-white/10 p-5 xl:border-b-0 xl:border-r">
+          <div className="border-b border-white/10 p-5 sm:p-6 xl:border-b-0 xl:border-r">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Comparison query</p>
             <h3 style={displayStyle} className="mt-4 text-2xl font-semibold leading-tight text-white">
               Which fund has stronger risk-adjusted metrics?
@@ -223,7 +223,7 @@ function HeroTerminal() {
             </div>
           </div>
 
-          <div className="p-5">
+          <div className="p-5 sm:p-6">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <DataChip>Source mapped</DataChip>
               <DataChip tone="amber">Research-only</DataChip>
@@ -271,9 +271,9 @@ function ProofRail() {
 
 function ProductTerminal() {
   return (
-    <div className="mt-8 grid gap-5 lg:grid-cols-12">
-      <Panel className="p-5 lg:col-span-7">
-        <div className="mb-5 flex items-center justify-between gap-4">
+    <div className="mt-8 grid gap-6 lg:grid-cols-12">
+      <Panel className="p-6 lg:col-span-7">
+        <div className="mb-6 flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-white">Comparison terminal</p>
             <p className="mt-1 text-xs text-slate-500">Example view for supported mutual funds.</p>
@@ -299,7 +299,7 @@ function ProductTerminal() {
       <div className="grid gap-4 lg:col-span-5">
         {productPanels.map(([title, body], index) => (
           <Reveal key={title} delay={index * 0.06}>
-            <Panel className="p-5">
+            <Panel className="p-6">
               <p style={displayStyle} className="text-xl font-semibold text-white">{title}</p>
               <p className="mt-3 text-sm leading-6 text-slate-400">{body}</p>
             </Panel>
@@ -359,29 +359,32 @@ export default function FundersAILandingPage() {
               Login
             </a>
             <a href="/dashboard" className="hidden rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#020617] transition hover:bg-[#dce9ff] sm:inline-flex">
-              Try FundersAI
+              Open workspace
             </a>
           </div>
         </nav>
       </header>
 
-      <section className="mx-auto w-full max-w-[1720px] px-5 pb-14 pt-14 sm:px-10 sm:pt-20 2xl:px-16 2xl:pt-24">
-        <div className="grid items-center gap-10 xl:grid-cols-12 2xl:gap-14">
+      <section className="mx-auto w-full max-w-[1720px] px-5 pb-12 pt-12 sm:px-10 sm:pb-16 sm:pt-16 2xl:px-16 2xl:pt-20">
+        <div className="grid items-center gap-12 xl:grid-cols-12 2xl:gap-16">
           <Reveal className="xl:col-span-6">
             <DataChip tone="blue">
               <CheckCircle className="h-3.5 w-3.5" weight="fill" />
               AI mutual fund research workspace
             </DataChip>
-            <h1 style={displayStyle} className="mt-7 max-w-6xl text-5xl font-semibold leading-[0.96] tracking-normal text-white sm:text-7xl xl:text-8xl 2xl:text-[7.4rem]">
+            <h1 style={displayStyle} className="mt-6 max-w-6xl text-5xl font-semibold leading-[0.96] tracking-normal text-white sm:text-7xl xl:text-7xl 2xl:text-[6.4rem]">
               AI-orchestrated mutual fund research.
             </h1>
-            <p className="mt-7 max-w-3xl text-lg leading-8 text-slate-400 sm:text-xl">
+            <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-400 sm:text-xl">
               Compare fund metrics, source freshness, and risk signals in one research workspace. Built for professionals who need clean evidence, not advisory language.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <PremiumButton href="/dashboard">Try FundersAI</PremiumButton>
+              <PremiumButton href="/dashboard">Open research workspace</PremiumButton>
               <PremiumButton href="/login" variant="secondary">Login</PremiumButton>
             </div>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
+              Research-only. No recommendations. Verified AMC coverage is shown clearly.
+            </p>
             <div className="mt-6 flex flex-wrap gap-2">
               <DataChip tone="green">PPFAS</DataChip>
               <DataChip tone="green">ICICI</DataChip>
@@ -399,14 +402,14 @@ export default function FundersAILandingPage() {
         <ProofRail />
       </section>
 
-      <section id="proof" className="mx-auto w-full max-w-[1720px] px-5 py-14 sm:px-10 2xl:px-16">
+      <section id="proof" className="mx-auto w-full max-w-[1720px] px-5 py-12 sm:px-10 sm:py-16 2xl:px-16">
         <SectionHeading
           number="01"
           eyebrow="Proof"
           title="Validated coverage, stated constraints, visible boundaries."
           body="The landing page should sound like financial software: concrete, scoped, and clear about what the product can and cannot do today."
         />
-        <div className="mt-8 grid gap-4 lg:grid-cols-3">
+        <div className="mt-8 grid gap-6 lg:grid-cols-3">
           {proofStats.map(([value, title, body], index) => (
             <Reveal key={title} delay={index * 0.06}>
               <Panel className="p-6">
@@ -419,7 +422,7 @@ export default function FundersAILandingPage() {
         </div>
       </section>
 
-      <section id="product" className="mx-auto w-full max-w-[1720px] px-5 py-14 sm:px-10 2xl:px-16">
+      <section id="product" className="mx-auto w-full max-w-[1720px] px-5 py-12 sm:px-10 sm:py-16 2xl:px-16">
         <SectionHeading
           number="02"
           eyebrow="Product"
@@ -430,14 +433,14 @@ export default function FundersAILandingPage() {
         <PromptMarquee />
       </section>
 
-      <section id="workflow" className="mx-auto w-full max-w-[1720px] px-5 py-14 sm:px-10 2xl:px-16">
+      <section id="workflow" className="mx-auto w-full max-w-[1720px] px-5 py-12 sm:px-10 sm:py-16 2xl:px-16">
         <SectionHeading
           number="03"
           eyebrow="Workflow"
           title="Pick funds. Compare metrics. Ask questions. Verify sources."
           body="The core workflow stays simple so a researcher can move from screening to explanation without losing the audit trail."
         />
-        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           {workflow.map(([number, title, body], index) => (
             <Reveal key={title} delay={index * 0.06}>
               <Panel className="min-h-56 p-6">
@@ -450,14 +453,14 @@ export default function FundersAILandingPage() {
         </div>
       </section>
 
-      <section id="trust" className="mx-auto w-full max-w-[1720px] px-5 py-14 sm:px-10 2xl:px-16">
+      <section id="trust" className="mx-auto w-full max-w-[1720px] px-5 py-12 sm:px-10 sm:py-16 2xl:px-16">
         <SectionHeading
           number="04"
           eyebrow="Trust"
           title="Compliance guardrails are part of the interface."
           body="Professional financial AI needs restraint: visible assumptions, source-state labels, and consistent research-only language."
         />
-        <div className="mt-8 grid gap-4 lg:grid-cols-2">
+        <div className="mt-8 grid gap-6 lg:grid-cols-2">
           {trustCards.map(([Icon, title, body], index) => (
             <Reveal key={title} delay={index * 0.06}>
               <Panel className="grid min-h-44 grid-cols-[auto_1fr] gap-5 p-6">
@@ -474,7 +477,7 @@ export default function FundersAILandingPage() {
         </div>
       </section>
 
-      <section id="roadmap" className="mx-auto w-full max-w-[1720px] px-5 py-14 sm:px-10 2xl:px-16">
+      <section id="roadmap" className="mx-auto w-full max-w-[1720px] px-5 py-12 sm:px-10 sm:py-16 2xl:px-16">
         <SectionHeading
           number="05"
           eyebrow="Roadmap"
@@ -503,7 +506,7 @@ export default function FundersAILandingPage() {
         </Reveal>
       </section>
 
-      <section className="mx-auto w-full max-w-[1720px] px-5 pb-16 pt-6 sm:px-10 2xl:px-16">
+      <section className="mx-auto w-full max-w-[1720px] px-5 pb-16 pt-8 sm:px-10 2xl:px-16">
         <Reveal>
           <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0f172a] p-7 text-center shadow-[0_30px_100px_rgba(0,0,0,0.24)] sm:p-12">
             <div aria-hidden="true" className="absolute inset-x-16 top-0 h-px bg-gradient-to-r from-transparent via-[#66a3ff] to-transparent" />
@@ -514,9 +517,12 @@ export default function FundersAILandingPage() {
               Start with verified PPFAS, ICICI, HDFC, and SBI coverage while FundersAI expands the research dataset.
             </p>
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-              <PremiumButton href="/dashboard">Try FundersAI</PremiumButton>
+              <PremiumButton href="/dashboard">Start fund research</PremiumButton>
               <PremiumButton href="/login" variant="secondary">Login</PremiumButton>
             </div>
+            <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-500">
+              Research-only. No recommendations. Verified AMC coverage is shown clearly.
+            </p>
           </div>
         </Reveal>
       </section>
