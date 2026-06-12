@@ -4099,8 +4099,8 @@ Controlled Web Context:
 
 ### Long-Term Read
 {long_term_read}
-{"\n\n### Comparison Snapshot\n" + comparison_summary if comparison_summary else ""}
-{"\n\n### Follow-up Answer\n" + followup_answer if followup_answer else ""}
+{chr(10) + chr(10) + "### Comparison Snapshot" + chr(10) + comparison_summary if comparison_summary else ""}
+{chr(10) + chr(10) + "### Follow-up Answer" + chr(10) + followup_answer if followup_answer else ""}
 
 ### News & Announcements *(last 48-72 hrs)*
 {news_markdown}
@@ -4119,7 +4119,7 @@ Controlled Web Context:
 
     return f"""### {subject} — {title}
 > {snapshot}
-{"\n\n### How They Differ\n" + compare_direct_answer if compare_direct_answer else ""}
+{chr(10) + chr(10) + "### How They Differ" + chr(10) + compare_direct_answer if compare_direct_answer else ""}
 
 ### Data Table
 {table_markdown}{notes_markdown}
