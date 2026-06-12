@@ -125,6 +125,7 @@ type WhyBetterPayload = {
   }>;
   verdict_context?: string;
   holdings_based_reasoning?: { status?: string; reason?: string | null };
+  research_notes?: Array<{ title: string; content: string }>;
 };
 
 type RiskAnalysisItem = {
@@ -154,6 +155,8 @@ type MFComparisonRecord = {
   sharpe_ratio?: string | number | null;
   max_drawdown_1y?: string | number | null;
   risk_level?: string | null;
+  holdings?: Array<{ security_name?: string; sector?: string; weight_pct?: number | string }>;
+  sector_allocation?: Array<{ sector_name?: string; weight_pct?: number | string }>;
 };
 
 type FundCoverage = Record<string, unknown> & {
@@ -469,6 +472,61 @@ const getMfComparisonRecord = (
   }
   return null;
 };
+
+function PortfolioCompositionPanel({ activeFunds }: { activeFunds: any[] }) {
+  const funds = activeFunds.filter(f => f && f.details && (f.details.holdings?.length || f.details.sector_allocation?.length));
+  if (funds.length === 0) return null;
+  const colsClass = funds.length === 2 ? 'sm:grid-cols-2' : funds.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-4';
+
+  return (
+    <div className="space-y-4 mb-6">
+      <h3 className="font-serif-display text-xl font-bold text-white tracking-tight">Portfolio Composition</h3>
+      <div className={`grid grid-cols-1 ${colsClass} gap-6`}>
+        {funds.map((f, i) => {
+          const holdings = (f.details.holdings || []).slice(0, 10);
+          const sectors = (f.details.sector_allocation || []).slice(0, 5);
+          return (
+            <div key={i} className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md p-5 shadow-[0_24px_90px_rgba(0,0,0,0.18)]">
+              <h4 className="font-serif-display text-lg font-bold text-white mb-4 line-clamp-1" title={f.label}>{f.label}</h4>
+              
+              <div className="mb-6">
+                <h5 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd] mb-3 border-b border-white/10 pb-2">Top Sectors</h5>
+                {sectors.length > 0 ? (
+                  <div className="space-y-2.5">
+                    {sectors.map((s: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center text-xs">
+                        <span className="text-[#c8d8f6] truncate pr-2" title={s.sector_name || s.sector}>{s.sector_name || s.sector || 'Unknown'}</span>
+                        <span className="text-white font-mono">{formatPercent(toNumber(s.weight_pct))}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 italic">No sector data available</p>
+                )}
+              </div>
+
+              <div>
+                <h5 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd] mb-3 border-b border-white/10 pb-2">Top Holdings</h5>
+                {holdings.length > 0 ? (
+                  <div className="space-y-2.5">
+                    {holdings.map((h: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center text-xs">
+                        <span className="text-[#c8d8f6] truncate pr-2" title={h.security_name}>{h.security_name || 'Unknown'}</span>
+                        <span className="text-white font-mono">{formatPercent(toNumber(h.weight_pct))}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 italic">No holdings data available</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
   if (!payload) return null;
@@ -1384,6 +1442,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                   </div>
                 </div>
 
+                <PortfolioCompositionPanel activeFunds={activeFunds} />
+
                 <div className="rounded-3xl bg-[#111] border border-[#222] p-5">
                   {ids.length === 2 && activeFunds.length === 2 && activeFunds[0] && activeFunds[1] ? (
                     <FundComparisonChart
@@ -1398,29 +1458,21 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                   ) : null}
                 </div>
 
-                <div className="rounded-3xl bg-[#111] border border-[#222] p-5">
-                  <h3 className="mb-4 text-base font-semibold text-white">Research notes</h3>
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
-                      <h4 className="text-sm font-semibold text-[#8ea7cd] mb-3">Different fund mandates</h4>
-                      <p className="text-xs text-[#d7e4fb] leading-relaxed">
-                        Parag Flexi Cap is primarily an equity-oriented fund, so it should be judged on long-term equity returns, downside control, portfolio quality, and consistency versus flexi-cap peers.
-                      </p>
-                    </div>
-                    <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
-                      <h4 className="text-sm font-semibold text-[#8ea7cd] mb-3">Multi-asset context</h4>
-                      <p className="text-xs text-[#d7e4fb] leading-relaxed">
-                        ICICI Multi Asset should be judged differently because it uses multiple asset classes. Its value comes from diversification, allocation decisions, and risk control rather than only maximum equity-like returns.
-                      </p>
-                    </div>
-                    <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
-                      <h4 className="text-sm font-semibold text-[#8ea7cd] mb-3">Return-only limitation</h4>
-                      <p className="text-xs text-[#d7e4fb] leading-relaxed">
-                        A direct return-only comparison may be misleading. A better comparison should include rolling returns, volatility, drawdown, Sharpe ratio, expense ratio, AUM, and asset-allocation history.
-                      </p>
+                {mfWhyBetter?.research_notes && mfWhyBetter.research_notes.length > 0 && (
+                  <div className="rounded-3xl bg-[#111] border border-[#222] p-5">
+                    <h3 className="mb-4 text-base font-semibold text-white">Research notes</h3>
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      {mfWhyBetter.research_notes.slice(0, 3).map((note: {title: string; content: string}, idx: number) => (
+                        <div key={idx} className="rounded-2xl border border-white/5 bg-white/[0.03] p-5">
+                          <h4 className="text-sm font-semibold text-[#8ea7cd] mb-3">{note.title || "Note"}</h4>
+                          <p className="text-xs text-[#d7e4fb] leading-relaxed">
+                            {note.content}
+                          </p>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                </div>
+                )}
 
                 <div className="rounded-3xl bg-[#111] border border-[#222] p-5">
                   <p className="text-xs text-[#8ea7cd] leading-relaxed">

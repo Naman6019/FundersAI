@@ -149,7 +149,7 @@ function MessageMetadataBadges({ metadata, content }: { metadata?: Record<string
   const sourceRows = sourceFreshness ? Object.entries(sourceFreshness).slice(0, 2) : [];
   const riskItems = Array.isArray(riskAnalysis?.items) ? riskAnalysis.items : [];
   const missingCount = dataQuality
-    ? Object.values(dataQuality).reduce((count, value) => {
+    ? Object.values(dataQuality).reduce((count: number, value) => {
         const row = asRecord(value);
         const missing = row?.missing_fields;
         return count + (Array.isArray(missing) ? missing.length : 0);

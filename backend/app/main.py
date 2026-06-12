@@ -2156,7 +2156,8 @@ def _system_history_contains(history: list[dict[str, str]], text: str) -> bool:
     return any(message["role"] == "system" and needle in message["content"].lower() for message in history)
 
 def _risk_quiz_started(history: list[dict[str, str]]) -> bool:
-    return any(message["role"] == "user" and _is_risk_quiz_start(message["content"]) for message in history) or _system_history_contains(history, "risk quiz")
+    # Only trap if the user explicitly started it, not just because the bot said "Risk Quiz"
+    return any(message["role"] == "user" and _is_risk_quiz_start(message["content"]) for message in history)
 
 def _risk_quiz_completed(history: list[dict[str, str]]) -> bool:
     return _system_history_contains(history, "risk profile result")
@@ -2205,6 +2206,10 @@ def _risk_quiz_answers(history: list[dict[str, str]], current_query: str) -> lis
         score = _risk_answer_score(message["content"], len(answers))
         if score is not None:
             answers.append(score)
+        else:
+            # If the user responds with something completely unrelated, abort the quiz
+            if len(message["content"]) > 15:
+                return []
         if len(answers) == len(RISK_QUIZ_QUESTIONS):
             break
     return answers
@@ -4342,10 +4347,10 @@ def _score_fund_candidates(
         if entity_norm and entity_norm in name_norm:
             value += 100
             notes.append("name_contains_full_query:+100")
-        value += sum(10 for word in entity_words if word in name_norm)
         overlap_hits = sum(1 for word in entity_words if word in name_norm)
         if overlap_hits:
-            notes.append(f"token_overlap:+{overlap_hits * 10}")
+            value += overlap_hits * 100
+            notes.append(f"token_overlap:+{overlap_hits * 100}")
         # Always prefer Direct Growth siblings for AMC-derived fields.
         if "direct" in name_norm:
             value += 30
