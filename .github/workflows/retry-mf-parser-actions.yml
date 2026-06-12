@@ -17,6 +17,10 @@ on:
         description: 'Retry only docs older than this many hours'
         required: false
         default: '6'
+      statuses:
+        description: 'Comma-separated statuses to retry'
+        required: false
+        default: 'needs_review,failed'
 
 concurrency:
   group: retry-mf-parser-actions-${{ github.ref }}
@@ -52,6 +56,7 @@ jobs:
           DISPATCH_AMCS: ${{ inputs.amcs }}
           DISPATCH_LIMIT: ${{ inputs.limit }}
           DISPATCH_MIN_AGE_HOURS: ${{ inputs.min_age_hours }}
+          DISPATCH_STATUSES: ${{ inputs.statuses }}
         run: |
           set -euo pipefail
 
@@ -67,6 +72,7 @@ jobs:
           AMCS="${DISPATCH_AMCS:-sbi,hdfc,icici,ppfas}"
           LIMIT="${DISPATCH_LIMIT:-50}"
           MIN_AGE_HOURS="${DISPATCH_MIN_AGE_HOURS:-6}"
+          STATUSES="${DISPATCH_STATUSES:-needs_review,failed}"
 
           IFS=',' read -ra AMC_LIST <<< "$AMCS"
           for amc in "${AMC_LIST[@]}"; do
@@ -75,10 +81,10 @@ jobs:
               continue
             fi
 
-            echo "Retrying parser actions for AMC=$amc limit=$LIMIT min_age_hours=$MIN_AGE_HOURS"
+            echo "Retrying parser actions for AMC=$amc limit=$LIMIT min_age_hours=$MIN_AGE_HOURS statuses=$STATUSES"
             timeout 45m python -m backend.app.mf_ingestion.jobs.reparse_needs_review \
               --amc "$amc" \
               --limit "$LIMIT" \
               --min-age-hours "$MIN_AGE_HOURS" \
-              --statuses "needs_review,failed"
+              --statuses "$STATUSES"
           done

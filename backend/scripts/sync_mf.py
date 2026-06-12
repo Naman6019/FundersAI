@@ -58,6 +58,13 @@ def fetch_amfi_nav():
                     scheme_name = cols[3]
                     date_str = cols[5].strip()
                     
+                    # Filter: Only Direct Growth Funds (exclude IDCW, Dividend, and Regular plans)
+                    scheme_name_lower = scheme_name.lower()
+                    if 'direct' not in scheme_name_lower or 'growth' not in scheme_name_lower:
+                        continue
+                    if 'idcw' in scheme_name_lower or 'dividend' in scheme_name_lower or 'regular' in scheme_name_lower:
+                        continue
+                    
                     try:
                         nav_date = datetime.strptime(date_str, "%d-%b-%Y").strftime("%Y-%m-%d")
                     except ValueError:

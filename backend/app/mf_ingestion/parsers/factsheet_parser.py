@@ -9,7 +9,7 @@ from app.mf_ingestion.parsers.base_parser import ParseContext
 from app.mf_ingestion.parsers.pdf_text_parser import PDFTextParser
 
 SCHEME_NAME_PATTERN = re.compile(
-    r"(?m)^(?:\((?:Formerly|Erstwhile)[^\n]*\)\s*)?(?P<name>(?:ICICI Prudential|Parag Parikh|HDFC|SBI)[^\n]{3,140}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{1,60}\))?\s*$"
+    r"(?m)^(?:\((?:Formerly|Erstwhile)[^\n]*\)\s*)?(?P<name>(?:ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset)[^\n]{3,140}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{1,60}\))?\s*$"
 )
 MANAGER_NAME_PATTERN = re.compile(r"\b(?:Mr|Ms|Mrs)\.?\s+[A-Z][A-Za-z' -]{1,80}")
 
@@ -77,6 +77,12 @@ class FactsheetParser:
 def _preprocess_factsheet_text(text: str) -> str:
     if not text:
         return ""
+    # Generalized line break fixes for scheme names
+    text = re.sub(r"(?i)\n+\s*(Fund|FOF|ETF)\b", r" \1", text)
+    text = re.sub(r"(?i)\b(ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset)\s*\n+\s*", r"\1 ", text)
+    text = re.sub(r"(?i)\b(Large|Mid|Small|Flexi|Multi|Micro|Value|Focused|Active)\s*\n+\s*Cap\b", r"\1 Cap", text)
+    text = re.sub(r"(?i)\b(Equity|Debt|Liquid|Hybrid|Index|Savings)\s*\n+\s*(Fund|FOF|ETF)\b", r"\1 \2", text)
+    
     # Clean newlines in scheme names for PPFAS and other split scheme names
     text = re.sub(r"(?i)\bParag\s+Parikh\s*\n+\s*", "Parag Parikh ", text)
     text = re.sub(r"(?i)\bFlexi\s*\n+\s*Cap\b", "Flexi Cap", text)

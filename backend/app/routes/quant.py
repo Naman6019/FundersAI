@@ -135,10 +135,15 @@ def get_stock_financials(symbol: str, period_type: Optional[str] = None):
         raise HTTPException(status_code=500, detail="Unexpected error")
 
 @router.get("/stocks/{symbol}/price-history")
-def get_stock_price_history(symbol: str, start_date: Optional[str] = None, end_date: Optional[str] = None):
+def get_stock_price_history(
+    symbol: str, 
+    start_date: Optional[str] = None, 
+    end_date: Optional[str] = None,
+    days: int = Query(365, description="Number of days of history to fetch")
+):
     try:
         # Current service API is day-count based and Supabase-first.
-        history = get_stock_price_history_service(symbol, days=365)
+        history = get_stock_price_history_service(symbol, days=days)
         return history
     except Exception as exc:
         logger.exception("Unexpected error in get_stock_price_history for symbol: %s", symbol)
