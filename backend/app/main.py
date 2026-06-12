@@ -4552,6 +4552,29 @@ async def get_mutual_fund_details(scheme_code: int):
             raise HTTPException(status_code=404, detail="Mutual fund not found")
 
         details = fund_res.data[0]
+
+        # Fallback to legacy mutual_funds table for missing AUM/Expense Ratio
+        if not details.get("aum") or not details.get("expense_ratio"):
+            legacy_res = supabase.table("mutual_funds").select("*").eq("scheme_code", scheme_code).limit(1).execute()
+            if legacy_res.data:
+                legacy_row = legacy_res.data[0]
+                if not details.get("aum"):
+                    details["aum"] = legacy_row.get("aum")
+                if not details.get("expense_ratio"):
+                    details["expense_ratio"] = legacy_row.get("expense_ratio")
+
+        # Fetch holdings
+        holdings, _ = _load_latest_fund_holdings(scheme_code)
+        details["holdings"] = holdings
+
+        # Infer sector allocation from holdings
+        sector_map = {}
+        for h in holdings:
+            sec = h.get("sector") or "Unclassified"
+            sector_map[sec] = sector_map.get(sec, 0) + float(h.get("weight_pct") or 0)
+        sorted_sectors = sorted([{"sector_name": k, "weight_pct": round(v, 2)} for k, v in sector_map.items()], key=lambda x: x["weight_pct"], reverse=True)
+        details["sector_allocation"] = sorted_sectors
+
         hist_df = await get_mf_history_df(scheme_code, days=2200)
         close_series = hist_df["Close"] if not hist_df.empty else pd.Series(dtype=float)
 
