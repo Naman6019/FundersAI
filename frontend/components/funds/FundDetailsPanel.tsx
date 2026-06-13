@@ -110,8 +110,11 @@ function FundColumn({ schemeCode, colorHex }: { schemeCode: string, colorHex: st
       return Number.isFinite(parsed) ? parsed : null;
     };
 
-    const holdings = Array.isArray(matched?.holdings)
-      ? matched!.holdings
+    const rawHoldings = Array.isArray(matched?.holdings) && matched!.holdings.length > 0 
+      ? matched!.holdings 
+      : Array.isArray(details?.holdings) ? details!.holdings : [];
+
+    const holdings = rawHoldings
           .map((row) => {
             const rec = row as Record<string, unknown>;
             const name = String(rec.security_name ?? rec.name ?? rec.holding ?? '').trim();
@@ -123,11 +126,13 @@ function FundColumn({ schemeCode, colorHex }: { schemeCode: string, colorHex: st
           })
           .filter((row): row is { name: string; weight: number | null } => Boolean(row))
           .sort((a, b) => (b.weight ?? -1) - (a.weight ?? -1))
-          .slice(0, 6)
-      : [];
+          .slice(0, 6);
 
-    const sectors = Array.isArray(matched?.sector_allocation)
+    const rawSectors = Array.isArray(matched?.sector_allocation) && matched!.sector_allocation.length > 0
       ? matched!.sector_allocation
+      : Array.isArray(details?.sector_allocation) ? details!.sector_allocation : [];
+
+    const sectors = rawSectors
           .map((row) => {
             const rec = row as Record<string, unknown>;
             const name = String(rec.sector ?? rec.name ?? '').trim();
@@ -139,15 +144,14 @@ function FundColumn({ schemeCode, colorHex }: { schemeCode: string, colorHex: st
           })
           .filter((row): row is { name: string; weight: number | null } => Boolean(row))
           .sort((a, b) => (b.weight ?? -1) - (a.weight ?? -1))
-          .slice(0, 6)
-      : [];
+          .slice(0, 6);
 
     return {
       holdings,
       sectors,
-      asOf: matched?.source_summary?.holdings_as_of_date || null,
+      asOf: matched?.source_summary?.holdings_as_of_date || details?.holdings_as_of_date || null,
     };
-  }, [auxiliaryData, meta?.scheme_name, schemeCode]);
+  }, [auxiliaryData, meta?.scheme_name, schemeCode, details]);
 
   const metrics = useMemo(() => {
     if (!navData) return null;

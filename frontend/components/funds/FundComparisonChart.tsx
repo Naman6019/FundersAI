@@ -135,7 +135,7 @@ export default function FundComparisonChart({ schemeCodeA, schemeCodeB, nameA, n
       <div className="max-w-[min(78vw,320px)] rounded-lg border border-white/10 bg-[#0b0c10]/95 p-3 text-xs shadow-xl">
         <div className="mb-2 text-gray-400">{label}</div>
         <div className="space-y-2">
-          {payload.map((entry) => {
+          {Array.from(new Map(payload.map(p => [p.dataKey, p])).values()).map((entry) => {
             const isFirstFund = entry.dataKey === 'assetA';
             const point = entry.payload as ChartTooltipPayload['payload'] | undefined;
             const actual = isFirstFund ? point?.actualA : point?.actualB;

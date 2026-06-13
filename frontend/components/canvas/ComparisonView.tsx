@@ -1217,7 +1217,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                 aum: toNumber(record?.aum ?? fund.details?.aum),
                 historyPts: (fund.coverage as FundCoverage | undefined)?.history_points,
                 lastNav: (fund.coverage as FundCoverage | undefined)?.last_nav_date,
-                freshness: fund.freshness as Record<string, unknown> | undefined
+                freshness: fund.freshness as Record<string, unknown> | undefined,
+                details: fund.details || record
               };
             };
 

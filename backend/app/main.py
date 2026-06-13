@@ -18,6 +18,9 @@ import yfinance as yf
 import feedparser
 from datetime import datetime, timedelta, timezone
 import pytz
+
+from app.services.fund_service import FundService
+from app.models.fund_models import FundDetails, FundProfileResponse
 import numpy as np
 import pandas as pd
 
@@ -1261,7 +1264,7 @@ def calculate_alpha_beta_v2(stock_hist, nifty_hist):
     # Alpha = R_p - [R_f + Beta * (R_m - R_f)]
     alpha = (stock_ann_ret - (rf + beta * (nifty_ann_ret - rf))) * 100
     
-    return {"alpha": round(alpha, 2), "beta": beta, "period_years": round(years, 1)}
+    return {"alpha": float(round(alpha, 2)), "beta": float(beta) if beta != "N/A" else "N/A", "period_years": float(round(years, 1))}
 
 def _normalize_price_df_index(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
@@ -2461,16 +2464,32 @@ def _resolve_portfolio_fund(name: str) -> dict[str, Any] | None:
                 .execute()
                 .data
                 or []
-        )
+            )
         supported_rows = [row for row in rows if _is_supported_mf_row(row)]
         candidates = supported_rows or rows
+        
+        best_match = None
         if candidates:
-            return _pick_best_fund_match(search_name, candidates, nav_history_cache={}, min_history_points=0)
+            best_match = FundService.pick_best_fund_match(search_name, candidates, nav_history_cache={}, min_history_points=0)
 
-        bucket_candidates = _portfolio_bucket_candidates(name, fields)
-        if not bucket_candidates:
-            return None
-        return _pick_best_fund_match(search_name, bucket_candidates, nav_history_cache={}, min_history_points=0)
+        if not best_match:
+            bucket_candidates = _portfolio_bucket_candidates(name, fields)
+            if bucket_candidates:
+                best_match = FundService.pick_best_fund_match(search_name, bucket_candidates, nav_history_cache={}, min_history_points=0)
+
+        # Fallback for missing AUM and Expense Ratio for the selected best_match
+        if best_match:
+            if not best_match.get("aum") or not best_match.get("expense_ratio"):
+                code = best_match.get("scheme_code")
+                if code:
+                    legacy_res = supabase.table("mutual_funds").select("aum,expense_ratio").eq("scheme_code", code).limit(1).execute()
+                    if legacy_res.data:
+                        legacy_row = legacy_res.data[0]
+                        if not best_match.get("aum"):
+                            best_match["aum"] = legacy_row.get("aum")
+                        if not best_match.get("expense_ratio"):
+                            best_match["expense_ratio"] = legacy_row.get("expense_ratio")
+        return best_match
     except Exception as exc:
         logger.error("Portfolio fund match failed for %s: %s", name, exc)
         return None
@@ -4138,63 +4157,20 @@ async def trigger_eod_fetch(background_tasks: BackgroundTasks):
     return {"message": "Background fetch process triggered successfully."}
 
 async def get_mf_history_df(scheme_code: int, days: int = 1100):
-    """Fetch MF history from Supabase and return as a DataFrame compatible with risk functions."""
-    if not supabase:
-        return pd.DataFrame()
-
-    def _fetch_rows_for_filter(code_filter: Any, max_rows: int) -> list[dict[str, Any]]:
-        batch_size = 1000
-        offset = 0
-        collected: list[dict[str, Any]] = []
-        while offset < max_rows:
-            chunk = (
-                supabase.table('mutual_fund_nav_history')
-                .select('nav, nav_date')
-                .eq('scheme_code', code_filter)
-                .order('nav_date', desc=True)
-                .range(offset, offset + batch_size - 1)
-                .execute()
-                .data
-                or []
-            )
-            if not chunk:
-                break
-            collected.extend(chunk)
-            if len(chunk) < batch_size:
-                break
-            offset += batch_size
-        return collected[:max_rows]
-
-    try:
-        candidate_filters = [str(scheme_code)]
-        try:
-            candidate_filters.append(int(scheme_code))
-        except Exception:
-            pass
-
-        best_rows: list[dict[str, Any]] = []
-        for code_filter in candidate_filters:
-            rows = _fetch_rows_for_filter(code_filter, days)
-            if len(rows) > len(best_rows):
-                best_rows = rows
-
-        if best_rows:
-            df = pd.DataFrame(best_rows)
-            df['date'] = pd.to_datetime(df['nav_date'])
-            df = df.sort_values('date')
-            df.rename(columns={'nav': 'Close'}, inplace=True)
-            df.set_index('date', inplace=True)
-            return _normalize_price_df_index(df)
-    except Exception as e:
-        logger.error(f"Failed to fetch local MF history for {scheme_code}: {e}")
-    return pd.DataFrame()
+    """Fetch MF history from Supabase (or fallback) and return as a DataFrame compatible with risk functions."""
+    from app.services.fund_service import FundService
+    import asyncio
+    return await asyncio.to_thread(FundService.get_mf_history_df, scheme_code, days)
 
 async def get_nifty_history_df(days: int = 1100):
     """Fetch NIFTY history from normalized stock price history."""
     if not supabase:
         return pd.DataFrame()
+    import asyncio
     try:
-        res = supabase.table('stock_prices_daily').select('close, date').eq('symbol', 'NIFTY').order('date', desc=True).limit(days).execute()
+        def _fetch_nifty():
+            return supabase.table('stock_prices_daily').select('close, date').eq('symbol', 'NIFTY').order('date', desc=True).limit(days).execute()
+        res = await asyncio.to_thread(_fetch_nifty)
         if res.data:
             df = pd.DataFrame(res.data)
             df['date'] = pd.to_datetime(df['date'])
@@ -4545,116 +4521,47 @@ async def get_mutual_fund_details(scheme_code: int):
         raise HTTPException(status_code=500, detail="Supabase client not initialized")
 
     try:
-        fund_res = supabase.table('mutual_fund_core_snapshot').select('*').eq('scheme_code', str(scheme_code)).limit(1).execute()
-        if not fund_res.data:
-            fund_res = supabase.table('mutual_funds').select('*').eq('scheme_code', scheme_code).limit(1).execute()
-        if not fund_res.data:
+        profile = FundService.get_mutual_fund_profile(scheme_code)
+        if not profile:
             raise HTTPException(status_code=404, detail="Mutual fund not found")
 
-        details = fund_res.data[0]
-
-        # Fallback to legacy mutual_funds table for missing AUM/Expense Ratio
-        if not details.get("aum") or not details.get("expense_ratio"):
-            legacy_res = supabase.table("mutual_funds").select("*").eq("scheme_code", scheme_code).limit(1).execute()
-            if legacy_res.data:
-                legacy_row = legacy_res.data[0]
-                if not details.get("aum"):
-                    details["aum"] = legacy_row.get("aum")
-                if not details.get("expense_ratio"):
-                    details["expense_ratio"] = legacy_row.get("expense_ratio")
-
-        # Fetch holdings
-        holdings, _ = _load_latest_fund_holdings(scheme_code)
-        details["holdings"] = holdings
-
-        # Infer sector allocation from holdings
-        sector_map = {}
-        for h in holdings:
-            sec = h.get("sector") or "Unclassified"
-            sector_map[sec] = sector_map.get(sec, 0) + float(h.get("weight_pct") or 0)
-        sorted_sectors = sorted([{"sector_name": k, "weight_pct": round(v, 2)} for k, v in sector_map.items()], key=lambda x: x["weight_pct"], reverse=True)
-        details["sector_allocation"] = sorted_sectors
-
-        hist_df = await get_mf_history_df(scheme_code, days=2200)
-        close_series = hist_df["Close"] if not hist_df.empty else pd.Series(dtype=float)
-
-        returns = {
-            "1Y": details.get("return_1y") if details.get("return_1y") is not None else _compute_cagr_from_close(close_series, 1),
-            "3Y": details.get("return_3y") if details.get("return_3y") is not None else _compute_cagr_from_close(close_series, 3),
-            "5Y": details.get("return_5y") if details.get("return_5y") is not None else _compute_cagr_from_close(close_series, 5)
-        }
-        risk_metrics = _compute_nav_risk_metrics(close_series)
+        # Nifty fallback for alpha/beta
         nifty_hist = await get_nifty_history_df(days=2200)
-        if risk_metrics is None:
-            risk_metrics = {}
-        if details.get("volatility_1y") is not None:
-            risk_metrics["stdDev"] = details.get("volatility_1y")
-        if details.get("max_drawdown_1y") is not None:
-            risk_metrics["maxDrawdown"] = details.get("max_drawdown_1y") / 100 if details.get("max_drawdown_1y") is not None else None
-        if details.get("beta") is not None:
-            risk_metrics["beta"] = details.get("beta")
-        if details.get("alpha") is not None:
-            risk_metrics["alpha_vs_nifty"] = details.get("alpha")
-        if details.get("sharpe_ratio") is not None:
-            risk_metrics["sharpeRatio"] = details.get("sharpe_ratio")
+        hist_df = FundService.get_mf_history_df(scheme_code, days=2200)
+
+        risk_metrics = profile.risk_metrics.model_dump()
         if not hist_df.empty and not nifty_hist.empty:
             alpha_beta = calculate_alpha_beta_v2(hist_df, nifty_hist)
-            risk_metrics.update({
-                "beta": risk_metrics.get("beta") if risk_metrics.get("beta") is not None else alpha_beta.get("beta"),
-                "alpha_vs_nifty": risk_metrics.get("alpha_vs_nifty") if risk_metrics.get("alpha_vs_nifty") is not None else alpha_beta.get("alpha"),
-                "risk_period": f"{alpha_beta.get('period_years', 3)}Y"
-            })
-
-        chart_df = hist_df.sort_index().tail(250) if not hist_df.empty else pd.DataFrame()
-        chart_data = []
-        if not chart_df.empty:
-            chart_data = [
-                {
-                    "date": idx.strftime("%d-%m-%Y"),
-                    "value": round(float(val), 4)
-                }
-                for idx, val in chart_df["Close"].items()
-            ]
-        full_data = []
-        if not hist_df.empty:
-            full_data = [
-                {
-                    "date": idx.strftime("%d-%m-%Y"),
-                    "value": round(float(val), 4)
-                }
-                for idx, val in hist_df.sort_index(ascending=False)["Close"].items()
-            ]
+            if risk_metrics.get("beta") is None:
+                risk_metrics["beta"] = alpha_beta.get("beta")
+            if risk_metrics.get("alpha_vs_nifty") is None:
+                risk_metrics["alpha_vs_nifty"] = alpha_beta.get("alpha")
+            risk_metrics["risk_period"] = f"{alpha_beta.get('period_years', 3)}Y"
 
         history_coverage = _history_coverage_from_df(hist_df)
-        nav_ref = details.get("nav_date") or details.get("last_updated")
-        stale = not cache_policy.is_fresh(nav_ref, "mutual_fund_nav")
-        if DEBUG_MF_RESOLUTION:
-            logger.info(
-                "MF /api/mf scheme_code=%s points=%s first=%s last=%s stale=%s",
-                scheme_code,
-                history_coverage.get("history_points"),
-                history_coverage.get("first_nav_date"),
-                history_coverage.get("last_nav_date"),
-                stale,
-            )
+        details_dump = profile.details.model_dump()
+        nav_ref = details_dump.get("launch_date") # Or whatever is available
+        stale = profile.data_quality.is_stale
+        
         return {
-            "details": details,
-            "returns": returns,
+            "scheme_code": scheme_code,
+            "details": details_dump,
+            "returns": profile.returns.model_dump(by_alias=True),
             "riskMetrics": risk_metrics,
-            "chartData": chart_data,
-            "fullData": full_data,
+            "chartData": [pt.model_dump() for pt in profile.nav_history],
+            "fullData": [pt.model_dump() for pt in profile.nav_history],
             "historyCoverage": history_coverage,
+            "data_quality": profile.data_quality.model_dump(),
             "freshness": {
                 "stale": stale,
-                "warning": "NAV data may be stale." if stale else None,
-                "nav_date": details.get("nav_date"),
-                "last_updated": details.get("last_updated"),
+                "warning": profile.data_quality.warning,
+                "nav_date": profile.data_quality.last_nav_date,
             },
         }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"MF details endpoint error for {scheme_code}: {e}")
+        logger.error(f"Failed to fetch MF details for {scheme_code}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/chat")
@@ -4986,7 +4893,7 @@ To experience FundersAI's advanced research capabilities, please try:
                         pass
 
                     if db_data:
-                        holdings_rows, sector_rows, holdings_as_of = _load_amc_holdings_and_sectors(scheme_code)
+                        holdings_rows, sector_rows, holdings_as_of = await asyncio.to_thread(_load_amc_holdings_and_sectors, scheme_code)
                         missing_fields = [
                             field
                             for field in ("nav", "nav_date", "expense_ratio", "aum")
