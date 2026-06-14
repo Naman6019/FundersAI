@@ -4554,6 +4554,7 @@ async def get_mutual_fund_details(scheme_code: int, background_tasks: Background
         
         # Trigger background auto-healing if data is stale or missing AUM
         if stale or profile.details.aum is None:
+            from app.services.auto_heal import trigger_mf_auto_heal
             background_tasks.add_task(trigger_mf_auto_heal, scheme_code)
             
         return {

@@ -59,6 +59,29 @@ class ParsingService:
             "sbi": SBIAdapter(),
         }
 
+    def parse_latest_document_for_scheme(self, amc_code: str, scheme_name: str) -> dict[str, Any] | None:
+        """Runs the parser on the latest raw document for an AMC, strictly filtering for a specific scheme."""
+        if not supabase:
+            return None
+        
+        normalized_amc = str(amc_code).strip()
+        query = (
+            supabase.table("mf_raw_documents")
+            .select("*")
+            .in_("amc_code", [normalized_amc.lower(), normalized_amc.upper(), normalized_amc])
+            .in_("document_type", ["portfolio_disclosure", "factsheet"])
+            .order("report_month", desc=True)
+            .order("downloaded_at", desc=True)
+            .limit(1)
+        )
+        response = query.execute()
+        if not response.data:
+            return None
+            
+        document = response.data[0]
+        logger.info("event=auto_heal_parsing amc_code=%s scheme_name=%s document_id=%s", amc_code, scheme_name, document.get("id"))
+        return self._parse_one(document, bypass_official_coverage=True, target_scheme_name=scheme_name)
+
     def parse_pending_documents(self, limit: int = 20, amc_code: str | None = None, report_month: str | None = None) -> dict[str, Any]:
         if not supabase:
             return {"status": "error", "reason": "supabase_not_configured"}
@@ -84,7 +107,7 @@ class ParsingService:
 
         return {"status": "ok", "processed": processed, "count": len(processed)}
 
-    def _parse_one(self, document: dict[str, Any], *, bypass_official_coverage: bool = False) -> dict[str, Any]:
+    def _parse_one(self, document: dict[str, Any], *, bypass_official_coverage: bool = False, target_scheme_name: str | None = None) -> dict[str, Any]:
         document_id = str(document.get("id"))
         amc_code = str(document.get("amc_code") or "")
         document_type = str(document.get("document_type") or document.get("source_document_type") or "").strip().lower()
@@ -110,12 +133,12 @@ class ParsingService:
 
         try:
             if document_type in FACTSHEET_SUPPORTED_DOCUMENT_TYPES:
-                factsheet_result = self._parse_factsheet_document(document, resolved_path)
+                factsheet_result = self._parse_factsheet_document(document, resolved_path, target_scheme_name=target_scheme_name)
                 # HDFC combined factsheets also contain portfolio tables.
                 if amc_code.lower() == "hdfc":
                     adapter = self.adapters.get("hdfc")
                     if adapter:
-                        holdings_result = self._parse_holdings_document(document, adapter, resolved_path)
+                        holdings_result = self._parse_holdings_document(document, adapter, resolved_path, target_scheme_name=target_scheme_name)
                         return _merge_parse_outcomes(factsheet_result, holdings_result)
                 return factsheet_result
 
@@ -123,7 +146,7 @@ class ParsingService:
             if not adapter:
                 self._mark_document(document_id, "failed", ["adapter_not_found"])
                 return {"source_document_id": document_id, "status": "failed", "reason": "adapter_not_found"}
-            return self._parse_holdings_document(document, adapter, resolved_path)
+            return self._parse_holdings_document(document, adapter, resolved_path, target_scheme_name=target_scheme_name)
         finally:
             if temp_downloaded:
                 try:
@@ -131,7 +154,7 @@ class ParsingService:
                 except Exception:
                     logger.warning("event=temp_file_cleanup_failed path=%s", temp_downloaded)
 
-    def _parse_holdings_document(self, document: dict[str, Any], adapter: Any, file_path: str) -> dict[str, Any]:
+    def _parse_holdings_document(self, document: dict[str, Any], adapter: Any, file_path: str, target_scheme_name: str | None = None) -> dict[str, Any]:
         document_id = str(document.get("id"))
         amc_code = str(document.get("amc_code") or "")
 
@@ -180,6 +203,15 @@ class ParsingService:
 
         for parsed in parsed_documents:
             parsed_scheme_name = str(parsed.scheme_name or "").strip()
+            
+            # Auto-Heal target filtering
+            if target_scheme_name and parsed_scheme_name:
+                from app.mf_ingestion.normalizers.scheme_name_normalizer import match_scheme_name
+                # Check if this parsed scheme matches our target scheme
+                temp_match = match_scheme_name(parsed_scheme_name, candidates=[target_scheme_name])
+                if temp_match.confidence < 80.0:
+                    continue
+                    
             if parsed_scheme_name and parsed_scheme_name not in candidates:
                 candidates.append(parsed_scheme_name)
             scheme_match = match_scheme_name(parsed.scheme_name, candidates=candidates)
@@ -279,19 +311,22 @@ class ParsingService:
         status = "needs_review" if review_needed_overall else "parsed"
         if review_needed_overall and inserted_total > 0:
             status = "parsed_partial"
-        self._mark_document(document_id, status, dedup_issues)
-        self._upload_parse_debug_snapshot(
-            document=document,
-            artifact="holdings_parse_summary",
-            payload={
-                "source_document_id": document_id,
-                "status": status,
-                "parsed_schemes": len(results),
-                "inserted_holdings": inserted_total,
-                "validation_issues": dedup_issues,
-                "schemes": results,
-            },
-        )
+            
+        if not target_scheme_name:
+            self._mark_document(document_id, status, dedup_issues)
+            self._upload_parse_debug_snapshot(
+                document=document,
+                artifact="holdings_parse_summary",
+                payload={
+                    "source_document_id": document_id,
+                    "status": status,
+                    "parsed_schemes": len(results),
+                    "inserted_holdings": inserted_total,
+                    "validation_issues": dedup_issues,
+                    "schemes": results,
+                },
+            )
+            
         if len(results) == 1:
             result = results[0]
             return {
@@ -311,7 +346,7 @@ class ParsingService:
             "validation_issues": dedup_issues,
         }
 
-    def _parse_factsheet_document(self, document: dict[str, Any], file_path: str) -> dict[str, Any]:
+    def _parse_factsheet_document(self, document: dict[str, Any], file_path: str, target_scheme_name: str | None = None) -> dict[str, Any]:
         document_id = str(document.get("id"))
         amc_code = str(document.get("amc_code") or "")
         report_month = _to_date_or_none(document.get("report_month"))
@@ -335,6 +370,12 @@ class ParsingService:
         updated = 0
         unmatched = 0
         for record in records:
+            if target_scheme_name:
+                from app.mf_ingestion.normalizers.scheme_name_normalizer import match_scheme_name
+                temp_match = match_scheme_name(record.scheme_name, candidates=[target_scheme_name])
+                if temp_match.confidence < 80.0:
+                    continue
+                    
             matched = self._upsert_amc_core_fields(
                 amc_code=amc_code,
                 scheme_name=record.scheme_name,
@@ -361,30 +402,32 @@ class ParsingService:
         elif unmatched > 0:
             status = "parsed_partial"
             issues.append("factsheet_partial_scheme_matching")
-        self._mark_document(document_id, status, issues)
-        self._upload_parse_debug_snapshot(
-            document=document,
-            artifact="factsheet_parse_summary",
-            payload={
-                "source_document_id": document_id,
-                "status": status,
-                "updated_schemes": updated,
-                "unmatched_schemes": unmatched,
-                "validation_issues": issues,
-                "records": [
-                    {
-                        "scheme_name": record.scheme_name,
-                        "report_month": record.report_month.isoformat() if record.report_month else None,
-                        "aum": record.aum,
-                        "expense_ratio": record.expense_ratio,
-                        "benchmark": record.benchmark,
-                        "fund_manager": record.fund_manager,
-                        "risk_level": record.risk_level,
-                    }
-                    for record in records
-                ],
-            },
-        )
+            
+        if not target_scheme_name:
+            self._mark_document(document_id, status, issues)
+            self._upload_parse_debug_snapshot(
+                document=document,
+                artifact="factsheet_parse_summary",
+                payload={
+                    "source_document_id": document_id,
+                    "status": status,
+                    "updated_schemes": updated,
+                    "unmatched_schemes": unmatched,
+                    "validation_issues": issues,
+                    "records": [
+                        {
+                            "scheme_name": record.scheme_name,
+                            "report_month": record.report_month.isoformat() if record.report_month else None,
+                            "aum": record.aum,
+                            "expense_ratio": record.expense_ratio,
+                            "benchmark": record.benchmark,
+                            "fund_manager": record.fund_manager,
+                            "risk_level": record.risk_level,
+                        }
+                        for record in records
+                    ],
+                },
+            )
         return {
             "source_document_id": document_id,
             "status": status,
