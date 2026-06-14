@@ -2479,12 +2479,12 @@ def _resolve_portfolio_fund(name: str) -> dict[str, Any] | None:
         
         best_match = None
         if candidates:
-            best_match = FundService.pick_best_fund_match(search_name, candidates, nav_history_cache={}, min_history_points=0)
+            best_match = FundService.pick_best_fund_match(search_name, candidates, min_history_points=0)
 
         if not best_match:
             bucket_candidates = _portfolio_bucket_candidates(name, fields)
             if bucket_candidates:
-                best_match = FundService.pick_best_fund_match(search_name, bucket_candidates, nav_history_cache={}, min_history_points=0)
+                best_match = FundService.pick_best_fund_match(search_name, bucket_candidates, min_history_points=0)
 
         # Fallback for missing AUM and Expense Ratio for the selected best_match
         if best_match:
@@ -2669,7 +2669,6 @@ def _build_portfolio_review_insights(
     label: str,
     total_amount: float,
 ) -> dict[str, Any]:
-    matched = [item for item in resolved if item.get("matched")]
     unmatched = [item for item in resolved if not item.get("matched")]
     top_fund = max(resolved, key=lambda item: float(item.get("weight") or 0), default=None)
     bucket_rows = sorted(bucket_totals.items(), key=lambda pair: pair[1], reverse=True)
@@ -4549,7 +4548,6 @@ async def get_mutual_fund_details(scheme_code: int, background_tasks: Background
 
         history_coverage = _history_coverage_from_df(hist_df)
         details_dump = profile.details.model_dump()
-        nav_ref = details_dump.get("launch_date") # Or whatever is available
         stale = profile.data_quality.is_stale
         
         # Trigger background auto-healing if data is stale or missing AUM
