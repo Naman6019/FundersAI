@@ -47,6 +47,13 @@ async def trigger_mf_auto_heal(scheme_code: Any):
             if core_payload:
                 supabase.table("mutual_fund_core_snapshot").upsert(core_payload, on_conflict="scheme_code").execute()
                 logger.info(f"[AutoHeal] Upserted core snapshot for {scheme_code_str}")
+        
+        # Fallback if engine fails, so we can still trigger parser
+        if not scheme_name or not amc_name:
+            existing_res = supabase.table("mutual_fund_core_snapshot").select("scheme_name, amc_name").eq("scheme_code", scheme_code_str).limit(1).execute()
+            if existing_res.data:
+                scheme_name = existing_res.data[0].get("scheme_name")
+                amc_name = existing_res.data[0].get("amc_name")
 
         # 2. Fetch and upsert full NAV history using AMFI API (mfapi_service)
         nav_res = mfapi_service.get_nav_history(scheme_code_str)
