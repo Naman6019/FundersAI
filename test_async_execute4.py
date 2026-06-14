@@ -2,9 +2,9 @@ import asyncio
 import sys
 import os
 sys.path.append(os.path.abspath('c:/Users/naman/OneDrive/Desktop/FundersAI/backend'))
-from app.core.config import supabase
+from app.database import supabase
 
-async def test():
+async def main():
     try:
         holdings_res = (
             supabase.table("mutual_fund_holdings")
@@ -20,4 +20,5 @@ async def test():
     except Exception as e:
         print("ERROR IN ASYNC:", type(e), e)
 
-asyncio.run(test())
+if __name__ == "__main__":
+    asyncio.run(main())

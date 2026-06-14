@@ -41,10 +41,11 @@ def _load_amc_holdings_and_sectors(scheme_code_value):
         )
     return holdings
 
-async def test():
+async def main():
     h = await asyncio.to_thread(_load_amc_holdings_and_sectors, 122639)
     print("final length:", len(h))
     if h:
         print("first item:", h[0])
 
-asyncio.run(test())
+if __name__ == "__main__":
+    asyncio.run(main())

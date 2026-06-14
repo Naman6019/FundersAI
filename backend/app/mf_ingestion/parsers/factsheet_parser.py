@@ -11,6 +11,9 @@ from app.mf_ingestion.parsers.pdf_text_parser import PDFTextParser
 SCHEME_NAME_PATTERN = re.compile(
     r"(?m)^(?:\((?:Formerly|Erstwhile)[^\n]*\)\s*)?(?P<name>(?:ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset)[^\n]{3,140}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{1,60}\))?\s*$"
 )
+ANCHORED_SCHEME_PATTERN = re.compile(
+    r"(?im)^Name\s+of\s+the\s+Fund\s*\n+\s*(?P<name>(?:ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset)[^\n]{3,160}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{1,80}\))?\s*$"
+)
 MANAGER_NAME_PATTERN = re.compile(r"\b(?:Mr|Ms|Mrs)\.?\s+[A-Z][A-Za-z' -]{1,80}")
 
 
@@ -36,19 +39,20 @@ class FactsheetParser:
 
     def parse_text(self, text: str, report_month: date | None) -> list[FactsheetRecord]:
         cleaned_text = _preprocess_factsheet_text(text)
-        matches = list(SCHEME_NAME_PATTERN.finditer(cleaned_text or ""))
-        if not matches:
+        has_anchored_sections = bool(ANCHORED_SCHEME_PATTERN.search(cleaned_text or ""))
+        sections = _find_scheme_sections(cleaned_text)
+        if not sections:
             return []
 
+        risk_by_scheme = _extract_scheme_risk_levels(cleaned_text)
         best_by_scheme: dict[str, tuple[int, FactsheetRecord]] = {}
-        for index, match in enumerate(matches):
-            start = match.start()
-            next_start = matches[index + 1].start() if index + 1 < len(matches) else len(cleaned_text)
-            end = min(len(cleaned_text), max(start + 2500, next_start))
+        for scheme_name, start, end in sections:
             chunk = str(cleaned_text[start:end])
 
-            scheme_name = _clean_scheme_name(match.group("name"))
             fields = _extract_fields(chunk)
+            mapped_risk_level = risk_by_scheme.get(_scheme_key(scheme_name))
+            if mapped_risk_level:
+                fields["risk_level"] = mapped_risk_level
             score = _score_fields(fields)
             if score <= 0:
                 continue
@@ -69,9 +73,34 @@ class FactsheetParser:
 
         records = [entry[1] for entry in sorted(best_by_scheme.values(), key=lambda value: value[1].scheme_name)]
         for record in records:
-            if record.aum is None:
+            if record.aum is None and not has_anchored_sections:
                 record.aum = _extract_aum_from_scheme_occurrences(cleaned_text, record.scheme_name)
+            if not record.risk_level:
+                record.risk_level = risk_by_scheme.get(_scheme_key(record.scheme_name))
         return records
+
+
+def _find_scheme_sections(cleaned_text: str) -> list[tuple[str, int, int]]:
+    text = cleaned_text or ""
+    anchored_matches = list(ANCHORED_SCHEME_PATTERN.finditer(text))
+    if anchored_matches:
+        return _sections_from_matches(text, anchored_matches, use_anchor_start=True)
+    return _sections_from_matches(text, list(SCHEME_NAME_PATTERN.finditer(text)), use_anchor_start=False)
+
+
+def _sections_from_matches(
+    text: str,
+    matches: list[re.Match[str]],
+    *,
+    use_anchor_start: bool,
+) -> list[tuple[str, int, int]]:
+    sections: list[tuple[str, int, int]] = []
+    for index, match in enumerate(matches):
+        start = match.start() if use_anchor_start else match.start()
+        next_start = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        end = min(len(text), max(start + 2500, next_start))
+        sections.append((_clean_scheme_name(match.group("name")), start, end))
+    return sections
 
 
 def _preprocess_factsheet_text(text: str) -> str:
@@ -143,6 +172,45 @@ def _extract_risk_level(chunk: str) -> str | None:
     return None
 
 
+def _extract_scheme_risk_levels(text: str) -> dict[str, str]:
+    risk_by_scheme: dict[str, str] = {}
+    risk_pattern = re.compile(
+        r"(?i)\bThe\s+risk\s+of\s+the\s+scheme\s+is\s+"
+        r"(Low\s+to\s+Moderate|Moderately\s+High|Very\s+High|Moderate|High|Low)\s+risk\b"
+    )
+    for risk_match in risk_pattern.finditer(text or ""):
+        label = _normalize_risk_label(risk_match.group(1))
+        if not label:
+            continue
+
+        preceding = text[max(0, risk_match.start() - 900): risk_match.start()]
+        scheme_name = _last_scheme_name(preceding)
+        if not scheme_name:
+            following = text[risk_match.end(): min(len(text), risk_match.end() + 900)]
+            scheme_name = _first_scheme_name(following)
+        if scheme_name:
+            risk_by_scheme[_scheme_key(scheme_name)] = label
+    return risk_by_scheme
+
+
+def _last_scheme_name(text: str) -> str | None:
+    matches = list(SCHEME_NAME_PATTERN.finditer(text or ""))
+    if not matches:
+        return None
+    return _clean_scheme_name(matches[-1].group("name"))
+
+
+def _first_scheme_name(text: str) -> str | None:
+    match = SCHEME_NAME_PATTERN.search(text or "")
+    if not match:
+        return None
+    return _clean_scheme_name(match.group("name"))
+
+
+def _scheme_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+
 def _normalize_risk_label(value: str) -> str | None:
     normalized = " ".join(str(value or "").split()).strip().lower()
     for label in RISK_LABELS:
@@ -153,8 +221,9 @@ def _normalize_risk_label(value: str) -> str | None:
 
 def _extract_aum(chunk: str) -> float | None:
     patterns = (
+        r"Assets\s+Under\s+Management[\s\S]{0,260}?(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|cr)\b",
+        r"Assets\s+Under\s+Management[\s\S]{0,260}?(?:crores?|cr)\s*\n\s*([0-9][0-9,]*(?:\.[0-9]+)?)\b",
         r"Closing\s+AUM[\s\S]{0,120}?:\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|cr)\b",
-        r"Assets\s+Under\s+Management[\s\S]{0,160}?(?:Rs\.?|`|₹)\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|cr)\b",
         r"Monthly\s+AAUM[\s\S]{0,120}?:\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|cr)\b",
     )
     for pattern in patterns:
@@ -182,6 +251,7 @@ def _extract_aum_from_scheme_occurrences(text: str, scheme_name: str) -> float |
 
 def _extract_expense_ratio(chunk: str) -> float | None:
     patterns = (
+        r"Direct\s+Plan\s*:\s*(?:\*\s*)?([0-9]+(?:\.[0-9]+)?)\s*%\*?",
         r"Base\s+Expense\s+Ratio[\s\S]{0,220}?Direct(?:\s+Plan)?\s*[:\-]\s*([0-9]+(?:\.[0-9]+)?)\s*%",
         r"Base\s+Expense\s+Ratio[\s\S]{0,220}?Direct\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*%",
         r"Expense\s+Ratio[\s\S]{0,100}?Direct(?:\s+Plan)?\s*[:\-]\s*([0-9]+(?:\.[0-9]+)?)\s*%",
@@ -217,6 +287,7 @@ def _extract_expense_ratio(chunk: str) -> float | None:
 
 def _extract_benchmark(chunk: str) -> str | None:
     patterns = (
+        r"AMFI\s+Tier\s+I\s+Benchmark\s+Index\s+([^\n]{3,90})",
         r"AMFI\s+Tier\s+I\s+Benchmark\s+Index\s*\n\s*([^\n]{3,90})",
         r"Benchmark\s*\n\s*([^\n]{3,90})",
         r"\(Benchmark\)\s*\n\s*([^\n]{3,90})",

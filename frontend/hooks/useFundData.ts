@@ -60,9 +60,10 @@ export function useFundData(schemeCode: string | null) {
 
           // Map local API response to existing FundDataResponse type
           const rawHistory: MFChartPoint[] = (json.fullData || json.chartData || []) as MFChartPoint[];
+          const fundHouse = json.details.fund_house || json.details.amc || json.details.amc_name || '';
           const formatted: FundDataResponse = {
             meta: {
-              fund_house: String(json.details.fund_house || ''),
+              fund_house: String(fundHouse),
               scheme_type: String(json.details.category || ''),
               scheme_category: String(json.details.sub_category || ''),
               scheme_code: json.details.scheme_code ?? '',

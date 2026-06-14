@@ -1,7 +1,7 @@
 import asyncio
 import httpx
 
-async def test():
+async def main():
     async with httpx.AsyncClient() as client:
         response = await client.post(
             "http://localhost:8000/api/chat",
@@ -19,4 +19,5 @@ async def test():
                 print(f"Fund {k}:")
                 print(f"  Holdings count: {len(v.get('holdings', []))}")
 
-asyncio.run(test())
+if __name__ == "__main__":
+    asyncio.run(main())

@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
 from typing import Any, List, Dict, Optional, Tuple
+import functools
 
 from app.database import supabase
 from app.models.fund_models import (
@@ -49,19 +50,16 @@ def _coerce_scheme_code_filter(scheme_code_value: Any):
 
 class FundService:
     @staticmethod
-    def get_nav_history_summary(scheme_code_value: Any, cache: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
+    @functools.lru_cache(maxsize=512)
+    def get_nav_history_summary(scheme_code_value: Any) -> Dict[str, Any]:
         key = str(scheme_code_value or "").strip()
         default_summary = {"count": 0, "first_nav_date": None, "last_nav_date": None}
         
         if not key:
             return default_summary
-        if cache is not None and key in cache:
-            return cache[key]
 
         code_filter = _coerce_scheme_code_filter(scheme_code_value)
         if code_filter is None or not supabase:
-            if cache is not None:
-                cache[key] = default_summary
             return default_summary
 
         summary = dict(default_summary)
@@ -81,12 +79,10 @@ class FundService:
             if DEBUG_MF_RESOLUTION:
                 logger.warning("MF nav history summary lookup failed for %s: %s", key, exc)
 
-        if cache is not None:
-            cache[key] = summary
         return summary
 
     @staticmethod
-    def score_fund_candidates(entity: str, rows: List[Dict], nav_history_cache: Optional[Dict[str, Dict[str, Any]]] = None, min_history_points: int = 0) -> List[Dict[str, Any]]:
+    def score_fund_candidates(entity: str, rows: List[Dict], min_history_points: int = 0) -> List[Dict[str, Any]]:
         if not rows:
             return []
 
@@ -158,7 +154,7 @@ class FundService:
                 value -= 30
                 notes.append("multi_asset_fof_penalty:-30")
 
-            history = FundService.get_nav_history_summary(row.get("scheme_code"), nav_history_cache)
+            history = FundService.get_nav_history_summary(row.get("scheme_code"))
             history_points = int(history.get("count") or 0)
             if history_points == 0:
                 value -= 30
@@ -183,8 +179,8 @@ class FundService:
         return scored_rows
 
     @staticmethod
-    def pick_best_fund_match(entity: str, rows: List[Dict], nav_history_cache: Optional[Dict[str, Dict[str, Any]]] = None, min_history_points: int = 0) -> Optional[Dict]:
-        scored_rows = FundService.score_fund_candidates(entity, rows, nav_history_cache, min_history_points)
+    def pick_best_fund_match(entity: str, rows: List[Dict], min_history_points: int = 0) -> Optional[Dict]:
+        scored_rows = FundService.score_fund_candidates(entity, rows, min_history_points)
         return scored_rows[0]["row"] if scored_rows else None
 
     @staticmethod
@@ -249,16 +245,34 @@ class FundService:
             return [], None
         scheme_code = str(scheme_code_value)
         try:
-            rows = (
-                supabase.table("mutual_fund_holdings")
-                .select("as_of_date,security_name,isin,sector,weight_pct,source,provider_payload")
-                .eq("scheme_code", int(scheme_code) if scheme_code.isdigit() else scheme_code)
-                .order("as_of_date", desc=True)
-                .order("weight_pct", desc=True)
-                .limit(500)
-                .execute()
-                .data or []
-            )
+            # Check family mapping
+            family_res = supabase.table("mutual_fund_family_mapping").select("family_id").eq("scheme_code", scheme_code).limit(1).execute()
+            family_id = family_res.data[0].get("family_id") if family_res.data else None
+            
+            rows = []
+            if family_id:
+                rows = (
+                    supabase.table("mutual_fund_holdings")
+                    .select("as_of_date,security_name,isin,sector,weight_pct,source,provider_payload")
+                    .eq("family_id", family_id)
+                    .order("as_of_date", desc=True)
+                    .order("weight_pct", desc=True)
+                    .limit(500)
+                    .execute()
+                    .data or []
+                )
+                
+            if not rows:
+                rows = (
+                    supabase.table("mutual_fund_holdings")
+                    .select("as_of_date,security_name,isin,sector,weight_pct,source,provider_payload")
+                    .eq("scheme_code", int(scheme_code) if scheme_code.isdigit() else scheme_code)
+                    .order("as_of_date", desc=True)
+                    .order("weight_pct", desc=True)
+                    .limit(500)
+                    .execute()
+                    .data or []
+                )
         except Exception:
             return [], None
 
@@ -274,6 +288,7 @@ class FundService:
         return holdings, latest_as_of
 
     @staticmethod
+    @functools.lru_cache(maxsize=128)
     def get_mutual_fund_profile(scheme_code: int) -> Optional[FundProfileResponse]:
         if not supabase:
             return None
@@ -299,7 +314,7 @@ class FundService:
                     raw_details["expense_ratio"] = legacy_row.get("expense_ratio")
 
         # Fetch holdings & calculate sectors
-        holdings, _ = FundService.load_latest_fund_holdings(scheme_code)
+        holdings, holdings_as_of = FundService.load_latest_fund_holdings(scheme_code)
         sector_map = {}
         for h in holdings:
             sec = h.sector or "Unclassified"
@@ -314,30 +329,30 @@ class FundService:
         hist_df = FundService.get_mf_history_df(scheme_code, days=2200)
         close_series = hist_df["Close"] if not hist_df.empty else pd.Series(dtype=float)
 
-        nav_points = []
+        chart_nav_points = []
+        full_nav_points = []
         chart_df = hist_df.sort_index().tail(250) if not hist_df.empty else pd.DataFrame()
         if not chart_df.empty:
             for idx, val in chart_df["Close"].items():
-                nav_points.append(NavHistoryPoint(date=idx.strftime("%d-%m-%Y"), value=round(float(val), 4)))
+                chart_nav_points.append(NavHistoryPoint(date=idx.strftime("%d-%m-%Y"), value=round(float(val), 4)))
+        if not hist_df.empty:
+            for idx, val in hist_df.sort_index(ascending=False)["Close"].items():
+                full_nav_points.append(NavHistoryPoint(date=idx.strftime("%d-%m-%Y"), value=round(float(val), 4)))
 
         # Risk & Returns logic
         def _compute_cagr(series: pd.Series, years: int):
             if series.empty: 
-                print(f"_compute_cagr({years}): series empty")
                 return None
             current_date = series.index[-1]
             target_date = current_date - pd.DateOffset(years=years)
             historical = series[series.index <= target_date]
             if historical.empty: 
-                print(f"_compute_cagr({years}): historical empty (target: {target_date}, min: {series.index[0]})")
                 return None
             current_val = float(series.iloc[-1])
             past_val = float(historical.iloc[-1])
             if past_val <= 0: 
-                print(f"_compute_cagr({years}): past_val <= 0")
                 return None
             cagr = (current_val / past_val) ** (1 / years) - 1
-            print(f"_compute_cagr({years}): SUCCESS -> {round(cagr * 100, 2)}")
             return round(cagr * 100, 2)
 
         def _compute_risk(series: pd.Series, risk_free_rate: float = 0.06):
@@ -383,8 +398,20 @@ class FundService:
             beta=raw_details.get("beta")
         )
 
+        amc_name = raw_details.get("fund_house") or raw_details.get("amc") or raw_details.get("amc_name")
+        raw_details["fund_house"] = raw_details.get("fund_house") or amc_name
+        raw_details["amc"] = raw_details.get("amc") or amc_name
+        raw_details["amc_name"] = raw_details.get("amc_name") or amc_name
         raw_details["holdings"] = holdings
         raw_details["sector_allocation"] = sorted_sectors
+        raw_details["holdings_as_of_date"] = holdings_as_of
+
+        if full_nav_points:
+            latest_nav = full_nav_points[0]
+            raw_details["nav"] = raw_details.get("nav") or latest_nav.value
+            if not raw_details.get("nav_date"):
+                latest_idx = hist_df.sort_index(ascending=False).index[0]
+                raw_details["nav_date"] = latest_idx.strftime("%Y-%m-%d")
 
         details = FundDetails(**raw_details)
         
@@ -403,6 +430,7 @@ class FundService:
             details=details,
             returns=returns,
             risk_metrics=risk_metrics,
-            nav_history=nav_points,
+            nav_history=chart_nav_points,
+            full_nav_history=full_nav_points,
             data_quality=data_quality
         )

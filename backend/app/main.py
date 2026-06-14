@@ -21,6 +21,7 @@ import pytz
 
 from app.services.fund_service import FundService
 from app.models.fund_models import FundDetails, FundProfileResponse
+from app.services.auto_heal import trigger_mf_auto_heal
 import numpy as np
 import pandas as pd
 
@@ -59,6 +60,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled server error at {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "message": str(exc)},
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -4516,7 +4525,7 @@ async def stock_quant_price_history(symbol: str, days: int = Query(365, ge=1, le
 
 
 @app.get("/api/mf/{scheme_code}")
-async def get_mutual_fund_details(scheme_code: int):
+async def get_mutual_fund_details(scheme_code: int, background_tasks: BackgroundTasks):
     if not supabase:
         raise HTTPException(status_code=500, detail="Supabase client not initialized")
 
@@ -4543,6 +4552,10 @@ async def get_mutual_fund_details(scheme_code: int):
         nav_ref = details_dump.get("launch_date") # Or whatever is available
         stale = profile.data_quality.is_stale
         
+        # Trigger background auto-healing if data is stale or missing AUM
+        if stale or profile.details.aum is None:
+            background_tasks.add_task(trigger_mf_auto_heal, scheme_code)
+            
         return {
             "scheme_code": scheme_code,
             "details": details_dump,

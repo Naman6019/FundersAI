@@ -2,11 +2,15 @@ import sys
 import os
 import asyncio
 sys.path.append(os.path.abspath('c:/Users/naman/OneDrive/Desktop/FundersAI/backend'))
-from app.main import _build_holdings_overlap, _load_amc_holdings_and_sectors
 
-async def test():
-    h1, s1, date1 = await asyncio.to_thread(_load_amc_holdings_and_sectors, 122639)
-    h2, s2, date2 = await asyncio.to_thread(_load_amc_holdings_and_sectors, 120596)
+async def main():
+    from app.main import _build_holdings_overlap
+    from app.services.fund_service import FundService
+
+    h1, date1 = await asyncio.to_thread(FundService.load_latest_fund_holdings, 122639)
+    h2, date2 = await asyncio.to_thread(FundService.load_latest_fund_holdings, 120596)
+    h1 = [h.model_dump() for h in h1]
+    h2 = [h.model_dump() for h in h2]
     
     print(f"H1 length: {len(h1)}, H2 length: {len(h2)}")
     
@@ -20,4 +24,5 @@ async def test():
     print("Reason:", overlap.get("reason"))
     print("Total overlap:", overlap.get("total_overlap_weight"))
 
-asyncio.run(test())
+if __name__ == "__main__":
+    asyncio.run(main())

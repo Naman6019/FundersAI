@@ -32,6 +32,8 @@ export interface FundDetails {
   scheme_code?: number | string | null;
   scheme_name?: string | null;
   fund_house?: string | null;
+  amc?: string | null;
+  amc_name?: string | null;
   category?: string | null;
   sub_category?: string | null;
   nav?: number | string | null;
@@ -41,6 +43,8 @@ export interface FundDetails {
   exit_load?: string | null;
   benchmark?: string | null;
   risk_level?: string | null;
+  fund_manager?: string | null;
+  holdings_as_of_date?: string | null;
   [key: string]: unknown;
 }
 

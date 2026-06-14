@@ -10,7 +10,7 @@ headers = {
     "Content-Type": "application/json"
 }
 
-def test():
+def main():
     # 1. Check mutual_fund_core_snapshot for MidCap funds
     url = f"{SUPABASE_URL}/rest/v1/mutual_fund_core_snapshot?select=scheme_code,scheme_name,aum,expense_ratio&scheme_name=ilike.*MidCap*&limit=5"
     response = requests.get(url, headers=headers)
@@ -24,4 +24,4 @@ def test():
         print(f"Holdings for {scheme_code}:", holdings)
 
 if __name__ == "__main__":
-    test()
+    main()

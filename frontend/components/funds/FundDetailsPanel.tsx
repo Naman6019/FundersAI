@@ -110,6 +110,10 @@ function FundColumn({ schemeCode, colorHex }: { schemeCode: string, colorHex: st
       return Number.isFinite(parsed) ? parsed : null;
     };
 
+    const toStringOrNull = (value: unknown): string | null => {
+      return typeof value === 'string' && value.trim() ? value : null;
+    };
+
     const rawHoldings = Array.isArray(matched?.holdings) && matched!.holdings.length > 0 
       ? matched!.holdings 
       : Array.isArray(details?.holdings) ? details!.holdings : [];
@@ -135,7 +139,7 @@ function FundColumn({ schemeCode, colorHex }: { schemeCode: string, colorHex: st
     const sectors = rawSectors
           .map((row) => {
             const rec = row as Record<string, unknown>;
-            const name = String(rec.sector ?? rec.name ?? '').trim();
+            const name = String(rec.sector_name ?? rec.sector ?? rec.name ?? '').trim();
             if (!name) return null;
             return {
               name,
@@ -149,7 +153,7 @@ function FundColumn({ schemeCode, colorHex }: { schemeCode: string, colorHex: st
     return {
       holdings,
       sectors,
-      asOf: matched?.source_summary?.holdings_as_of_date || details?.holdings_as_of_date || null,
+      asOf: toStringOrNull(matched?.source_summary?.holdings_as_of_date) || toStringOrNull(details?.holdings_as_of_date),
     };
   }, [auxiliaryData, meta?.scheme_name, schemeCode, details]);
 

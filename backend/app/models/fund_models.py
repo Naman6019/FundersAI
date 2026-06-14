@@ -33,16 +33,24 @@ class NavHistoryPoint(BaseModel):
     value: float
 
 class FundDetails(BaseModel):
-    scheme_code: str
+    scheme_code: str | int
     scheme_name: str
     amc: Optional[str] = None
+    amc_name: Optional[str] = None
+    fund_house: Optional[str] = None
     category: Optional[str] = None
     sub_category: Optional[str] = None
+    nav: Optional[float] = None
+    nav_date: Optional[str] = None
     aum: Optional[float] = None
     expense_ratio: Optional[float] = None
+    exit_load: Optional[str] = None
     risk_level: Optional[str] = None
     launch_date: Optional[str] = None
     benchmark: Optional[str] = None
+    fund_manager: Optional[str] = None
+    holdings_as_of_date: Optional[str] = None
+    last_updated: Optional[str] = None
     
     # Returns
     return_1y: Optional[float] = None
@@ -57,8 +65,8 @@ class FundDetails(BaseModel):
     beta: Optional[float] = None
 
     # Enriched data
-    holdings: List[FundHolding] = []
-    sector_allocation: List[SectorAllocation] = []
+    holdings: List[FundHolding] = Field(default_factory=list)
+    sector_allocation: List[SectorAllocation] = Field(default_factory=list)
 
 class FundDataQuality(BaseModel):
     nav_points_count: int
@@ -71,5 +79,6 @@ class FundProfileResponse(BaseModel):
     details: FundDetails
     returns: FundReturns
     risk_metrics: RiskMetrics
-    nav_history: List[NavHistoryPoint] = []
+    nav_history: List[NavHistoryPoint] = Field(default_factory=list)
+    full_nav_history: List[NavHistoryPoint] = Field(default_factory=list)
     data_quality: FundDataQuality
