@@ -32,7 +32,22 @@ function normalizeAmcCode(name: string): string {
   if (clean.includes('ICICI')) return 'ICICI';
   if (clean.includes('HDFC')) return 'HDFC';
   if (clean.includes('SBI')) return 'SBI';
+  if (clean.includes('AXIS')) return 'AXIS';
   return clean || 'UNKNOWN';
+}
+
+function monthValue(value: unknown): string | null {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  if (/^\d{4}-\d{2}/.test(raw)) return raw.slice(0, 7);
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 7);
+}
+
+function latestMonth(current: string | null, value: unknown): string | null {
+  const month = monthValue(value);
+  if (!month) return current;
+  return !current || month > current ? month : current;
 }
 
 function normalizeSchemeName(name: string): string {
@@ -74,13 +89,13 @@ const ACTION_WORKFLOW_ORDER = [
     order: 2,
     label: 'Pending parser pass',
     schedule: 'After daily sync',
-    action: 'Parse pending and needs_reparse documents for PPFAS, ICICI, HDFC, SBI.',
+    action: 'Parse pending and needs_reparse documents for PPFAS, ICICI, HDFC, SBI, Axis.',
   },
   {
     order: 3,
     label: 'Parser retry loop',
     schedule: 'Every 6 hours',
-    action: 'Retry cooled-down needs_review and failed rows in order: SBI, HDFC, ICICI, PPFAS.',
+    action: 'Retry cooled-down needs_review and failed rows in order: Axis, SBI, HDFC, ICICI, PPFAS.',
   },
   {
     order: 4,
@@ -104,13 +119,13 @@ export async function GET(request: Request) {
 
   const coreRes = await supabase
     .from('mutual_fund_core_snapshot')
-    .select('scheme_code,scheme_name,amc_name,nav_date,aum,expense_ratio,alpha,beta,sharpe_ratio,benchmark')
+    .select('scheme_code,scheme_name,amc_name,nav_date,aum,expense_ratio,alpha,beta,sharpe_ratio,benchmark,risk_level')
     .limit(20000);
   const coreRows = coreRes.data || [];
 
   const holdingsRes = await supabase
     .from('mutual_fund_holdings')
-    .select('scheme_code')
+    .select('scheme_code,as_of_date')
     .limit(50000);
   const holdingsRows = holdingsRes.data || [];
   const sectorRes = await supabase
@@ -136,15 +151,21 @@ export async function GET(request: Request) {
 
   const nativeHoldingsRes = await supabase
     .from('mf_scheme_holdings')
-    .select('scheme_id,sector')
+    .select('scheme_id,sector,report_month')
     .limit(50000);
   const nativeHoldingsRows = nativeHoldingsRes.data || [];
 
   const docsRes = await supabase
     .from('mf_raw_documents')
-    .select('id,amc_code,source_document_type,source_url,parse_status,validation_issues,downloaded_at,parsed_at')
+    .select('id,amc_code,source_document_type,source_url,parse_status,validation_issues,report_month,downloaded_at,parsed_at')
     .limit(30000);
   const docsRows = docsRes.data || [];
+
+  const reviewQueueRes = await supabase
+    .from('mf_parse_review_queue')
+    .select('amc_code,status,report_month')
+    .limit(30000);
+  const reviewQueueRows = reviewQueueRes.data || [];
 
   const holdingsSet = new Set(holdingsRows.map((row) => String(row.scheme_code || '').trim()).filter(Boolean));
   const sectorSet = new Set(sectorRows.map((row) => String(row.scheme_code || '').trim()).filter(Boolean));
@@ -169,18 +190,29 @@ export async function GET(request: Request) {
     funds_with_asset_allocation: number;
     funds_with_ratios: number;
     funds_with_benchmark: number;
+    funds_with_risk_label: number;
     stale_nav_count: number;
     missing_ter_count: number;
     parser_failed_docs: number;
     skipped_docs: number;
+    parse_review_count: number;
     factsheet_files: number;
     portfolio_disclosure_files: number;
+    latest_factsheet_month: string | null;
+    latest_holdings_month: string | null;
     latest_parser_at: string | null;
+    ter_coverage: number;
+    benchmark_coverage: number;
+    risk_label_coverage: number;
+    holdings_source_note: string | null;
   };
 
   const map = new Map<string, Bucket>();
+  const schemeAmcByCode = new Map<string, string>();
   for (const row of coreRows) {
     const amc = normalizeAmcCode(row.amc_name || '');
+    const schemeCode = String(row.scheme_code || '').trim();
+    if (schemeCode) schemeAmcByCode.set(schemeCode, amc);
     const bucket =
       map.get(amc) ||
       {
@@ -194,16 +226,23 @@ export async function GET(request: Request) {
         funds_with_asset_allocation: 0,
         funds_with_ratios: 0,
         funds_with_benchmark: 0,
+        funds_with_risk_label: 0,
         stale_nav_count: 0,
         missing_ter_count: 0,
         parser_failed_docs: 0,
         skipped_docs: 0,
+        parse_review_count: 0,
         factsheet_files: 0,
         portfolio_disclosure_files: 0,
+        latest_factsheet_month: null,
+        latest_holdings_month: null,
         latest_parser_at: null,
+        ter_coverage: 0,
+        benchmark_coverage: 0,
+        risk_label_coverage: 0,
+        holdings_source_note: amc === 'AXIS' ? 'Axis holdings use AMC factsheet % of NAV rows, not ISIN-backed rows.' : null,
       };
 
-    const schemeCode = String(row.scheme_code || '').trim();
     bucket.total_funds += 1;
     if (row.nav_date) bucket.funds_with_nav += 1;
     if (row.nav_date && row.nav_date < staleCutoff) bucket.stale_nav_count += 1;
@@ -215,8 +254,25 @@ export async function GET(request: Request) {
     if ((schemeCode && sectorSet.has(schemeCode)) || hasCoverageName(nativeSectorByAmc, amc, row.scheme_name || '')) bucket.funds_with_asset_allocation += 1; // TODO: add dedicated asset allocation table when available.
     if (row.alpha !== null || row.beta !== null || row.sharpe_ratio !== null) bucket.funds_with_ratios += 1;
     if (row.benchmark) bucket.funds_with_benchmark += 1;
+    if (row.risk_level) bucket.funds_with_risk_label += 1;
 
     map.set(amc, bucket);
+  }
+
+  for (const row of holdingsRows) {
+    const amc = schemeAmcByCode.get(String(row.scheme_code || '').trim());
+    if (!amc) continue;
+    const bucket = map.get(amc);
+    if (!bucket) continue;
+    bucket.latest_holdings_month = latestMonth(bucket.latest_holdings_month, row.as_of_date);
+  }
+
+  for (const row of nativeHoldingsRows) {
+    const scheme = nativeSchemeById.get(String(row.scheme_id || ''));
+    if (!scheme) continue;
+    const bucket = map.get(scheme.amc);
+    if (!bucket) continue;
+    bucket.latest_holdings_month = latestMonth(bucket.latest_holdings_month, row.report_month);
   }
 
   for (const doc of docsRows) {
@@ -225,14 +281,31 @@ export async function GET(request: Request) {
     if (!bucket) continue;
     const docType = String(doc.source_document_type || '').toLowerCase();
     const parseStatus = String(doc.parse_status || '').toLowerCase();
-    if (docType === 'factsheet') bucket.factsheet_files += 1;
-    if (docType === 'portfolio_disclosure') bucket.portfolio_disclosure_files += 1;
+    if (docType === 'factsheet') {
+      bucket.factsheet_files += 1;
+      if (parseStatus === 'parsed') bucket.latest_factsheet_month = latestMonth(bucket.latest_factsheet_month, doc.report_month || doc.parsed_at || doc.downloaded_at);
+    }
+    if (docType === 'portfolio_disclosure') {
+      bucket.portfolio_disclosure_files += 1;
+      if (parseStatus === 'parsed') bucket.latest_holdings_month = latestMonth(bucket.latest_holdings_month, doc.report_month || doc.parsed_at || doc.downloaded_at);
+    }
+    if (docType === 'factsheet' && parseStatus === 'parsed' && amc === 'AXIS') {
+      bucket.latest_holdings_month = latestMonth(bucket.latest_holdings_month, doc.report_month || doc.parsed_at || doc.downloaded_at);
+    }
     if (parseStatus === 'failed') bucket.parser_failed_docs += 1;
     if (parseStatus.startsWith('skipped')) bucket.skipped_docs += 1;
     const parserAt = String(doc.parsed_at || doc.downloaded_at || '');
     if (parserAt && (!bucket.latest_parser_at || parserAt > bucket.latest_parser_at)) {
       bucket.latest_parser_at = parserAt;
     }
+  }
+
+  for (const row of reviewQueueRows) {
+    const amc = normalizeAmcCode(row.amc_code || '');
+    const bucket = map.get(amc);
+    if (!bucket) continue;
+    const status = String(row.status || '').toLowerCase();
+    if (!status || status === 'pending_review' || status === 'needs_review' || status === 'failed') bucket.parse_review_count += 1;
   }
 
   const rows = Array.from(map.values()).map((bucket) => {
@@ -243,6 +316,9 @@ export async function GET(request: Request) {
     const navCoverage = bucket.funds_with_nav / total;
     const avgCoverage = (ratiosCoverage + holdingsCoverage + terCoverage + navCoverage) / 4;
     const coverage_percentage = Math.round(avgCoverage * 100);
+    const ter_coverage = Math.round(terCoverage * 100);
+    const benchmark_coverage = Math.round((bucket.funds_with_benchmark / total) * 100);
+    const risk_label_coverage = Math.round((bucket.funds_with_risk_label / total) * 100);
 
     let parser_status = 'Active';
     if (bucket.parser_failed_docs > 0) parser_status = 'Failing';
@@ -263,6 +339,9 @@ export async function GET(request: Request) {
       parser_status,
       freshness_status,
       coverage_percentage,
+      ter_coverage,
+      benchmark_coverage,
+      risk_label_coverage,
       status,
     };
   });
@@ -307,8 +386,8 @@ export async function GET(request: Request) {
     needs_review_entries: needsReviewEntries,
     action_workflow_order: ACTION_WORKFLOW_ORDER,
     pipeline_focus: {
-      active_current: ['PPFAS', 'ICICI', 'HDFC', 'SBI'],
-      note: 'Current parser pipeline is active for PPFAS, ICICI, HDFC, and SBI while broader AMC coverage is being expanded.',
+      active_current: ['PPFAS', 'ICICI', 'HDFC', 'SBI', 'AXIS'],
+      note: 'Current parser pipeline is active for PPFAS, ICICI, HDFC, SBI, and Axis. Axis holdings are % of NAV factsheet rows, not ISIN-backed rows.',
     },
     todo_notes: [
       'TODO: dedicated asset allocation coverage needs a normalized table.',

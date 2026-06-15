@@ -9,6 +9,7 @@ AMC_MIRAE = "mirae"
 AMC_HDFC = "hdfc"
 AMC_ICICI = "icici"
 AMC_SBI = "sbi"
+AMC_AXIS = "axis"
 
 SUPPORTED_AMCS = [
     AMC_PPFAS,
@@ -16,6 +17,7 @@ SUPPORTED_AMCS = [
     AMC_HDFC,
     AMC_ICICI,
     AMC_SBI,
+    AMC_AXIS,
 ]
 
 EXCEL_EXTENSIONS = {".xls", ".xlsx", ".xlsm"}

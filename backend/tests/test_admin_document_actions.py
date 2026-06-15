@@ -1,5 +1,5 @@
 import pytest
-from fastapi import HTTPException
+from app.exceptions import AppServiceError
 
 
 class _FakeResponse:
@@ -53,7 +53,7 @@ class _FakeSupabase:
 
 
 def test_request_reparse_marks_document_for_existing_flow(monkeypatch):
-    from app import main as app_main
+    from app.services import admin_service as app_main
 
     fake_supabase = _FakeSupabase({
         "mf_raw_documents": [
@@ -63,7 +63,7 @@ def test_request_reparse_marks_document_for_existing_flow(monkeypatch):
             {"source_document_id": "doc-1", "status": "pending_review"},
         ],
     })
-    monkeypatch.setattr(app_main, "supabase", fake_supabase)
+    app_main._current_admin_repository.set(fake_supabase)
 
     payload = app_main._request_mf_document_reparse("doc-1", "try parser again")
 
@@ -78,7 +78,7 @@ def test_request_reparse_marks_document_for_existing_flow(monkeypatch):
 
 
 def test_resolve_review_marks_document_parsed_and_approves_queue(monkeypatch):
-    from app import main as app_main
+    from app.services import admin_service as app_main
 
     fake_supabase = _FakeSupabase({
         "mf_raw_documents": [
@@ -88,7 +88,7 @@ def test_resolve_review_marks_document_parsed_and_approves_queue(monkeypatch):
             {"source_document_id": "doc-1", "status": "pending_review"},
         ],
     })
-    monkeypatch.setattr(app_main, "supabase", fake_supabase)
+    app_main._current_admin_repository.set(fake_supabase)
 
     payload = app_main._resolve_mf_document_review("doc-1", "safe to clear")
 
@@ -103,7 +103,7 @@ def test_resolve_review_marks_document_parsed_and_approves_queue(monkeypatch):
 
 
 def test_skip_review_marks_document_skipped_and_clears_queue(monkeypatch):
-    from app import main as app_main
+    from app.services import admin_service as app_main
 
     fake_supabase = _FakeSupabase({
         "mf_raw_documents": [
@@ -113,7 +113,7 @@ def test_skip_review_marks_document_skipped_and_clears_queue(monkeypatch):
             {"source_document_id": "doc-1", "status": "pending_review"},
         ],
     })
-    monkeypatch.setattr(app_main, "supabase", fake_supabase)
+    app_main._current_admin_repository.set(fake_supabase)
 
     payload = app_main._skip_mf_document_review("doc-1", "not a parseable disclosure")
 
@@ -128,7 +128,7 @@ def test_skip_review_marks_document_skipped_and_clears_queue(monkeypatch):
 
 
 def test_review_action_rejects_non_review_document(monkeypatch):
-    from app import main as app_main
+    from app.services import admin_service as app_main
 
     fake_supabase = _FakeSupabase({
         "mf_raw_documents": [
@@ -136,9 +136,9 @@ def test_review_action_rejects_non_review_document(monkeypatch):
         ],
         "mf_parse_review_queue": [],
     })
-    monkeypatch.setattr(app_main, "supabase", fake_supabase)
+    app_main._current_admin_repository.set(fake_supabase)
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(AppServiceError) as exc:
         app_main._request_mf_document_reparse("doc-1")
 
     assert exc.value.status_code == 409
@@ -146,11 +146,11 @@ def test_review_action_rejects_non_review_document(monkeypatch):
 
 
 def test_admin_review_endpoint_requires_admin_key(monkeypatch):
-    from app import main as app_main
+    from app.services import admin_service as app_main
 
     monkeypatch.setenv("MF_INTERNAL_ADMIN_KEY", "expected-secret")
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(AppServiceError) as exc:
         app_main.admin_request_mf_document_reparse("doc-1", x_admin_key="wrong-secret")
 
     assert exc.value.status_code == 403

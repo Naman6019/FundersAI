@@ -9,10 +9,10 @@ from app.mf_ingestion.parsers.base_parser import ParseContext
 from app.mf_ingestion.parsers.pdf_text_parser import PDFTextParser
 
 SCHEME_NAME_PATTERN = re.compile(
-    r"(?m)^(?:\((?:Formerly|Erstwhile)[^\n]*\)\s*)?(?P<name>(?:ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset)[^\n]{3,140}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{1,60}\))?\s*$"
+    r"(?im)^(?:\((?:Formerly|Erstwhile)[^\n]*\)\s*)?(?P<name>(?:ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset|Axis)[^\n]{3,140}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{1,60}\))?\s*$"
 )
 ANCHORED_SCHEME_PATTERN = re.compile(
-    r"(?im)^Name\s+of\s+the\s+Fund\s*\n+\s*(?P<name>(?:ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset)[^\n]{3,160}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{1,80}\))?\s*$"
+    r"(?im)^Name\s+of\s+the\s+Fund\s*\n+\s*(?P<name>(?:ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset|Axis)[^\n]{3,160}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{1,80}\))?\s*$"
 )
 MANAGER_NAME_PATTERN = re.compile(r"\b(?:Mr|Ms|Mrs)\.?\s+[A-Z][A-Za-z' -]{1,80}")
 
@@ -45,14 +45,23 @@ class FactsheetParser:
             return []
 
         risk_by_scheme = _extract_scheme_risk_levels(cleaned_text)
-        best_by_scheme: dict[str, tuple[int, FactsheetRecord]] = {}
+        axis_ter_by_scheme = _extract_axis_ter_ratios(cleaned_text)
+        axis_manager_by_scheme = _extract_axis_manager_map(cleaned_text)
+        best_by_scheme: dict[str, FactsheetRecord] = {}
         for scheme_name, start, end in sections:
             chunk = str(cleaned_text[start:end])
 
             fields = _extract_fields(chunk)
-            mapped_risk_level = risk_by_scheme.get(_scheme_key(scheme_name))
+            scheme_key = _scheme_key(scheme_name)
+            mapped_risk_level = risk_by_scheme.get(scheme_key)
             if mapped_risk_level:
                 fields["risk_level"] = mapped_risk_level
+            mapped_ter = axis_ter_by_scheme.get(scheme_key)
+            if mapped_ter is not None:
+                fields["expense_ratio"] = mapped_ter
+            mapped_manager = axis_manager_by_scheme.get(scheme_key)
+            if mapped_manager:
+                fields["fund_manager"] = mapped_manager
             score = _score_fields(fields)
             if score <= 0:
                 continue
@@ -67,16 +76,22 @@ class FactsheetParser:
                 risk_level=fields.get("risk_level"),
                 confidence_score=float(min(99.0, 60 + (score * 10))),
             )
-            current = best_by_scheme.get(scheme_name)
-            if not current or score > current[0]:
-                best_by_scheme[scheme_name] = (score, record)
+            current = best_by_scheme.get(scheme_key)
+            best_by_scheme[scheme_key] = _merge_factsheet_records(current, record) if current else record
 
-        records = [entry[1] for entry in sorted(best_by_scheme.values(), key=lambda value: value[1].scheme_name)]
+        records = sorted(best_by_scheme.values(), key=lambda value: value.scheme_name)
         for record in records:
             if record.aum is None and not has_anchored_sections:
                 record.aum = _extract_aum_from_scheme_occurrences(cleaned_text, record.scheme_name)
             if not record.risk_level:
                 record.risk_level = risk_by_scheme.get(_scheme_key(record.scheme_name))
+            mapped_ter = axis_ter_by_scheme.get(_scheme_key(record.scheme_name))
+            if mapped_ter is not None:
+                record.expense_ratio = mapped_ter
+            mapped_manager = axis_manager_by_scheme.get(_scheme_key(record.scheme_name))
+            if mapped_manager:
+                record.fund_manager = mapped_manager
+            record.confidence_score = float(min(99.0, 60 + (_record_score(record) * 10)))
         return records
 
 
@@ -108,7 +123,7 @@ def _preprocess_factsheet_text(text: str) -> str:
         return ""
     # Generalized line break fixes for scheme names
     text = re.sub(r"(?i)\n+\s*(Fund|FOF|ETF)\b", r" \1", text)
-    text = re.sub(r"(?i)\b(ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset)\s*\n+\s*", r"\1 ", text)
+    text = re.sub(r"(?i)\b(ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset|Axis)\s*\n+\s*", r"\1 ", text)
     text = re.sub(r"(?i)\b(Large|Mid|Small|Flexi|Multi|Micro|Value|Focused|Active)\s*\n+\s*Cap\b", r"\1 Cap", text)
     text = re.sub(r"(?i)\b(Equity|Debt|Liquid|Hybrid|Index|Savings)\s*\n+\s*(Fund|FOF|ETF)\b", r"\1 \2", text)
     
@@ -143,6 +158,58 @@ def _score_fields(fields: dict[str, Any]) -> int:
         if fields.get(key) not in (None, ""):
             score += 1
     return score
+
+
+def _record_score(record: FactsheetRecord) -> int:
+    return _score_fields(
+        {
+            "aum": record.aum,
+            "expense_ratio": record.expense_ratio,
+            "benchmark": record.benchmark,
+            "fund_manager": record.fund_manager,
+            "risk_level": record.risk_level,
+        }
+    )
+
+
+def _merge_factsheet_records(existing: FactsheetRecord, incoming: FactsheetRecord) -> FactsheetRecord:
+    scheme_name = _preferred_scheme_name(existing.scheme_name, incoming.scheme_name)
+    merged = FactsheetRecord(
+        scheme_name=scheme_name,
+        report_month=existing.report_month or incoming.report_month,
+        aum=existing.aum if existing.aum is not None else incoming.aum,
+        expense_ratio=existing.expense_ratio if existing.expense_ratio is not None else incoming.expense_ratio,
+        benchmark=existing.benchmark or incoming.benchmark,
+        fund_manager=_merge_manager_names(existing.fund_manager, incoming.fund_manager),
+        risk_level=existing.risk_level or incoming.risk_level,
+        confidence_score=max(existing.confidence_score, incoming.confidence_score),
+    )
+    if incoming.expense_ratio is not None and (existing.expense_ratio is None or incoming.confidence_score >= existing.confidence_score):
+        merged.expense_ratio = incoming.expense_ratio
+    return merged
+
+
+def _preferred_scheme_name(left: str, right: str) -> str:
+    if _is_all_caps_scheme_name(left) and not _is_all_caps_scheme_name(right):
+        return right
+    if _is_all_caps_scheme_name(right) and not _is_all_caps_scheme_name(left):
+        return left
+    return left if len(left) >= len(right) else right
+
+
+def _is_all_caps_scheme_name(value: str) -> bool:
+    letters = re.sub(r"[^A-Za-z]+", "", str(value or ""))
+    return bool(letters) and letters.upper() == letters
+
+
+def _merge_manager_names(left: str | None, right: str | None) -> str | None:
+    names: list[str] = []
+    for value in (left, right):
+        for name in str(value or "").split(";"):
+            cleaned = " ".join(name.split()).strip()
+            if cleaned and cleaned not in names:
+                names.append(cleaned)
+    return "; ".join(names) if names else None
 
 
 RISK_LABELS = (
@@ -225,6 +292,8 @@ def _extract_aum(chunk: str) -> float | None:
         r"Assets\s+Under\s+Management[\s\S]{0,260}?(?:crores?|cr)\s*\n\s*([0-9][0-9,]*(?:\.[0-9]+)?)\b",
         r"Closing\s+AUM[\s\S]{0,120}?:\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|cr)\b",
         r"Monthly\s+AAUM[\s\S]{0,120}?:\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|cr)\b",
+        r"MONTHLY\s*AVERAGE[\s\S]{0,120}?(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:Cr\.?|crores?)\b",
+        r"AS ON\s+[^\n]{1,30}\n\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:Cr\.?|crores?)\b",
     )
     for pattern in patterns:
         match = re.search(pattern, chunk, flags=re.IGNORECASE)
@@ -264,9 +333,11 @@ def _extract_expense_ratio(chunk: str) -> float | None:
         if not match:
             continue
         try:
-            return float(match.group(1))
+            value = float(match.group(1))
         except ValueError:
             continue
+        if _valid_expense_ratio(value):
+            return value
     # Fallback: look for the nearest percentage around the word "Direct" in expense-ratio-like sections.
     direct_hits = list(re.finditer(r"direct(?:\s+plan)?", chunk, flags=re.IGNORECASE))
     for hit in direct_hits[:6]:
@@ -280,9 +351,128 @@ def _extract_expense_ratio(chunk: str) -> float | None:
             value = float(pct.group(1))
         except ValueError:
             continue
-        if 0 < value < 8:
+        if _valid_expense_ratio(value):
             return value
     return None
+
+
+def _valid_expense_ratio(value: float | None) -> bool:
+    return value is not None and 0.0 < float(value) <= 3.0
+
+
+def _extract_axis_ter_ratios(text: str) -> dict[str, float]:
+    lines = [_clean_line(line) for line in str(text or "").splitlines()]
+    ratios: dict[str, float] = {}
+    in_ter_section = False
+
+    for idx, line in enumerate(lines):
+        low = line.lower()
+        if "discloser of total expenses ratio" in low or "disclosure of total expenses ratio" in low:
+            in_ter_section = True
+            continue
+        if not in_ter_section:
+            continue
+        if _axis_ter_stop_line(line):
+            in_ter_section = False
+            continue
+        if not _looks_like_axis_table_scheme_name(line):
+            continue
+
+        percentages: list[float] = []
+        for tail in lines[idx + 1 : idx + 8]:
+            if _axis_ter_stop_line(tail) or _looks_like_axis_table_scheme_name(tail):
+                break
+            value = _parse_percent_text(tail)
+            if value is not None:
+                percentages.append(value)
+        if not percentages:
+            continue
+
+        direct_ratio = percentages[1] if len(percentages) >= 2 else percentages[0]
+        if _valid_expense_ratio(direct_ratio):
+            ratios[_scheme_key(line)] = direct_ratio
+    return ratios
+
+
+def _extract_axis_manager_map(text: str) -> dict[str, str]:
+    blob = " ".join(_clean_line(line) for line in str(text or "").splitlines())
+    manager_pattern = re.compile(
+        r"\b(?P<manager>[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]*){0,3})\s+is\s+Managing\s+",
+    )
+    matches = list(manager_pattern.finditer(blob))
+    manager_by_scheme: dict[str, list[str]] = {}
+
+    for index, match in enumerate(matches):
+        manager = " ".join(match.group("manager").split())
+        if not manager or manager.lower() in {"fund", "scheme"}:
+            continue
+        end = matches[index + 1].start() if index + 1 < len(matches) else min(len(blob), match.end() + 1200)
+        body = blob[match.end() : end]
+        body = re.split(
+            r"\b(?:PRODUCT\s+LABELLING|Statutory\s+Details|Risk\s+Factors|Mutual\s+Fund\s+investments)\b",
+            body,
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )[0]
+        for scheme_name in _axis_scheme_names_from_text(body):
+            key = _scheme_key(scheme_name)
+            manager_by_scheme.setdefault(key, [])
+            if manager not in manager_by_scheme[key]:
+                manager_by_scheme[key].append(manager)
+
+    return {key: "; ".join(names) for key, names in manager_by_scheme.items()}
+
+
+def _axis_scheme_names_from_text(text: str) -> list[str]:
+    pattern = re.compile(
+        r"\bAxis\s+[A-Za-z0-9&,'()/:.\- ]{2,120}?(?:Fund|ETF|FoF|FOF|Plan)\b",
+        flags=re.IGNORECASE,
+    )
+    names: list[str] = []
+    for match in pattern.finditer(text or ""):
+        name = _clean_scheme_name(match.group(0))
+        name = re.sub(r"\s+since\s+.*$", "", name, flags=re.IGNORECASE).strip(" ,")
+        if not name or name.lower().startswith("axis mutual fund"):
+            continue
+        if name not in names:
+            names.append(name)
+    return names
+
+
+def _looks_like_axis_table_scheme_name(line: str) -> bool:
+    text = _clean_line(line)
+    if not text.lower().startswith("axis "):
+        return False
+    if " - " in text and not text.lower().endswith("plan"):
+        return False
+    return bool(re.search(r"\b(Fund|ETF|FOF|FoF|Plan)\b", text, flags=re.IGNORECASE))
+
+
+def _axis_ter_stop_line(line: str) -> bool:
+    low = _clean_line(line).lower()
+    if not low:
+        return False
+    stop_markers = (
+        "date of",
+        "sip investments",
+        "past performance",
+        "product labelling",
+        "riskometer",
+        "statutory details",
+    )
+    return any(low.startswith(marker) for marker in stop_markers)
+
+
+def _parse_percent_text(value: str) -> float | None:
+    match = re.fullmatch(r"\s*([0-9]+(?:\.[0-9]+)?)\s*%\s*", str(value or ""))
+    if not match:
+        return None
+    parsed = _parse_number(match.group(1))
+    return parsed
+
+
+def _clean_line(value: str) -> str:
+    return " ".join(str(value or "").replace("\xa0", " ").split()).strip()
 
 
 def _extract_benchmark(chunk: str) -> str | None:
@@ -313,6 +503,7 @@ def _extract_fund_manager(chunk: str) -> str | None:
     block_patterns = (
         r"Name\s+of\s+the\s+Fund\s+Managers?\s*[\s:]*([\s\S]{0,700})",
         r"Fund\s+Managers?\s*:\s*([\s\S]{0,700})",
+        r"FUND MANAGER\s*[\s:]*([\s\S]{0,700})",
     )
     for pattern in block_patterns:
         match = re.search(pattern, chunk, flags=re.IGNORECASE)

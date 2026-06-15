@@ -63,7 +63,7 @@ const defaultTemplates: SuggestionTemplate[] = [
   {
     id: 'mf-deep-dive',
     label: 'Mutual Fund Deep Dive',
-    prompt: 'Create a mutual fund deep dive for Parag Parikh Flexi Cap and ICICI Multi Asset Fund with returns, risk, cost, freshness, and missing data.',
+    prompt: 'Create a mutual fund deep dive for Axis Flexi Cap and HDFC Flexi Cap with returns, risk, cost, freshness, and missing data.',
     assetType: 'mutual_fund',
     explanationMode: 'advanced',
   },
@@ -146,6 +146,9 @@ function MessageMetadataBadges({ metadata, content }: { metadata?: Record<string
   const confidence = asRecord(metadata?.confidence);
   const riskAnalysis = asRecord(metadata?.risk_analysis);
   const dataQuality = asRecord(metadata?.data_quality);
+  const statusFlag = typeof metadata?.status_flag === 'string' ? metadata.status_flag : null;
+  const modelStatus = typeof metadata?.model_status === 'string' ? metadata.model_status : null;
+  const coverageStatus = typeof metadata?.coverage_status === 'string' ? metadata.coverage_status : null;
   const sourceRows = sourceFreshness ? Object.entries(sourceFreshness).slice(0, 2) : [];
   const riskItems = Array.isArray(riskAnalysis?.items) ? riskAnalysis.items : [];
   const missingCount = dataQuality
@@ -164,7 +167,7 @@ function MessageMetadataBadges({ metadata, content }: { metadata?: Record<string
     );
   }
 
-  if (!metadata || (!sourceRows.length && !confidence?.label && !riskItems.length && !missingCount)) {
+  if (!metadata || (!sourceRows.length && !confidence?.label && !riskItems.length && !missingCount && !statusFlag && !modelStatus && !coverageStatus)) {
     return (
       <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-300">
         Source metadata pending
@@ -174,6 +177,16 @@ function MessageMetadataBadges({ metadata, content }: { metadata?: Record<string
 
   return (
     <>
+      {statusFlag === 'deterministic_fallback' ? (
+        <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200">
+          Basic comparison shown
+        </span>
+      ) : null}
+      {coverageStatus && coverageStatus !== 'not_applicable' ? (
+        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-300">
+          Coverage {coverageStatus}
+        </span>
+      ) : null}
       {confidence?.label ? (
         <span className="rounded-full border border-[#66a3ff]/20 bg-[#66a3ff]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#cce0ff]">
           Confidence {String(confidence.label)}
@@ -383,7 +396,24 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
         }),
       });
 
-      if (!res.ok) throw new Error('API Error');
+      if (!res.ok) {
+        let errorMessage = res.status === 408 || res.status === 504
+          ? 'The research request timed out. Try again in a moment.'
+          : 'FundersAI research service returned an error. Try again in a moment.';
+        try {
+          const errorBody = await res.json();
+          if (errorBody?.error === 'token_budget_exceeded') {
+            errorMessage = 'Your chat token budget has been reached for this period.';
+          } else if (errorBody?.error === 'Upstream Error') {
+            errorMessage = 'FundersAI research service could not complete the request in time. Try again in a moment.';
+          } else if (typeof errorBody?.error === 'string') {
+            errorMessage = errorBody.error;
+          }
+        } catch {
+          // Keep the status-based message when the response body is not JSON.
+        }
+        throw new Error(errorMessage);
+      }
       const data = await res.json();
 
       if (data.system_action?.type === 'COMPARE') {
@@ -418,11 +448,19 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
           data_quality: data.data_quality || null,
           risk_analysis: data.risk_analysis || null,
           confidence: data.confidence || null,
+          trace_id: data.trace_id || null,
+          coverage_status: data.coverage_status || null,
+          model_status: data.model_status || null,
+          status_flag: data.status_flag || null,
+          resolution: data.resolution || null,
           explanation_mode: data.explanation_mode || selectedExplanationMode,
         },
       });
-    } catch {
-      addMessage({ id: Date.now().toString(), role: 'system', content: 'Coverage pending: FundersAI core is not reachable. Try again when the research service is running.' });
+    } catch (error) {
+      const message = error instanceof Error && error.message
+        ? error.message
+        : 'FundersAI research service is unavailable. Try again in a moment.';
+      addMessage({ id: Date.now().toString(), role: 'system', content: message });
     } finally {
       setIsProcessing(false);
     }
@@ -576,10 +614,10 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
             }}
             placeholder={
               assetType === 'mutual_fund'
-                ? 'Compare PPFAS and ICICI funds for long-term consistency…'
+                ? 'Compare Axis Flexi and HDFC Flexi for long-term consistency…'
                 : assetType === 'stock'
                 ? 'Stock research is in progress. Try fund comparison prompts.'
-                : 'Ask for PPFAS vs ICICI comparison, risk, cost, or NAV view…'
+                : 'Ask for Axis vs HDFC comparison, risk, cost, or NAV view…'
             }
             rows={1}
             name="chat_message"

@@ -66,3 +66,36 @@ stitch_downloads/
 
 .vercel
 .env*
+
+# Graphifyy Ignore Docs
+*.md
+*.MD
+*.txt
+*.csv
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.gif
+*.webp
+*.ico
+*.json
+*.yaml
+*.yml
+*.log
+*.markdown
+*.rst
+*.xls
+*.xlsx
+
+# Temporary debugging scripts
+check_db2.py
+fix_syntax.py
+backend/fix_metrics.py
+backend/fix_nav.py
+backend/test_auto_heal.py
+backend/test_axis*.py
+backend/test_camelot_axis*.py
+backend/test_regex_axis.py
+backend/test_search_ter.py

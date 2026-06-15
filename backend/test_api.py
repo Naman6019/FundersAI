@@ -4,7 +4,7 @@ import asyncio
 sys.path.append(os.path.abspath('c:/Users/naman/OneDrive/Desktop/FundersAI/backend'))
 
 async def main():
-    from app.main import _build_holdings_overlap
+    from app.services.chat_service import _build_holdings_overlap
     from app.services.fund_service import FundService
 
     h1, date1 = await asyncio.to_thread(FundService.load_latest_fund_holdings, 122639)

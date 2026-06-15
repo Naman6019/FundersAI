@@ -142,7 +142,7 @@ def test_stock_compare_does_not_call_live_clients(monkeypatch):
 
 
 def test_chat_mf_compare_does_not_call_live_clients(monkeypatch):
-    from app import main
+    from app.services import chat_service as main
 
     class FakeResult:
         def __init__(self, data):
@@ -244,10 +244,10 @@ def test_chat_mf_compare_does_not_call_live_clients(monkeypatch):
     async def fake_synthesis_response(*_args, **_kwargs):
         return "ok"
 
-    monkeypatch.setattr(main, "supabase", FakeSupabase(fake_db))
+    main._current_mf_repository.set(FakeSupabase(fake_db))
     monkeypatch.setattr(main, "route_query", fake_route_query)
     monkeypatch.setattr(main, "synthesis_response", fake_synthesis_response)
-    monkeypatch.setattr(main, "fetch_news", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(main, "fetch_news", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("news fetch called")))
     monkeypatch.setattr(main, "analyze_news_sentiment", lambda news: news)
     monkeypatch.setattr(main, "mfapi_get_latest_nav", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("live mfapi called")))
     monkeypatch.setattr(main, "mfapi_get_nav_history", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("live mfapi called")))
@@ -258,7 +258,7 @@ def test_chat_mf_compare_does_not_call_live_clients(monkeypatch):
 
     monkeypatch.setattr(main.yf, "Ticker", FailTicker)
 
-    req = main.ChatRequest(query="Compare ICICI Alpha Fund and PPFAS Beta Fund", asset_type="mutual_fund", research_depth="standard")
+    req = main.ChatRequest(query="Compare ICICI Alpha Fund and PPFAS Beta Fund", asset_type="mutual_fund", research_depth="standard", comparison_view_mode="canvas")
     response = asyncio.run(main.chat_endpoint(req))
 
     assert "quant_data" in response
@@ -267,7 +267,7 @@ def test_chat_mf_compare_does_not_call_live_clients(monkeypatch):
 
 
 def test_compare_synthesis_includes_direct_difference_section(monkeypatch):
-    from app import main
+    from app.services import chat_service as main
 
     async def fake_function_ollama_chat(*_args, **_kwargs):
         return "Trend text."
@@ -326,10 +326,10 @@ def test_compare_synthesis_includes_direct_difference_section(monkeypatch):
 
 
 def test_compare_synthesis_canvas_mode_hides_data_table(monkeypatch):
-    from app import main
+    from app.services import chat_service as main
 
     async def fake_function_ollama_chat(*_args, **_kwargs):
-        return "Trend text."
+        raise AssertionError("OpenRouter synthesis called")
 
     monkeypatch.setattr(main, "function_ollama_chat", fake_function_ollama_chat)
 
@@ -358,8 +358,99 @@ def test_compare_synthesis_canvas_mode_hides_data_table(monkeypatch):
     assert "### How They Differ" not in response
 
 
+def test_compare_synthesis_canvas_followup_calls_model(monkeypatch):
+    from app.services import chat_service as main
+
+    seen = {}
+
+    async def fake_function_ollama_chat(*_args, **kwargs):
+        seen["timeout_seconds"] = kwargs.get("timeout_seconds")
+        return "Model follow-up explanation."
+
+    monkeypatch.setattr(main, "function_ollama_chat", fake_function_ollama_chat)
+
+    response = asyncio.run(
+        main.synthesis_response(
+            query="Why is B riskier?",
+            intent_info={"intent": "compare", "ticker": None, "followup_question": "Why is B riskier?"},
+            quant_data={
+                "comparison": {
+                    "A": {"name": "A", "nav": 100, "source_summary": {"stale": False}},
+                    "B": {"name": "B", "nav": 110, "source_summary": {"stale": False}},
+                },
+                "why_better": {
+                    "winner": {"entity_name": "B", "status": "winner"},
+                    "confidence": {"label": "Medium", "score": 0.6},
+                    "factor_results": [{"factor": "Risk (Volatility 1Y)", "winner": "A", "coverage": 1.0}],
+                },
+            },
+            news_data=[],
+            comparison_view_mode="canvas",
+        )
+    )
+
+    assert seen["timeout_seconds"] == 20.0
+    assert "Model follow-up explanation." in response
+    assert "### Follow-up Answer" in response
+    assert "### Data Table" not in response
+
+
+def test_compare_intent_preserves_same_message_followup_question():
+    from app.services import chat_service as main
+
+    intent = main._deterministic_compare_intent(
+        "Compare HDFC Flexi and ICICI Large cap. What fund is better for long term investment and which fund has higher downside protection?",
+        asset_type="mutual_fund",
+    )
+
+    assert intent is not None
+    assert intent["intent"] == "compare"
+    assert intent["compare_entities"] == ["HDFC Flexi Cap", "ICICI Prudential Large Cap"]
+    assert intent["historical_period"] == "5y"
+    assert intent["downside_focus"] is True
+    assert "higher downside protection" in intent["followup_question"].lower()
+
+
+def test_compare_synthesis_canvas_advanced_calls_model(monkeypatch):
+    from app.services import chat_service as main
+
+    seen = {}
+
+    async def fake_function_ollama_chat(*_args, **kwargs):
+        seen["timeout_seconds"] = kwargs.get("timeout_seconds")
+        return "Advanced model synthesis."
+
+    monkeypatch.setattr(main, "function_ollama_chat", fake_function_ollama_chat)
+
+    response = asyncio.run(
+        main.synthesis_response(
+            query="Compare A and B",
+            intent_info={"intent": "compare", "ticker": None},
+            quant_data={
+                "comparison": {
+                    "A": {"name": "A", "nav": 100, "source_summary": {"stale": False}},
+                    "B": {"name": "B", "nav": 110, "source_summary": {"stale": False}},
+                },
+                "why_better": {
+                    "winner": {"entity_name": "B", "status": "winner"},
+                    "confidence": {"label": "Medium", "score": 0.6},
+                    "factor_results": [{"factor": "Returns (3Y)", "winner": "B", "coverage": 1.0}],
+                },
+            },
+            news_data=[],
+            research_depth="deep",
+            explanation_mode="advanced",
+            comparison_view_mode="canvas",
+        )
+    )
+
+    assert seen["timeout_seconds"] == 20.0
+    assert "Advanced model synthesis." in response
+    assert "### Data Table" not in response
+
+
 def test_news_markdown_has_takeaway_quote_and_source_link():
-    from app import main
+    from app.services import chat_service as main
 
     news = [
         {

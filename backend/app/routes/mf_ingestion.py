@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import os
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
-from app.database import supabase
+from app.repositories.mf_ingestion_repository import MfIngestionRepository
 from app.mf_ingestion.config import get_config
 from app.mf_ingestion.storage.r2_store import R2Store, build_safe_key
 
 router = APIRouter(prefix="/api/internal/mf", tags=["mf-ingestion"])
+
+
+def get_mf_ingestion_repository() -> MfIngestionRepository:
+    return MfIngestionRepository()
 
 
 @router.get("/schemes/{scheme_name}/holdings")
@@ -16,37 +20,17 @@ def get_scheme_holdings(
     scheme_name: str,
     report_month: str | None = Query(default=None, description="YYYY-MM-01"),
     limit: int = Query(default=250, ge=1, le=5000),
+    repository: MfIngestionRepository = Depends(get_mf_ingestion_repository),
 ):
-    if not supabase:
+    if not repository:
         raise HTTPException(status_code=500, detail="Supabase client not initialized")
 
     normalized = scheme_name.strip().lower()
-    scheme_result = (
-        supabase.table("mf_schemes")
-        .select("id,amc_code,scheme_name,scheme_name_normalized")
-        .eq("scheme_name_normalized", normalized)
-        .limit(1)
-        .execute()
-    )
-    if not scheme_result.data:
+    scheme = repository.get_scheme_by_normalized_name(normalized)
+    if not scheme:
         raise HTTPException(status_code=404, detail="Scheme not found")
 
-    scheme = scheme_result.data[0]
-
-    query = (
-        supabase.table("mf_scheme_holdings")
-        .select(
-            "id,report_month,instrument_name,instrument_name_normalized,isin,sector,percent_aum,"
-            "source_document_id,source_url,source_row_hash,parser_version,confidence_score,validation_status"
-        )
-        .eq("scheme_id", scheme["id"])
-        .order("percent_aum", desc=True)
-        .limit(limit)
-    )
-    if report_month:
-        query = query.eq("report_month", report_month)
-
-    rows = query.execute().data or []
+    rows = repository.get_scheme_holdings(scheme["id"], report_month=report_month, limit=limit)
     return {
         "scheme": scheme,
         "report_month": report_month,
@@ -58,13 +42,14 @@ def get_scheme_holdings(
 @router.get("/documents/{source_document_id}/signed-url")
 def get_document_signed_url(
     source_document_id: str,
-    artifact: str = Query(default="raw", regex="^(raw|debug)$"),
+    artifact: str = Query(default="raw", pattern="^(raw|debug)$"),
     x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+    repository: MfIngestionRepository = Depends(get_mf_ingestion_repository),
 ):
     expected_admin_key = os.getenv("MF_INTERNAL_ADMIN_KEY", "").strip()
     if not expected_admin_key or x_admin_key != expected_admin_key:
         raise HTTPException(status_code=403, detail="admin_auth_required")
-    if not supabase:
+    if not repository:
         raise HTTPException(status_code=500, detail="Supabase client not initialized")
 
     config = get_config()
@@ -79,16 +64,9 @@ def get_document_signed_url(
     if not r2_store.enabled:
         raise HTTPException(status_code=500, detail="r2_not_configured")
 
-    doc_result = (
-        supabase.table("mf_raw_documents")
-        .select("id,amc_code,report_month,storage_backend,storage_bucket,storage_key")
-        .eq("id", source_document_id)
-        .limit(1)
-        .execute()
-    )
-    if not doc_result.data:
+    row = repository.get_raw_document_storage(source_document_id)
+    if not row:
         raise HTTPException(status_code=404, detail="source_document_not_found")
-    row = doc_result.data[0]
 
     if artifact == "raw":
         if str(row.get("storage_backend") or "").strip().lower() != "r2" or not row.get("storage_key"):

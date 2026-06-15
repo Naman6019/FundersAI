@@ -83,6 +83,17 @@ SOURCES: dict[str, AMCDocumentSource] = {
         confirmation_notes=None,
         enabled=True,
     ),
+    "axis": AMCDocumentSource(
+        amc_name="Axis Mutual Fund",
+        amc_code="AXIS",
+        adapter_key="axis",
+        factsheet_page_url=_env_url("MF_AXIS_FACTSHEET_PAGE_URL", "https://www.axismf.com/downloads"),
+        portfolio_disclosure_page_url=_env_url("MF_AXIS_PORTFOLIO_PAGE_URL", "https://www.axismf.com/downloads"),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+    ),
 }
 
 

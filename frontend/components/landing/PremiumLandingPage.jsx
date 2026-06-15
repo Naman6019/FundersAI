@@ -19,14 +19,14 @@ const ease = [0.22, 1, 0.36, 1];
 const displayStyle = { fontFamily: '"Space Grotesk", var(--font-body-md)' };
 
 const proofRail = [
-  ["Verified AMCs", "PPFAS, ICICI, HDFC, SBI"],
+  ["Verified AMCs", "PPFAS, ICICI, HDFC, SBI, Axis"],
   ["Output boundary", "Research-only, no recommendations"],
   ["Data layer", "Stored records, freshness, limits"],
   ["Next focus", "Broader AMC coverage before stocks"],
 ];
 
 const proofStats = [
-  ["04", "validated AMC families", "Coverage is intentionally scoped to PPFAS, ICICI, HDFC, and SBI while expansion continues."],
+  ["05", "validated AMC families", "Coverage is intentionally scoped to PPFAS, ICICI, HDFC, SBI, and Axis while expansion continues."],
   ["0", "advisory outputs", "The product avoids recommendations, buy/sell calls, and portfolio advice."],
   ["1", "research workspace", "Fund metrics, source freshness, and AI explanations stay visible together."],
 ];
@@ -44,7 +44,8 @@ const metricRows = [
 ];
 
 const productPanels = [
-  ["Verified AMC coverage", "PPFAS, ICICI, HDFC, and SBI coverage is stated clearly while broader AMC expansion continues."],
+  ["Verified AMC coverage", "PPFAS, ICICI, HDFC, SBI, and Axis coverage is stated clearly while broader AMC expansion continues."],
+  ["Axis holdings note", "Axis factsheet holdings are parsed as % of NAV rows from the AMC factsheet; they are not ISIN-backed from that source."],
   ["Source freshness", "NAV and factsheet status stay visible beside the metrics so stale data is easier to spot."],
   ["No advisory output", "The interface frames answers as research notes, not recommendations, suitability calls, or buy/sell guidance."],
 ];
@@ -73,12 +74,13 @@ const trustCards = [
 ];
 
 const roadmap = [
-  ["Now", "Verified four-AMC mutual fund comparison", "PPFAS, ICICI, HDFC, SBI"],
+  ["Now", "Verified five-AMC mutual fund comparison", "PPFAS, ICICI, HDFC, SBI, Axis"],
   ["Next", "Broader major-AMC coverage", "More factsheets, holdings, and metric mapping"],
   ["Later", "Stock research module", "Planned after the fund coverage layer is stronger"],
 ];
 
 const promptChips = [
+  "Compare Axis Flexi Cap vs HDFC Flexi Cap",
   "Compare Parag Parikh Flexi Cap vs ICICI Multi Asset",
   "Show expense ratio and risk signals",
   "Explain Sharpe and beta in simple terms",
@@ -400,6 +402,7 @@ export default function FundersAILandingPage() {
               <DataChip tone="green">ICICI</DataChip>
               <DataChip tone="green">HDFC</DataChip>
               <DataChip tone="green">SBI</DataChip>
+              <DataChip tone="green">Axis</DataChip>
               <DataChip tone="amber">No recommendations</DataChip>
             </div>
           </Reveal>
@@ -548,7 +551,7 @@ export default function FundersAILandingPage() {
               Compare Indian mutual funds with explainable AI.
             </h2>
             <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-slate-400">
-              Start with verified PPFAS, ICICI, HDFC, and SBI coverage while FundersAI expands the research dataset.
+              Start with verified PPFAS, ICICI, HDFC, SBI, and Axis coverage while FundersAI expands the research dataset.
             </p>
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <PremiumButton href="/dashboard">Start fund research</PremiumButton>

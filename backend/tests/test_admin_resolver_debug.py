@@ -1,5 +1,5 @@
 import pytest
-from fastapi import HTTPException
+from app.exceptions import AppServiceError
 
 
 class _FakeResponse:
@@ -85,16 +85,16 @@ class _FakeSupabase:
 
 
 def test_require_admin_key_rejects_wrong_key(monkeypatch):
-    from app import main as app_main
+    from app.services import admin_service as app_main
 
     monkeypatch.setenv("MF_INTERNAL_ADMIN_KEY", "expected-secret")
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(AppServiceError) as exc:
         app_main._require_admin_key("wrong-secret")
     assert exc.value.status_code == 403
 
 
 def test_admin_mf_resolver_debug_response_shape(monkeypatch):
-    from app import main as app_main
+    from app.services import admin_service as app_main
 
     monkeypatch.setenv("MF_INTERNAL_ADMIN_KEY", "expected-secret")
 
@@ -131,7 +131,7 @@ def test_admin_mf_resolver_debug_response_shape(monkeypatch):
         ],
     }
 
-    monkeypatch.setattr(app_main, "supabase", _FakeSupabase(core_rows, nav_rows_by_scheme))
+    app_main._current_admin_repository.set(_FakeSupabase(core_rows, nav_rows_by_scheme))
 
     payload = app_main.admin_mf_resolver_debug(
         query="ICICI Multi Asset",
@@ -147,4 +147,3 @@ def test_admin_mf_resolver_debug_response_shape(monkeypatch):
     assert payload["selected_candidate"]["scheme_code"] == "1001"
     assert payload["top_candidates"][0]["selected"] is True
     assert "penalty_notes" in payload["top_candidates"][0]
-

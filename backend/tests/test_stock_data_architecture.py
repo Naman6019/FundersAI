@@ -283,7 +283,7 @@ def test_comparison_item_falls_back_to_snapshot_bare_minimum(monkeypatch):
 
 
 def test_chat_compare_table_handles_empty_risk_period():
-    from app import main
+    from app.services import chat_service as main
 
     table, notes = main._data_table_markdown("compare", {
         "comparison": {
@@ -302,7 +302,7 @@ def test_chat_compare_table_handles_empty_risk_period():
 
 
 def test_chat_stock_compare_item_uses_quant_service_shape(monkeypatch):
-    from app import main
+    from app.services import chat_service as main
 
     def fake_build_stock_compare(symbols):
         assert symbols == ["TCS"]
@@ -328,11 +328,11 @@ def test_chat_stock_compare_item_uses_quant_service_shape(monkeypatch):
 
 def test_synthesis_prompt_excludes_large_comparison_payload(monkeypatch):
     import asyncio
-    from app import main
+    from app.services import chat_service as main
 
     captured = {}
 
-    async def fake_chat(messages, format="text", max_retries=2):
+    async def fake_chat(messages, format="text", max_retries=2, **_kwargs):
         captured["context"] = messages[1]["content"]
         return "TCS and Reliance have structured comparison data, with missing values limiting the conclusion."
 

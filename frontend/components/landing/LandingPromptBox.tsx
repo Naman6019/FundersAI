@@ -29,7 +29,7 @@ export default function LandingPromptBox() {
             openApp();
           }
         }}
-        placeholder="Ask FundersAI about a stock or mutual fund (e.g., PPFAS vs ICICI)…"
+        placeholder="Ask FundersAI about a stock or mutual fund (e.g., Axis Flexi vs HDFC Flexi)…"
         rows={3}
         name="landing_query"
         autoComplete="off"

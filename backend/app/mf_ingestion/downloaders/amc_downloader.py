@@ -105,7 +105,7 @@ class AMCDownloader(BaseDownloader):
                 len(docs),
             )
             return docs
-        if adapter_key in {"hdfc", "sbi"}:
+        if adapter_key in {"hdfc", "sbi", "axis"}:
             if adapter_key == "sbi" and (document_type or "").strip().lower() == "factsheet":
                 docs = _discover_sbi_factsheet_documents(
                     self.source,
@@ -177,7 +177,7 @@ class AMCDownloader(BaseDownloader):
                 file_bytes=response.content,
             )
 
-        if adapter_key in {"hdfc", "sbi"}:
+        if adapter_key in {"hdfc", "sbi", "axis"}:
             referer = discovered.discovery_page_url or _base_site_url(discovered.url)
             response = _request_with_retry(
                 "GET",

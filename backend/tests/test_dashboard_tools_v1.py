@@ -61,7 +61,7 @@ class _FakeSupabase:
 
 
 def test_sip_projection_uses_standard_monthly_formula():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     projection = app_main._calculate_sip_projection(10_000, 10, 12)
 
@@ -71,7 +71,7 @@ def test_sip_projection_uses_standard_monthly_formula():
 
 
 def test_sip_response_defaults_rate_when_missing():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     response = app_main._build_sip_calculator_response(
         "Calculate SIP returns for 10000 per month for 10 years"
@@ -86,7 +86,7 @@ def test_sip_response_defaults_rate_when_missing():
 
 
 def test_category_search_reads_core_snapshot_and_ranks_by_3y_return(monkeypatch):
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     fake = _FakeSupabase(
         {
@@ -124,7 +124,8 @@ def test_category_search_reads_core_snapshot_and_ranks_by_3y_return(monkeypatch)
             ]
         }
     )
-    monkeypatch.setattr(app_main, "supabase", fake)
+    monkeypatch.setattr(app_main, "_default_mf_repository", fake)
+    app_main._current_mf_repository.set(fake)
 
     intent = app_main._dashboard_tool_intent("Show me top large cap funds", "mutual_fund")
     response = app_main._build_category_search_response(intent)
@@ -140,7 +141,7 @@ def test_category_search_reads_core_snapshot_and_ranks_by_3y_return(monkeypatch)
 
 
 def test_category_list_includes_unsupported_as_coming_soon(monkeypatch):
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     fake = _FakeSupabase(
         {
@@ -166,7 +167,8 @@ def test_category_list_includes_unsupported_as_coming_soon(monkeypatch):
             ]
         }
     )
-    monkeypatch.setattr(app_main, "supabase", fake)
+    monkeypatch.setattr(app_main, "_default_mf_repository", fake)
+    app_main._current_mf_repository.set(fake)
 
     payload = app_main._category_list_payload("large_cap")
 
@@ -180,8 +182,8 @@ def test_category_list_includes_unsupported_as_coming_soon(monkeypatch):
 
 
 def test_category_compare_rejects_unsupported_fund(monkeypatch):
-    from app import main as app_main
-    from fastapi import HTTPException
+    from app.services import chat_service as app_main
+    from app.exceptions import AppServiceError
 
     fake = _FakeSupabase(
         {
@@ -191,11 +193,12 @@ def test_category_compare_rejects_unsupported_fund(monkeypatch):
             ]
         }
     )
-    monkeypatch.setattr(app_main, "supabase", fake)
+    monkeypatch.setattr(app_main, "_default_mf_repository", fake)
+    app_main._current_mf_repository.set(fake)
 
     try:
         app_main._build_category_compare_payload("large_cap", ["1", "2"])
-    except HTTPException as exc:
+    except AppServiceError as exc:
         assert exc.status_code == 400
         assert "Coming Soon" in str(exc.detail)
     else:
@@ -203,7 +206,7 @@ def test_category_compare_rejects_unsupported_fund(monkeypatch):
 
 
 def test_category_compare_returns_metrics_and_overlap_for_three_funds(monkeypatch):
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     fake = _FakeSupabase(
         {
@@ -219,7 +222,8 @@ def test_category_compare_returns_metrics_and_overlap_for_three_funds(monkeypatc
             ],
         }
     )
-    monkeypatch.setattr(app_main, "supabase", fake)
+    monkeypatch.setattr(app_main, "_default_mf_repository", fake)
+    app_main._current_mf_repository.set(fake)
 
     payload = app_main._build_category_compare_payload("large_cap", ["1", "2", "3"])
 
@@ -234,9 +238,11 @@ def test_category_compare_returns_metrics_and_overlap_for_three_funds(monkeypatc
 
 
 def test_empty_category_search_returns_clear_message(monkeypatch):
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
-    monkeypatch.setattr(app_main, "supabase", _FakeSupabase({"mutual_fund_core_snapshot": []}))
+    fake = _FakeSupabase({"mutual_fund_core_snapshot": []})
+    monkeypatch.setattr(app_main, "_default_mf_repository", fake)
+    app_main._current_mf_repository.set(fake)
 
     intent = {
         "intent": "category_search",
@@ -250,7 +256,7 @@ def test_empty_category_search_returns_clear_message(monkeypatch):
 
 
 def test_compare_shorthand_maps_to_mutual_fund_canvas_intent():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     intent = app_main._deterministic_compare_intent(
         "Compare HDFC Flexi and Parag Flexi for long term",
@@ -264,8 +270,46 @@ def test_compare_shorthand_maps_to_mutual_fund_canvas_intent():
     assert intent["compare_entities"] == ["HDFC Flexi Cap", "Parag Parikh Flexi Cap"]
 
 
+def test_compare_typo_maps_to_supported_ppfas_fund():
+    from app.services import chat_service as app_main
+
+    intent = app_main._deterministic_compare_intent(
+        "Compare Paras Flexi Cap and HDFC Flexi Cap",
+        "mutual_fund",
+    )
+
+    assert intent is not None
+    assert intent["compare_entities"] == ["Parag Parikh Flexi Cap", "HDFC Flexi Cap"]
+    assert all(app_main._is_supported_mf_query_text(entity) for entity in intent["compare_entities"])
+
+
+def test_compare_ppfa_alias_maps_to_supported_ppfas_fund():
+    from app.services import chat_service as app_main
+
+    intent = app_main._deterministic_compare_intent(
+        "PPFA flexi cap vs HDFC flexi cap",
+        "mutual_fund",
+    )
+
+    assert intent is not None
+    assert intent["compare_entities"] == ["Parag Parikh Flexi Cap", "HDFC Flexi Cap"]
+    assert all(app_main._is_supported_mf_query_text(entity) for entity in intent["compare_entities"])
+
+
+def test_compare_typo_without_cap_maps_to_supported_ppfas_fund():
+    from app.services import chat_service as app_main
+
+    intent = app_main._deterministic_compare_intent(
+        "compare paras flexi and hdfc flexi",
+        "mutual_fund",
+    )
+
+    assert intent is not None
+    assert intent["compare_entities"] == ["Parag Parikh Flexi Cap", "HDFC Flexi Cap"]
+
+
 def test_compare_query_can_include_same_message_followup():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     intent = app_main._deterministic_compare_intent(
         "Compare HDFC Flexi and Parag Flexi and why do returns differ?",
@@ -277,8 +321,41 @@ def test_compare_query_can_include_same_message_followup():
     assert intent["followup_question"] == "why do returns differ?"
 
 
+def test_compare_query_with_large_cap_followup_stays_compare_intent():
+    from app.services import chat_service as app_main
+
+    query = (
+        "Compare HDFC Flexi and ICICI Large cap. What fund is better for long term "
+        "investment and which fund has higher downside protection?"
+    )
+
+    intent = app_main._deterministic_compare_intent(query, "mutual_fund")
+    dashboard_intent = app_main._dashboard_tool_intent(query, "mutual_fund")
+
+    assert dashboard_intent["intent"] == "category_search"
+    assert intent is not None
+    assert app_main._compare_intent_has_specific_entities(intent) is True
+    assert intent["compare_entities"] == ["HDFC Flexi Cap", "ICICI Prudential Large Cap"]
+    assert intent["historical_period"] == "5y"
+    assert intent["downside_focus"] is True
+    assert intent["followup_question"] == (
+        "What fund is better for long term investment and which fund has higher downside protection?"
+    )
+
+
+def test_hybrid_compare_all_category_query_routes_to_category_search():
+    from app.services import chat_service as app_main
+
+    query = "Compare all flexi cap funds"
+
+    assert app_main._deterministic_compare_intent(query, "mutual_fund") is None
+    dashboard_intent = app_main._dashboard_tool_intent(query, "mutual_fund")
+    assert dashboard_intent["intent"] == "category_search"
+    assert dashboard_intent["category_key"] == "flexi_cap"
+
+
 def test_compare_followup_reuses_previous_compare_from_history():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     history = [
         {"role": "user", "content": "Compare HDFC Flexi and Parag Flexi"},
@@ -299,7 +376,7 @@ def test_compare_followup_reuses_previous_compare_from_history():
 
 
 def test_compare_followup_with_category_words_still_reuses_history():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     history = [
         {"role": "user", "content": "Compare HDFC Flexi and Parag Flexi"},
@@ -324,7 +401,7 @@ def test_compare_followup_with_category_words_still_reuses_history():
 
 
 def test_compare_followup_prefers_structured_context_over_history():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     context = {
         "last_compare": {
@@ -354,7 +431,7 @@ def test_compare_followup_prefers_structured_context_over_history():
 
 
 def test_comparison_summary_builds_verdict_cards():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     summary = app_main._build_comparison_summary(
         {
@@ -371,7 +448,7 @@ def test_comparison_summary_builds_verdict_cards():
 
 
 def test_holdings_overlap_matches_common_isins_and_sectors():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     overlap = app_main._build_holdings_overlap(
         {
@@ -398,7 +475,7 @@ def test_holdings_overlap_matches_common_isins_and_sectors():
 
 
 def test_holdings_overlap_reports_unavailable_when_missing():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     overlap = app_main._build_holdings_overlap(
         {
@@ -411,7 +488,7 @@ def test_holdings_overlap_reports_unavailable_when_missing():
 
 
 def test_comparison_followup_answer_explains_return_gap():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     answer = app_main._comparison_followup_answer_markdown(
         {
@@ -428,7 +505,7 @@ def test_comparison_followup_answer_explains_return_gap():
 
 
 def test_comparison_followup_answer_uses_holdings_overlap():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     answer = app_main._comparison_followup_answer_markdown(
         {
@@ -451,7 +528,7 @@ def test_comparison_followup_answer_uses_holdings_overlap():
 
 
 def test_controlled_web_context_filters_to_approved_sources():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     assert app_main._is_approved_web_source("Mint")
     assert app_main._is_approved_web_source("Value Research")
@@ -459,7 +536,7 @@ def test_controlled_web_context_filters_to_approved_sources():
 
 
 def test_risk_quiz_starts_with_first_question():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     response = app_main._build_risk_quiz_response("Help me find my risk profile", [])
 
@@ -470,7 +547,7 @@ def test_risk_quiz_starts_with_first_question():
 
 
 def test_risk_quiz_completes_from_history():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     history = [
         {"role": "user", "content": "Help me find my risk profile"},
@@ -491,7 +568,7 @@ def test_risk_quiz_completes_from_history():
 
 
 def test_portfolio_review_prompts_for_holdings():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     response = app_main._build_portfolio_review_response("Review my portfolio health", [])
 
@@ -501,7 +578,7 @@ def test_portfolio_review_prompts_for_holdings():
 
 
 def test_portfolio_parser_accepts_fund_name_then_amount():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     holdings = app_main._parse_portfolio_holdings(
         "Parag Flexi Cap 10K, HDFC Flexi Cap 12K and ICICI Large Cap 10K"
@@ -515,7 +592,7 @@ def test_portfolio_parser_accepts_fund_name_then_amount():
 
 
 def test_portfolio_parser_accepts_amount_first_and_colon_formats():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     amount_first = app_main._parse_portfolio_holdings(
         "50k in Parag Parikh Flexi Cap, 20k in HDFC Mid-Cap"
@@ -531,7 +608,7 @@ def test_portfolio_parser_accepts_amount_first_and_colon_formats():
 
 
 def test_portfolio_fund_name_normalization_supports_active_amcs():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     assert app_main._normalize_portfolio_fund_name("Parag Flexi Cap") == "Parag Parikh Flexi Cap"
     assert app_main._normalize_portfolio_fund_name("HDFC Mid-Cap") == "HDFC Mid Cap Opportunities"
@@ -541,7 +618,7 @@ def test_portfolio_fund_name_normalization_supports_active_amcs():
 
 
 def test_portfolio_review_parses_matches_and_scores(monkeypatch):
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     fake = _FakeSupabase(
         {
@@ -570,7 +647,8 @@ def test_portfolio_review_parses_matches_and_scores(monkeypatch):
             "mutual_fund_nav_history": [],
         }
     )
-    monkeypatch.setattr(app_main, "supabase", fake)
+    monkeypatch.setattr(app_main, "_default_mf_repository", fake)
+    app_main._current_mf_repository.set(fake)
     history = [
         {"role": "user", "content": "Review my portfolio health"},
         {"role": "system", "content": "Paste your mutual fund holdings"},
@@ -590,7 +668,7 @@ def test_portfolio_review_parses_matches_and_scores(monkeypatch):
 
 
 def test_portfolio_review_matches_supported_amc_shorthand(monkeypatch):
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     fake = _FakeSupabase(
         {
@@ -639,7 +717,8 @@ def test_portfolio_review_matches_supported_amc_shorthand(monkeypatch):
             "mutual_fund_nav_history": [],
         }
     )
-    monkeypatch.setattr(app_main, "supabase", fake)
+    monkeypatch.setattr(app_main, "_default_mf_repository", fake)
+    app_main._current_mf_repository.set(fake)
 
     response = app_main._build_portfolio_review_response(
         "Parag Flexi Cap 10K, HDFC Mid-Cap 20K, SBI Bluechip 30K and ICICI Large Cap 10K",
@@ -659,7 +738,7 @@ def test_portfolio_review_matches_supported_amc_shorthand(monkeypatch):
 
 
 def test_portfolio_review_reports_portfolio_overlap(monkeypatch):
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     fake = _FakeSupabase(
         {
@@ -699,7 +778,8 @@ def test_portfolio_review_reports_portfolio_overlap(monkeypatch):
             ],
         }
     )
-    monkeypatch.setattr(app_main, "supabase", fake)
+    monkeypatch.setattr(app_main, "_default_mf_repository", fake)
+    app_main._current_mf_repository.set(fake)
 
     response = app_main._build_portfolio_review_response(
         "SBI Large Cap 12K, PARAG Flexi 18K, HDFC Mid Cap 10K and ICICI Small Cap 10K",
@@ -724,7 +804,7 @@ def test_portfolio_review_reports_portfolio_overlap(monkeypatch):
 
 
 def test_portfolio_followup_uses_last_portfolio_context():
-    from app import main as app_main
+    from app.services import chat_service as app_main
 
     context = {
         "last_portfolio": {

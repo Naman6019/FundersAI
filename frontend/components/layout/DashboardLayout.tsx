@@ -542,7 +542,7 @@ export default function DashboardLayout() {
         {/* Main Action Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div
-            onClick={() => handleOverviewQuery('Compare PPFAS Flexi Cap and HDFC Flexi Cap')}
+            onClick={() => handleOverviewQuery('Compare Axis Flexi Cap and HDFC Flexi Cap')}
             className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 p-6 rounded-xl hover:border-[#66a3ff]/40 transition-colors cursor-pointer group shadow-lg"
           >
             <div className="w-10 h-10 rounded-lg bg-[#66a3ff]/10 flex items-center justify-center mb-4 group-hover:bg-[#66a3ff]/20 transition-colors">

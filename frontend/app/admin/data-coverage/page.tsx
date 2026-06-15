@@ -14,8 +14,17 @@ type CoverageRow = {
   funds_with_sector_allocation: number;
   funds_with_asset_allocation: number;
   funds_with_ratios: number;
+  funds_with_benchmark: number;
+  funds_with_risk_label: number;
   parser_status: string;
   skipped_docs: number;
+  parse_review_count: number;
+  latest_factsheet_month: string | null;
+  latest_holdings_month: string | null;
+  ter_coverage: number;
+  benchmark_coverage: number;
+  risk_label_coverage: number;
+  holdings_source_note: string | null;
   freshness_status: string;
   coverage_percentage: number;
   status: string;
@@ -167,9 +176,15 @@ export default function AdminDataCoveragePage() {
                 <th className="px-2 py-2 text-right">NAV</th>
                 <th className="px-2 py-2 text-right">AUM</th>
                 <th className="px-2 py-2 text-right">TER</th>
+                <th className="px-2 py-2 text-right">TER %</th>
+                <th className="px-2 py-2 text-right">Benchmark %</th>
+                <th className="px-2 py-2 text-right">Risk Label %</th>
                 <th className="px-2 py-2 text-right">Holdings</th>
+                <th className="px-2 py-2 text-left">Factsheet Month</th>
+                <th className="px-2 py-2 text-left">Holdings Month</th>
                 <th className="px-2 py-2 text-right">Sector</th>
                 <th className="px-2 py-2 text-right">Ratios</th>
+                <th className="px-2 py-2 text-right">Review</th>
                 <th className="px-2 py-2 text-right">Coverage %</th>
                 <th className="px-2 py-2 text-left">Freshness</th>
                 <th className="px-2 py-2 text-left">Parser</th>
@@ -184,9 +199,18 @@ export default function AdminDataCoveragePage() {
                   <td className="px-2 py-2 text-right">{row.funds_with_nav}</td>
                   <td className="px-2 py-2 text-right">{row.funds_with_aum}</td>
                   <td className="px-2 py-2 text-right">{row.funds_with_ter}</td>
+                  <td className="px-2 py-2 text-right">{row.ter_coverage}%</td>
+                  <td className="px-2 py-2 text-right">{row.benchmark_coverage}%</td>
+                  <td className="px-2 py-2 text-right">{row.risk_label_coverage}%</td>
                   <td className="px-2 py-2 text-right">{row.funds_with_holdings}</td>
+                  <td className="px-2 py-2 text-[#b7c9e6]">{row.latest_factsheet_month || '-'}</td>
+                  <td className="px-2 py-2 text-[#b7c9e6]">
+                    <div>{row.latest_holdings_month || '-'}</div>
+                    {row.holdings_source_note ? <div className="mt-1 max-w-40 text-[10px] leading-4 text-[#8ea6cb]">{row.holdings_source_note}</div> : null}
+                  </td>
                   <td className="px-2 py-2 text-right">{row.funds_with_sector_allocation}</td>
                   <td className="px-2 py-2 text-right">{row.funds_with_ratios}</td>
+                  <td className="px-2 py-2 text-right">{row.parse_review_count}</td>
                   <td className="px-2 py-2 text-right">{row.coverage_percentage}%</td>
                   <td className="px-2 py-2"><span className={`rounded-full border px-2 py-0.5 ${statusBadgeClass(row.freshness_status)}`}>{row.freshness_status}</span></td>
                   <td className="px-2 py-2"><span className={`rounded-full border px-2 py-0.5 ${statusBadgeClass(row.parser_status)}`}>{row.parser_status}</span></td>

@@ -1,0 +1,36 @@
+# Documents (require LLM)
+*.md
+*.MD
+*.txt
+*.csv
+*.pdf
+*.doc
+*.docx
+*.rtf
+
+# Images (require LLM)
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.gif
+*.webp
+*.ico
+*.bmp
+
+# Other non-code assets
+*.json
+*.yaml
+*.yml
+*.log
+LICENSE
+license
+references
+
+**/*.md
+**/*.MD
+**/*.txt
+**/*.csv
+**/*.pdf
+
+**/*.html

@@ -44,6 +44,19 @@ class HoldingsParser:
         if extension == ".zip":
             return self._parse_zip_documents(file_path, context)
 
+        pdf_file_many = getattr(self.adapter, "parse_pdf_file_many", None)
+        if callable(pdf_file_many):
+            parsed_documents = pdf_file_many(file_path, context)
+            if parsed_documents:
+                return parsed_documents
+
+        pdf_text_many = getattr(self.adapter, "parse_pdf_text_many", None)
+        if callable(pdf_text_many):
+            pdf_text = self.pdf_text_parser.extract_text(file_path)
+            parsed_documents = pdf_text_many(pdf_text, context)
+            if parsed_documents:
+                return parsed_documents
+
         pdf_frames = self.pdf_table_parser.extract_tables(file_path)
         if pdf_frames:
             parsed_by_frame = self._parse_pdf_frames_individually(pdf_frames, context)
@@ -52,7 +65,8 @@ class HoldingsParser:
 
             # Backward-safe fallback for adapters that expect all frames together.
             parsed = self.adapter.parse_holdings([], pdf_frames, "", context)
-            return [parsed] if parsed.holdings else []
+            if parsed and parsed.holdings:
+                return [parsed]
 
         pdf_text = self.pdf_text_parser.extract_text(file_path)
         parsed = self.adapter.parse_holdings([], [], pdf_text, context)

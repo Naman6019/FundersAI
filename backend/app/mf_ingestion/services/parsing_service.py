@@ -19,6 +19,7 @@ from app.mf_ingestion.parsers.adapters.icici_adapter import ICICIAdapter
 from app.mf_ingestion.parsers.adapters.mirae_adapter import MiraeAdapter
 from app.mf_ingestion.parsers.adapters.ppfas_adapter import PPFASAdapter
 from app.mf_ingestion.parsers.adapters.sbi_adapter import SBIAdapter
+from app.mf_ingestion.parsers.adapters.axis_adapter import AxisAdapter
 from app.mf_ingestion.parsers.base_parser import ParseContext
 from app.mf_ingestion.parsers.factsheet_parser import FactsheetParser
 from app.mf_ingestion.parsers.holdings_parser import HoldingsParser
@@ -57,6 +58,7 @@ class ParsingService:
             "hdfc": HDFCAdapter(),
             "icici": ICICIAdapter(),
             "sbi": SBIAdapter(),
+            "axis": AxisAdapter(),
         }
 
     def parse_latest_document_for_scheme(self, amc_code: str, scheme_name: str) -> dict[str, Any] | None:
@@ -134,9 +136,9 @@ class ParsingService:
         try:
             if document_type in FACTSHEET_SUPPORTED_DOCUMENT_TYPES:
                 factsheet_result = self._parse_factsheet_document(document, resolved_path, target_scheme_name=target_scheme_name)
-                # HDFC combined factsheets also contain portfolio tables.
-                if amc_code.lower() == "hdfc":
-                    adapter = self.adapters.get("hdfc")
+                # HDFC and Axis combined factsheets also contain portfolio tables.
+                if amc_code.lower() in {"hdfc", "axis"}:
+                    adapter = self.adapters.get(amc_code.lower())
                     if adapter:
                         holdings_result = self._parse_holdings_document(document, adapter, resolved_path, target_scheme_name=target_scheme_name)
                         return _merge_parse_outcomes(factsheet_result, holdings_result)
@@ -225,7 +227,11 @@ class ParsingService:
             scheme_id = self._upsert_scheme(amc_code, scheme_match.canonical_name, scheme_match.confidence)
 
             inserted_count = 0
-            if validation.validation_status != VALIDATION_STATUS_INVALID:
+            should_insert_holdings = validation.validation_status != VALIDATION_STATUS_INVALID
+            if amc_code.lower() == "axis" and "percent_aum_out_of_band" in validation.issues:
+                should_insert_holdings = False
+
+            if should_insert_holdings:
                 rows = []
                 for row in parsed.holdings:
                     rows.append(
@@ -687,6 +693,7 @@ class ParsingService:
             scheme_code=int(scheme_code),
             family_id=family_id,
             current_report_month=as_of_date,
+            replace_current_month=any(not row.get("isin") for row in holdings),
         )
         supabase.table("mutual_fund_holdings").upsert(
             payload,
@@ -897,20 +904,32 @@ class ParsingService:
             return None
         return str(value)
 
-    def _archive_and_trim_holdings(self, *, scheme_code: int, family_id: str | None, current_report_month: str) -> None:
+    def _archive_and_trim_holdings(
+        self,
+        *,
+        scheme_code: int,
+        family_id: str | None,
+        current_report_month: str,
+        replace_current_month: bool = False,
+    ) -> None:
         query = supabase.table("mutual_fund_holdings").select("*").eq("source", AMC_DISCLOSURE_SOURCE).eq("scheme_code", scheme_code)
         if family_id:
             query = query.eq("family_id", family_id)
         rows = query.execute().data or []
-        stale_rows = [row for row in rows if str(row.get("as_of_date") or "") != current_report_month]
-        if stale_rows:
+        rows_to_archive = [
+            row
+            for row in rows
+            if str(row.get("as_of_date") or "") != current_report_month
+            or (replace_current_month and str(row.get("as_of_date") or "") == current_report_month)
+        ]
+        if rows_to_archive:
             self._archive_portfolio_rows(
                 report_month=current_report_month,
                 family_id=family_id,
                 scheme_code=str(scheme_code),
-                payload={"table": "mutual_fund_holdings", "rows": stale_rows},
+                payload={"table": "mutual_fund_holdings", "rows": rows_to_archive},
             )
-            dates = sorted({str(row.get("as_of_date")) for row in stale_rows if row.get("as_of_date")})
+            dates = sorted({str(row.get("as_of_date")) for row in rows_to_archive if row.get("as_of_date")})
             for as_of_date in dates:
                 delete_query = (
                     supabase.table("mutual_fund_holdings")
