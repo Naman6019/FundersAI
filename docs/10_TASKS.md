@@ -97,7 +97,21 @@
 - Why this matters:
   - Adds market context beyond standalone stock snapshots.
 
-### 8. Saved Reports and PDF Export
+### 8. Verteal Aesthetic Redesign Tasks
+- [x] Global Theming
+  - [x] Update `globals.css` to pure black dark mode variables.
+  - [x] Update `layout.tsx` to `bg-black` and remove serif font imports.
+- [x] Landing Page UI Overhaul
+  - [x] Swap `font-serif-display` for crisp sans-serif fonts in `PremiumLandingPage.jsx`.
+  - [x] Replace flat borders with `bg-white/[0.02] border-white/10 backdrop-blur-md` (Glassmorphism).
+  - [x] Add animated, glowing `<AmbientGlow />` background components.
+  - [x] Convert Intelligence and Proof sections into asymmetrical Bento Grids.
+  - [x] Update Hero Section text to use metallic gradients.
+- [x] Verification
+  - [x] Check hover states for inner glows.
+  - [x] Verify contrast and readability on deep black.
+
+### 9. Saved Reports and PDF Export
 - [ ] Allow users to save stock/fund analysis reports.
 - [ ] Add exportable PDF research reports.
 - [ ] Include summary, key metrics, charts, risks, news sentiment, data sources, freshness, and disclaimer.
@@ -109,7 +123,7 @@
 - Why this matters:
   - Improves research continuity and shareability.
 
-### 9. Suggested Questions and Research Templates
+### 10. Suggested Questions and Research Templates
 - [ ] Add clickable suggested questions in chat, stock pages, MF pages, and comparison pages.
 - [ ] Include prompts like: expensive now, key risks, competitor compare, benchmark compare, SIP research fit.
 - [ ] Add templates: Stock Deep Dive, Mutual Fund Deep Dive, Risk Analysis, News Impact Analysis, Long-Term Investor View.
@@ -231,3 +245,5 @@
 - YFinance rate limits often on Render deployments.
 - [ ] Portfolio overlap is partial for schemes/months not yet covered by AMC disclosure parser outputs.
 - News uses Google News RSS and can be slow.
+
+##Fund manager Past positions and performance

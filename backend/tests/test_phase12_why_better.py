@@ -353,7 +353,8 @@ def test_compare_synthesis_canvas_mode_hides_data_table(monkeypatch):
         )
     )
 
-    assert "Detailed comparison metrics are visible in the canvas panel." in response
+    assert "Canvas is open with the full metric view" in response
+    assert "### What the Data Says" in response
     assert "### Data Table" not in response
     assert "### How They Differ" not in response
 
@@ -467,3 +468,100 @@ def test_news_markdown_has_takeaway_quote_and_source_link():
     assert "Takeaway:" in formatted
     assert "Quoted headline:" in formatted
     assert "([The Economic Times](https://example.com/news-1))" in formatted
+
+
+def test_current_events_query_routes_to_news_without_llm():
+    from app.services import chat_service as main
+
+    intent = asyncio.run(
+        main.route_query(
+            "What is the status of the Iran US peace deal and how does it affect the Indian market?",
+            "auto",
+        )
+    )
+
+    assert intent["intent"] == "news"
+    assert intent["answer_mode"] == "market_current_events"
+    assert intent["ticker"] is None
+
+
+def test_current_events_chat_fetches_news_and_returns_metadata(monkeypatch):
+    from app.services import chat_service as main
+
+    calls = []
+
+    def fake_fetch_news(query, ticker, *_args, **_kwargs):
+        calls.append((query, ticker))
+        return [
+            {
+                "title": "Oil eases as Iran US talks resume",
+                "source": "The Economic Times",
+                "published": "Fri, 19 Jun 2026 08:00:00 GMT",
+                "url": "https://example.com/oil",
+            }
+        ]
+
+    async def fake_function_ollama_chat(*_args, **_kwargs):
+        return "### Current Status\nTalks are being tracked through approved headlines.\n\n### Indian Market Impact\nOil and INR are the first channels to watch."
+
+    monkeypatch.setattr(main, "fetch_news", fake_fetch_news)
+    monkeypatch.setattr(main, "function_ollama_chat", fake_function_ollama_chat)
+
+    req = main.ChatRequest(
+        query="What is the status of the Iran US peace deal and how does it affect the Indian market?",
+        asset_type="auto",
+    )
+    response = asyncio.run(main.ChatService(None).handle_chat(req))
+
+    assert calls
+    assert response["answer_mode"] == "market_current_events"
+    assert response["news_context_status"] == "limited"
+    assert response["sources"][0]["source"] == "The Economic Times"
+    assert response["reasoning_summary"]["title"] == "Thinking"
+    assert response["reasoning_summary"]["steps"][0]["label"] == "Routed"
+    assert "Indian Market Impact" in response["answer"]
+
+
+def test_current_events_no_source_returns_limited_context_without_model(monkeypatch):
+    from app.services import chat_service as main
+
+    async def fake_function_ollama_chat(*_args, **_kwargs):
+        raise AssertionError("model should not be called without current-event sources")
+
+    monkeypatch.setattr(main, "function_ollama_chat", fake_function_ollama_chat)
+
+    meta = {}
+    response = asyncio.run(
+        main.synthesis_response(
+            query="What is the status of the Iran US peace deal and how does it affect the Indian market?",
+            intent_info={"intent": "news", "ticker": None, "answer_mode": "market_current_events"},
+            quant_data={},
+            news_data=[],
+            response_meta=meta,
+        )
+    )
+
+    assert "source-coverage limitation" in response
+    assert meta["answer_mode"] == "market_current_events"
+    assert meta["news_context_status"] == "unavailable"
+    assert meta["status_flag"] == "source_limited"
+
+
+def test_current_events_no_source_response_has_limited_thinking(monkeypatch):
+    from app.services import chat_service as main
+
+    async def fake_function_ollama_chat(*_args, **_kwargs):
+        raise AssertionError("model should not be called without current-event sources")
+
+    monkeypatch.setattr(main, "fetch_news", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(main, "function_ollama_chat", fake_function_ollama_chat)
+
+    req = main.ChatRequest(
+        query="What is the status of the Iran US peace deal and how does it affect the Indian market?",
+        asset_type="auto",
+    )
+    response = asyncio.run(main.ChatService(None).handle_chat(req))
+
+    assert response["reasoning_summary"]["title"] == "Thinking"
+    assert response["reasoning_summary"]["steps"][1]["status"] == "limited"
+    assert "News source coverage was unavailable." in response["reasoning_summary"]["limits"]

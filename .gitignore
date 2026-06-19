@@ -74,6 +74,7 @@ stitch_downloads/
 *.csv
 *.pdf
 *.png
+!frontend/public/logo.png
 *.jpg
 *.jpeg
 *.svg

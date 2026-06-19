@@ -308,6 +308,19 @@ def test_compare_typo_without_cap_maps_to_supported_ppfas_fund():
     assert intent["compare_entities"] == ["Parag Parikh Flexi Cap", "HDFC Flexi Cap"]
 
 
+def test_compare_hdfc_mid_cpa_typo_maps_to_mid_cap_fund():
+    from app.services import chat_service as app_main
+
+    intent = app_main._deterministic_compare_intent(
+        "Compare Axis Large cap and Hdfc mid cpa",
+        "mutual_fund",
+    )
+
+    assert intent is not None
+    assert intent["compare_entities"] == ["Axis Large Cap", "HDFC Mid Cap"]
+    assert all(app_main._is_supported_mf_query_text(entity) for entity in intent["compare_entities"])
+
+
 def test_compare_query_can_include_same_message_followup():
     from app.services import chat_service as app_main
 

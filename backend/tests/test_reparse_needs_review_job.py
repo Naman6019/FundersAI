@@ -131,6 +131,10 @@ def test_load_retry_documents_filters_by_amc_status_age_and_limit():
     assert [doc["id"] for doc in docs] == ["old-sbi-review"]
 
 
+def test_default_retry_statuses_include_parsed_partial():
+    assert reparse_needs_review._parse_statuses(None) == ["needs_review", "failed", "parsed_partial"]
+
+
 def test_reparse_documents_returns_zero_runtime_errors_for_still_review(monkeypatch):
     fake_supabase = _FakeSupabase(
         [
@@ -149,6 +153,25 @@ def test_reparse_documents_returns_zero_runtime_errors_for_still_review(monkeypa
         "success_count": 1,
         "still_actionable_count": 1,
         "runtime_error_count": 0,
+        "skipped_duplicate_count": 0,
     }
     assert fake_supabase.tables["mf_raw_documents"][0]["parse_status"] == "needs_reparse"
     assert fake_supabase.deletes == [("mf_parse_review_queue", {"source_document_id": "doc-2"})]
+
+
+def test_reparse_documents_keeps_parsed_partial_actionable(monkeypatch):
+    fake_supabase = _FakeSupabase(
+        [
+            {"id": "doc-1", "amc_code": "HDFC", "parse_status": "parsed_partial"},
+        ]
+    )
+    monkeypatch.setattr(reparse_needs_review, "supabase", fake_supabase)
+
+    summary = reparse_needs_review.reparse_documents(
+        fake_supabase.tables["mf_raw_documents"],
+        _FakeService({"doc-1": "parsed_partial"}),
+    )
+
+    assert summary["success_count"] == 0
+    assert summary["still_actionable_count"] == 1
+    assert fake_supabase.deletes == []

@@ -10,6 +10,8 @@ import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Too
 import type { CanvasPayload, MetricValue as SharedMetricValue } from '@/types/funds';
 import type { NavPoint } from '@/types/funds';
 import { calculateAlpha, calculateBeta } from '@/lib/quantUtils';
+import { Sparkles } from 'lucide-react';
+import { MagicCard } from '@/components/ui/magic-card';
 
 type MetricValue = SharedMetricValue;
 type FundamentalMetric = Record<string, MetricValue>;
@@ -540,73 +542,47 @@ function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
   const isMf = winner?.asset_type === 'mutual_fund';
 
   return (
-    <section className="p-2 sm:p-4 mb-6">
-      <h3 className="mb-2 text-sm font-semibold tracking-wide text-[#9ec5ff]">Why this result?</h3>
-      <p className="whitespace-pre-line text-sm leading-relaxed text-[#d7e4fb]">
+    <MagicCard gradientColor="rgba(0, 255, 157, 0.15)" className="p-6 mb-6">
+      <div className="flex items-center gap-2 mb-3">
+        <Sparkles className="w-5 h-5 text-[#00FF9D]" />
+        <h3 className="text-sm font-semibold tracking-wide text-white uppercase">Smart Comparative Synthesis</h3>
+      </div>
+      <p className="whitespace-pre-line text-sm leading-relaxed text-slate-200 border-l-2 border-[#00FF9D] pl-4">
         {payload.summary || 'Deterministic comparison summary unavailable.'}
       </p>
-      <div className="mt-3 flex flex-wrap gap-2 text-xs">
-        <span className="rounded-md border border-white/20 bg-[#0e182a] px-2 py-1 text-[#d7e4fb]">
+      
+      <div className="mt-4 flex flex-wrap gap-2 text-xs">
+        <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-300">
           Based on available data: {winner?.status === 'winner' ? (winner.entity_name || winner.entity_id || 'Not available') : winner?.status || 'Not available'}
         </span>
-        <span className="rounded-md border border-white/20 bg-[#0e182a] px-2 py-1 text-[#d7e4fb]">
+        <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-300">
           Confidence: {confidence?.label || 'Not available'} ({typeof confidence?.score === 'number' ? confidence.score.toFixed(2) : 'Not available'})
         </span>
-        <span className="rounded-md border border-white/20 bg-[#0e182a] px-2 py-1 text-[#d7e4fb]">
-          Coverage: {factors.length > 0 && factors.every((f) => (f.coverage ?? 0) >= 1) ? 'Complete' : 'Incomplete'}
-        </span>
       </div>
-      {isMf && (
-        <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-[#bcd0f0]">
-          <li>Flexi-cap and multi-asset funds should not be judged only by returns.</li>
-          <li>Risk profile differs by mandate, volatility, and downside behavior.</li>
-          <li>Asset allocation changes the comparison baseline and expected outcomes.</li>
-          <li>Sharpe, volatility, drawdown, and rolling-return consistency matter.</li>
-          <li>Coverage is currently limited but still useful for validating comparison logic.</li>
-        </ul>
-      )}
-      {holdingsBlocked && (
-        <div className="mt-3 rounded-md border border-amber-300/35 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
-          Holdings-based reasoning unavailable. Holdings sync pending.
-        </div>
-      )}
+
       {factors.length > 0 && (
-        <div className="mt-3 grid gap-2 md:grid-cols-2">
+        <div className="mt-4 grid gap-2 md:grid-cols-2">
           {factors.map((factor, idx) => (
-            <div key={`${factor.factor || 'factor'}-${idx}`} className="rounded-md border border-white/15 bg-[#0e182a] p-2 text-xs">
+            <div key={`${factor.factor || 'factor'}-${idx}`} className="rounded-md border border-white/5 bg-white/[0.02] p-3 text-xs">
               <div className="font-semibold text-white">{factor.factor || 'Factor'}</div>
-              <div className="text-[#c8d8f6]">Winner: {factor.winner || 'No clear edge'}</div>
-              <div className="text-[#8ea7cd]">Coverage: {typeof factor.coverage === 'number' ? `${Math.round(factor.coverage * 100)}%` : 'Not available'}</div>
+              <div className="text-slate-400 mt-1">Winner: <span className="text-[#00FF9D]">{factor.winner || 'No clear edge'}</span></div>
             </div>
           ))}
         </div>
       )}
-      {freshnessRows.length > 0 && (
-        <div className="mt-3 grid gap-2 md:grid-cols-2">
-          {freshnessRows.map(([entity, meta]) => (
-            <div key={entity} className="rounded-md border border-white/15 bg-[#0e182a] p-2 text-xs">
-              <div className="font-semibold text-white">{entity}</div>
-              <div className="text-[#c8d8f6]">Source: {meta?.source || 'Not available'}</div>
-              <div className="text-[#c8d8f6]">Last Updated: {meta?.snapshot_last_updated || meta?.price_date || meta?.nav_date || 'Not available'}</div>
-              <div className={meta?.stale ? 'text-amber-200' : 'text-emerald-200'}>
-                {meta?.stale ? 'Stale' : 'Fresh'}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      
       {limitations.length > 0 && (
-        <div className="mt-3 rounded-md border border-amber-300/35 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
-          <div className="font-semibold">Data limits shown beside this result</div>
-          <ul className="mt-2 list-disc space-y-1 pl-4">
+        <div className="mt-4 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <div className="font-semibold">Data Limitations</div>
+          <ul className="mt-1 list-disc space-y-1 pl-4">
             {limitations.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
         </div>
       )}
-      {payload.verdict_context && <p className="mt-3 text-xs text-[#8ea7cd]">{payload.verdict_context}</p>}
-    </section>
+      {payload.verdict_context && <p className="mt-4 text-xs text-slate-400 italic">{payload.verdict_context}</p>}
+    </MagicCard>
   );
 }
 
@@ -827,8 +803,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
       };
 
       return (
-        <div className="rounded-2xl bg-[#111] border border-[#222] overflow-hidden shadow-lg">
-          <div className="px-5 py-3.5 border-b border-white/10 bg-white/[0.02]">
+        <div className="rounded-2xl bg-white/[0.02] backdrop-blur-md border border-white/5 overflow-hidden shadow-lg">
+          <div className="px-5 py-3.5 border-b border-white/10 bg-white/[0.01]">
             <h4 className="text-sm font-semibold text-white tracking-wide">{title}</h4>
           </div>
           <div className="divide-y divide-white/5">
@@ -863,11 +839,11 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
     };
 
     return (
-      <div className="comparison-detail finance-compare-wrap p-3 sm:p-6 h-full flex flex-col overflow-hidden max-w-7xl mx-auto w-full">
-        <div className="mb-5 rounded-2xl bg-[#111] border border-[#222] px-5 py-4 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="comparison-detail finance-compare-wrap p-3 sm:p-6 h-full flex flex-col overflow-hidden max-w-7xl mx-auto w-full bg-[#050505]">
+        <div className="mb-5 rounded-2xl bg-white/[0.02] backdrop-blur-md border border-white/5 px-5 py-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Stock Comparison Workspace</h2>
-            <p className="text-sm text-[#a7bad9] mt-1">
+            <p className="text-sm text-slate-400 mt-1">
               Source-neutral valuation, growth, quality, and ownership comparison
             </p>
           </div>
@@ -917,8 +893,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
           <WhyBetterPanel payload={whyBetter} />
           <RiskAnalysisPanel payload={riskAnalysis} />
           {priceRows.length > 0 && (
-            <section className="rounded-2xl bg-[#111] border border-[#222] p-4 shadow-md">
-              <h3 className="mb-3 text-sm font-semibold text-[#d7e4fb]">Price History</h3>
+            <section className="rounded-2xl bg-white/[0.02] backdrop-blur-md border border-white/5 p-4 shadow-lg">
+              <h3 className="mb-3 text-sm font-semibold text-white">Price History</h3>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={priceRows}>
@@ -1078,7 +1054,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
   );
 
   return (
-    <div className="comparison-detail finance-compare-wrap p-3 sm:p-6 h-full flex flex-col overflow-hidden w-full">
+    <div className="comparison-detail finance-compare-wrap p-3 sm:p-6 h-full flex flex-col overflow-hidden w-full bg-[#050505]">
       <div className="mb-5 px-2 py-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -1141,7 +1117,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
         </div>
       </div>
 
-      <div className={`sticky top-0 z-30 bg-[#0a0a0a]/95 pb-4 pt-4 mb-6 -mx-3 sm:-mx-6 px-3 sm:px-6`}>
+      <div className={`sticky top-0 z-30 bg-[#050505]/95 backdrop-blur-md pb-4 pt-4 mb-6 -mx-3 sm:-mx-6 px-3 sm:px-6`}>
         <div className={`grid ${colsClass} gap-4 items-center`}>
           <div className="font-semibold text-[#8ea7cd] text-sm pl-2">Compare</div>
           {ids.map((id, index) => (
@@ -1307,7 +1283,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                 <RiskAnalysisPanel payload={mfRiskAnalysis} />
 
                 <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
-                  <h3 className="mb-2 text-sm font-semibold text-[#d7e4fb]">Decision clarity</h3>
+                  <h3 className="mb-2 text-sm font-semibold text-white">Decision clarity</h3>
                   <p className="text-sm leading-relaxed text-[#c8d8f6]">
                     {comparisonSummary?.headline || 'Use this view to compare facts, tradeoffs, and coverage limits before making an independent decision.'}
                   </p>
@@ -1350,8 +1326,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                   </div>
                 </div>
 
-                <div className="rounded-3xl bg-[#111] border border-[#222] p-5">
-                  <h3 className="mb-2 text-sm font-semibold text-[#d7e4fb]">Research frame</h3>
+                <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
+                  <h3 className="mb-2 text-sm font-semibold text-white">Research frame</h3>
                   <p className="text-sm leading-relaxed text-[#c8d8f6]">
                     {activeFunds.some(f => !f!.cov?.supports_1y) ? "No strong overall winner due to limited NAV history." :
                      (mfWhyBetter?.confidence?.score ?? 0) < 0.6 ? "No strong overall winner. Both funds serve different mandates." :
@@ -1360,10 +1336,10 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                 </div>
 
                 {holdingsOverlap && (
-                  <div className="rounded-3xl bg-[#111] border border-[#222] p-5">
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <h3 className="text-sm font-semibold text-[#d7e4fb]">Holdings overlap</h3>
+                        <h3 className="text-sm font-semibold text-white">Holdings overlap</h3>
                         <p className="mt-1 text-xs text-[#8ea7cd]">
                           {holdingsOverlap.coverage_status === 'available'
                             ? `Latest holdings: ${holdingsOverlap.as_of_date || 'date unavailable'}`
@@ -1426,7 +1402,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                         </div>
                       </div>
                     ) : (
-                      <div className="mt-4 rounded-2xl bg-[#111] border border-[#222] p-4 text-sm text-[#c8d8f6]">
+                      <div className="mt-4 rounded-2xl bg-white/[0.02] border border-white/5 p-4 text-sm text-slate-300">
                         Holdings overlap will appear when both selected funds have latest holdings data.
                       </div>
                     )}
@@ -1445,7 +1421,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
 
                 <PortfolioCompositionPanel activeFunds={activeFunds} />
 
-                <div className="rounded-3xl bg-[#111] border border-[#222] p-5">
+                <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
                   {ids.length === 2 && activeFunds.length === 2 && activeFunds[0] && activeFunds[1] ? (
                     <FundComparisonChart
                       schemeCodeA={ids[0]}
@@ -1460,7 +1436,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                 </div>
 
                 {mfWhyBetter?.research_notes && mfWhyBetter.research_notes.length > 0 && (
-                  <div className="rounded-3xl bg-[#111] border border-[#222] p-5">
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
                     <h3 className="mb-4 text-base font-semibold text-white">Research notes</h3>
                     <div className="grid gap-4 sm:grid-cols-3">
                       {mfWhyBetter.research_notes.slice(0, 3).map((note: {title: string; content: string}, idx: number) => (
@@ -1475,8 +1451,8 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                   </div>
                 )}
 
-                <div className="rounded-3xl bg-[#111] border border-[#222] p-5">
-                  <p className="text-xs text-[#8ea7cd] leading-relaxed">
+                <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
+                  <p className="text-xs text-slate-400 leading-relaxed">
                     Deterministic comparison based on available local NAV, risk, cost, and freshness factors for selected funds. Not a universal investment verdict.
                   </p>
                   <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-medium text-slate-400">

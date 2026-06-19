@@ -1,14 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Send, Sparkles, Trash2 } from 'lucide-react';
 import { useCanvasStore } from '@/store/useCanvasStore';
-import { AssetType, ComparisonViewMode, ConversationContext, ExplanationMode, initialMessages, Message, ResearchDepth, useChatStore } from '@/store/useChatStore';
+import { AssetType, ComparisonViewMode, ConversationContext, ExplanationMode, Message, ResearchDepth, useChatStore } from '@/store/useChatStore';
 import { hasSupabaseBrowserEnv, supabaseBrowser } from '@/lib/supabaseBrowser';
 import Magnetic from '@/components/ui/Magnetic';
+import { motion } from 'framer-motion';
 
 const markdownComponents = {
   h1: (props: React.ComponentProps<'h1'>) => <h1 className="mb-3 mt-1 text-lg font-bold text-white" {...props} />,
@@ -40,16 +41,6 @@ const markdownComponents = {
   code: (props: React.ComponentProps<'code'>) => <code className="rounded bg-white/[0.08] px-1.5 py-0.5 text-[#cce0ff]" {...props} />,
   hr: (props: React.ComponentProps<'hr'>) => <hr className="my-3 border-white/10" {...props} />,
 };
-
-function contextFromMessageMetadata(messages: Message[]): ConversationContext {
-  for (const message of [...messages].reverse()) {
-    const context = message.metadata?.conversation_context;
-    if (context && typeof context === 'object' && ('last_compare' in context || 'last_portfolio' in context)) {
-      return context as ConversationContext;
-    }
-  }
-  return {};
-}
 
 type SuggestionTemplate = {
   id: string;
@@ -146,6 +137,7 @@ function MessageMetadataBadges({ metadata, content }: { metadata?: Record<string
   const confidence = asRecord(metadata?.confidence);
   const riskAnalysis = asRecord(metadata?.risk_analysis);
   const dataQuality = asRecord(metadata?.data_quality);
+  const reasoningSummary = asRecord(metadata?.reasoning_summary);
   const statusFlag = typeof metadata?.status_flag === 'string' ? metadata.status_flag : null;
   const modelStatus = typeof metadata?.model_status === 'string' ? metadata.model_status : null;
   const coverageStatus = typeof metadata?.coverage_status === 'string' ? metadata.coverage_status : null;
@@ -167,7 +159,7 @@ function MessageMetadataBadges({ metadata, content }: { metadata?: Record<string
     );
   }
 
-  if (!metadata || (!sourceRows.length && !confidence?.label && !riskItems.length && !missingCount && !statusFlag && !modelStatus && !coverageStatus)) {
+  if (!metadata || (!sourceRows.length && !confidence?.label && !riskItems.length && !missingCount && !statusFlag && !modelStatus && !coverageStatus && !reasoningSummary)) {
     return (
       <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-300">
         Source metadata pending
@@ -223,6 +215,60 @@ function MessageMetadataBadges({ metadata, content }: { metadata?: Record<string
   );
 }
 
+function statusClass(status: unknown): string {
+  if (status === 'ok') return 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100';
+  if (status === 'missing') return 'border-rose-300/25 bg-rose-300/10 text-rose-100';
+  return 'border-amber-300/25 bg-amber-300/10 text-amber-100';
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [];
+}
+
+function ThinkingSummary({ metadata }: { metadata?: Record<string, unknown> | null }) {
+  const summary = asRecord(metadata?.reasoning_summary);
+  if (!summary) return null;
+
+  const steps = Array.isArray(summary.steps)
+    ? summary.steps.map(asRecord).filter((step): step is Record<string, unknown> => Boolean(step)).slice(0, 4)
+    : [];
+  const dataUsed = stringList(summary.data_used).slice(0, 5);
+  const limits = stringList(summary.limits).slice(0, 4);
+
+  if (!steps.length && !dataUsed.length && !limits.length) return null;
+
+  return (
+    <details className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-200">
+      <summary className="cursor-pointer select-none text-[11px] font-semibold uppercase tracking-[0.14em] text-[#cce0ff]">
+        Thinking
+      </summary>
+      <div className="mt-2 space-y-2">
+        {steps.length ? (
+          <div className="space-y-1.5">
+            {steps.map((step, index) => (
+              <div key={`${String(step.label || 'step')}-${index}`} className="flex gap-2">
+                <span className={`mt-0.5 h-fit rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase ${statusClass(step.status)}`}>
+                  {String(step.status || 'limited')}
+                </span>
+                <p className="m-0 leading-5 text-slate-200">
+                  <span className="font-semibold text-slate-100">{String(step.label || 'Step')}:</span>{' '}
+                  {String(step.detail || '')}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {dataUsed.length ? (
+          <p className="m-0 leading-5 text-slate-300">Data used: {dataUsed.join('; ')}</p>
+        ) : null}
+        {limits.length ? (
+          <p className="m-0 leading-5 text-amber-100/85">Limits: {limits.join('; ')}</p>
+        ) : null}
+      </div>
+    </details>
+  );
+}
+
 export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: boolean }) {
   const searchParams = useSearchParams();
   const { setView, setIds, openCanvas, closeCanvas } = useCanvasStore();
@@ -241,13 +287,14 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
   const setExplanationMode = useChatStore((state) => state.setExplanationMode);
   const setComparisonViewMode = useChatStore((state) => state.setComparisonViewMode);
   const setConversationContext = useChatStore((state) => state.setConversationContext);
-  const setMessages = useChatStore((state) => state.setMessages);
   const addMessage = useChatStore((state) => state.addMessage);
   const resetMessages = useChatStore((state) => state.resetMessages);
+  const currentSessionId = useChatStore((state) => state.currentSessionId);
+  const createNewSession = useChatStore((state) => state.createNewSession);
   const pendingQuery = useChatStore((state) => state.pendingQuery);
   const setPendingQuery = useChatStore((state) => state.setPendingQuery);
-  const [isHistoryReady, setIsHistoryReady] = useState(!hasSupabaseBrowserEnv);
-  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const isHistoryReady = true;
+  const isHistoryLoading = false;
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -295,57 +342,6 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
     if (template.explanationMode) setExplanationMode(template.explanationMode);
   };
 
-  useEffect(() => {
-    let ignore = false;
-
-    const loadHistory = async () => {
-      const token = await getAccessToken();
-      if (!token) {
-        if (!ignore) setIsHistoryReady(true);
-        return;
-      }
-
-      setIsHistoryLoading(true);
-      try {
-        const res = await fetch('/api/chat/history', {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store',
-        });
-        if (!res.ok) return;
-
-        const payload = await res.json();
-        const savedMessages: Message[] = Array.isArray(payload?.messages)
-          ? payload.messages
-              .filter((message: Message) => message?.id && (message.role === 'user' || message.role === 'system') && message.content)
-              .map((message: Message) => ({
-                id: message.id,
-                role: message.role,
-                content: message.content,
-                metadata: message.metadata || null,
-              }))
-          : [];
-
-        if (!ignore && savedMessages.length > 0) {
-          setMessages([...initialMessages, ...savedMessages]);
-          setConversationContext(contextFromMessageMetadata(savedMessages));
-        }
-      } catch (error) {
-        console.error('Chat history load failed:', error);
-      } finally {
-        if (!ignore) {
-          setIsHistoryLoading(false);
-          setIsHistoryReady(true);
-        }
-      }
-    };
-
-    void loadHistory();
-
-    return () => {
-      ignore = true;
-    };
-  }, [getAccessToken, setConversationContext, setMessages]);
-
   const sendQuery = useCallback(async (
     queryText: string,
     selectedAssetType: AssetType = assetType,
@@ -378,6 +374,12 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
           role: message.role,
           content: message.content.slice(0, 4000),
         }));
+
+      let activeSessionId = currentSessionId;
+      if (!activeSessionId) {
+        activeSessionId = await createNewSession(text.substring(0, 30) + '...');
+      }
+
       const token = await getAccessToken();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
@@ -393,6 +395,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
           comparison_view_mode: selectedComparisonViewMode,
           history: requestHistory,
           conversation_context: conversationContext,
+          session_id: activeSessionId,
         }),
       });
 
@@ -454,6 +457,10 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
           status_flag: data.status_flag || null,
           resolution: data.resolution || null,
           explanation_mode: data.explanation_mode || selectedExplanationMode,
+          answer_mode: data.answer_mode || null,
+          news_context_status: data.news_context_status || null,
+          sources: data.sources || null,
+          reasoning_summary: data.reasoning_summary || null,
         },
       });
     } catch (error) {
@@ -464,7 +471,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
     } finally {
       setIsProcessing(false);
     }
-  }, [addMessage, assetType, closeCanvas, comparisonViewMode, conversationContext, explanationMode, getAccessToken, messages, openCanvas, researchDepth, setConversationContext, setIds, setInput, setIsProcessing, setView]);
+  }, [addMessage, assetType, closeCanvas, comparisonViewMode, conversationContext, currentSessionId, createNewSession, explanationMode, getAccessToken, messages, openCanvas, researchDepth, setConversationContext, setIds, setInput, setIsProcessing, setView]);
 
   useEffect(() => {
     if (!isHistoryReady) return;
@@ -509,206 +516,311 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
     }).catch((error) => console.error('Chat history clear failed:', error));
   };
 
-  return (
-    <section className={`flex h-full min-h-0 w-full flex-col ${
-      isFullScreen
-        ? 'bg-transparent border-none'
-        : 'rounded-[1.3rem] border border-white/10 bg-[#07111f] shadow-[0_18px_40px_rgba(0,0,0,0.38)]'
-    }`}>
-      <header className={`flex items-center justify-between border-white/10 px-4 py-3 sm:px-5 ${isFullScreen ? 'border-b-0' : 'border-b'}`}>
-        <div className="flex items-center gap-2.5">
-          <div className="grid h-7 w-7 place-items-center rounded-md bg-[linear-gradient(135deg,#67b2ff,#3b82f6)] text-white shadow-[0_8px_16px_rgba(59,130,246,0.35)]">
-            <Sparkles className="h-3.5 w-3.5" />
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold tracking-tight text-white">FundersAI</h2>
-            <p className="text-[11px] text-slate-400">Ask, compare, and inspect source-backed metrics</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {isHistoryLoading ? (
-            <span className="rounded-full border border-[#66a3ff]/30 bg-[#66a3ff]/10 px-2.5 py-1 text-[11px] font-semibold text-[#66a3ff]">
-              Loading
-            </span>
-          ) : null}
-          <button
-            type="button"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-300 transition hover:border-rose-300/45 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={handleClearHistory}
-            disabled={isProcessing}
-            aria-label="Clear chat history"
-            title="Clear chat history"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-          <span className="rounded-full border border-[#007acc]/30 bg-[#007acc]/12 px-2.5 py-1 text-[11px] font-semibold text-[#66a3ff]">
-            Research only
-          </span>
-        </div>
-      </header>
+  const isEmpty = messages.length <= 1 && !isProcessing;
 
-      <div ref={scrollRef} className="custom-scroll flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pt-4 sm:px-5">
-        <div ref={contentRef} className="flex flex-col gap-3 pb-8">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={
-                msg.role === 'user'
-                  ? 'ml-auto w-fit max-w-[85%] rounded-2xl border border-[#66a3ff]/30 bg-[#66a3ff]/10 px-4 py-3 text-sm text-[#f3f8ff]'
-                  : 'mr-auto max-w-[92%] rounded-2xl border border-white/10 bg-[#0f172a] px-4 py-3 text-sm leading-relaxed text-slate-100'
-              }
+  return (
+    <div className={`flex flex-col h-full min-h-0 w-full bg-transparent text-white relative overflow-hidden flex-1 ${
+      isFullScreen ? '' : ''
+    }`}>
+      {/* Animated Backgrounds */}
+      <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none">
+          <div className="absolute top-0 left-1/4 w-96 h-96 bg-violet-500/10 rounded-full mix-blend-normal filter blur-[128px] animate-pulse" />
+          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-500/10 rounded-full mix-blend-normal filter blur-[128px] animate-pulse delay-700" />
+          <div className="absolute top-1/4 right-1/3 w-64 h-64 bg-fuchsia-500/10 rounded-full mix-blend-normal filter blur-[96px] animate-pulse delay-1000" />
+      </div>
+
+      {/* Header */}
+      {!isEmpty && (
+        <header className="relative z-10 flex items-center justify-between border-b border-white/5 px-4 py-3 sm:px-5 shrink-0 bg-[#050505]/60 backdrop-blur-md">
+          <div className="flex items-center gap-2.5">
+            <div className="grid h-7 w-7 place-items-center rounded-md bg-[linear-gradient(135deg,#67b2ff,#3b82f6)] text-white shadow-[0_8px_16px_rgba(59,130,246,0.35)]">
+              <Sparkles className="h-3.5 w-3.5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold tracking-tight text-white">FundersAI</h2>
+              <p className="text-[11px] text-slate-400">Ask, compare, and inspect source-backed metrics</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {isHistoryLoading ? (
+              <span className="rounded-full border border-[#66a3ff]/30 bg-[#66a3ff]/10 px-2.5 py-1 text-[11px] font-semibold text-[#66a3ff]">
+                Loading
+              </span>
+            ) : null}
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-300 transition hover:border-rose-300/45 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={handleClearHistory}
+              disabled={isProcessing}
+              aria-label="Clear chat history"
+              title="Clear chat history"
             >
-              {msg.role === 'system' ? (
-                <div className="chat-markdown text-sm">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                    {msg.content}
-                  </ReactMarkdown>
-                  {msg.id !== '1' && (
-                    <div className="mt-3 flex flex-wrap gap-2 border-t border-white/5 pt-3">
-                      <MessageMetadataBadges metadata={msg.metadata} content={msg.content} />
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </header>
+      )}
+
+      {/* Content Area */}
+      <div className={`relative z-10 flex flex-col flex-1 w-full max-w-4xl mx-auto overflow-hidden ${isEmpty ? 'items-center justify-center px-6' : 'px-0'}`}>
+
+        {/* Empty State Centered Hero */}
+        {isEmpty && (
+          <motion.div
+            className="w-full max-w-2xl text-center space-y-3 mb-8"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+          >
+              <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2, duration: 0.5 }}
+                  className="inline-block"
+              >
+                  <h1 className="text-3xl font-medium tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white/90 to-white/40 pb-1">
+                      How can I help today?
+                  </h1>
+                  <motion.div
+                      className="h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                      initial={{ width: 0, opacity: 0 }}
+                      animate={{ width: "100%", opacity: 1 }}
+                      transition={{ delay: 0.5, duration: 0.8 }}
+                  />
+              </motion.div>
+              <motion.p
+                  className="text-sm text-white/40"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+              >
+                  Type a query to compare mutual funds or review your portfolio
+              </motion.p>
+          </motion.div>
+        )}
+
+        {/* Chat Feed */}
+        {!isEmpty && (
+          <div ref={scrollRef} className="custom-scroll flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-4 sm:px-6 w-full">
+            <div ref={contentRef} className="flex flex-col gap-5 pb-8 w-full max-w-3xl mx-auto">
+              {messages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={
+                    msg.role === 'user'
+                      ? 'ml-auto w-fit max-w-[85%] rounded-2xl border border-[#66a3ff]/20 bg-[#66a3ff]/10 px-5 py-3.5 text-sm text-[#f3f8ff] shadow-sm'
+                      : 'mr-auto max-w-[92%] rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-md px-5 py-3.5 text-sm leading-relaxed text-slate-100 shadow-sm'
+                  }
+                >
+                  {msg.role === 'system' ? (
+                    <div className="chat-markdown text-sm">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                        {msg.content}
+                      </ReactMarkdown>
+                      {msg.id !== '1' && <ThinkingSummary metadata={msg.metadata} />}
+                      {msg.id !== '1' && (
+                        <div className="mt-3 flex flex-wrap gap-2 border-t border-white/5 pt-3">
+                          <MessageMetadataBadges metadata={msg.metadata} content={msg.content} />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    msg.content
+                  )}
+                  {msg.id === '1' && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {suggestionTemplates.map((template) => (
+                        <Magnetic key={template.id}>
+                          <button
+                            className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white"
+                            onClick={() => applySuggestion(template)}
+                          >
+                            {template.label}
+                          </button>
+                        </Magnetic>
+                      ))}
                     </div>
                   )}
                 </div>
-              ) : (
-                msg.content
-              )}
-              {msg.id === '1' && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {suggestionTemplates.map((template) => (
-                    <Magnetic key={template.id}>
-                      <button
-                        className="rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white"
-                        onClick={() => applySuggestion(template)}
-                      >
-                        {template.label}
-                      </button>
-                    </Magnetic>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+              ))}
 
-          <div className="rounded-xl border border-amber-300/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-100/90">
-            This is not investment advice. Verify data independently.
-          </div>
-        </div>
-      </div>
-      <div className={`${isFullScreen ? 'bg-transparent' : 'border-t border-white/10 bg-[#07111f]'} p-3 sm:p-4 pb-8`}>
-        {isProcessing && (
-          <div className="mb-3 rounded-lg border border-[#66a3ff]/20 bg-[#66a3ff]/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#66a3ff] animate-pulse">
-            Thinking…
+              {isProcessing && (
+                <motion.div
+                    className="mr-auto w-fit backdrop-blur-md bg-white/[0.02] rounded-full px-4 py-2 shadow-sm border border-white/[0.05]"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-7 rounded-full bg-[linear-gradient(135deg,#67b2ff,#3b82f6)] flex items-center justify-center text-center shadow-[0_4px_8px_rgba(59,130,246,0.2)]">
+                            <Sparkles className="h-3 w-3 text-white" />
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-white/70">
+                            <span>Thinking</span>
+                            <TypingDots />
+                        </div>
+                    </div>
+                </motion.div>
+              )}
+
+              <div className="mt-2 mx-auto rounded-xl border border-amber-300/10 bg-amber-400/5 px-4 py-2.5 text-xs text-amber-100/70 max-w-md text-center">
+                FundersAI provides educational insights. Verify data independently.
+              </div>
+            </div>
           </div>
         )}
 
-        <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-[#0f172a] p-2 transition-all duration-300 focus-within:border-[#66a3ff]/40 focus-within:bg-[#0f172a]/80 focus-within:ring-4 focus-within:ring-[#66a3ff]/10">
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={handleInput}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder={
-              assetType === 'mutual_fund'
-                ? 'Compare Axis Flexi and HDFC Flexi for long-term consistency…'
-                : assetType === 'stock'
-                ? 'Stock research is in progress. Try fund comparison prompts.'
-                : 'Ask for Axis vs HDFC comparison, risk, cost, or NAV view…'
-            }
-            rows={1}
-            name="chat_message"
-            autoComplete="off"
-            aria-label="Type your message"
-            className="max-h-28 min-h-[2.5rem] w-full resize-none bg-transparent px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none"
-          />
-
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-2 px-1">
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Asset Type selector */}
-              <div className="inline-flex rounded-full bg-white/[0.03] p-1 border border-white/5 gap-1">
-                {[
-                  { label: 'Auto', value: 'auto' },
-                  { label: 'Stocks', value: 'stock' },
-                  { label: 'Funds', value: 'mutual_fund' },
-                ].map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide transition-all ${
-                      assetType === option.value
-                        ? 'bg-[#00509e]/20 border border-[#66a3ff]/30 text-[#66a3ff]'
-                        : 'text-slate-400 hover:text-white border border-transparent'
-                    }`}
-                    onClick={() => setAssetType(option.value as AssetType)}
-                    disabled={isProcessing}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Explanation mode selector */}
-              <div className="inline-flex rounded-full bg-white/[0.03] p-1 border border-white/5 gap-1">
-                {[
-                  { label: 'Beginner', value: 'beginner' },
-                  { label: 'Advanced', value: 'advanced' },
-                ].map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide transition-all ${
-                      explanationMode === option.value
-                        ? 'bg-emerald-400/15 border border-emerald-300/30 text-emerald-100'
-                        : 'text-slate-400 hover:text-white border border-transparent'
-                    }`}
-                    onClick={() => setExplanationMode(option.value as ExplanationMode)}
-                    disabled={isProcessing}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* View Mode selector */}
-              <div className="inline-flex rounded-full bg-white/[0.03] p-1 border border-white/5 gap-1">
-                {[
-                  { label: 'Canvas', value: 'canvas' },
-                  { label: 'Chat', value: 'chat' },
-                ].map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide transition-all ${
-                      comparisonViewMode === option.value
-                        ? 'bg-[#007acc]/20 border border-[#007acc]/30 text-[#66a3ff]'
-                        : 'text-slate-400 hover:text-white border border-transparent'
-                    }`}
-                    onClick={() => setComparisonViewMode(option.value as ComparisonViewMode)}
-                    disabled={isProcessing}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
+        {/* Input Area */}
+        <motion.div
+          layout
+          className={`shrink-0 w-full ${isEmpty ? 'max-w-2xl' : 'max-w-3xl mx-auto px-4 sm:px-6 pb-6 pt-2'}`}
+          initial={isEmpty ? { scale: 0.98 } : false}
+          animate={isEmpty ? { scale: 1 } : false}
+          transition={{ delay: 0.1 }}
+        >
+          <div className="relative backdrop-blur-2xl bg-white/[0.02] rounded-2xl border border-white/[0.05] shadow-2xl focus-within:border-[#66a3ff]/30 focus-within:bg-white/[0.03] transition-all duration-300">
+            <div className="p-3 sm:p-4">
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={handleInput}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                placeholder={
+                  assetType === 'mutual_fund'
+                    ? 'Compare Axis Flexi and HDFC Flexi...'
+                    : assetType === 'stock'
+                    ? 'Stock research is in progress. Try fund comparison prompts.'
+                    : 'Ask about mutual funds or stocks...'
+                }
+                rows={1}
+                name="chat_message"
+                autoComplete="off"
+                aria-label="Type your message"
+                className="w-full resize-none bg-transparent px-2 py-1 text-[15px] text-white/90 placeholder:text-white/30 focus:outline-none min-h-[44px] custom-scrollbar leading-relaxed"
+                style={{ overflow: "hidden" }}
+              />
             </div>
 
-            <Magnetic>
-              <button
-                onClick={handleSend}
-                aria-label="Send Message"
-                disabled={isProcessing || !input.trim()}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#66a3ff] text-slate-950 transition-all hover:bg-[#66a3ff]/80 hover:scale-105 active:scale-95 disabled:scale-100 disabled:cursor-not-allowed disabled:bg-white/5 disabled:text-slate-600"
-              >
-                <Send size={15} />
-              </button>
-            </Magnetic>
+            <div className="p-2 sm:px-4 sm:pb-3 sm:pt-0 border-t border-white/[0.05] flex items-center justify-between gap-4 mt-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {/* Asset Type selector */}
+                <div className="inline-flex rounded-lg bg-white/[0.02] p-0.5 border border-white/5">
+                  {[
+                    { label: 'Auto', value: 'auto' },
+                    { label: 'Stocks', value: 'stock' },
+                    { label: 'Funds', value: 'mutual_fund' },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-all ${
+                        assetType === option.value
+                          ? 'bg-[#66a3ff]/15 text-[#66a3ff]'
+                          : 'text-white/40 hover:text-white/80'
+                      }`}
+                      onClick={() => setAssetType(option.value as AssetType)}
+                      disabled={isProcessing}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="inline-flex rounded-lg bg-white/[0.02] p-0.5 border border-white/5">
+                  {[
+                    { label: 'Beginner', value: 'beginner' },
+                    { label: 'Advanced', value: 'advanced' },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-all ${
+                        explanationMode === option.value
+                          ? 'bg-emerald-400/15 text-emerald-200'
+                          : 'text-white/40 hover:text-white/80'
+                      }`}
+                      onClick={() => {
+                        const nextMode = option.value as ExplanationMode;
+                        setExplanationMode(nextMode);
+                        setResearchDepth(nextMode === 'advanced' ? 'deep' : 'standard');
+                      }}
+                      disabled={isProcessing}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="inline-flex rounded-lg bg-white/[0.02] p-0.5 border border-white/5">
+                  {[
+                    { label: 'Canvas', value: 'canvas' },
+                    { label: 'Chat', value: 'chat' },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-all ${
+                        comparisonViewMode === option.value
+                          ? 'bg-[#66a3ff]/15 text-[#66a3ff]'
+                          : 'text-white/40 hover:text-white/80'
+                      }`}
+                      onClick={() => setComparisonViewMode(option.value as ComparisonViewMode)}
+                      disabled={isProcessing}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSend}
+                  disabled={isProcessing || !input.trim()}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
+                    input.trim()
+                      ? 'bg-white text-[#0A0A0B] shadow-[0_4px_12px_rgba(255,255,255,0.15)] hover:scale-[1.02] active:scale-[0.98]'
+                      : 'bg-white/[0.05] text-white/30 cursor-not-allowed'
+                  }`}
+                >
+                  <Send className="w-4 h-4" />
+                  <span className="hidden sm:inline">{isProcessing ? 'Wait' : 'Send'}</span>
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        </motion.div>
       </div>
-    </section>
+    </div>
   );
+}
+
+function TypingDots() {
+    return (
+        <div className="flex items-center ml-1">
+            {[1, 2, 3].map((dot) => (
+                <motion.div
+                    key={dot}
+                    className="w-1.5 h-1.5 bg-white/90 rounded-full mx-0.5"
+                    initial={{ opacity: 0.3 }}
+                    animate={{
+                        opacity: [0.3, 0.9, 0.3],
+                        scale: [0.85, 1.1, 0.85]
+                    }}
+                    transition={{
+                        duration: 1.2,
+                        repeat: Infinity,
+                        delay: dot * 0.15,
+                        ease: "easeInOut",
+                    }}
+                    style={{
+                        boxShadow: "0 0 4px rgba(255, 255, 255, 0.3)"
+                    }}
+                />
+            ))}
+        </div>
+    );
 }

@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import { AppSidebar } from '@/components/layout/AppSidebar';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   Bolt,
@@ -53,7 +55,7 @@ import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import type { CategoryComparePayload, CategoryFundRow, SearchResultItem } from '@/types/funds';
 import type { UserTier } from '@/lib/billing/tiers';
 
-type DataHealthItem = {
+export type DataHealthItem = {
   label: string;
   status: string;
   note?: string | null;
@@ -98,7 +100,7 @@ function CanvasPlaceholder() {
       <div>
         <h2 className="text-3xl font-semibold tracking-tight text-white">Comparison canvas</h2>
         <p className="mt-1 text-sm text-slate-300">Ask FundersAI to compare funds and open side-by-side metrics from stored data.</p>
-        <span className="mt-4 inline-flex rounded-full border border-[#66a3ff]/30 bg-[#66a3ff]/10 px-3 py-1 text-xs text-[#66a3ff]">
+        <span className="mt-4 inline-flex rounded-full border border-[#00FF9D]/30 bg-[#00FF9D]/10 px-3 py-1 text-xs text-[#00FF9D]">
           Waiting for data-backed comparison
         </span>
       </div>
@@ -120,143 +122,12 @@ function CanvasPlaceholder() {
 
       <div className="mt-5 flex-1 rounded-[1.2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(0,80,158,0.15),rgba(15,23,42,0.25))] p-4">
         <svg viewBox="0 0 700 260" className="h-full w-full" aria-hidden>
-          <path d="M30 210 C110 180, 150 192, 220 160 C270 138, 300 150, 360 122 C410 98, 450 112, 510 86 C560 66, 620 82, 670 72" fill="none" stroke="#66a3ff" strokeWidth="4" strokeLinecap="round"/>
-          <path d="M30 224 C105 202, 150 198, 220 188 C280 178, 310 166, 360 172 C412 178, 455 144, 510 150 C560 156, 620 126, 670 132" fill="none" stroke="#007acc" strokeWidth="3" strokeLinecap="round"/>
+          <path d="M30 210 C110 180, 150 192, 220 160 C270 138, 300 150, 360 122 C410 98, 450 112, 510 86 C560 66, 620 82, 670 72" fill="none" stroke="#00FF9D" strokeWidth="4" strokeLinecap="round"/>
+          <path d="M30 224 C105 202, 150 198, 220 188 C280 178, 310 166, 360 172 C412 178, 455 144, 510 150 C560 156, 620 126, 670 132" fill="none" stroke="#00cc7d" strokeWidth="3" strokeLinecap="round"/>
         </svg>
       </div>
       <div className="mt-5 rounded-xl border border-amber-300/20 bg-amber-300/10 p-4 text-xs leading-5 text-amber-100">
         FundersAI shows &quot;Not available&quot; for missing fields, flags partial or stale data, and keeps AI output as explanation only.
-      </div>
-    </div>
-  );
-}
-
-function SidebarContent({
-  activeTab,
-  setActiveTab,
-  dataHealth,
-  healthCheckedAt,
-  currentTier,
-}: {
-  activeTab: 'overview' | 'research' | 'ai_research';
-  setActiveTab: (tab: 'overview' | 'research' | 'ai_research') => void;
-  dataHealth: DataHealthItem[];
-  healthCheckedAt: string | null;
-  currentTier: UserTier;
-}) {
-  const assetType = useChatStore((state) => state.assetType);
-  const setAssetType = useChatStore((state) => state.setAssetType);
-
-  const navItems = [
-    {
-      id: 'overview',
-      label: 'Overview',
-      icon: LayoutDashboard,
-      isActive: activeTab === 'overview',
-      onClick: () => setActiveTab('overview'),
-    },
-    {
-      id: 'mutual_funds',
-      label: 'Mutual Funds',
-      icon: Landmark,
-      isActive: activeTab === 'research' && assetType === 'mutual_fund',
-      onClick: () => {
-        setActiveTab('research');
-        setAssetType('mutual_fund');
-      },
-    },
-    {
-      id: 'stocks',
-      label: 'Stocks',
-      icon: LineChart,
-      isActive: activeTab === 'research' && assetType === 'stock',
-      onClick: () => {
-        setActiveTab('research');
-        setAssetType('stock');
-      },
-    },
-    {
-      id: 'ai_research',
-      label: 'AI Research',
-      icon: Brain,
-      isActive: activeTab === 'ai_research',
-      onClick: () => {
-        setActiveTab('ai_research');
-        setAssetType('auto');
-      },
-    },
-  ];
-
-  return (
-    <div className="flex h-full flex-col rounded-[1.2rem] border border-white/10 bg-[#07111f] p-5 shadow-[0_20px_42px_rgba(0,0,0,0.4)]">
-      <div>
-        <div className="flex flex-col gap-1 items-start">
-          <img src="/FUNDERSAI-vertical.png" alt="FundersAI Logo" className="h-8 w-auto object-contain origin-left" />
-          <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400 pl-1">Research terminal</p>
-        </div>
-      </div>
-
-      {/* Navigation menu */}
-      <div className="mt-6 flex-1 space-y-1">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.id}
-              onClick={item.onClick}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${
-                item.isActive
-                  ? 'text-white font-bold border-r-2 border-[#66a3ff] bg-white/5'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <Icon className="h-[18px] w-[18px] shrink-0" />
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
-
-        {/* Dynamic Pipelines & Data Health Info sections, merged neatly under the navigation */}
-        <div className="mt-6 border-t border-white/5 pt-4">
-          <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400 font-semibold">Pipelines</p>
-          <div className="mt-2.5 space-y-2">
-            <div className="flex items-center gap-2 text-xs text-slate-300">
-              <ChartSpline className="h-3.5 w-3.5 text-[#66a3ff] shrink-0" />
-              <span>Quant + comparison</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-300">
-              <Database className="h-3.5 w-3.5 text-[#007acc] shrink-0" />
-              <span>Normalized stored data</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-300">
-              <ShieldCheck className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-              <span>Research guardrails</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 border-t border-white/5 pt-4">
-          <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400 font-semibold">Data health</p>
-          <div className="mt-2.5 space-y-2">
-            {dataHealth.slice(0, 3).map(({ label, status, note }) => (
-              <div key={label} className="rounded-lg border border-white/5 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)]/70 px-2.5 py-1.5 text-[11px]">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400" title={note || ''}>{label}</span>
-                  <span className={`font-semibold ${statusColorClass(status)}`} title={note || ''}>{status}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-          {healthCheckedAt && (
-            <p className="mt-2 text-[9px] text-slate-500">
-              Checked {new Date(healthCheckedAt).toLocaleString('en-IN', { hour12: false })}
-            </p>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-auto pt-4 border-t border-white/10 space-y-3">
-        <UserProfileDropdown currentTier={currentTier} />
       </div>
     </div>
   );
@@ -278,35 +149,22 @@ function FineGrid() {
 export default function DashboardLayout() {
   const searchParams = useSearchParams();
   const { activeView, selectedIds, auxiliaryData, isCanvasOpen, toggleCanvas, comparisonMode } = useCanvasStore();
-  const [isMobile, setIsMobile] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [canvasWidth, setCanvasWidth] = useState(640);
-  const [isResizingCanvas, setIsResizingCanvas] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'research'>('research');
   const [dataHealth, setDataHealth] = useState<DataHealthItem[]>(DEFAULT_DATA_HEALTH);
   const [healthCheckedAt, setHealthCheckedAt] = useState<string | null>(null);
-  
-  const initialTab = (searchParams?.get('tab') as 'overview' | 'research' | 'ai_research') || 'overview';
-  const [activeTab, setActiveTab] = useState<'overview' | 'research' | 'ai_research'>(initialTab);
+  const [currentTier, setCurrentTier] = useState<UserTier>('free');
+  const [isResizingCanvas, setIsResizingCanvas] = useState(false);
+  const [canvasWidth, setCanvasWidth] = useState(500);
   const [compareFund1, setCompareFund1] = useState<SearchResultItem | null>(null);
   const [compareFund2, setCompareFund2] = useState<SearchResultItem | null>(null);
-  const [assistantInput, setAssistantInput] = useState('');
-  const [currentTier, setCurrentTier] = useState<UserTier>('free');
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [categoryFunds, setCategoryFunds] = useState<CategoryFundRow[]>([]);
-  const [categoryLoading, setCategoryLoading] = useState(false);
-  const [categoryError, setCategoryError] = useState<string | null>(null);
-  const [selectedCategoryCodes, setSelectedCategoryCodes] = useState<string[]>([]);
-  const [categoryCompare, setCategoryCompare] = useState<CategoryComparePayload | null>(null);
-  const [categoryCompareLoading, setCategoryCompareLoading] = useState(false);
-  const [categoryCompareError, setCategoryCompareError] = useState<string | null>(null);
+
   const setPendingQuery = useChatStore((state) => state.setPendingQuery);
   const navStatus = dataHealth.find((item) => item.label === 'MF NAV')?.status || 'Checking';
+
   const getCanvasBounds = () => {
-    const sidebarWidth = !isSidebarCollapsed ? SIDEBAR_WIDTH : 0;
     const shellPadding = MAIN_PADDING * 2;
     const splitChrome = (PANEL_GAP * 2) + RESIZE_HANDLE_WIDTH;
-    const availableWidth = window.innerWidth - sidebarWidth - shellPadding;
+    const availableWidth = window.innerWidth - shellPadding;
     const max = Math.max(availableWidth - CHAT_MIN_WIDTH - splitChrome, CANVAS_MIN_WIDTH);
     return { min: CANVAS_MIN_WIDTH, max };
   };
@@ -317,7 +175,6 @@ export default function DashboardLayout() {
 
   useEffect(() => {
     let ignore = false;
-
     const loadBilling = async () => {
       const { data } = await supabaseBrowser.auth.getSession();
       const token = data.session?.access_token;
@@ -333,16 +190,12 @@ export default function DashboardLayout() {
         setCurrentTier(tier);
       }
     };
-
     void loadBilling();
-    return () => {
-      ignore = true;
-    };
+    return () => { ignore = true; };
   }, []);
 
   useEffect(() => {
     let ignore = false;
-
     const loadDataHealth = async () => {
       try {
         const res = await fetch('/api/data-health', { cache: 'no-store' });
@@ -352,7 +205,6 @@ export default function DashboardLayout() {
           }
           return;
         }
-
         const payload = await res.json();
         const incoming = Array.isArray(payload?.metrics) ? payload.metrics : [];
         const byLabel = new Map(incoming.map((item: DataHealthItem) => [item.label, item]));
@@ -371,28 +223,12 @@ export default function DashboardLayout() {
         }
       }
     };
-
     loadDataHealth();
     const timer = window.setInterval(loadDataHealth, 120000);
-
     return () => {
       ignore = true;
       window.clearInterval(timer);
     };
-  }, []);
-
-  useEffect(() => {
-    const query = window.matchMedia('(max-width: 1100px)');
-    const update = () => {
-      const nextIsMobile = query.matches;
-      setIsMobile(nextIsMobile);
-      if (nextIsMobile) {
-        setIsMobileSidebarOpen(false);
-      }
-    };
-    update();
-    query.addEventListener('change', update);
-    return () => query.removeEventListener('change', update);
   }, []);
 
   useEffect(() => {
@@ -402,28 +238,22 @@ export default function DashboardLayout() {
         return Math.min(Math.max(prev, min), max);
       });
     };
-
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
   useEffect(() => {
     if (!isResizingCanvas) return;
-
     const onMouseMove = (event: MouseEvent) => {
       const { min, max } = getCanvasBounds();
       const next = window.innerWidth - MAIN_PADDING - event.clientX;
       setCanvasWidth(Math.min(Math.max(next, min), max));
     };
-
     const onMouseUp = () => setIsResizingCanvas(false);
-
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
-
     return () => {
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
@@ -458,6 +288,15 @@ export default function DashboardLayout() {
     .replace(/\s*-\s*Direct Plan\s*-\s*Growth/gi, '')
     .replace(/\s*Direct\s*Growth/gi, '')
     .trim();
+
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [categoryFunds, setCategoryFunds] = useState<CategoryFundRow[]>([]);
+  const [categoryLoading, setCategoryLoading] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [selectedCategoryCodes, setSelectedCategoryCodes] = useState<string[]>([]);
+  const [categoryCompare, setCategoryCompare] = useState<CategoryComparePayload | null>(null);
+  const [categoryCompareLoading, setCategoryCompareLoading] = useState(false);
+  const [categoryCompareError, setCategoryCompareError] = useState<string | null>(null);
 
   const loadCategoryFunds = async (categoryKey: string) => {
     setActiveCategory(categoryKey);
@@ -519,7 +358,6 @@ export default function DashboardLayout() {
     openCanvas();
     setActiveTab('research');
 
-    // Still send a background query for context if needed, but it won't block UI
     const names = categoryCompare.selected_funds.map((fund) => compactFundName(fund.scheme_name));
     const last = names.pop();
     const joined = names.length ? `${names.join(', ')} and ${last}` : last;
@@ -529,7 +367,6 @@ export default function DashboardLayout() {
   const renderOverview = () => {
     return (
       <div className="space-y-6">
-        {/* Page Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
             <h2 className="font-serif text-3xl font-semibold text-white tracking-tight">What can I safely do here?</h2>
@@ -539,14 +376,13 @@ export default function DashboardLayout() {
           </div>
         </div>
 
-        {/* Main Action Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div
             onClick={() => handleOverviewQuery('Compare Axis Flexi Cap and HDFC Flexi Cap')}
-            className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 p-6 rounded-xl hover:border-[#66a3ff]/40 transition-colors cursor-pointer group shadow-lg"
+            className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 p-6 rounded-xl hover:border-[#00FF9D]/40 transition-colors cursor-pointer group shadow-lg"
           >
-            <div className="w-10 h-10 rounded-lg bg-[#66a3ff]/10 flex items-center justify-center mb-4 group-hover:bg-[#66a3ff]/20 transition-colors">
-              <ArrowLeftRight className="text-[#66a3ff] h-5 w-5" />
+            <div className="w-10 h-10 rounded-lg bg-[#00FF9D]/10 flex items-center justify-center mb-4 group-hover:bg-[#00FF9D]/20 transition-colors">
+              <ArrowLeftRight className="text-[#00FF9D] h-5 w-5" />
             </div>
             <h3 className="font-serif text-lg font-medium text-white mb-2">Compare Funds</h3>
             <p className="text-sm text-slate-400 leading-relaxed">
@@ -557,11 +393,11 @@ export default function DashboardLayout() {
 
           <div
             onClick={() => setActiveTab('research')}
-            className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-[#66a3ff]/20 p-6 rounded-xl hover:border-[#66a3ff]/60 transition-colors cursor-pointer group relative overflow-hidden shadow-lg"
+            className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-[#00FF9D]/20 p-6 rounded-xl hover:border-[#00FF9D]/60 transition-colors cursor-pointer group relative overflow-hidden shadow-lg"
           >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-[#66a3ff]/5 rounded-full blur-3xl pointer-events-none"></div>
-            <div className="w-10 h-10 rounded-lg bg-[#66a3ff]/20 flex items-center justify-center mb-4 group-hover:bg-[#66a3ff]/30 transition-colors relative z-10">
-              <Brain className="text-[#66a3ff] h-5 w-5" />
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[#00FF9D]/5 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="w-10 h-10 rounded-lg bg-[#00FF9D]/20 flex items-center justify-center mb-4 group-hover:bg-[#00FF9D]/30 transition-colors relative z-10">
+              <Brain className="text-[#00FF9D] h-5 w-5" />
             </div>
             <h3 className="font-serif text-lg font-medium text-white mb-2 relative z-10">Ask Research Question</h3>
             <p className="text-sm text-slate-400 leading-relaxed relative z-10">
@@ -572,10 +408,10 @@ export default function DashboardLayout() {
 
           <div
             onClick={() => handleOverviewQuery('Review my portfolio diversification')}
-            className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 p-6 rounded-xl hover:border-[#66a3ff]/40 transition-colors cursor-pointer group shadow-lg"
+            className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 p-6 rounded-xl hover:border-[#00FF9D]/40 transition-colors cursor-pointer group shadow-lg"
           >
-            <div className="w-10 h-10 rounded-lg bg-[#66a3ff]/10 flex items-center justify-center mb-4 group-hover:bg-[#66a3ff]/20 transition-colors">
-              <Wallet className="text-[#66a3ff] h-5 w-5" />
+            <div className="w-10 h-10 rounded-lg bg-[#00FF9D]/10 flex items-center justify-center mb-4 group-hover:bg-[#00FF9D]/20 transition-colors">
+              <Wallet className="text-[#00FF9D] h-5 w-5" />
             </div>
             <h3 className="font-serif text-lg font-medium text-white mb-2">Portfolio Review</h3>
             <p className="text-sm text-slate-400 leading-relaxed">
@@ -585,11 +421,11 @@ export default function DashboardLayout() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-[#66a3ff]/20 bg-[#66a3ff]/[0.055] p-5">
+        <div className="rounded-xl border border-[#00FF9D]/20 bg-[#00FF9D]/[0.055] p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <Database className="h-4 w-4 text-[#66a3ff]" />
+                <Database className="h-4 w-4 text-[#00FF9D]" />
                 <h3 className="text-sm font-semibold text-white">How FundersAI keeps answers grounded</h3>
               </div>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
@@ -611,7 +447,7 @@ export default function DashboardLayout() {
               return (
                 <div key={item.label} className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
                   <div className="flex items-center gap-2 text-xs font-semibold text-white">
-                    <Icon className="h-3.5 w-3.5 text-[#66a3ff]" />
+                    <Icon className="h-3.5 w-3.5 text-[#00FF9D]" />
                     {item.label}
                   </div>
                   <p className="mt-2 text-[11px] leading-5 text-slate-400">{item.note}</p>
@@ -621,15 +457,11 @@ export default function DashboardLayout() {
           </div>
         </div>
 
-        {/* Two Column Layout for the rest */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          {/* Left Column (Wider) */}
           <div className="xl:col-span-2 space-y-6">
-            
-            {/* Quick Compare Widget */}
             <div className="relative z-30 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 rounded-xl p-6 shadow-lg">
               <div className="flex items-center gap-2 mb-4">
-                <ArrowLeftRight className="text-[#66a3ff] h-5 w-5" />
+                <ArrowLeftRight className="text-[#00FF9D] h-5 w-5" />
                 <h3 className="font-serif text-xl font-medium text-white">Quick Compare</h3>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 items-center">
@@ -668,14 +500,13 @@ export default function DashboardLayout() {
                     }
                   }}
                   disabled={!compareFund1 || !compareFund2}
-                  className="w-full sm:w-auto px-6 py-2.5 bg-[#66a3ff] text-slate-950 rounded-lg font-medium text-sm hover:bg-[#66a3ff]/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-4 sm:mt-0"
+                  className="w-full sm:w-auto px-6 py-2.5 bg-[#00FF9D] text-slate-950 rounded-lg font-medium text-sm hover:bg-[#00FF9D]/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-4 sm:mt-0"
                 >
                   Compare Now
                 </button>
               </div>
             </div>
 
-            {/* Market / Category Snapshot */}
             <div className="relative z-0">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
@@ -683,7 +514,7 @@ export default function DashboardLayout() {
                   <p className="mt-1 text-xs text-slate-400">List funds by bucket, select 2-3 supported funds, then compare metrics and portfolios.</p>
                 </div>
                 {selectedCategoryCodes.length > 0 && (
-                  <span className="rounded-full border border-[#66a3ff]/25 bg-[#66a3ff]/10 px-3 py-1 text-xs text-[#cce0ff]">
+                  <span className="rounded-full border border-[#00FF9D]/25 bg-[#00FF9D]/10 px-3 py-1 text-xs text-[#b3ffdb]">
                     {selectedCategoryCodes.length}/3 selected
                   </span>
                 )}
@@ -698,11 +529,11 @@ export default function DashboardLayout() {
                       onClick={() => loadCategoryFunds(cat.key)}
                       className={`text-left bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border rounded-lg p-4 transition-all cursor-pointer group shadow-sm ${
                         activeCategory === cat.key
-                          ? 'border-[#66a3ff]/60 bg-[#66a3ff]/10 shadow-[0_4px_16px_rgba(102,163,255,0.15)]'
-                          : 'border-white/10 hover:border-[#66a3ff]/30 hover:bg-[#1a2333]'
+                          ? 'border-[#00FF9D]/60 bg-[#00FF9D]/10 shadow-[0_4px_16px_rgba(102,163,255,0.15)]'
+                          : 'border-white/10 hover:border-[#00FF9D]/30 hover:bg-[#1a2333]'
                       }`}
                     >
-                      <CatIcon className="text-[#66a3ff] h-4 w-4 mb-2 opacity-80 group-hover:opacity-100 transition-opacity" />
+                      <CatIcon className="text-[#00FF9D] h-4 w-4 mb-2 opacity-80 group-hover:opacity-100 transition-opacity" />
                       <div className="text-sm font-medium text-white mb-0.5">{cat.title}</div>
                       <div className="text-[11px] text-slate-400">{cat.desc}</div>
                     </button>
@@ -724,7 +555,7 @@ export default function DashboardLayout() {
                         type="button"
                         onClick={compareSelectedCategoryFunds}
                         disabled={selectedCategoryCodes.length < 2 || selectedCategoryCodes.length > 3 || categoryCompareLoading}
-                        className="rounded-lg bg-[#66a3ff] px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-[#66a3ff]/85 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-lg bg-[#00FF9D] px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-[#00FF9D]/85 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {categoryCompareLoading ? 'Comparing...' : 'Compare Selected'}
                       </button>
@@ -735,7 +566,7 @@ export default function DashboardLayout() {
                           setCategoryCompare(null);
                         }}
                         disabled={selectedCategoryCodes.length === 0}
-                        className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-[#66a3ff]/40 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-[#00FF9D]/40 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Clear
                       </button>
@@ -776,7 +607,7 @@ export default function DashboardLayout() {
                                     disabled={disabled || (!selected && selectedCategoryCodes.length >= 3)}
                                     className={`grid h-6 w-6 place-items-center rounded-md border transition ${
                                       selected
-                                        ? 'border-[#66a3ff] bg-[#66a3ff] text-slate-950'
+                                        ? 'border-[#00FF9D] bg-[#00FF9D] text-slate-950'
                                         : 'border-white/15 bg-white/[0.03] text-slate-300 disabled:cursor-not-allowed'
                                     }`}
                                     aria-label={`Select ${fund.scheme_name}`}
@@ -813,7 +644,7 @@ export default function DashboardLayout() {
 
                   {categoryCompareError && <div className="mt-3 rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-100">{categoryCompareError}</div>}
                   {categoryCompare && (
-                    <div className="mt-4 rounded-xl border border-[#66a3ff]/20 bg-[#66a3ff]/[0.06] p-4">
+                    <div className="mt-4 rounded-xl border border-[#00FF9D]/20 bg-[#00FF9D]/[0.06] p-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <h4 className="text-sm font-semibold text-white">{categoryCompare.category} comparison ready</h4>
@@ -823,7 +654,7 @@ export default function DashboardLayout() {
                           <button
                             type="button"
                             onClick={useCategoryCompareInChat}
-                            className="rounded-lg bg-[#66a3ff] px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-[#66a3ff]/85"
+                            className="rounded-lg bg-[#00FF9D] px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-[#00FF9D]/85"
                           >
                             Open Canvas Comparison
                           </button>
@@ -843,34 +674,29 @@ export default function DashboardLayout() {
                 </div>
               )}
             </div>
-            
           </div>
 
-          {/* Right Column (Narrower) */}
           <div className="space-y-6">
-            
-            {/* Beginner Tools Placeholder */}
             <div className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 rounded-xl p-6 shadow-lg">
               <h3 className="font-serif text-lg font-medium text-white mb-4">Investor Tools</h3>
               <div className="space-y-2">
-                <Link href="/dashboard/sip-calculator" className="w-full text-left p-3 rounded-lg border border-white/10 bg-black/20 hover:bg-[#66a3ff]/10 hover:border-[#66a3ff]/30 transition-all cursor-pointer flex items-center justify-between group">
+                <Link href="/dashboard/sip-calculator" className="w-full text-left p-3 rounded-lg border border-white/10 bg-black/20 hover:bg-[#00FF9D]/10 hover:border-[#00FF9D]/30 transition-all cursor-pointer flex items-center justify-between group">
                   <div>
                     <div className="text-[13px] font-medium text-white">SIP Calculator</div>
                     <div className="text-[11px] text-slate-400 mt-0.5">Estimate SIP outcomes</div>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-[#66a3ff] transition-colors" />
+                  <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-[#00FF9D] transition-colors" />
                 </Link>
-                <Link href="/dashboard/risk-quiz" className="w-full text-left p-3 rounded-lg border border-white/10 bg-black/20 hover:bg-[#66a3ff]/10 hover:border-[#66a3ff]/30 transition-all cursor-pointer flex items-center justify-between group">
+                <Link href="/dashboard/risk-quiz" className="w-full text-left p-3 rounded-lg border border-white/10 bg-black/20 hover:bg-[#00FF9D]/10 hover:border-[#00FF9D]/30 transition-all cursor-pointer flex items-center justify-between group">
                   <div>
                     <div className="text-[13px] font-medium text-white">Risk Quiz</div>
                     <div className="text-[11px] text-slate-400 mt-0.5">Understand risk profile</div>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-[#66a3ff] transition-colors" />
+                  <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-[#00FF9D] transition-colors" />
                 </Link>
               </div>
             </div>
 
-            {/* Recent Activity */}
             <div className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 rounded-xl p-6 shadow-lg">
               <h3 className="font-serif text-lg font-medium text-white mb-4">Recent Activity</h3>
               <div className="space-y-3">
@@ -879,7 +705,7 @@ export default function DashboardLayout() {
                     <History className="h-3.5 w-3.5 text-slate-400" />
                   </div>
                   <div>
-                    <div className="text-[12px] font-medium text-white group-hover:text-[#66a3ff] transition-colors">Parag Parikh Flexi Cap</div>
+                    <div className="text-[12px] font-medium text-white group-hover:text-[#00FF9D] transition-colors">Parag Parikh Flexi Cap</div>
                     <div className="text-[10px] text-slate-500">Viewed 2h ago</div>
                   </div>
                 </div>
@@ -888,17 +714,15 @@ export default function DashboardLayout() {
                     <History className="h-3.5 w-3.5 text-slate-400" />
                   </div>
                   <div>
-                    <div className="text-[12px] font-medium text-white group-hover:text-[#66a3ff] transition-colors">Nifty 50 vs Next 50</div>
+                    <div className="text-[12px] font-medium text-white group-hover:text-[#00FF9D] transition-colors">Nifty 50 vs Next 50</div>
                     <div className="text-[10px] text-slate-500">Compared yesterday</div>
                   </div>
                 </div>
               </div>
             </div>
-
           </div>
         </div>
 
-        {/* Disclaimer Footer */}
         <div className="pt-6 border-t border-white/10 text-center">
            <p className="text-[11px] text-slate-500 leading-relaxed max-w-4xl mx-auto">
              <span className="font-semibold text-slate-400">Disclaimer:</span> FundersAI provides educational insights and data-driven research. Mutual fund investments are subject to market risks, read all scheme related documents carefully. The information provided here is not financial advice. Past performance is not indicative of future returns.
@@ -932,202 +756,130 @@ export default function DashboardLayout() {
   };
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-[#050A15] text-[#e8f0ff] flex flex-col selection:bg-[#66a3ff]/30 selection:text-white">
-      <FineGrid />
-      <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_0%,rgba(102,163,255,0.06),transparent_65%)]" />
+    <SidebarProvider>
+      <AppSidebar 
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        dataHealth={dataHealth}
+        healthCheckedAt={healthCheckedAt}
+        currentTier={currentTier}
+      />
+      <div className="relative h-screen w-full overflow-hidden bg-[#050505] text-[#e8f0ff] flex flex-col selection:bg-[#00FF9D]/30 selection:text-white flex-1">
+        <FineGrid />
+        <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_0%,rgba(102,163,255,0.06),transparent_65%)]" />
 
-      <div className="relative z-10 flex flex-col flex-1 h-full w-full overflow-hidden border border-white/10 bg-transparent shadow-[0_28px_80px_rgba(0,0,0,0.5)]">
-        <header className="h-16 shrink-0 flex items-center justify-between border-b border-white/10 px-4 sm:px-6">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/15 bg-white/[0.04] text-slate-200 transition hover:border-[#66a3ff]/50 hover:text-white"
-              onClick={() => {
-                if (isMobile) {
-                  setIsMobileSidebarOpen((value) => !value);
-                  return;
-                }
-                setIsSidebarCollapsed((value) => !value);
-              }}
-              aria-label={isMobile ? 'Toggle sidebar menu' : 'Collapse sidebar'}
-            >
-              {isMobile || isSidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-            </button>
-            <div className="hidden sm:flex items-center gap-3">
-              <Image src="/FUNDERSAI-nobackground.png" alt="FundersAI Logo" width={28} height={28} className="object-contain" />
-              <div>
-                <p className="text-sm font-semibold text-white">FundersAI Research</p>
-                <p className="text-xs text-slate-400">Centered chat + optional canvas</p>
+        <div className="relative z-10 flex flex-col flex-1 h-full w-full overflow-hidden bg-transparent">
+          <header className="h-16 shrink-0 flex items-center justify-between border-b border-white/10 px-4 sm:px-6">
+            <div className="flex items-center gap-2">
+              <SidebarTrigger className="text-slate-200 hover:text-white transition" />
+              <div className="hidden sm:flex items-center gap-3">
+                <Image src="/FUNDERSAI-nobackground.png" alt="FundersAI Logo" width={28} height={28} className="object-contain" />
+                <div>
+                  <p className="text-sm font-semibold text-white">FundersAI Research</p>
+                  <p className="text-xs text-slate-400">Centered chat + optional canvas</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="hidden relative max-w-xs w-full sm:block">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 h-3.5 w-3.5" />
-            <input
-              type="text"
-              placeholder="Search tickers, funds, research..."
-              className="w-full bg-black/20 border border-white/10 rounded-lg py-1.5 pl-8 pr-3 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#66a3ff]/50 focus:border-[#66a3ff]/50 transition-all"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const target = e.target as HTMLInputElement;
-                  const query = target.value.trim();
-                  if (query) {
-                    setPendingQuery(query);
-                    setActiveTab('research');
-                    target.value = '';
+            <div className="hidden relative max-w-xs w-full sm:block">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 h-3.5 w-3.5" />
+              <input
+                type="text"
+                placeholder="Search tickers, funds, research..."
+                className="w-full bg-black/20 border border-white/10 rounded-lg py-1.5 pl-8 pr-3 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00FF9D]/50 focus:border-[#00FF9D]/50 transition-all"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const target = e.target as HTMLInputElement;
+                    const query = target.value.trim();
+                    if (query) {
+                      setPendingQuery(query);
+                      setActiveTab('research');
+                      target.value = '';
+                    }
                   }
-                }
-              }}
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            {activeTab === 'research' && (
-              <button
-                type="button"
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
-                  isCanvasOpen
-                    ? 'border-[#66a3ff]/35 bg-[#66a3ff]/12 text-[#cce0ff]'
-                    : 'border-white/15 bg-white/[0.04] text-slate-200 hover:border-[#66a3ff]/45 hover:text-white'
-                }`}
-                onClick={toggleCanvas}
-              >
-                {isCanvasOpen ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
-                Canvas
-              </button>
-            )}
-            <div className="hidden items-center gap-1.5 text-xs font-medium text-emerald-300 sm:flex">
-              <Clock3 className="h-3.5 w-3.5" />
-              <span className={statusColorClass(navStatus)}>MF NAV {navStatus}</span>
-            </div>
-          </div>
-        </header>
-
-        <div className="flex overflow-hidden relative z-10 w-full" style={{ height: `calc(100vh - ${HEADER_HEIGHT}px)` }}>
-          {!isMobile && !isSidebarCollapsed && (
-            <aside className="w-[276px] shrink-0 border-r border-white/10 bg-[#0b1526]/72 p-4 min-h-0 h-full overflow-y-auto">
-              <SidebarContent
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-                dataHealth={dataHealth}
-                healthCheckedAt={healthCheckedAt}
-                currentTier={currentTier}
+                }}
               />
-            </aside>
-          )}
+            </div>
 
-          <div className="flex-1 min-w-0 h-full p-6 overflow-hidden">
-            {activeTab === 'overview' ? (
-              <div className="h-full w-full overflow-y-auto custom-scrollbar pr-1">
-                {renderOverview()}
+            <div className="flex items-center gap-2">
+              {activeTab === 'research' && (
+                <button
+                  type="button"
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
+                    isCanvasOpen
+                      ? 'border-[#00FF9D]/35 bg-[#00FF9D]/12 text-[#b3ffdb]'
+                      : 'border-white/15 bg-white/[0.04] text-slate-200 hover:border-[#00FF9D]/45 hover:text-white'
+                  }`}
+                  onClick={toggleCanvas}
+                >
+                  {isCanvasOpen ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
+                  Canvas
+                </button>
+              )}
+              <div className="hidden items-center gap-1.5 text-xs font-medium text-emerald-300 sm:flex">
+                <Clock3 className="h-3.5 w-3.5" />
+                <span className={statusColorClass(navStatus)}>MF NAV {navStatus}</span>
               </div>
-            ) : activeTab === 'ai_research' ? (
-              <div className="flex h-full items-center justify-center w-full relative">
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(102,163,255,0.05),transparent_50%)] pointer-events-none" />
-                <div className="h-full w-full max-w-[800px] min-h-0 pt-4 pb-0 relative z-10">
-                  <ChatWindow isFullScreen={true} />
+            </div>
+          </header>
+
+          <div className="flex overflow-hidden relative z-10 w-full" style={{ height: `calc(100vh - ${HEADER_HEIGHT}px)` }}>
+            <div className="flex-1 min-w-0 h-full p-6 overflow-hidden">
+              {activeTab === 'overview' ? (
+                <div className="h-full w-full overflow-y-auto custom-scrollbar pr-1">
+                  {renderOverview()}
                 </div>
-              </div>
-            ) : isMobile ? (
-              <div className="flex h-full flex-col gap-4 overflow-y-auto">
-                <div className="h-[450px] shrink-0 min-h-0">
-                  <ChatWindow />
-                </div>
-                {isCanvasOpen && (
-                  <section className="flex-1 min-h-[420px] rounded-[1.2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.85),rgba(2,6,23,0.9))] p-4">
-                    {renderCanvasContent()}
-                  </section>
-                )}
-              </div>
-            ) : isCanvasOpen ? (
-              <div className="flex h-full gap-4 relative">
-                {comparisonMode === 'llm' && (
+              ) : isCanvasOpen ? (
+                <div className="flex h-full gap-4 relative">
                   <aside className="flex-1 h-full min-h-0" style={{ minWidth: CHAT_MIN_WIDTH }}>
                     <ChatWindow />
                   </aside>
-                )}
-                
-                {/* Drag handle styled like Gemini's canvas handle */}
-                {comparisonMode === 'llm' && (
+                  
                   <div
                     onMouseDown={() => setIsResizingCanvas(true)}
                     className="cursor-col-resize self-stretch transition-all duration-150 relative z-20 flex-shrink-0 flex items-center justify-center group"
                     style={{ width: RESIZE_HANDLE_WIDTH }}
                     title="Drag to resize canvas"
                   >
-                    {/* Central divider line */}
                     <div className={`w-[2px] h-full transition-all duration-150 ${
-                      isResizingCanvas ? 'bg-[#66a3ff]' : 'bg-[#222] group-hover:bg-[#66a3ff]/50'
+                      isResizingCanvas ? 'bg-[#00FF9D]' : 'bg-[#222] group-hover:bg-[#00FF9D]/50'
                     }`} />
 
-                    {/* Glassmorphic Capsule Handle - removed blur */}
                     <div className={`absolute w-5 h-12 rounded-full border bg-[#111] flex flex-col gap-1 items-center justify-center shadow-lg transition-all duration-200 pointer-events-none ${
                       isResizingCanvas
-                        ? 'border-[#66a3ff]/80 scale-105 opacity-100 shadow-[0_0_12px_rgba(102,163,255,0.3)]'
-                        : 'border-[#222] opacity-40 group-hover:opacity-100 group-hover:border-[#66a3ff]/40'
+                        ? 'border-[#00FF9D]/80 scale-105 opacity-100 shadow-[0_0_12px_rgba(102,163,255,0.3)]'
+                        : 'border-[#222] opacity-40 group-hover:opacity-100 group-hover:border-[#00FF9D]/40'
                     }`}>
-                      {/* Vertical grip dots */}
                       <div className="flex flex-col gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-[#66a3ff]" />
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-[#66a3ff]" />
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-[#66a3ff]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-[#00FF9D]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-[#00FF9D]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-[#00FF9D]" />
                       </div>
                     </div>
                   </div>
-                )}
 
-                <main 
-                  style={{ width: comparisonMode === 'llm' ? `${canvasWidth}px` : '100%' }}
-                  className="min-h-0 min-w-0 h-full overflow-y-auto rounded-[1.2rem] border border-[#222] bg-[#0a0a0a] p-6 flex-shrink-0 relative"
-                >
-                  <button
-                    onClick={() => { useCanvasStore.getState().closeCanvas(); }}
-                    className="absolute top-4 right-4 p-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors z-50"
+                  <main 
+                    style={{ width: `${canvasWidth}px` }}
+                    className="min-h-0 min-w-0 h-full overflow-y-auto rounded-[1.2rem] border border-[#222] bg-[#0a0a0a] p-6 flex-shrink-0 relative"
                   >
-                    <X className="w-5 h-5" />
-                  </button>
-                  {renderCanvasContent()}
-                </main>
-              </div>
-            ) : (
-              <div className="flex h-full items-center justify-center">
-                <div className="h-full w-full max-w-[680px] min-h-0">
-                  <ChatWindow />
+                    <button
+                      onClick={() => { useCanvasStore.getState().closeCanvas(); }}
+                      className="absolute top-4 right-4 p-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors z-50"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                    {renderCanvasContent()}
+                  </main>
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="flex h-full w-full">
+                    <ChatWindow />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
-
-      {isMobile && isMobileSidebarOpen && (
-        <div
-          role="button"
-          tabIndex={-1}
-          aria-label="Close sidebar menu"
-          className="fixed inset-0 z-50 bg-black/50 lg:hidden cursor-default"
-          onClick={() => setIsMobileSidebarOpen(false)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              setIsMobileSidebarOpen(false);
-            }
-          }}
-        >
-          <aside
-            className="h-full w-[290px] border-r border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,8,24,0.96))] p-4"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <SidebarContent
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              dataHealth={dataHealth}
-              healthCheckedAt={healthCheckedAt}
-              currentTier={currentTier}
-            />
-          </aside>
-        </div>
-      )}
-    </div>
+    </SidebarProvider>
   );
 }

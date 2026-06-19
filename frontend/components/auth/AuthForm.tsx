@@ -80,83 +80,126 @@ const AUTH_NEXT_STORAGE_KEY = 'fundersai_auth_next';
   };
 
   return (
-    <main className="auth-page">
-      <section className="auth-panel">
-        <Link href="/" className="auth-brand" style={{ gap: '0px' }}>
-          <img src="/logo-vertical.png" alt="FundersAI Logo" className="h-12 w-auto object-contain" />
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#050505] relative overflow-hidden w-full font-sans">
+      {/* Background ambient glow matching Verteal aesthetic */}
+      <div className="pointer-events-none absolute left-1/2 top-1/2 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#00FF9D]/10 blur-[120px]" />
+
+      {/* Centered glass card */}
+      <div className="relative z-10 w-full max-w-[400px] rounded-3xl border border-white/10 bg-white/[0.02] backdrop-blur-xl shadow-2xl p-8 flex flex-col items-center">
+        {/* Logo */}
+        <Link href="/" className="flex items-center justify-center w-14 h-14 rounded-2xl bg-white/5 border border-white/10 mb-6 shadow-lg p-2 hover:bg-white/10 transition">
+          <img src="/FUNDERSAI-nobackground.png" alt="FundersAI Logo" className="w-full h-full object-contain" />
         </Link>
-
-        <div className="auth-heading">
-          <h1>{mode === 'signin' ? 'Sign in' : 'Create account'}</h1>
-          <p>Use your account to access the research workspace.</p>
-        </div>
-
-        <button
-          type="button"
-          className="auth-google-button"
-          onClick={handleGoogleAuth}
-          disabled={isAuthLoading}
-        >
-          <span>G</span>
-          {isGoogleLoading
-            ? 'Connecting...'
-            : mode === 'signin'
-              ? 'Sign in with Google'
-              : 'Sign up with Google'}
-        </button>
-
-        <div className="auth-divider">
-          <span>or</span>
-        </div>
-
-        <form className="auth-form" onSubmit={handleSubmit} suppressHydrationWarning>
-          <label suppressHydrationWarning>
-            Email
+        
+        {/* Title */}
+        <h2 className="text-2xl font-bold text-white mb-6 text-center tracking-tight">
+          {mode === 'signin' ? 'Sign in to FundersAI' : 'Create an account'}
+        </h2>
+        
+        {/* Form */}
+        <form className="flex flex-col w-full gap-5" onSubmit={handleSubmit} suppressHydrationWarning>
+          <div className="w-full flex flex-col gap-4">
             <input
-              suppressHydrationWarning
+              placeholder="Email"
               type="email"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
               name="email"
-              spellCheck={false}
+              className="w-full px-5 py-3 rounded-xl bg-white/5 border border-white/5 text-white placeholder-white/30 text-sm focus:outline-none focus:ring-1 focus:ring-[#00FF9D]/50 focus:border-[#00FF9D]/50 transition"
             />
-          </label>
-
-          <label suppressHydrationWarning>
-            Password
             <input
-              suppressHydrationWarning
+              placeholder="Password"
               type="password"
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
               autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
               name="password"
+              className="w-full px-5 py-3 rounded-xl bg-white/5 border border-white/5 text-white placeholder-white/30 text-sm focus:outline-none focus:ring-1 focus:ring-[#00FF9D]/50 focus:border-[#00FF9D]/50 transition"
             />
-          </label>
+            {message && (
+              <div className={`text-sm text-left px-1 mt-1 ${message.includes('error') || message.includes('not configured') ? 'text-red-400' : 'text-[#00FF9D]'}`}>
+                {message}
+              </div>
+            )}
+          </div>
+          
+          <hr className="border-white/10 my-1" />
+          
+          <div className="flex flex-col gap-3 w-full">
+            <button
+              type="submit"
+              disabled={isAuthLoading}
+              className="w-full bg-[#00FF9D] text-black font-semibold px-5 py-3 rounded-xl shadow hover:bg-[#00FF9D]/90 hover:shadow-[0_0_20px_rgba(0,255,157,0.2)] transition text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? 'Please wait...' : mode === 'signin' ? 'Sign in' : 'Sign up'}
+            </button>
+            
+            {/* Google Sign In */}
+            <button
+              type="button"
+              onClick={handleGoogleAuth}
+              disabled={isAuthLoading}
+              className="w-full flex items-center justify-center gap-3 bg-white/5 border border-white/10 rounded-xl px-5 py-3 font-medium text-white shadow hover:bg-white/10 transition text-sm disabled:opacity-50"
+            >
+              <img
+                src="https://www.svgrepo.com/show/475656/google-color.svg"
+                alt="Google"
+                className="w-5 h-5"
+              />
+              {isGoogleLoading ? 'Connecting...' : `Continue with Google`}
+            </button>
 
-          {message && <p className="auth-message">{message}</p>}
-
-          <button type="submit" disabled={isAuthLoading}>
-            {isLoading ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Sign up'}
-          </button>
+            <div className="w-full text-center mt-3">
+              <span className="text-sm text-white/50">
+                {mode === 'signin' ? "Don't have an account? " : "Already have an account? "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode(mode === 'signin' ? 'signup' : 'signin');
+                    setMessage('');
+                  }}
+                  className="font-medium text-white/80 hover:text-white underline decoration-white/30 underline-offset-4 transition-colors"
+                >
+                  {mode === 'signin' ? "Sign up, it's free!" : "Sign in instead"}
+                </button>
+              </span>
+            </div>
+          </div>
         </form>
-
-        <button
-          type="button"
-          className="auth-switch"
-          onClick={() => {
-            setMode(mode === 'signin' ? 'signup' : 'signin');
-            setMessage('');
-          }}
-          disabled={isAuthLoading}
-        >
-          {mode === 'signin' ? 'Need an account? Sign up' : 'Already have an account? Sign in'}
-        </button>
-      </section>
-    </main>
+      </div>
+      
+      {/* User count and avatars */}
+      <div className="relative z-10 mt-12 flex flex-col items-center text-center">
+        <p className="text-white/50 text-sm mb-3">
+          Join <span className="font-medium text-white/90">thousands</span> of quantitative researchers.
+        </p>
+        <div className="flex -space-x-3">
+          <img
+            src="https://randomuser.me/api/portraits/men/32.jpg"
+            alt="user"
+            className="w-10 h-10 rounded-full border-2 border-[#050505] object-cover opacity-80"
+          />
+          <img
+            src="https://randomuser.me/api/portraits/women/44.jpg"
+            alt="user"
+            className="w-10 h-10 rounded-full border-2 border-[#050505] object-cover opacity-80"
+          />
+          <img
+            src="https://randomuser.me/api/portraits/men/54.jpg"
+            alt="user"
+            className="w-10 h-10 rounded-full border-2 border-[#050505] object-cover opacity-80"
+          />
+          <img
+            src="https://randomuser.me/api/portraits/women/68.jpg"
+            alt="user"
+            className="w-10 h-10 rounded-full border-2 border-[#050505] object-cover opacity-80"
+          />
+        </div>
+      </div>
+    </div>
   );
 }

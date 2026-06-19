@@ -30,7 +30,7 @@ def check_coverage():
     res_sectors = supabase.table('mutual_fund_sectors').select('family_id').not_.is_('family_id', 'null').execute()
     sector_families = {r['family_id'] for r in res_sectors.data if r.get('family_id')}
     
-    amcs = ['HDFC', 'ICICI', 'SBI', 'PPFAS', 'Parag Parikh', 'Mirae']
+    amcs = ['Axis', 'HDFC', 'ICICI', 'SBI', 'PPFAS', 'Parag Parikh', 'Mirae']
     stats = {amc: {'total': 0, 'aum': 0, 'er': 0, 'fm': 0, 'bench': 0, 'holdings': 0, 'sectors': 0} for amc in amcs}
     
     print("Fetching snapshot rows...")

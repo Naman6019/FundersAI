@@ -184,38 +184,48 @@ async def function_ollama_chat(
     timeout_seconds: float = 60.0,
 ):
     openrouter_key = os.environ.get("OPENROUTER_API_KEY") or OPENROUTER_API_KEY
-    if not openrouter_key or openrouter_key == "OPENROUTER_API_KEY_PLACEHOLDER":
-        logger.error("Missing OPENROUTER_API_KEY in environment.")
+    groq_key = os.environ.get("GROQ_API_KEY")
+
+    api_key = openrouter_key if openrouter_key and openrouter_key != "OPENROUTER_API_KEY_PLACEHOLDER" else groq_key
+
+    if not api_key:
+        logger.error("Missing OPENROUTER_API_KEY and GROQ_API_KEY in environment.")
         return None
-        
+
+    is_groq = api_key == groq_key
+    base_url = "https://api.groq.com/openai/v1/chat/completions" if is_groq else OPENROUTER_BASE_URL
+    model = "llama-3.3-70b-versatile" if is_groq else OPENROUTER_MODEL
+
     req_messages = [dict(m) for m in messages]
     payload = {
-        "model": OPENROUTER_MODEL,
+        "model": model,
     }
-    
+
     if format == "json":
         payload["response_format"] = {"type": "json_object"}
         if "json" not in req_messages[0]["content"].lower():
             req_messages[0]["content"] += "\nReturn output strictly in JSON format."
-            
+
     payload["messages"] = req_messages
-            
+
     headers = {
-        "Authorization": f"Bearer {openrouter_key}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
-        "HTTP-Referer": OPENROUTER_SITE_URL,
-        "X-Title": OPENROUTER_APP_NAME,
     }
+
+    if not is_groq:
+        headers["HTTP-Referer"] = OPENROUTER_SITE_URL
+        headers["X-Title"] = OPENROUTER_APP_NAME
 
     async with httpx.AsyncClient(timeout=timeout_seconds) as client:
         try:
-            response = await client.post(OPENROUTER_BASE_URL, headers=headers, json=payload)
+            response = await client.post(base_url, headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()
             _append_openrouter_usage(usage_collector, data)
             return data["choices"][0]["message"]["content"]
         except Exception as e:
-            logger.error(f"OpenRouter API Error: {e}")
+            logger.error(f"LLM API Error: {e}")
             return None
 
 async def route_query(query: str, asset_type: str = "auto", usage_collector: list[dict[str, Any]] | None = None) -> dict:
@@ -235,6 +245,16 @@ async def route_query(query: str, asset_type: str = "auto", usage_collector: lis
         ]
         return any(token in q for token in triggers)
 
+    if _is_market_current_events_query(query):
+        return {
+            "intent": "news",
+            "ticker": None,
+            "historical_period": "1mo",
+            "sentiment_flag": False,
+            "downside_focus": _has_downside_focus(query),
+            "answer_mode": "market_current_events",
+        }
+
     asset_instruction = ""
     if asset_type == "mutual_fund":
         asset_instruction = """
@@ -252,7 +272,7 @@ Do not classify stock requests as mutual fund requests.
 If the query asks to filter, list, or screen stocks (e.g., "Find stocks with PE < 20", "Show me oversold stocks", "Mid cap stocks with RSI < 30"), set intent to 'screen' and populate 'screen_filters'.
 If the query asks to compare two or more mutual funds or stocks, set intent to 'compare' and populate 'compare_entities' with a list of their names (e.g. ["HDFC Flexi Cap", "Parag Parikh Flexi Cap"]).
 Otherwise, use 'quant', 'news', 'both', or 'general'.
-Extract primary NSE/BSE ticker explicitly (e.g. RELIANCE.NS, ^NSEI for Nifty). 
+Extract primary NSE/BSE ticker explicitly (e.g. RELIANCE.NS, ^NSEI for Nifty).
 
 Check for historical period mentions (e.g., '1m', '1y') and sentiment mentions.
 
@@ -260,7 +280,7 @@ Output strict JSON only format:
 {
   "intent": "quant|news|both|general|screen|compare",
   "ticker": "TICKER.NS",
-  "historical_period": "1mo|1y|5y|max", 
+  "historical_period": "1mo|1y|5y|max",
   "sentiment_flag": true/false,
   "downside_focus": true/false,
   "screen_filters": {
@@ -278,7 +298,7 @@ Default downside_focus to false unless user explicitly asks downside/fall/crash/
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": query}
     ]
-    
+
     result = await function_ollama_chat(messages, format="json", usage_collector=usage_collector)
     if result:
         try:
@@ -299,7 +319,7 @@ def calculate_beta(stock_returns, nifty_returns):
         # Handle cases with constant returns or zero variance
         if np.var(nifty_returns) < 1e-9:
             return 1.0
-        
+
         cov_matrix = np.cov(stock_returns, nifty_returns)
         if cov_matrix.shape == (2, 2):
             cov = cov_matrix[0][1]
@@ -320,40 +340,40 @@ def calculate_alpha_beta_v2(stock_hist, nifty_hist):
 
     stock_hist = _normalize_price_df_index(stock_hist)
     nifty_hist = _normalize_price_df_index(nifty_hist)
-    
+
     # Pre-process: ensure we have numeric data and no NaNs in Close
     s_close = stock_hist['Close'].ffill().dropna()
     n_close = nifty_hist['Close'].ffill().dropna()
-    
+
     stock_returns = s_close.pct_change().dropna()
     nifty_returns = n_close.pct_change().dropna()
-    
+
     # Align returns on the same dates
     aligned = stock_returns.to_frame('stock').join(nifty_returns.to_frame('nifty'), how='inner')
-    
+
     if len(aligned) < 10: return {"alpha": "N/A", "beta": "N/A"}
-    
+
     beta = calculate_beta(aligned['stock'].tolist(), aligned['nifty'].tolist())
-    
+
     # Annualized Returns for Alpha
     # Using the first and last valid prices to get total return
     stock_ret_total = (s_close.iloc[-1] - s_close.iloc[0]) / s_close.iloc[0]
     nifty_ret_total = (n_close.iloc[-1] - n_close.iloc[0]) / n_close.iloc[0]
-    
+
     days = (s_close.index[-1] - s_close.index[0]).days
     if days <= 0: return {"alpha": "N/A", "beta": beta}
-    
+
     # Annualize the returns
     years = days / 365.25
     stock_ann_ret = (1 + stock_ret_total) ** (1 / years) - 1
     nifty_ann_ret = (1 + nifty_ret_total) ** (1 / years) - 1
-    
+
     # Risk-free rate (approx 6.5% for India)
     rf = 0.065
-    
+
     # Alpha = R_p - [R_f + Beta * (R_m - R_f)]
     alpha = (stock_ann_ret - (rf + beta * (nifty_ann_ret - rf))) * 100
-    
+
     return {"alpha": float(round(alpha, 2)), "beta": float(beta) if beta != "N/A" else "N/A", "period_years": float(round(years, 1))}
 
 def _normalize_price_df_index(df: pd.DataFrame) -> pd.DataFrame:
@@ -387,10 +407,10 @@ def fetch_source_neutral_fundamentals(symbol: str) -> dict | None:
         data = comp.get(clean_symbol)
         if not data or not data.get("profile"):
             return None
-            
+
         profile = asdict(data["profile"]) if data["profile"] else {}
         ratios = asdict(data["ratios"]) if data["ratios"] else {}
-        
+
         # Model must not be asked to invent missing financial values
         # Explicit nulls are passed where data is missing
         fundamentals = {
@@ -438,7 +458,7 @@ async def resolve_mf_ticker(entity_name: str) -> str:
 def fetch_quant_data(ticker: str, period: str = "1mo") -> dict:
     """Agent 2: Quant Data"""
     if not ticker: return {"error": "No ticker identified"}
-    
+
     clean_ticker = ticker.replace('.NS', '').replace('.BO', '').replace('^NSEI', 'NIFTY')
 
     cache_key = f"{clean_ticker}:{period}"
@@ -613,7 +633,7 @@ def fetch_quant_data(ticker: str, period: str = "1mo") -> dict:
     try:
         if period not in ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"]:
             period = "1y"
-            
+
         stock = yf.Ticker(ticker)
         nifty = yf.Ticker("^NSEI")
         try:
@@ -621,25 +641,25 @@ def fetch_quant_data(ticker: str, period: str = "1mo") -> dict:
         except Exception as e:
             logger.warning(f"YFinance info lookup failed for {ticker}: {e}")
             info = {}
-        
+
         hist = stock.history(period=period)
         # Use 3y for stable risk metrics calculation
         calc_period = "3y"
         hist_calc = stock.history(period=calc_period)
         nifty_hist = nifty.history(period=calc_period)
-        
+
         if hist.empty:
             local_data = get_local_quant_snapshot(clean_ticker)
             if local_data:
                 return cache_and_return(local_data)
             return {"error": "No recent data found"}
-            
+
         current_price = info.get('currentPrice', hist['Close'].iloc[-1])
         prev_close = info.get('previousClose', hist['Close'].iloc[-2] if len(hist) > 1 else current_price)
         change_pct = ((current_price - prev_close) / prev_close) * 100
-        
+
         risk_metrics = calculate_alpha_beta_v2(hist_calc, nifty_hist)
-        
+
         data = {
             "timestamp": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S IST"),
             "price": round(current_price, 2),
@@ -668,17 +688,17 @@ def fetch_quant_data(ticker: str, period: str = "1mo") -> dict:
 async def analyze_news_sentiment(news_items: list, usage_collector: list[dict[str, Any]] | None = None) -> list:
     """Agent: Sentiment Analyzer"""
     if not news_items: return []
-    
-    system_prompt = """You are a financial sentiment analyzer. Given a list of news headlines, assign a sentiment of POSITIVE, NEGATIVE, or NEUTRAL to each. 
+
+    system_prompt = """You are a financial sentiment analyzer. Given a list of news headlines, assign a sentiment of POSITIVE, NEGATIVE, or NEUTRAL to each.
 Return exactly in this JSON format:
 {"evaluations": [{"title": "Headline", "sentiment": "POSITIVE"}]}"""
-    
+
     titles = "\\n".join([n['title'] for n in news_items])
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": titles}
     ]
-    
+
     result = await function_ollama_chat(messages, format="json", usage_collector=usage_collector)
     if result:
         try:
@@ -689,7 +709,7 @@ Return exactly in this JSON format:
             return news_items
         except Exception as e:
             logger.error(f"Sentiment parsing error: {e}")
-    
+
     for n in news_items: n["sentiment"] = "NEUTRAL"
     return news_items
 
@@ -704,8 +724,9 @@ def fetch_news(query: str, ticker: str, sentiment_flag: bool = False) -> list:
         return []
     search_term = ticker.replace('.NS', '').replace('.BO', '') if ticker else query
     encoded_term = search_term.replace(' ', '+')
-    rss_url = f"https://news.google.com/rss/search?q={encoded_term}+India+mutual+fund+stock+market&hl=en-IN&gl=IN&ceid=IN:en"
-    
+    suffix = "India+stock+market+crude+oil+rupee+inflation" if _is_market_current_events_query(search_term) else "India+mutual+fund+stock+market"
+    rss_url = f"https://news.google.com/rss/search?q={encoded_term}+{suffix}&hl=en-IN&gl=IN&ceid=IN:en"
+
     try:
         feed = feedparser.parse(rss_url)
         news_items = []
@@ -728,7 +749,7 @@ def fetch_news(query: str, ticker: str, sentiment_flag: bool = False) -> list:
         logger.error(f"News Error: {e}")
         return []
 
-DISCLAIMER = "> ⚠️ **Disclaimer:** *FundersAI is an informational research tool only. Nothing presented here constitutes investment advice, a solicitation, or a recommendation to buy or sell any security. Always conduct your own research and consult a SEBI-registered Investment Advisor before making any financial decision.*"
+DISCLAIMER = ""
 DATA_UNAVAILABLE = "Data Unavailable"
 
 ADVICE_REPLACEMENTS = {
@@ -1078,6 +1099,25 @@ def _looks_like_axis_alias(value: str) -> bool:
     return "axs" in word_set and _has_mf_category_hint(words)
 
 
+def _is_market_current_events_query(value: str) -> bool:
+    low = str(value or "").lower()
+    if not low:
+        return False
+    current_markers = (
+        "status", "latest", "today", "current", "news", "deal", "peace",
+        "war", "conflict", "sanction", "geopolitic", "election", "fed",
+        "rbi", "inflation", "crude", "oil", "brent", "wti", "rupee",
+        "inr", "usd", "dollar", "rate cut", "rate hike", "hormuz",
+        "iran", "israel", "us ", "usa", "trade", "tariff",
+    )
+    market_markers = (
+        "indian market", "india market", "nifty", "sensex", "stock market",
+        "market", "stocks", "sectors", "economy", "affect", "impact",
+        "rupee", "inflation", "oil", "crude",
+    )
+    return any(token in low for token in current_markers) and any(token in low for token in market_markers)
+
+
 def _is_supported_mf_query_text(value: str) -> bool:
     low = str(value or "").lower()
     if _looks_like_ppfas_alias(low):
@@ -1092,6 +1132,8 @@ def _normalize_compare_entity_name(entity: str) -> str:
     text = re.sub(r"\b(?:and\s+)?(?:why|how|what|which|explain|show|tell)\b.*$", "", text, flags=re.IGNORECASE).strip()
     text = text.strip(" .?;:")
     low = text.lower()
+    low = re.sub(r"\b(mid|large|small|flexi)cap\b", r"\1 cap", low)
+    low = re.sub(r"\bcpa\b", "cap", low)
     if _looks_like_ppfas_alias(low):
         if "flexi" in low or "flexi cap" in low:
             return "Parag Parikh Flexi Cap"
@@ -1102,6 +1144,10 @@ def _normalize_compare_entity_name(entity: str) -> str:
             return "Axis Large Cap"
     if "hdfc" in low and "flexi" in low:
         return "HDFC Flexi Cap"
+    if "hdfc" in low and "mid" in low:
+        return "HDFC Mid Cap"
+    if "hdfc" in low and "large" in low:
+        return "HDFC Large Cap"
     if "icici" in low and "multi" in low:
         return "ICICI Multi Asset"
     if "icici" in low and "large" in low:
@@ -1650,7 +1696,7 @@ def _resolve_portfolio_fund(name: str) -> dict[str, Any] | None:
             )
         supported_rows = [row for row in rows if _is_supported_mf_row(row)]
         candidates = supported_rows or rows
-        
+
         best_match = None
         if candidates:
             best_match = FundService.pick_best_fund_match(search_name, candidates, min_history_points=0)
@@ -2343,12 +2389,12 @@ def _read_category_rows(category_key: str, include_unsupported: bool = False, li
     matched_rows = [_decorate_category_row(row) for row in rows if _category_row_matches(row, category_key)]
     if not matched_rows:
         matched_rows = [_decorate_category_row(row) for row in rows]
-    
+
     # Filter out funds where AUM is missing so we only show the variants that actually have parsed data
     matched_rows = [row for row in matched_rows if row.get("aum") is not None]
     if not include_unsupported:
         matched_rows = [row for row in matched_rows if row.get("is_supported")]
-    
+
     return sorted(matched_rows, key=_category_sort_key)[:limit]
 
 def _build_category_search_response(intent_info: dict[str, Any]) -> dict[str, Any]:
@@ -2764,6 +2810,145 @@ def _news_markdown(news_data: list) -> str:
         rows.append(f"- {sentiment}{published} {takeaway} {quoted} {source_line}")
     return "\n".join(rows) if rows else "- No recent news found from configured sources."
 
+def _news_context_status(news_data: list) -> str:
+    if not news_data:
+        return "unavailable"
+    return "fresh" if len(news_data) >= 2 else "limited"
+
+def _source_metadata(news_data: list) -> list[dict[str, Any]]:
+    sources = []
+    for item in news_data[:6]:
+        if not isinstance(item, dict):
+            continue
+        sources.append({
+            "title": item.get("title"),
+            "source": item.get("source"),
+            "published": item.get("published"),
+            "url": item.get("url"),
+        })
+    return sources
+
+def _count_missing_fields(data_quality: Any) -> int:
+    if not isinstance(data_quality, dict):
+        return 0
+    missing_count = 0
+    for row in data_quality.values():
+        if not isinstance(row, dict):
+            continue
+        missing = row.get("missing_fields")
+        if isinstance(missing, list):
+            missing_count += len(missing)
+    return missing_count
+
+def _build_reasoning_summary(
+    *,
+    intent_info: dict[str, Any],
+    answer_mode: str | None,
+    coverage_status: str,
+    model_status: str,
+    status_flag: str | None,
+    news_context_status: str | None,
+    sources: list[dict[str, Any]] | None,
+    quant_data: Any,
+    response_json: dict[str, Any],
+    comparison_view_mode: str,
+) -> dict[str, Any]:
+    intent = str(intent_info.get("intent") or "general")
+    mode = answer_mode or ("general_education" if intent == "general" else intent)
+    steps: list[dict[str, str]] = []
+    data_used: list[str] = []
+    limits: list[str] = []
+
+    if mode == "market_current_events":
+        steps.append({
+            "label": "Routed",
+            "detail": "Classified as a market current-events question.",
+            "status": "ok",
+        })
+        steps.append({
+            "label": "Sources",
+            "detail": "Fetched approved recent news headlines." if sources else "No approved recent news headlines were available.",
+            "status": "ok" if sources else "limited",
+        })
+        steps.append({
+            "label": "Market link",
+            "detail": "Mapped the impact through crude oil, INR, inflation, rates, and sector sensitivity.",
+            "status": "ok" if sources else "limited",
+        })
+    elif intent == "compare":
+        steps.extend([
+            {
+                "label": "Resolved",
+                "detail": "Matched the requested assets to available FundersAI records.",
+                "status": "ok" if coverage_status not in {"unsupported", "unavailable"} else "limited",
+            },
+            {
+                "label": "Compared",
+                "detail": "Checked returns, risk, cost, holdings, and freshness where data was present.",
+                "status": "ok" if coverage_status != "unavailable" else "limited",
+            },
+            {
+                "label": "View",
+                "detail": "Opened canvas for the full comparison table." if comparison_view_mode == "canvas" else "Kept the comparison inside chat.",
+                "status": "ok",
+            },
+        ])
+    elif intent in {"quant", "both"}:
+        steps.append({
+            "label": "Loaded",
+            "detail": "Used structured price, metric, and freshness data available for the asset.",
+            "status": "ok" if quant_data else "limited",
+        })
+    elif intent == "news":
+        steps.append({
+            "label": "Sources",
+            "detail": "Used approved news context when available.",
+            "status": "ok" if sources else "limited",
+        })
+    else:
+        steps.append({
+            "label": "Explained",
+            "detail": "Answered as a general research question with educational framing.",
+            "status": "ok",
+        })
+
+    if isinstance(quant_data, dict):
+        if quant_data.get("comparison"):
+            data_used.append("Structured comparison metrics")
+        if quant_data.get("source_freshness"):
+            data_used.append("Source freshness")
+        if quant_data.get("data_quality"):
+            data_used.append("Data quality checks")
+        if quant_data.get("risk_analysis"):
+            data_used.append("Risk flags")
+
+    if sources:
+        source_names = [str(item.get("source")) for item in sources[:3] if item.get("source")]
+        data_used.append("Approved news headlines" + (f": {', '.join(source_names)}" if source_names else ""))
+
+    confidence = response_json.get("confidence")
+    if isinstance(confidence, dict) and confidence.get("label"):
+        data_used.append(f"Confidence: {confidence.get('label')}")
+
+    missing_count = _count_missing_fields(response_json.get("data_quality"))
+    if missing_count:
+        limits.append(f"{missing_count} missing fields reduced confidence.")
+    if news_context_status in {"limited", "unavailable"}:
+        limits.append(f"News source coverage was {news_context_status}.")
+    if coverage_status and coverage_status not in {"not_applicable", "complete"}:
+        limits.append(f"Structured coverage was {coverage_status}.")
+    if model_status and model_status not in {"completed", "not_used"}:
+        limits.append(f"Model status: {model_status}.")
+    if status_flag:
+        limits.append(f"Status flag: {status_flag}.")
+
+    return {
+        "title": "Thinking",
+        "steps": steps[:4],
+        "data_used": data_used[:5],
+        "limits": limits[:4],
+    }
+
 def _sanitize_research_text(text: str) -> str:
     sanitized = text or ""
     for bad, replacement in ADVICE_REPLACEMENTS.items():
@@ -3128,24 +3313,24 @@ async def run_stock_screen(filters: dict) -> list:
 
     try:
         query = get_mf_repository().table('nifty_stocks').select('*')
-        
+
         min_pe = filters.get("min_pe")
         max_pe = filters.get("max_pe")
         if min_pe is not None: query = query.gte('pe_ratio', min_pe)
         if max_pe is not None: query = query.lte('pe_ratio', max_pe)
-            
+
         rsi_range = filters.get("rsi_range", {})
         rsi_min = rsi_range.get("min")
         rsi_max = rsi_range.get("max")
         if rsi_min is not None: query = query.gte('rsi', rsi_min)
         if rsi_max is not None: query = query.lte('rsi', rsi_max)
-            
+
         category = filters.get("category")
         if category: query = query.eq('category', category)
-            
+
         res = query.execute()
         raw_results = res.data
-        
+
         formatted_results = []
         for r in raw_results:
             formatted_results.append({
@@ -3173,15 +3358,36 @@ async def synthesis_response(
     response_meta: dict[str, Any] | None = None,
 ) -> str:
     """Synthesis Core"""
-    
+
     intent = intent_info.get("intent")
     deep_research = explanation_mode == "advanced" or research_depth == "deep"
     beginner_mode = explanation_mode == "beginner" or (explanation_mode is None and not deep_research)
-    
-    if intent == "general":
+    answer_mode = intent_info.get("answer_mode")
+    if answer_mode is None and intent == "news" and not intent_info.get("ticker") and _is_market_current_events_query(query):
+        answer_mode = "market_current_events"
+    if response_meta is not None:
+        response_meta["answer_mode"] = answer_mode or ("general_education" if intent == "general" else intent)
+        if intent == "news" or answer_mode == "market_current_events":
+            response_meta["news_context_status"] = _news_context_status(news_data)
+            response_meta["sources"] = _source_metadata(news_data)
+
+    is_pure_news = intent == "news" and not intent_info.get("ticker")
+    if intent == "general" or is_pure_news:
+        if answer_mode == "market_current_events" and not news_data:
+            if response_meta is not None:
+                response_meta["model_status"] = "skipped"
+                response_meta["status_flag"] = "source_limited"
+            return """### Current Market Context
+I could not find recent approved-source headlines for this current-events question, so the live status is limited in FundersAI right now.
+
+### How to Read the Indian Market Link
+- For Iran-US or Middle East headlines, the first Indian-market channel is usually crude oil because India imports a large share of its energy needs.
+- Oil shocks can affect inflation, INR/USD, bond yields, airline costs, paint and chemical input costs, and broad market risk sentiment.
+- Treat this as a source-coverage limitation, not a market verdict."""
+
         system_prompt_gen = """You are FundersAI, an expert AI stock market research assistant and financial educator.
-If the user asks basic educational questions (e.g., 'What is PE ratio?', 'Explain the metrics used here'), provide a clear, comprehensive, and beginner-friendly explanation. 
-Break down metrics like P/E Ratio (valuation), RSI (momentum/overbought/oversold), and moving averages carefully. Use bullet points and analogies if helpful. 
+If the user asks basic educational questions (e.g., 'What is PE ratio?', 'Explain the metrics used here'), provide a clear, comprehensive, and beginner-friendly explanation.
+Break down metrics like P/E Ratio (valuation), RSI (momentum/overbought/oversold), and moving averages carefully. Use bullet points and analogies if helpful.
 Do NOT be overly brief when explaining concepts. Provide deep value to the user.
 NEVER give direct financial advice to buy or sell a specific stock."""
         if beginner_mode:
@@ -3198,16 +3404,43 @@ Answer as a deep research explainer with this structure:
 4) Red Flags and Common Mistakes
 5) Research Checklist
 Use clear language, practical examples, and no buy/sell advice."""
+        if answer_mode == "market_current_events":
+            system_prompt_gen = """You are FundersAI, a research-only Indian market analyst.
+Use only the provided recent news context. Do not invent live facts, prices, dates, or outcomes.
+Answer in these concise sections:
+### Current Status
+### Indian Market Impact
+### Sectors to Watch
+### What Could Change the View
+Mention source limitations when context is thin.
+Do not give buy/sell/invest advice."""
+
+        context_str = query
+        if is_pure_news and news_data:
+            news_markdown = _news_markdown(news_data)
+            context_str = f"User Query: {query}\n\nRecent News Context:\n{news_markdown}\n\nPlease answer the user's query using the provided news context."
+
         messages = [
             {"role": "system", "content": system_prompt_gen},
-            {"role": "user", "content": query}
+            {"role": "user", "content": context_str}
         ]
         answer = await function_ollama_chat(messages, format="text", usage_collector=usage_collector)
         if response_meta is not None:
             response_meta["model_status"] = "completed" if answer else "timeout_or_error"
             if not answer:
                 response_meta["status_flag"] = "deterministic_fallback"
-        return answer or f"FundersAI could not complete the explanation right now.\n\n{DISCLAIMER}"
+        if answer:
+            return _sanitize_research_text(answer.strip())
+        if answer_mode == "market_current_events" and news_data:
+            return f"""### Current Status
+Recent approved-source headlines were found, but FundersAI could not complete the synthesis step.
+
+### Source Context
+{_news_markdown(news_data)}
+
+### Indian Market Link
+Read the impact mainly through crude oil, INR/USD, inflation expectations, rates, and energy-sensitive sectors until fresher synthesis is available."""
+        return f"FundersAI could not complete the explanation right now."
 
     table_markdown, data_notes = _data_table_markdown(intent, quant_data, screening_results)
     news_markdown = _news_markdown(news_data)
@@ -3229,7 +3462,7 @@ Use clear language, practical examples, and no buy/sell advice."""
         if response_meta is not None:
             response_meta["model_status"] = "skipped"
             response_meta["status_flag"] = None
-        title = "Deep Research Snapshot" if deep_research else "Snapshot"
+        title = "Quick Read"
         long_term_read = compare_direct_answer or (
             "Use the canvas metrics to compare returns, volatility, drawdown, Sharpe ratio, expense ratio, AUM, and data freshness side by side."
         )
@@ -3237,18 +3470,16 @@ Use clear language, practical examples, and no buy/sell advice."""
         if beginner_mode:
             glossary_markdown = "\n\n### Terms in Plain English\n- Sharpe ratio: return earned for each unit of risk.\n- Drawdown: how far the value fell from a recent high.\n- Beta: how much the asset tends to move compared with the market.\n- Expense ratio: the yearly fund cost charged as a percentage."
         return f"""### {subject} — {title}
-> Detailed comparison metrics are visible in the canvas panel.
+> Canvas is open with the full metric view. Here is the usable read from the data available now.
 
-### Long-Term Read
+### What the Data Says
 {long_term_read}
 {chr(10) + chr(10) + "### Comparison Snapshot" + chr(10) + comparison_summary if comparison_summary else ""}
 {chr(10) + chr(10) + "### Follow-up Answer" + chr(10) + followup_answer if followup_answer else ""}
 {glossary_markdown}
 
-### Follow-up Questions
+### Best Follow-up
 - Compare downside protection and max drawdown.
-- Show expense ratio and AUM differences.
-- Explain which fund looks steadier over 3Y and 5Y.
 
 {DISCLAIMER}"""
 
@@ -3277,7 +3508,7 @@ Rules:
 - Do not invent numbers.
 - If data is missing, state it clearly.
 - Keep each section concise and factual."""
-    
+
     notes_context = "\n".join([f"- {note}" for note in data_notes]) if data_notes else "- None"
     context = f"""
 User Query: {query}
@@ -3298,7 +3529,7 @@ Controlled Web Context:
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": context}
     ]
-    
+
     model_timeout = 20.0 if intent == "compare" and comparison_view_mode == "canvas" else 60.0
     trend = await function_ollama_chat(messages, format="text", usage_collector=usage_collector, timeout_seconds=model_timeout)
     if response_meta is not None:
@@ -3342,9 +3573,9 @@ Controlled Web Context:
             "Use the canvas metrics to compare returns, volatility, drawdown, Sharpe ratio, expense ratio, AUM, and data freshness side by side."
         )
         return f"""### {subject} — {title}
-> Detailed comparison metrics are visible in the canvas panel.
+> Canvas is open with the full metric view. Here is the usable read from the data available now.
 
-### Long-Term Read
+### What the Data Says
 {long_term_read}
 {chr(10) + chr(10) + "### Comparison Snapshot" + chr(10) + comparison_summary if comparison_summary else ""}
 {chr(10) + chr(10) + "### Follow-up Answer" + chr(10) + followup_answer if followup_answer else ""}
@@ -3354,10 +3585,8 @@ Controlled Web Context:
 {trend}
 {glossary_markdown}
 
-### Follow-up Questions
+### Best Follow-up
 - Compare downside protection and max drawdown.
-- Show expense ratio and AUM differences.
-- Explain which fund looks steadier over 3Y and 5Y.
 
 {DISCLAIMER}"""
 
@@ -3763,12 +3992,12 @@ async def get_mutual_fund_details(scheme_code: int, background_tasks: Background
         history_coverage = _history_coverage_from_df(hist_df)
         details_dump = profile.details.model_dump()
         stale = profile.data_quality.is_stale
-        
+
         # Trigger background auto-healing if data is stale or missing AUM
         if stale or profile.details.aum is None:
             from app.services.auto_heal import trigger_mf_auto_heal
             background_tasks.add_task(trigger_mf_auto_heal, scheme_code)
-            
+
         return {
             "scheme_code": scheme_code,
             "details": details_dump,
@@ -3868,14 +4097,14 @@ async def chat_endpoint(
     ticker = intent_info.get("ticker")
     period = intent_info.get("historical_period", "1mo")
     sentiment = intent_info.get("sentiment_flag", False)
-    
+
     # Restrict mutual fund queries to AMCs with active ingestion pipelines
     is_unsupported_mf = False
     query_lower = req.query.lower()
-    
-    is_mf_context = (asset_type == "mutual_fund" or 
+
+    is_mf_context = (asset_type == "mutual_fund" or
                      any(k in query_lower for k in ["fund", "mutual fund", "flexi cap", "small cap", "mid cap", "large cap", "elss", "nav", "amc", "sip", "portfolio"]))
-    
+
     if is_mf_context and intent in ["compare", "quant", "both"]:
         # Check if comparison entities contain unsupported AMCs or don't match the supported ones
         if intent == "compare":
@@ -3917,7 +4146,7 @@ To experience FundersAI's advanced research capabilities, please try:
 - Comparing **Parag Parikh**, **ICICI**, **HDFC**, **SBI**, or **Axis** funds
 - Inspecting sector allocations, risk metrics, or portfolio holdings for these supported funds
 - Asking about NAV trends, expense ratios, or Sharpe/Alpha comparisons across these supported AMCs."""
-        
+
         response = {
             "answer": advisory_message,
             "debug_intent": intent_info,
@@ -3927,7 +4156,7 @@ To experience FundersAI's advanced research capabilities, please try:
         if trusted_proxy:
             response["_usage"] = _summarize_openrouter_usage(usage_collector)
         return response
-    
+
     quant_data = {}
     news_data = []
     screening_results = None
@@ -3953,14 +4182,14 @@ To experience FundersAI's advanced research capabilities, please try:
 
     def _fund_from_mfapi(search_term: str) -> dict | None:
         return None
-    
+
     if intent == "screen":
         filters = intent_info.get("screen_filters", {})
         screening_results = await run_stock_screen(filters)
-        
+
     elif intent == "compare":
         entities = intent_info.get("compare_entities", [])
-        
+
         # If user only provided one entity, treat as a single quant lookup
         if len(entities) == 1:
             intent = "quant"
@@ -3991,7 +4220,7 @@ To experience FundersAI's advanced research capabilities, please try:
                 resolution_payload = compare_payload.get("resolution", resolution_payload)
                 coverage_status = compare_payload.get("coverage_status", coverage_status)
                 data_status = compare_payload.get("data_status", {})
-    
+
     # Handle single quant lookup (or forced single comparison)
     if intent in ["quant", "both"]:
         quant_data = {}
@@ -4001,7 +4230,7 @@ To experience FundersAI's advanced research capabilities, please try:
             yf_ticker = await resolve_mf_ticker(ticker or req.query)
             final_ticker = stock_symbol or yf_ticker or ticker
             quant_data = fetch_quant_data(final_ticker, period)
-        
+
         # Fallback to Supabase
         if (not quant_data or "error" in quant_data) and get_mf_repository() and asset_type != "stock":
             try:
@@ -4027,7 +4256,7 @@ To experience FundersAI's advanced research capabilities, please try:
                         "expense_ratio": fund.get('expense_ratio', "N/A"),
                         "source": "FundersAI DB"
                     }
-                    
+
                     # Compute risk metrics locally for single entity too!
                     hist = await get_mf_history_df(scheme_code)
                     nifty_hist = await get_nifty_history_df()
@@ -4044,7 +4273,7 @@ To experience FundersAI's advanced research capabilities, please try:
             fund_data = _fund_from_mfapi(ticker or req.query)
             if fund_data:
                 quant_data = fund_data
-            
+
         if intent in ["news", "both"]:
             news_items = fetch_news(req.query, ticker)
             if sentiment:
@@ -4056,7 +4285,7 @@ To experience FundersAI's advanced research capabilities, please try:
         if sentiment:
             news_items = await analyze_news_sentiment(news_items, usage_collector=usage_collector)
         news_data = news_items
-            
+
     synthesis_meta: dict[str, Any] = {}
     final_answer = await synthesis_response(
         req.query,
@@ -4072,6 +4301,9 @@ To experience FundersAI's advanced research capabilities, please try:
     )
     model_status = synthesis_meta.get("model_status", model_status)
     status_flag = synthesis_meta.get("status_flag", status_flag)
+    answer_mode = synthesis_meta.get("answer_mode")
+    news_context_status = synthesis_meta.get("news_context_status")
+    sources = synthesis_meta.get("sources")
     why_better_payload = quant_data.get("why_better") if isinstance(quant_data, dict) and isinstance(quant_data.get("why_better"), dict) else {}
     response_json = {
         "answer": final_answer,
@@ -4088,8 +4320,23 @@ To experience FundersAI's advanced research capabilities, please try:
         "risk_analysis": quant_data.get("risk_analysis") if isinstance(quant_data, dict) else None,
         "confidence": why_better_payload.get("confidence"),
         "explanation_mode": req.explanation_mode or ("advanced" if req.research_depth == "deep" else "beginner"),
+        "answer_mode": answer_mode,
+        "news_context_status": news_context_status,
+        "sources": sources,
     }
-    
+    response_json["reasoning_summary"] = _build_reasoning_summary(
+        intent_info=intent_info,
+        answer_mode=answer_mode,
+        coverage_status=coverage_status,
+        model_status=model_status,
+        status_flag=status_flag,
+        news_context_status=news_context_status,
+        sources=sources,
+        quant_data=quant_data,
+        response_json=response_json,
+        comparison_view_mode=req.comparison_view_mode,
+    )
+
     if intent == "compare":
         entities = intent_info.get("compare_entities", [])
         if len(entities) >= 2:
@@ -4118,7 +4365,7 @@ To experience FundersAI's advanced research capabilities, please try:
                 if value not in seen_ids:
                     seen_ids.add(value)
                     resolved_ids.append(value)
-             
+
             for entity in entities:
                 if comparison_payload and _is_unavailable_entity(comparison_payload.get(entity)):
                     continue
@@ -4177,7 +4424,7 @@ To experience FundersAI's advanced research capabilities, please try:
                     stock_symbol = resolve_stock_symbol(entity)
                     ticker_clean = stock_symbol or entity.split()[0].upper()
                     _append_resolved_id(ticker_clean); resolved = True
-            
+
             if len(resolved_ids) >= 2:
                 compare_context["last_compare"]["ids"] = resolved_ids[:2]
                 response_json["system_action"] = {
@@ -4186,7 +4433,7 @@ To experience FundersAI's advanced research capabilities, please try:
                     "entities": [str(entity) for entity in entities[:2]],
                     "asset_type": compare_context["last_compare"]["asset_type"],
                 }
-                
+
     if trusted_proxy:
         _attach_runtime_meta(response_json)
         response_json["_usage"] = _summarize_openrouter_usage(usage_collector)

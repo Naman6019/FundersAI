@@ -8,19 +8,19 @@ on:
       amcs:
         description: 'Comma-separated AMCs, in retry order'
         required: false
-        default: 'sbi,hdfc,icici,ppfas'
+        default: 'axis,hdfc,sbi,icici,ppfas'
       limit:
         description: 'Max docs retried per AMC'
         required: false
         default: '50'
       min_age_hours:
-        description: 'Retry only docs older than this many hours'
+        description: 'Retry only docs older than this many hours. Scheduled runs use 6 when omitted; manual runs may pass 0.'
         required: false
         default: '6'
       statuses:
         description: 'Comma-separated statuses to retry'
         required: false
-        default: 'needs_review,failed'
+        default: 'needs_review,failed,parsed_partial'
 
 concurrency:
   group: retry-mf-parser-actions-${{ github.ref }}
@@ -52,7 +52,7 @@ jobs:
           R2_RAW_BUCKET: ${{ secrets.R2_RAW_BUCKET }}
           R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
           MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
-          ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "true"
+          ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "false"
           DISPATCH_AMCS: ${{ inputs.amcs }}
           DISPATCH_LIMIT: ${{ inputs.limit }}
           DISPATCH_MIN_AGE_HOURS: ${{ inputs.min_age_hours }}
@@ -69,10 +69,10 @@ jobs:
             exit 1
           fi
 
-          AMCS="${DISPATCH_AMCS:-sbi,hdfc,icici,ppfas}"
+          AMCS="${DISPATCH_AMCS:-axis,hdfc,sbi,icici,ppfas}"
           LIMIT="${DISPATCH_LIMIT:-50}"
           MIN_AGE_HOURS="${DISPATCH_MIN_AGE_HOURS:-6}"
-          STATUSES="${DISPATCH_STATUSES:-needs_review,failed}"
+          STATUSES="${DISPATCH_STATUSES:-needs_review,failed,parsed_partial}"
 
           IFS=',' read -ra AMC_LIST <<< "$AMCS"
           for amc in "${AMC_LIST[@]}"; do

@@ -6,13 +6,13 @@ on:
   workflow_dispatch:
     inputs:
       amcs:
-        description: 'Comma-separated AMCs (ppfas,icici,hdfc,sbi)'
+        description: 'Comma-separated AMCs (axis,hdfc,sbi,icici,ppfas)'
         required: false
-        default: 'ppfas,icici,hdfc,sbi'
+        default: 'axis,hdfc,sbi,icici,ppfas'
       max_documents:
         description: 'Max documents per AMC per document type'
         required: false
-        default: '2'
+        default: '5'
       parse_limit:
         description: 'Max pending docs parsed per AMC'
         required: false
@@ -20,9 +20,33 @@ on:
       parse_rounds:
         description: 'How many parse rounds per AMC (each round uses parse_limit)'
         required: false
-        default: '2'
+        default: '3'
       sbi_portfolio_url:
         description: 'Optional exact SBI monthly portfolio URL (leave empty for auto-discovery)'
+        required: false
+        default: ''
+      sbi_factsheet_urls:
+        description: 'Optional exact SBI factsheet URLs, comma-separated'
+        required: false
+        default: ''
+      sbi_portfolio_urls:
+        description: 'Optional exact SBI portfolio URLs, comma-separated'
+        required: false
+        default: ''
+      hdfc_factsheet_urls:
+        description: 'Optional exact HDFC factsheet URLs, comma-separated'
+        required: false
+        default: ''
+      hdfc_portfolio_urls:
+        description: 'Optional exact HDFC portfolio URLs, comma-separated'
+        required: false
+        default: ''
+      axis_factsheet_urls:
+        description: 'Optional exact Axis factsheet URLs, comma-separated'
+        required: false
+        default: ''
+      axis_portfolio_urls:
+        description: 'Optional exact Axis portfolio URLs, comma-separated'
         required: false
         default: ''
 
@@ -31,9 +55,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  sync:
+  sync-matrix:
     runs-on: ubuntu-latest
     timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      matrix:
+        amc: [axis, hdfc, sbi, icici, ppfas]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -57,19 +85,29 @@ jobs:
           R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
           MF_HDFC_FACTSHEET_PAGE_URL: ${{ secrets.MF_HDFC_FACTSHEET_PAGE_URL }}
           MF_HDFC_PORTFOLIO_PAGE_URL: ${{ secrets.MF_HDFC_PORTFOLIO_PAGE_URL }}
+          MF_AXIS_FACTSHEET_PAGE_URL: ${{ secrets.MF_AXIS_FACTSHEET_PAGE_URL }}
+          MF_AXIS_PORTFOLIO_PAGE_URL: ${{ secrets.MF_AXIS_PORTFOLIO_PAGE_URL }}
           MF_SBI_FACTSHEET_PAGE_URL: ${{ secrets.MF_SBI_FACTSHEET_PAGE_URL }}
           MF_SBI_PORTFOLIO_PAGE_URL: ${{ secrets.MF_SBI_PORTFOLIO_PAGE_URL }}
           MF_HDFC_FACTSHEET_DOCUMENT_URLS: ${{ secrets.MF_HDFC_FACTSHEET_DOCUMENT_URLS }}
           MF_HDFC_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_HDFC_PORTFOLIO_DOCUMENT_URLS }}
+          MF_AXIS_FACTSHEET_DOCUMENT_URLS: ${{ secrets.MF_AXIS_FACTSHEET_DOCUMENT_URLS }}
+          MF_AXIS_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_AXIS_PORTFOLIO_DOCUMENT_URLS }}
           MF_SBI_FACTSHEET_DOCUMENT_URLS: ${{ secrets.MF_SBI_FACTSHEET_DOCUMENT_URLS }}
           MF_SBI_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_SBI_PORTFOLIO_DOCUMENT_URLS }}
           MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
-          ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "true"
+          ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "false"
           DISPATCH_AMCS: ${{ inputs.amcs }}
           DISPATCH_MAX_DOCS: ${{ inputs.max_documents }}
           DISPATCH_PARSE_LIMIT: ${{ inputs.parse_limit }}
           DISPATCH_PARSE_ROUNDS: ${{ inputs.parse_rounds }}
           DISPATCH_SBI_PORTFOLIO_URL: ${{ inputs.sbi_portfolio_url }}
+          DISPATCH_SBI_FACTSHEET_URLS: ${{ inputs.sbi_factsheet_urls }}
+          DISPATCH_SBI_PORTFOLIO_URLS: ${{ inputs.sbi_portfolio_urls }}
+          DISPATCH_HDFC_FACTSHEET_URLS: ${{ inputs.hdfc_factsheet_urls }}
+          DISPATCH_HDFC_PORTFOLIO_URLS: ${{ inputs.hdfc_portfolio_urls }}
+          DISPATCH_AXIS_FACTSHEET_URLS: ${{ inputs.axis_factsheet_urls }}
+          DISPATCH_AXIS_PORTFOLIO_URLS: ${{ inputs.axis_portfolio_urls }}
         run: |
           set -euo pipefail
 
@@ -85,67 +123,111 @@ jobs:
           # Force stable source URLs even when optional URL secrets are unset.
           export MF_HDFC_FACTSHEET_PAGE_URL="${MF_HDFC_FACTSHEET_PAGE_URL:-https://www.hdfcfund.com/mutual-funds/factsheets}"
           export MF_HDFC_PORTFOLIO_PAGE_URL="${MF_HDFC_PORTFOLIO_PAGE_URL:-https://www.hdfcfund.com/statutory-disclosure/portfolio/monthly-portfolio}"
+          export MF_AXIS_FACTSHEET_PAGE_URL="${MF_AXIS_FACTSHEET_PAGE_URL:-https://www.axismf.com/downloads}"
+          export MF_AXIS_PORTFOLIO_PAGE_URL="${MF_AXIS_PORTFOLIO_PAGE_URL:-https://www.axismf.com/downloads}"
           export MF_SBI_FACTSHEET_PAGE_URL="${MF_SBI_FACTSHEET_PAGE_URL:-https://www.sbimf.com/factsheets}"
           export MF_SBI_PORTFOLIO_PAGE_URL="${MF_SBI_PORTFOLIO_PAGE_URL:-https://www.sbimf.com/portfolios}"
-          export MF_HDFC_FACTSHEET_DOCUMENT_URLS="${MF_HDFC_FACTSHEET_DOCUMENT_URLS:-https://files.hdfcfund.com/s3fs-public/2026-05/HDFC%20MF%20Factsheet%20-%20April%202026.pdf,https://files.hdfcfund.com/s3fs-public/2026-05/HDFC%20MF%20Index%20Solutions%20Factsheet%20-%20April%202026.pdf}"
-          export MF_SBI_FACTSHEET_DOCUMENT_URLS="${MF_SBI_FACTSHEET_DOCUMENT_URLS:-https://www.sbimf.com/docs/default-source/scheme-factsheets/all-sbimf-schemes-factsheet-april-2026.pdf?sfvrsn=2b0639d8_4}"
+          if [ -n "${DISPATCH_HDFC_FACTSHEET_URLS:-}" ]; then
+            export MF_HDFC_FACTSHEET_DOCUMENT_URLS="$DISPATCH_HDFC_FACTSHEET_URLS"
+          fi
+          if [ -n "${DISPATCH_HDFC_PORTFOLIO_URLS:-}" ]; then
+            export MF_HDFC_PORTFOLIO_DOCUMENT_URLS="$DISPATCH_HDFC_PORTFOLIO_URLS"
+          fi
+          if [ -n "${DISPATCH_AXIS_FACTSHEET_URLS:-}" ]; then
+            export MF_AXIS_FACTSHEET_DOCUMENT_URLS="$DISPATCH_AXIS_FACTSHEET_URLS"
+          fi
+          if [ -n "${DISPATCH_AXIS_PORTFOLIO_URLS:-}" ]; then
+            export MF_AXIS_PORTFOLIO_DOCUMENT_URLS="$DISPATCH_AXIS_PORTFOLIO_URLS"
+          fi
+          if [ -n "${DISPATCH_SBI_FACTSHEET_URLS:-}" ]; then
+            export MF_SBI_FACTSHEET_DOCUMENT_URLS="$DISPATCH_SBI_FACTSHEET_URLS"
+          fi
+          if [ -n "${DISPATCH_SBI_PORTFOLIO_URLS:-}" ]; then
+            export MF_SBI_PORTFOLIO_DOCUMENT_URLS="$DISPATCH_SBI_PORTFOLIO_URLS"
+          fi
           if [ -n "${DISPATCH_SBI_PORTFOLIO_URL:-}" ]; then
             export MF_SBI_PORTFOLIO_DOCUMENT_URLS="$DISPATCH_SBI_PORTFOLIO_URL"
           fi
 
           EVENT_NAME="${GITHUB_EVENT_NAME:-workflow_dispatch}"
-          AMCS="${DISPATCH_AMCS:-ppfas,icici,hdfc,sbi}"
-          GLOBAL_MAX_DOCS="${DISPATCH_MAX_DOCS:-1}"
+          AMCS="${DISPATCH_AMCS:-axis,hdfc,sbi,icici,ppfas}"
+          GLOBAL_MAX_DOCS="${DISPATCH_MAX_DOCS:-5}"
           GLOBAL_PARSE_LIMIT="${DISPATCH_PARSE_LIMIT:-800}"
-          PARSE_ROUNDS="${DISPATCH_PARSE_ROUNDS:-2}"
+          PARSE_ROUNDS="${DISPATCH_PARSE_ROUNDS:-3}"
 
-          failed_amcs=()
-          IFS=',' read -ra AMC_LIST <<< "$AMCS"
-          for amc in "${AMC_LIST[@]}"; do
-            amc="$(echo "$amc" | xargs)"
-            if [ -z "$amc" ]; then
-              continue
-            fi
+          # Check if the matrix amc is in the AMCS list
+          # We add commas around both sides to ensure exact matching (e.g. ,axis, against ,axis,hdfc,)
+          # We also strip spaces just in case
+          clean_amcs=$(echo "$AMCS" | tr -d ' ')
+          if [[ ! ",$clean_amcs," == *",${{ matrix.amc }},"* ]]; then
+            echo "Skipping ${{ matrix.amc }} as it is not in the requested AMCS list ($AMCS)"
+            exit 0
+          fi
 
-            # Safer scheduled defaults to stay well below GitHub-hosted 6h limit.
-            max_docs="$GLOBAL_MAX_DOCS"
-            parse_limit="$GLOBAL_PARSE_LIMIT"
-            if [ "$EVENT_NAME" = "schedule" ]; then
-              case "$amc" in
-                ppfas) max_docs=1; parse_limit=500 ;;
-                hdfc)  max_docs=1; parse_limit=700 ;;
-                sbi)   max_docs=1; parse_limit=900 ;;
-                icici) max_docs=1; parse_limit=900 ;;
-                *)     max_docs=1; parse_limit=600 ;;
-              esac
-            fi
+          amc="${{ matrix.amc }}"
+          
+          # Safer scheduled defaults to stay well below GitHub-hosted 6h limit.
+          max_docs="$GLOBAL_MAX_DOCS"
+          parse_limit="$GLOBAL_PARSE_LIMIT"
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            case "$amc" in
+              axis)  max_docs=1; parse_limit=900 ;;
+              ppfas) max_docs=1; parse_limit=500 ;;
+              hdfc)  max_docs=1; parse_limit=700 ;;
+              sbi)   max_docs=1; parse_limit=900 ;;
+              icici) max_docs=1; parse_limit=900 ;;
+              *)     max_docs=1; parse_limit=600 ;;
+            esac
+          fi
 
-            echo "Processing AMC=$amc max_docs=$max_docs parse_limit=$parse_limit parse_rounds=$PARSE_ROUNDS event=$EVENT_NAME"
+          echo "Processing AMC=$amc max_docs=$max_docs parse_limit=$parse_limit parse_rounds=$PARSE_ROUNDS event=$EVENT_NAME"
 
-            if ! timeout 40m python -m backend.app.mf_ingestion.jobs.ingest_latest_amc_docs --amc "$amc" --all-document-types --max-documents "$max_docs" --strict; then
-              failed_amcs+=("$amc")
-              echo "AMC ingest failed/timed out: $amc"
-              continue
-            fi
-
-            amc_failed=false
-            round=1
-            while [ "$round" -le "$PARSE_ROUNDS" ]; do
-              echo "AMC=$amc parse_round=$round/$PARSE_ROUNDS"
-              if ! timeout 85m python -m backend.app.mf_ingestion.jobs.parse_pending_documents --amc "$amc" --limit "$parse_limit" --strict --fail-on-needs-review; then
-                amc_failed=true
-                echo "AMC parse failed/timed out: $amc round=$round"
-                break
-              fi
-              round=$((round + 1))
-            done
-
-            if [ "$amc_failed" = "true" ]; then
-              failed_amcs+=("$amc")
-            fi
-          done
-
-          if [ "${#failed_amcs[@]}" -gt 0 ]; then
-            echo "Disclosures sync completed with failures: ${failed_amcs[*]}"
+          if ! timeout 40m python -m backend.app.mf_ingestion.jobs.ingest_latest_amc_docs --amc "$amc" --all-document-types --max-documents "$max_docs" --strict; then
+            echo "AMC ingest failed/timed out: $amc"
             exit 1
           fi
+
+          amc_failed=false
+          round=1
+          while [ "$round" -le "$PARSE_ROUNDS" ]; do
+            echo "AMC=$amc parse_round=$round/$PARSE_ROUNDS"
+            if ! timeout 85m python -m backend.app.mf_ingestion.jobs.parse_pending_documents --amc "$amc" --limit "$parse_limit" --strict --fail-on-needs-review; then
+              amc_failed=true
+              echo "AMC parse failed/timed out: $amc round=$round"
+              break
+            fi
+            round=$((round + 1))
+          done
+
+          if [ "$amc_failed" = "true" ]; then
+            exit 1
+          fi
+
+  coverage:
+    needs: sync-matrix
+    # Run even if one of the matrix jobs fails, so we still get coverage numbers
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Check MF disclosure coverage
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          MF_DISCLOSURE_COVERAGE_AMCS: axis,hdfc,sbi,icici,ppfas
+          MF_DISCLOSURE_MIN_FIELD_COUNT: "1"
+          MF_DISCLOSURE_MIN_CORE_FIELD_RATIO: "0.01"
+          MF_DISCLOSURE_MIN_PORTFOLIO_FAMILY_RATIO: "0.01"
+        run: |
+          python backend/scripts/check_coverage.py
+          python backend/scripts/check_mf_disclosure_coverage.py

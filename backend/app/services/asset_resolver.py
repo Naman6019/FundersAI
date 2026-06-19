@@ -134,7 +134,10 @@ resolver_cache = ResolverCache()
 
 
 def normalize_text(value: str) -> str:
-    return " ".join(re.findall(r"[a-z0-9]+", str(value or "").lower()))
+    text = str(value or "").lower()
+    text = re.sub(r"\b(mid|large|small|flexi)cap\b", r"\1 cap", text)
+    text = re.sub(r"\bcpa\b", "cap", text)
+    return " ".join(re.findall(r"[a-z0-9]+", text))
 
 
 def fund_name_words(value: str) -> list[str]:
@@ -201,6 +204,10 @@ def canonical_fund_query(value: str) -> str:
         return "Axis Large Cap"
     if "hdfc" in text and "flexi" in text:
         return "HDFC Flexi Cap"
+    if "hdfc" in text and "mid" in text:
+        return "HDFC Mid Cap"
+    if "hdfc" in text and "large" in text:
+        return "HDFC Large Cap"
     if "icici" in text and "multi" in text:
         return "ICICI Multi Asset"
     if "icici" in text and "large" in text:
@@ -370,11 +377,16 @@ class AssetResolver:
                 if overlap == len(input_words) and input_norm not in name_norm:
                     score += 0.18
                     reasons.append("all_query_tokens_match")
-            if canonical_fund_query(raw_input) != raw_input and normalize_text(canonical_fund_query(raw_input)) in name_norm:
+            canonical_query_norm = normalize_text(canonical_fund_query(raw_input))
+            if canonical_query_norm != raw_norm and canonical_query_norm in name_norm:
                 score += 0.28
                 reasons.append("alias_canonical_match")
             if "direct" in name_norm:
                 score += 0.03
+            if "growth" in name_norm:
+                score += 0.04
+            if "idcw" in name_norm or "dividend" in name_norm:
+                score -= 0.12
             if "regular" in name_norm:
                 score -= 0.05
             amc = supported_amc_from_text(" ".join([name, str(row.get("amc_name") or "")]))

@@ -208,7 +208,6 @@ class ParsingService:
             
             # Auto-Heal target filtering
             if target_scheme_name and parsed_scheme_name:
-                from app.mf_ingestion.normalizers.scheme_name_normalizer import match_scheme_name
                 # Check if this parsed scheme matches our target scheme
                 temp_match = match_scheme_name(parsed_scheme_name, candidates=[target_scheme_name])
                 if temp_match.confidence < 80.0:
@@ -377,7 +376,6 @@ class ParsingService:
         unmatched = 0
         for record in records:
             if target_scheme_name:
-                from app.mf_ingestion.normalizers.scheme_name_normalizer import match_scheme_name
                 temp_match = match_scheme_name(record.scheme_name, candidates=[target_scheme_name])
                 if temp_match.confidence < 80.0:
                     continue
@@ -535,10 +533,13 @@ class ParsingService:
         return rows
 
     def _official_factsheet_covers_document(self, amc_code: str, report_month: date) -> bool:
-        for row in self._official_core_rows_for_amc(amc_code):
-            if any(row.get(field) not in (None, "") for field in ("aum", "expense_ratio", "benchmark", "fund_manager")):
-                return True
-        return False
+        rows = self._official_core_rows_for_amc(amc_code)
+        if not rows:
+            return False
+        return all(
+            all(row.get(field) not in (None, "") for field in ("aum", "expense_ratio", "benchmark", "fund_manager"))
+            for row in rows
+        )
 
     def _official_risk_level_covers_document(self, amc_code: str, report_month: date) -> bool:
         for row in self._official_core_rows_for_amc(amc_code):

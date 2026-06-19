@@ -99,6 +99,43 @@ def test_resolver_maps_axis_typo_to_high_confidence_fund():
     assert result.confidence >= 0.88
 
 
+def test_resolver_maps_hdfc_mid_cpa_typo_to_mid_cap_fund():
+    resolver, _fake = _resolver([
+        {
+            "scheme_code": "hdfc-mid-101",
+            "scheme_name": "HDFC Mid-Cap Opportunities Fund - Direct Plan - Growth",
+            "amc_name": "HDFC Mutual Fund",
+        }
+    ])
+
+    result = resolver.resolve("Hdfc mid cpa", asset_type="mutual_fund")
+
+    assert result.coverage_status == "supported"
+    assert result.resolved_name == "HDFC Mid-Cap Opportunities Fund - Direct Plan - Growth"
+    assert result.id == "hdfc-mid-101"
+    assert result.confidence >= 0.88
+
+
+def test_resolver_prefers_growth_variant_over_idcw():
+    resolver, _fake = _resolver([
+        {
+            "scheme_code": "axis-idcw",
+            "scheme_name": "Axis Large Cap Fund - Direct Plan - IDCW",
+            "amc_name": "Axis Mutual Fund",
+        },
+        {
+            "scheme_code": "axis-growth",
+            "scheme_name": "Axis Large Cap Fund - Direct Plan - Growth",
+            "amc_name": "Axis Mutual Fund",
+        },
+    ])
+
+    result = resolver.resolve("Axis Large cap", asset_type="mutual_fund")
+
+    assert result.coverage_status == "supported"
+    assert result.id == "axis-growth"
+
+
 def test_resolver_rejects_unsupported_amc_without_db_lookup():
     resolver, fake = _resolver([])
 

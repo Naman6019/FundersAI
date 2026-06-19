@@ -59,7 +59,7 @@ export async function POST(req: Request) {
     const TARGET = process.env.NODE_ENV === 'development'
       ? 'http://127.0.0.1:8000/api/chat'
       : `${process.env.NEXT_PUBLIC_API_URL}/api/chat`;
-    
+
     console.log(`Proxying chat request to: ${TARGET}`);
 
     const proxyRes = await fetch(TARGET, {
@@ -90,7 +90,7 @@ export async function POST(req: Request) {
         }
         return NextResponse.json({ error: 'Upstream Error' }, { status: proxyRes.status });
     }
-    
+
     const data = await proxyRes.json();
     const usage = (data?._usage || null) as TokenUsage | null;
     if (data && typeof data === 'object' && '_usage' in data) {
@@ -139,18 +139,29 @@ export async function POST(req: Request) {
             status_flag: data.status_flag || null,
             resolution: data.resolution || null,
             explanation_mode: data.explanation_mode || body.explanation_mode || null,
+            answer_mode: data.answer_mode || null,
+            news_context_status: data.news_context_status || null,
+            sources: data.sources || null,
+            reasoning_summary: data.reasoning_summary || null,
           },
         },
       ].filter((row) => row.content.trim().length > 0);
 
-      if (rows.length > 0) {
-        const { error } = await userContext.supabaseAdmin.from('chat_messages').insert(rows);
+      if (rows.length > 0 && body.session_id) {
+        const rowsWithSession = rows.map(r => ({ ...r, session_id: body.session_id }));
+        const { error } = await userContext.supabaseAdmin.from('ai_chat_messages').insert(rowsWithSession);
         if (error) console.error('Chat history write failed:', error);
+
+        // Update session's updated_at
+        await userContext.supabaseAdmin
+          .from('ai_chat_sessions')
+          .update({ updated_at: new Date(nowMs + 1).toISOString() })
+          .eq('id', body.session_id);
       }
     }
 
     return NextResponse.json(data);
-    
+
   } catch (error) {
     console.error('Chat Proxy Error:', error);
     if (tokenReservation && userContext) {

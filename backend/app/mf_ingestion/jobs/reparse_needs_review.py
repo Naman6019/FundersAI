@@ -22,7 +22,7 @@ from app.mf_ingestion.services.parsing_service import ParsingService
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-DEFAULT_RETRY_STATUSES = ("needs_review", "failed")
+DEFAULT_RETRY_STATUSES = ("needs_review", "failed", "parsed_partial")
 
 
 def _parse_statuses(raw: str | None) -> list[str]:
@@ -126,7 +126,7 @@ def reparse_documents(documents: list[dict[str, Any]], service: ParsingService) 
             result = service._parse_one(doc_to_parse)
             status = str((result or {}).get("status") or "").strip().lower()
 
-            if status not in {"failed", "needs_review"}:
+            if status not in {"failed", "needs_review", "parsed_partial"}:
                 logger.info("Doc %s no longer actionable after retry: %s", doc_id, result)
                 supabase.table("mf_parse_review_queue").delete().eq("source_document_id", doc_id).execute()
                 success_count += 1
@@ -150,7 +150,7 @@ def main() -> int:
     parser.add_argument("--amc", default=None, help="Filter by AMC code (e.g., ppfas, icici)")
     parser.add_argument("--limit", type=int, default=50, help="Max docs to retry.")
     parser.add_argument("--min-age-hours", type=float, default=6.0, help="Retry only docs older than this many hours.")
-    parser.add_argument("--statuses", default="needs_review,failed", help="Comma-separated parse statuses to retry.")
+    parser.add_argument("--statuses", default="needs_review,failed,parsed_partial", help="Comma-separated parse statuses to retry.")
     args = parser.parse_args()
 
     if not supabase:
