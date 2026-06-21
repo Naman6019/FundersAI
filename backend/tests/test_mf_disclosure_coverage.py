@@ -58,6 +58,30 @@ def test_disclosure_coverage_passes_when_supported_amc_has_required_data(monkeyp
     assert check_mf_disclosure_coverage.check_disclosure_coverage() == 0
 
 
+def test_disclosure_coverage_matches_nippon_supported_amc(monkeypatch):
+    fake_supabase = _FakeSupabase(
+        {
+            "mutual_fund_family_mapping": [{"scheme_code": "119332", "family_id": "nippon-small"}],
+            "mutual_fund_core_snapshot": [
+                {
+                    "scheme_code": "119332",
+                    "scheme_name": "Nippon India Small Cap Fund - Direct Plan - Growth",
+                    "amc_name": "Nippon India Mutual Fund",
+                    "aum": 59456.65,
+                    "expense_ratio": 0.67,
+                    "benchmark": "Nifty Smallcap 250 TRI",
+                }
+            ],
+            "mutual_fund_holdings": [{"family_id": "nippon-small"}],
+            "mutual_fund_sectors": [{"family_id": "nippon-small"}],
+        }
+    )
+    monkeypatch.setattr(check_mf_disclosure_coverage, "supabase", fake_supabase)
+    monkeypatch.setenv("MF_DISCLOSURE_COVERAGE_AMCS", "nippon")
+
+    assert check_mf_disclosure_coverage.check_disclosure_coverage() == 0
+
+
 def test_disclosure_coverage_fails_when_benchmark_or_holdings_are_missing(monkeypatch):
     fake_supabase = _FakeSupabase(
         {
@@ -78,5 +102,20 @@ def test_disclosure_coverage_fails_when_benchmark_or_holdings_are_missing(monkey
     )
     monkeypatch.setattr(check_mf_disclosure_coverage, "supabase", fake_supabase)
     monkeypatch.setenv("MF_DISCLOSURE_COVERAGE_AMCS", "axis")
+
+    assert check_mf_disclosure_coverage.check_disclosure_coverage() == 1
+
+
+def test_disclosure_coverage_fails_when_configured_amc_has_no_snapshot_rows(monkeypatch):
+    fake_supabase = _FakeSupabase(
+        {
+            "mutual_fund_family_mapping": [],
+            "mutual_fund_core_snapshot": [],
+            "mutual_fund_holdings": [],
+            "mutual_fund_sectors": [],
+        }
+    )
+    monkeypatch.setattr(check_mf_disclosure_coverage, "supabase", fake_supabase)
+    monkeypatch.setenv("MF_DISCLOSURE_COVERAGE_AMCS", "motilal")
 
     assert check_mf_disclosure_coverage.check_disclosure_coverage() == 1

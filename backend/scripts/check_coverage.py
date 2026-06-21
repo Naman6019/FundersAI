@@ -1,5 +1,13 @@
 import asyncio
+import os
+import sys
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
 from app.database import supabase
+from app.services.supported_amcs import SUPPORTED_MF_AMC_MARKERS
 
 def get_all(table, columns):
     all_data = []
@@ -30,8 +38,8 @@ def check_coverage():
     res_sectors = supabase.table('mutual_fund_sectors').select('family_id').not_.is_('family_id', 'null').execute()
     sector_families = {r['family_id'] for r in res_sectors.data if r.get('family_id')}
     
-    amcs = ['Axis', 'HDFC', 'ICICI', 'SBI', 'PPFAS', 'Parag Parikh', 'Mirae']
-    stats = {amc: {'total': 0, 'aum': 0, 'er': 0, 'fm': 0, 'bench': 0, 'holdings': 0, 'sectors': 0} for amc in amcs}
+    amc_markers = {label: markers for label, markers in SUPPORTED_MF_AMC_MARKERS.items()}
+    stats = {amc: {'total': 0, 'aum': 0, 'er': 0, 'fm': 0, 'bench': 0, 'holdings': 0, 'sectors': 0} for amc in amc_markers}
     
     print("Fetching snapshot rows...")
     all_data = get_all('mutual_fund_core_snapshot', 'scheme_code, amc_name, aum, expense_ratio, fund_manager, benchmark')
@@ -41,7 +49,7 @@ def check_coverage():
         scheme_code = str(row.get('scheme_code'))
         family_id = scheme_to_family.get(scheme_code)
         
-        matched_amc = next((a for a in amcs if a.lower() in amc_name.lower()), None)
+        matched_amc = next((label for label, markers in amc_markers.items() if any(marker in amc_name.lower() for marker in markers)), None)
         
         if matched_amc:
             stats[matched_amc]['total'] += 1

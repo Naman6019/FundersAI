@@ -3,16 +3,19 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 from typing import Any
+
+from bs4 import BeautifulSoup
 
 from app.mf_ingestion.parsers.base_parser import ParseContext
 from app.mf_ingestion.parsers.pdf_text_parser import PDFTextParser
 
 SCHEME_NAME_PATTERN = re.compile(
-    r"(?im)^(?:\((?:Formerly|Erstwhile)[^\n]*\)\s*)?(?P<name>(?:ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset|Axis)[^\n]{3,140}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{1,60}\))?\s*$"
+    r"(?im)^(?:\((?:Formerly|Erstwhile)[^\n]*\)\s*)?(?P<name>(?:ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset|Axis|Motilal Oswal|Nippon India)[^\n]{3,140}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{1,60}\))?\s*$"
 )
 ANCHORED_SCHEME_PATTERN = re.compile(
-    r"(?im)^Name\s+of\s+the\s+Fund\s*\n+\s*(?P<name>(?:ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset|Axis)[^\n]{3,160}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{1,80}\))?\s*$"
+    r"(?im)^Name\s+of\s+the\s+Fund\s*\n+\s*(?P<name>(?:ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset|Axis|Motilal Oswal|Nippon India)[^\n]{3,160}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{1,80}\))?\s*$"
 )
 MANAGER_NAME_PATTERN = re.compile(r"\b(?:Mr|Ms|Mrs)\.?\s+[A-Z][A-Za-z' -]{1,80}")
 
@@ -34,7 +37,11 @@ class FactsheetParser:
         self.pdf_text_parser = PDFTextParser()
 
     def parse(self, file_path: str, context: ParseContext) -> list[FactsheetRecord]:
-        text = self.pdf_text_parser.extract_text(file_path)
+        extension = Path(file_path).suffix.lower()
+        if extension in {".html", ".htm"}:
+            text = _extract_html_text(file_path)
+        else:
+            text = self.pdf_text_parser.extract_text(file_path)
         return self.parse_text(text=text, report_month=context.report_month)
 
     def parse_text(self, text: str, report_month: date | None) -> list[FactsheetRecord]:
@@ -123,7 +130,7 @@ def _preprocess_factsheet_text(text: str) -> str:
         return ""
     # Generalized line break fixes for scheme names
     text = re.sub(r"(?i)\n+\s*(Fund|FOF|ETF)\b", r" \1", text)
-    text = re.sub(r"(?i)\b(ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset|Axis)\s*\n+\s*", r"\1 ", text)
+    text = re.sub(r"(?i)\b(ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset|Axis|Motilal Oswal|Nippon India)\s*\n+\s*", r"\1 ", text)
     text = re.sub(r"(?i)\b(Large|Mid|Small|Flexi|Multi|Micro|Value|Focused|Active)\s*\n+\s*Cap\b", r"\1 Cap", text)
     text = re.sub(r"(?i)\b(Equity|Debt|Liquid|Hybrid|Index|Savings)\s*\n+\s*(Fund|FOF|ETF)\b", r"\1 \2", text)
     
@@ -134,6 +141,15 @@ def _preprocess_factsheet_text(text: str) -> str:
     text = re.sub(r"(?i)\bHybrid\s*\n+\s*Fund\b", "Hybrid Fund", text)
     text = re.sub(r"(?i)\bAsset\s*\n+\s*Allocation\b", "Asset Allocation", text)
     return text
+
+
+def _extract_html_text(file_path: str) -> str:
+    raw = Path(file_path).read_text(encoding="utf-8", errors="ignore")
+    soup = BeautifulSoup(raw, "html.parser")
+    for node in soup(["script", "style", "noscript"]):
+        node.decompose()
+    lines = [" ".join(line.split()) for line in soup.get_text("\n").splitlines()]
+    return "\n".join(line for line in lines if line)
 
 
 def _clean_scheme_name(raw: str) -> str:
@@ -292,6 +308,7 @@ def _extract_aum(chunk: str) -> float | None:
         r"Assets\s+Under\s+Management[\s\S]{0,260}?(?:crores?|cr)\s*\n\s*([0-9][0-9,]*(?:\.[0-9]+)?)\b",
         r"Closing\s+AUM[\s\S]{0,120}?:\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|cr)\b",
         r"Monthly\s+AAUM[\s\S]{0,120}?:\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|cr)\b",
+        r"Latest\s+AUM[\s\S]{0,120}?(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*\(?\s*(?:Rs\.?|`|₹)?\s*(?:crores?|cr)\b",
         r"MONTHLY\s*AVERAGE[\s\S]{0,120}?(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:Cr\.?|crores?)\b",
         r"AS ON\s+[^\n]{1,30}\n\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:Cr\.?|crores?)\b",
     )
@@ -569,6 +586,7 @@ def _normalize_benchmark_candidate(raw: str) -> str:
     if not text:
         return ""
     text = re.sub(r"(?i)^is\s+", "", text).strip()
+    text = re.split(r"(?i)\b(?:Fund\s+Manager|Riskometer|Assets\s+Under\s+Management)\b", text)[0].strip(" :;,-")
     text = re.split(r"[.;]", text)[0].strip(" :;,-")
     if not text:
         return ""

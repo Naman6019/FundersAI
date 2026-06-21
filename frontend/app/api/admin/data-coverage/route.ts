@@ -33,6 +33,7 @@ function normalizeAmcCode(name: string): string {
   if (clean.includes('HDFC')) return 'HDFC';
   if (clean.includes('SBI')) return 'SBI';
   if (clean.includes('AXIS')) return 'AXIS';
+  if (clean.includes('NIPPON')) return 'NIPPON';
   return clean || 'UNKNOWN';
 }
 
@@ -89,13 +90,13 @@ const ACTION_WORKFLOW_ORDER = [
     order: 2,
     label: 'Pending parser pass',
     schedule: 'After daily sync',
-    action: 'Parse pending and needs_reparse documents for PPFAS, ICICI, HDFC, SBI, Axis.',
+    action: 'Parse pending and needs_reparse documents for PPFAS, ICICI, HDFC, SBI, Axis, Nippon.',
   },
   {
     order: 3,
     label: 'Parser retry loop',
     schedule: 'Every 6 hours',
-    action: 'Retry cooled-down needs_review and failed rows in order: Axis, SBI, HDFC, ICICI, PPFAS.',
+    action: 'Retry cooled-down needs_review and failed rows in order: Axis, SBI, HDFC, ICICI, PPFAS, Nippon.',
   },
   {
     order: 4,
@@ -386,8 +387,8 @@ export async function GET(request: Request) {
     needs_review_entries: needsReviewEntries,
     action_workflow_order: ACTION_WORKFLOW_ORDER,
     pipeline_focus: {
-      active_current: ['PPFAS', 'ICICI', 'HDFC', 'SBI', 'AXIS'],
-      note: 'Current parser pipeline is active for PPFAS, ICICI, HDFC, SBI, and Axis. Axis holdings are % of NAV factsheet rows, not ISIN-backed rows.',
+      active_current: ['PPFAS', 'ICICI', 'HDFC', 'SBI', 'AXIS', 'NIPPON'],
+      note: 'Current parser pipeline is active for PPFAS, ICICI, HDFC, SBI, Axis, and Nippon. Axis holdings are % of NAV factsheet rows, not ISIN-backed rows.',
     },
     todo_notes: [
       'TODO: dedicated asset allocation coverage needs a normalized table.',

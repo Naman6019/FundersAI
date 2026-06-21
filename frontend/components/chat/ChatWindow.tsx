@@ -10,6 +10,7 @@ import { AssetType, ComparisonViewMode, ConversationContext, ExplanationMode, Me
 import { hasSupabaseBrowserEnv, supabaseBrowser } from '@/lib/supabaseBrowser';
 import Magnetic from '@/components/ui/Magnetic';
 import { motion } from 'framer-motion';
+import ComparisonView from '@/components/canvas/ComparisonView';
 
 const markdownComponents = {
   h1: (props: React.ComponentProps<'h1'>) => <h1 className="mb-3 mt-1 text-lg font-bold text-white" {...props} />,
@@ -425,7 +426,9 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
           setView('COMPARISON', data);
           openCanvas(data);
         } else {
-          closeCanvas();
+          setIds(data.system_action.ids);
+          setView('COMPARISON_GRAPH_ONLY', data);
+          openCanvas(data);
         }
       }
       if (data.system_action?.type === 'PORTFOLIO_REVIEW') {
@@ -461,6 +464,8 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
           news_context_status: data.news_context_status || null,
           sources: data.sources || null,
           reasoning_summary: data.reasoning_summary || null,
+          system_action_type: data.system_action?.type || null,
+          system_action_ids: data.system_action?.ids || null,
         },
       });
     } catch (error) {
@@ -618,6 +623,16 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
                         {msg.content}
                       </ReactMarkdown>
                       {msg.id !== '1' && <ThinkingSummary metadata={msg.metadata} />}
+                      {msg.metadata?.system_action_type === 'COMPARE' && comparisonViewMode === 'chat' && Array.isArray(msg.metadata?.system_action_ids) && (
+                        <div className="mt-4 -mx-2 sm:-mx-4 h-[600px] border border-white/10 rounded-2xl overflow-hidden bg-[#050505]/50">
+                          <ComparisonView
+                            key={(msg.metadata.system_action_ids as string[]).join('|')}
+                            ids={msg.metadata.system_action_ids as string[]}
+                            type={(msg.metadata.system_action_ids[0] as string)?.match(/^[0-9]+$/) ? 'MUTUAL_FUND' : 'STOCK'}
+                            variant="metrics_only"
+                          />
+                        </div>
+                      )}
                       {msg.id !== '1' && (
                         <div className="mt-3 flex flex-wrap gap-2 border-t border-white/5 pt-3">
                           <MessageMetadataBadges metadata={msg.metadata} content={msg.content} />

@@ -35,3 +35,32 @@ export async function proxyGet(path: string, request: Request) {
     return NextResponse.json({ error: 'Quant backend unavailable' }, { status: 502 });
   }
 }
+
+export async function proxyPost(path: string, request: Request) {
+  try {
+    const userContext = await getUserContext(request);
+    const limited = await enforceRateLimit(request, 'quant', userContext ? {
+      identifier: userContext.user.id,
+      tier: userContext.profile.tier,
+      role: userContext.profile.role,
+    } : {});
+    if (limited) return limited;
+
+    const url = new URL(request.url);
+    const requestBody = await request.text();
+
+    const res = await fetch(backendUrl(path, url.search), {
+      method: 'POST',
+      headers: {
+        'X-Forwarded-For': getClientIp(request),
+        'Content-Type': 'application/json',
+      },
+      body: requestBody,
+    });
+    const body = await res.json().catch(() => ({ error: 'Invalid backend response' }));
+    return NextResponse.json(body, { status: res.status });
+  } catch (error) {
+    console.error('Quant proxy error POST:', error);
+    return NextResponse.json({ error: 'Quant backend unavailable' }, { status: 502 });
+  }
+}

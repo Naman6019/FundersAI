@@ -88,6 +88,7 @@ interface Props {
   ids: string[];
   type: 'STOCK' | 'MUTUAL_FUND';
   auxiliaryData?: CanvasPayload | null;
+  variant?: 'full' | 'graph_only' | 'metrics_only';
 }
 
 type WhyWinner = {
@@ -144,6 +145,19 @@ type RiskAnalysisPayload = {
   items?: RiskAnalysisItem[];
 };
 
+type MFHoldingRow = {
+  security_name?: string;
+  isin?: string | null;
+  sector?: string | null;
+  weight_pct?: number | string | null;
+};
+
+type MFSectorRow = {
+  sector?: string | null;
+  sector_name?: string | null;
+  weight_pct?: number | string | null;
+};
+
 type MFComparisonRecord = {
   scheme_code?: string | number | null;
   name?: string;
@@ -157,9 +171,19 @@ type MFComparisonRecord = {
   sharpe_ratio?: string | number | null;
   max_drawdown_1y?: string | number | null;
   risk_level?: string | null;
-  holdings?: Array<{ security_name?: string; sector?: string; weight_pct?: number | string }>;
-  sector_allocation?: Array<{ sector_name?: string; weight_pct?: number | string }>;
+  fund_house?: string | null;
+  benchmark?: string | null;
+  fund_manager?: string | null;
+  main_style?: string | null;
+  mandate?: string | null;
+  best_for?: string | null;
+  main_risk?: string | null;
+  minimum_sip?: string | null;
+  holdings?: MFHoldingRow[];
+  sector_allocation?: MFSectorRow[];
 };
+
+type CompositionFund = { details: MFComparisonRecord; label?: string };
 
 type FundCoverage = Record<string, unknown> & {
   supports?: Record<string, boolean | undefined>;
@@ -475,8 +499,12 @@ const getMfComparisonRecord = (
   return null;
 };
 
-function PortfolioCompositionPanel({ activeFunds }: { activeFunds: any[] }) {
-  const funds = activeFunds.filter(f => f && f.details && (f.details.holdings?.length || f.details.sector_allocation?.length));
+function PortfolioCompositionPanel({
+  activeFunds,
+}: {
+  activeFunds: Array<{ details?: MFComparisonRecord | null; label?: string } | null>;
+}) {
+  const funds = activeFunds.filter((f): f is CompositionFund => Boolean(f?.details && (f.details.holdings?.length || f.details.sector_allocation?.length)));
   if (funds.length === 0) return null;
   const colsClass = funds.length === 2 ? 'sm:grid-cols-2' : funds.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-4';
 
@@ -485,8 +513,8 @@ function PortfolioCompositionPanel({ activeFunds }: { activeFunds: any[] }) {
       <h3 className="font-serif-display text-xl font-bold text-white tracking-tight">Portfolio Composition</h3>
       <div className={`grid grid-cols-1 ${colsClass} gap-6`}>
         {funds.map((f, i) => {
-          const holdings = (f.details.holdings || []).slice(0, 10);
-          const sectors = (f.details.sector_allocation || []).slice(0, 5);
+          const holdings = (f.details?.holdings || []).slice(0, 10);
+          const sectors = (f.details?.sector_allocation || []).slice(0, 5);
           return (
             <div key={i} className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md p-5 shadow-[0_24px_90px_rgba(0,0,0,0.18)]">
               <h4 className="font-serif-display text-lg font-bold text-white mb-4 line-clamp-1" title={f.label}>{f.label}</h4>
@@ -495,12 +523,15 @@ function PortfolioCompositionPanel({ activeFunds }: { activeFunds: any[] }) {
                 <h5 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd] mb-3 border-b border-white/10 pb-2">Top Sectors</h5>
                 {sectors.length > 0 ? (
                   <div className="space-y-2.5">
-                    {sectors.map((s: any, idx: number) => (
-                      <div key={idx} className="flex justify-between items-center text-xs">
-                        <span className="text-[#c8d8f6] truncate pr-2" title={s.sector_name || s.sector}>{s.sector_name || s.sector || 'Unknown'}</span>
-                        <span className="text-white font-mono">{formatPercent(toNumber(s.weight_pct))}</span>
-                      </div>
-                    ))}
+                    {sectors.map((s, idx) => {
+                      const sectorLabel = s.sector_name || s.sector || 'Unknown';
+                      return (
+                        <div key={idx} className="flex justify-between items-center text-xs">
+                          <span className="text-[#c8d8f6] truncate pr-2" title={sectorLabel}>{sectorLabel}</span>
+                          <span className="text-white font-mono">{formatPercent(toNumber(s.weight_pct))}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-xs text-slate-500 italic">No sector data available</p>
@@ -511,7 +542,7 @@ function PortfolioCompositionPanel({ activeFunds }: { activeFunds: any[] }) {
                 <h5 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd] mb-3 border-b border-white/10 pb-2">Top Holdings</h5>
                 {holdings.length > 0 ? (
                   <div className="space-y-2.5">
-                    {holdings.map((h: any, idx: number) => (
+                    {holdings.map((h, idx) => (
                       <div key={idx} className="flex justify-between items-center text-xs">
                         <span className="text-[#c8d8f6] truncate pr-2" title={h.security_name}>{h.security_name || 'Unknown'}</span>
                         <span className="text-white font-mono">{formatPercent(toNumber(h.weight_pct))}</span>
@@ -535,11 +566,7 @@ function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
   const winner = payload.winner;
   const confidence = payload.confidence;
   const factors = payload.factor_results || [];
-  const freshness = payload.source_freshness || {};
-  const freshnessRows = Object.entries(freshness);
   const limitations = payload.data_limitations || [];
-  const holdingsBlocked = payload.holdings_based_reasoning?.status === 'blocked';
-  const isMf = winner?.asset_type === 'mutual_fund';
 
   return (
     <MagicCard gradientColor="rgba(0, 255, 157, 0.15)" className="p-6 mb-6">
@@ -624,7 +651,8 @@ function RiskAnalysisPanel({ payload }: { payload: RiskAnalysisPayload | null })
   );
 }
 
-export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
+export default function ComparisonView({ ids: initialIds, type, auxiliaryData, variant = 'full' }: Props) {
+  const [ids, setIds] = useState<string[]>(initialIds);
   const [period, setPeriod] = useState<Period>('1Y');
   const { comparisonMode, setComparisonMode } = useCanvasStore();
 
@@ -680,19 +708,23 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
     const store = useCanvasStore.getState();
     const newIds = [...ids];
     newIds[index] = newId;
+    setIds(newIds);
     store.setIds(newIds);
   };
 
   const handleAddFund = (newId: string) => {
     if (ids.length >= 4) return;
     const store = useCanvasStore.getState();
-    store.setIds([...ids, newId]);
+    const newIds = [...ids, newId];
+    setIds(newIds);
+    store.setIds(newIds);
   };
 
   const handleRemoveFund = (index: number) => {
     if (ids.length <= 2) return;
     const store = useCanvasStore.getState();
     const newIds = ids.filter((_, i) => i !== index);
+    setIds(newIds);
     store.setIds(newIds);
   };
 
@@ -1055,9 +1087,10 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
 
   return (
     <div className="comparison-detail finance-compare-wrap p-3 sm:p-6 h-full flex flex-col overflow-hidden w-full bg-[#050505]">
+      {variant !== 'metrics_only' && variant !== 'graph_only' && (
       <div className="mb-5 px-2 py-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center justify-between">
             <span className="rounded bg-[#1a2740] px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider text-[#8ea7cd] border border-[#222]">Research-only</span>
           </div>
           <h2 className="text-xl font-bold text-white tracking-tight sm:text-2xl">Mutual Fund Workspace</h2>
@@ -1066,6 +1099,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
           </p>
         </div>
       </div>
+      )}
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         {comparisonMode === 'simple' ? (
@@ -1089,7 +1123,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
             Hide AI
           </button>
         )}
-        <div className="flex max-w-full overflow-x-auto rounded-xl bg-white/[0.02] p-1 border border-white/5 gap-1.5 shrink-0 self-end ml-auto">
+        <div className={`flex max-w-full overflow-x-auto rounded-xl bg-white/[0.02] p-1 border border-white/5 gap-1.5 shrink-0 ${variant === 'graph_only' ? 'mx-auto' : 'self-end ml-auto'}`}>
           {periods.map(p => {
             const isSupported = (() => {
                if (p === '1D' || p === '6M') return true;
@@ -1117,6 +1151,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
         </div>
       </div>
 
+      {variant !== 'metrics_only' && variant !== 'graph_only' && (
       <div className={`sticky top-0 z-30 bg-[#050505]/95 backdrop-blur-md pb-4 pt-4 mb-6 -mx-3 sm:-mx-6 px-3 sm:px-6`}>
         <div className={`grid ${colsClass} gap-4 items-center`}>
           <div className="font-semibold text-[#8ea7cd] text-sm pl-2">Compare</div>
@@ -1143,6 +1178,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
           )}
         </div>
       </div>
+      )}
 
       {loading && renderSkeleton()}
 
@@ -1162,7 +1198,7 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
       )}
 
       {!loading && !error && fundsData.every((f, i) => i >= ids.length || f.meta) && (
-        <div className="flex-1 overflow-y-auto pr-2 custom-scroll pb-10">
+        <div className={`flex-1 overflow-y-auto ${variant === 'metrics_only' ? 'px-1 sm:px-2 py-2' : 'px-1 sm:px-4 py-2 sm:py-6'} custom-scroll pb-10`}>
           {(() => {
             const getFundData = (i: number) => {
               const fund = fundsData[i];
@@ -1194,7 +1230,15 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
                 historyPts: (fund.coverage as FundCoverage | undefined)?.history_points,
                 lastNav: (fund.coverage as FundCoverage | undefined)?.last_nav_date,
                 freshness: fund.freshness as Record<string, unknown> | undefined,
-                details: fund.details || record
+                details: fund.details || record,
+                fund_house: (fund.details?.fund_house as string | undefined) || record?.fund_house || 'Not available',
+                benchmark: (fund.details?.benchmark as string | undefined) || record?.benchmark || 'Not available',
+                manager: (fund.details?.fund_manager as string | undefined) || record?.fund_manager || 'Not available',
+                mainStyle: record?.main_style || null,
+                mandate: record?.mandate || null,
+                bestFor: record?.best_for || null,
+                mainRisk: record?.main_risk || null,
+                minimumSip: record?.minimum_sip || null
               };
             };
 
@@ -1243,6 +1287,99 @@ export default function ComparisonView({ ids, type, auxiliaryData }: Props) {
             ];
 
             const colsClass = ids.length === 2 ? 'sm:grid-cols-2' : ids.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-4';
+
+            if (variant === 'graph_only') {
+               return (
+                 <div className="flex flex-col h-full bg-[#050505]">
+                  <div className="flex-1 min-h-[400px] rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
+                    {ids.length === 2 && activeFunds.length === 2 && activeFunds[0] && activeFunds[1] ? (
+                      <FundComparisonChart
+                        schemeCodeA={ids[0]}
+                        schemeCodeB={ids[1]}
+                        nameA={activeFunds[0]?.fund?.meta?.scheme_name ?? 'Fund A'}
+                        nameB={activeFunds[1]?.fund?.meta?.scheme_name ?? 'Fund B'}
+                        period={period}
+                      />
+                    ) : ids.length > 2 ? (
+                      <div className="text-sm text-[#8ea7cd] text-center p-4">Chart comparison currently supports only 2 funds. Please select 2 funds to view the chart.</div>
+                    ) : null}
+                  </div>
+                 </div>
+               );
+            }
+
+            if (variant === 'metrics_only') {
+              const metricsQuant = auxiliaryData?.quant_data as QuantResponsePayload | undefined;
+              const verdict = metricsQuant?.verdict_context || '';
+              const sources = metricsQuant?.available || [];
+              const loadingVerdict = false;
+              const rows = [
+                { factor: 'Category', vals: activeFunds.map(f => f?.fund?.meta?.scheme_category || 'Not available') },
+                { factor: 'Main style', vals: activeFunds.map(f => f?.mainStyle || 'Not available') },
+                { factor: 'Risk level', vals: activeFunds.map(f => f?.riskLabel || 'Not available') },
+                { factor: 'AUM', vals: activeFunds.map(f => formatAum(f?.aum)) },
+                { factor: 'Expense ratio', vals: activeFunds.map(f => formatExpense(f?.expense)) },
+                { factor: 'Fund manager(s)', vals: activeFunds.map(f => f?.manager || 'Not available') },
+                { factor: 'Mandate', vals: activeFunds.map(f => f?.mandate || 'Not available') },
+                { factor: 'Best for', vals: activeFunds.map(f => f?.bestFor || 'Not available') },
+                { factor: 'Main risk', vals: activeFunds.map(f => f?.mainRisk || 'Not available') }
+              ];
+
+              return (
+                <div className="flex flex-col gap-5 my-4">
+                  <div className="overflow-x-auto rounded-xl border border-[#333] bg-[#111] shadow-lg">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-[#1a1a1a] text-white">
+                        <tr>
+                          <th className="px-5 py-4 font-bold border-b border-[#333] w-1/4 bg-[#1e1e1e]">Factor</th>
+                          {activeFunds.map((f, i) => (
+                            <th key={i} className="px-5 py-4 font-bold border-b border-[#333] min-w-[200px] border-l border-[#333]">{f?.fund?.meta?.scheme_name || `Fund ${i+1}`}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#333] text-gray-300">
+                        {rows.map((row, i) => (
+                          <tr key={i} className={i % 2 === 0 ? 'bg-[#111]' : 'bg-[#181818]'}>
+                            <td className="px-5 py-4 font-semibold text-white whitespace-nowrap align-top border-r border-[#333] bg-[#161616]">{row.factor}</td>
+                            {row.vals.map((v, j) => (
+                              <td key={j} className={`px-5 py-4 align-top leading-relaxed ${j > 0 ? 'border-l border-[#333]' : ''}`}>{v as string}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {loadingVerdict ? (
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-4 h-4 rounded-full border-2 border-[#66a3ff] border-t-transparent animate-spin"></div>
+                        <h3 className="text-sm font-semibold text-[#66a3ff]">Generating Simple Verdict...</h3>
+                      </div>
+                    </div>
+                  ) : verdict ? (
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5">
+                      <h3 className="mb-2 text-sm font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                        <Sparkles className="w-4 h-4" /> Simple Verdict
+                      </h3>
+                      <p className="text-sm leading-relaxed text-white">
+                        {verdict}
+                      </p>
+                      {sources.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-white/10">
+                          <h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd] mb-2">Sources</h4>
+                          <ul className="list-disc space-y-1 pl-4 text-xs leading-relaxed text-[#c8d8f6]">
+                            {sources.map((src, idx) => (
+                              <li key={idx}>{src}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }
 
             return (
               <div className="grid gap-6">

@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       amcs:
-        description: 'Comma-separated AMCs, in retry order'
+        description: 'Comma-separated AMCs to retry'
         required: false
-        default: 'axis,hdfc,sbi,icici,ppfas'
+        default: 'axis,hdfc,sbi,icici,ppfas,nippon'
       limit:
         description: 'Max docs retried per AMC'
         required: false
@@ -28,8 +28,13 @@ concurrency:
 
 jobs:
   retry:
+    name: retry-${{ matrix.amc }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        amc: [axis, hdfc, sbi, icici, ppfas, nippon]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -69,22 +74,28 @@ jobs:
             exit 1
           fi
 
-          AMCS="${DISPATCH_AMCS:-axis,hdfc,sbi,icici,ppfas}"
-          LIMIT="${DISPATCH_LIMIT:-50}"
+          EVENT_NAME="${GITHUB_EVENT_NAME:-workflow_dispatch}"
+          AMCS="${DISPATCH_AMCS:-axis,hdfc,sbi,icici,ppfas,nippon}"
+          clean_amcs=$(echo "$AMCS" | tr -d ' ')
+          if [[ ! ",$clean_amcs," == *",${{ matrix.amc }},"* ]]; then
+            echo "Skipping ${{ matrix.amc }} as it is not in the requested AMCS list ($AMCS)"
+            exit 0
+          fi
+
+          if [ -n "${DISPATCH_LIMIT:-}" ]; then
+            LIMIT="$DISPATCH_LIMIT"
+          elif [ "$EVENT_NAME" = "schedule" ]; then
+            LIMIT="1"
+          else
+            LIMIT="50"
+          fi
           MIN_AGE_HOURS="${DISPATCH_MIN_AGE_HOURS:-6}"
           STATUSES="${DISPATCH_STATUSES:-needs_review,failed,parsed_partial}"
+          amc="${{ matrix.amc }}"
 
-          IFS=',' read -ra AMC_LIST <<< "$AMCS"
-          for amc in "${AMC_LIST[@]}"; do
-            amc="$(echo "$amc" | xargs)"
-            if [ -z "$amc" ]; then
-              continue
-            fi
-
-            echo "Retrying parser actions for AMC=$amc limit=$LIMIT min_age_hours=$MIN_AGE_HOURS statuses=$STATUSES"
-            timeout 45m python -m backend.app.mf_ingestion.jobs.reparse_needs_review \
-              --amc "$amc" \
-              --limit "$LIMIT" \
-              --min-age-hours "$MIN_AGE_HOURS" \
-              --statuses "$STATUSES"
-          done
+          echo "Retrying parser actions for AMC=$amc limit=$LIMIT min_age_hours=$MIN_AGE_HOURS statuses=$STATUSES"
+          timeout 45m python -m backend.app.mf_ingestion.jobs.reparse_needs_review \
+            --amc "$amc" \
+            --limit "$LIMIT" \
+            --min-age-hours "$MIN_AGE_HOURS" \
+            --statuses "$STATUSES"

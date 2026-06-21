@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       amcs:
-        description: 'Comma-separated AMCs (axis,hdfc,sbi,icici,ppfas)'
+        description: 'Comma-separated AMCs (axis,hdfc,sbi,icici,ppfas,nippon)'
         required: false
-        default: 'axis,hdfc,sbi,icici,ppfas'
+        default: 'axis,hdfc,sbi,icici,ppfas,nippon'
       max_documents:
         description: 'Max documents per AMC per document type'
         required: false
@@ -49,6 +49,14 @@ on:
         description: 'Optional exact Axis portfolio URLs, comma-separated'
         required: false
         default: ''
+      nippon_factsheet_urls:
+        description: 'Optional exact Nippon factsheet URLs, comma-separated'
+        required: false
+        default: ''
+      nippon_portfolio_urls:
+        description: 'Optional exact Nippon portfolio URLs, comma-separated'
+        required: false
+        default: ''
 
 concurrency:
   group: sync-mf-disclosures-${{ github.ref }}
@@ -61,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        amc: [axis, hdfc, sbi, icici, ppfas]
+        amc: [axis, hdfc, sbi, icici, ppfas, nippon]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -89,12 +97,16 @@ jobs:
           MF_AXIS_PORTFOLIO_PAGE_URL: ${{ secrets.MF_AXIS_PORTFOLIO_PAGE_URL }}
           MF_SBI_FACTSHEET_PAGE_URL: ${{ secrets.MF_SBI_FACTSHEET_PAGE_URL }}
           MF_SBI_PORTFOLIO_PAGE_URL: ${{ secrets.MF_SBI_PORTFOLIO_PAGE_URL }}
+          MF_NIPPON_FACTSHEET_PAGE_URL: ${{ secrets.MF_NIPPON_FACTSHEET_PAGE_URL }}
+          MF_NIPPON_PORTFOLIO_PAGE_URL: ${{ secrets.MF_NIPPON_PORTFOLIO_PAGE_URL }}
           MF_HDFC_FACTSHEET_DOCUMENT_URLS: ${{ secrets.MF_HDFC_FACTSHEET_DOCUMENT_URLS }}
           MF_HDFC_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_HDFC_PORTFOLIO_DOCUMENT_URLS }}
           MF_AXIS_FACTSHEET_DOCUMENT_URLS: ${{ secrets.MF_AXIS_FACTSHEET_DOCUMENT_URLS }}
           MF_AXIS_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_AXIS_PORTFOLIO_DOCUMENT_URLS }}
           MF_SBI_FACTSHEET_DOCUMENT_URLS: ${{ secrets.MF_SBI_FACTSHEET_DOCUMENT_URLS }}
           MF_SBI_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_SBI_PORTFOLIO_DOCUMENT_URLS }}
+          MF_NIPPON_FACTSHEET_DOCUMENT_URLS: ${{ secrets.MF_NIPPON_FACTSHEET_DOCUMENT_URLS }}
+          MF_NIPPON_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_NIPPON_PORTFOLIO_DOCUMENT_URLS }}
           MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
           ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "false"
           DISPATCH_AMCS: ${{ inputs.amcs }}
@@ -108,6 +120,8 @@ jobs:
           DISPATCH_HDFC_PORTFOLIO_URLS: ${{ inputs.hdfc_portfolio_urls }}
           DISPATCH_AXIS_FACTSHEET_URLS: ${{ inputs.axis_factsheet_urls }}
           DISPATCH_AXIS_PORTFOLIO_URLS: ${{ inputs.axis_portfolio_urls }}
+          DISPATCH_NIPPON_FACTSHEET_URLS: ${{ inputs.nippon_factsheet_urls }}
+          DISPATCH_NIPPON_PORTFOLIO_URLS: ${{ inputs.nippon_portfolio_urls }}
         run: |
           set -euo pipefail
 
@@ -127,6 +141,8 @@ jobs:
           export MF_AXIS_PORTFOLIO_PAGE_URL="${MF_AXIS_PORTFOLIO_PAGE_URL:-https://www.axismf.com/downloads}"
           export MF_SBI_FACTSHEET_PAGE_URL="${MF_SBI_FACTSHEET_PAGE_URL:-https://www.sbimf.com/factsheets}"
           export MF_SBI_PORTFOLIO_PAGE_URL="${MF_SBI_PORTFOLIO_PAGE_URL:-https://www.sbimf.com/portfolios}"
+          export MF_NIPPON_FACTSHEET_PAGE_URL="${MF_NIPPON_FACTSHEET_PAGE_URL:-https://mf.nipponindiaim.com/InvestorServices/FactsheetsDocuments/Fundamentals-June-2026/index.html}"
+          export MF_NIPPON_PORTFOLIO_PAGE_URL="${MF_NIPPON_PORTFOLIO_PAGE_URL:-https://mf.nipponindiaim.com/investor-service/downloads/factsheet-portfolio-and-other-disclosures}"
           if [ -n "${DISPATCH_HDFC_FACTSHEET_URLS:-}" ]; then
             export MF_HDFC_FACTSHEET_DOCUMENT_URLS="$DISPATCH_HDFC_FACTSHEET_URLS"
           fi
@@ -148,9 +164,15 @@ jobs:
           if [ -n "${DISPATCH_SBI_PORTFOLIO_URL:-}" ]; then
             export MF_SBI_PORTFOLIO_DOCUMENT_URLS="$DISPATCH_SBI_PORTFOLIO_URL"
           fi
+          if [ -n "${DISPATCH_NIPPON_FACTSHEET_URLS:-}" ]; then
+            export MF_NIPPON_FACTSHEET_DOCUMENT_URLS="$DISPATCH_NIPPON_FACTSHEET_URLS"
+          fi
+          if [ -n "${DISPATCH_NIPPON_PORTFOLIO_URLS:-}" ]; then
+            export MF_NIPPON_PORTFOLIO_DOCUMENT_URLS="$DISPATCH_NIPPON_PORTFOLIO_URLS"
+          fi
 
           EVENT_NAME="${GITHUB_EVENT_NAME:-workflow_dispatch}"
-          AMCS="${DISPATCH_AMCS:-axis,hdfc,sbi,icici,ppfas}"
+          AMCS="${DISPATCH_AMCS:-axis,hdfc,sbi,icici,ppfas,nippon}"
           GLOBAL_MAX_DOCS="${DISPATCH_MAX_DOCS:-5}"
           GLOBAL_PARSE_LIMIT="${DISPATCH_PARSE_LIMIT:-800}"
           PARSE_ROUNDS="${DISPATCH_PARSE_ROUNDS:-3}"
@@ -176,6 +198,7 @@ jobs:
               hdfc)  max_docs=1; parse_limit=700 ;;
               sbi)   max_docs=1; parse_limit=900 ;;
               icici) max_docs=1; parse_limit=900 ;;
+              nippon) max_docs=1; parse_limit=900 ;;
               *)     max_docs=1; parse_limit=600 ;;
             esac
           fi
@@ -224,7 +247,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          MF_DISCLOSURE_COVERAGE_AMCS: axis,hdfc,sbi,icici,ppfas
+          MF_DISCLOSURE_COVERAGE_AMCS: axis,hdfc,sbi,icici,ppfas,nippon
           MF_DISCLOSURE_MIN_FIELD_COUNT: "1"
           MF_DISCLOSURE_MIN_CORE_FIELD_RATIO: "0.01"
           MF_DISCLOSURE_MIN_PORTFOLIO_FAMILY_RATIO: "0.01"

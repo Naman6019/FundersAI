@@ -38,7 +38,7 @@ DAY_FIRST_MONTH_PATTERN = re.compile(
     r"\b\d{1,2}(?:st|nd|rd|th)?[\s\-_]+(?P<month>jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\-_\,]+(?P<year>20\d{2})",
     re.IGNORECASE,
 )
-SUPPORTED_FILE_EXTENSIONS = {".pdf", ".xls", ".xlsx", ".xlsm", ".csv", ".zip"}
+SUPPORTED_FILE_EXTENSIONS = {".pdf", ".xls", ".xlsx", ".xlsm", ".csv", ".zip", ".html", ".htm"}
 GENERIC_KEYWORDS = {
     "factsheet": ("factsheet", "fact sheet", "fund sheet", "monthly factsheet"),
     "portfolio_disclosure": ("portfolio", "disclosure", "holdings", "statutory", "monthly portfolio"),
@@ -51,6 +51,10 @@ GENERIC_REQUIRED_KEYWORDS: dict[str, dict[str, tuple[str, ...]]] = {
     "sbi": {
         "factsheet": ("factsheet", "fact sheet", "fund fact"),
         "portfolio_disclosure": ("portfolio", "holding", "monthly portfolio"),
+    },
+    "nippon": {
+        "factsheet": ("factsheet", "fundamental", "fundamentals", "fund facts", "fund", "nippon"),
+        "portfolio_disclosure": ("portfolio", "monthly portfolio", "disclosure", "nippon"),
     },
 }
 GENERIC_EXCLUDE_KEYWORDS = (
@@ -105,7 +109,7 @@ class AMCDownloader(BaseDownloader):
                 len(docs),
             )
             return docs
-        if adapter_key in {"hdfc", "sbi", "axis"}:
+        if adapter_key in {"hdfc", "sbi", "axis", "motilal", "nippon"}:
             if adapter_key == "sbi" and (document_type or "").strip().lower() == "factsheet":
                 docs = _discover_sbi_factsheet_documents(
                     self.source,
@@ -177,7 +181,7 @@ class AMCDownloader(BaseDownloader):
                 file_bytes=response.content,
             )
 
-        if adapter_key in {"hdfc", "sbi", "axis"}:
+        if adapter_key in {"hdfc", "sbi", "axis", "motilal", "nippon"}:
             referer = discovered.discovery_page_url or _base_site_url(discovered.url)
             response = _request_with_retry(
                 "GET",
@@ -249,6 +253,10 @@ def _discover_generic_anchor_documents(
     if not listing_url:
         return []
 
+    manual_docs = _manual_discovered_documents_for_source(source, doc_type, listing_url)
+    docs: list[DiscoveredDocument] = list(manual_docs)
+    seen_urls: set[str] = {item.url for item in manual_docs}
+
     try:
         response = _request_with_retry(
             "GET",
@@ -263,19 +271,12 @@ def _discover_generic_anchor_documents(
             doc_type,
             exc,
         )
-        return []
+        return docs
 
     soup = BeautifulSoup(response.text or "", "html.parser")
-    docs: list[DiscoveredDocument] = []
-    seen_urls: set[str] = set()
     keywords = GENERIC_KEYWORDS.get(doc_type, ())
     required_keywords = _required_keywords_for_generic_source(source, doc_type)
-
-    # Manual override URLs (if provided) should be considered first.
-    manual_docs = _manual_discovered_documents_for_source(source, doc_type, listing_url)
-    for item in manual_docs:
-        docs.append(item)
-        seen_urls.add(item.url)
+    adapter_key = (source.adapter_key or "").strip().lower()
 
     for anchor in soup.find_all("a"):
         href = str(anchor.get("href") or "").strip()
@@ -322,7 +323,24 @@ def _discover_generic_anchor_documents(
             )
         )
 
-    adapter_key = (source.adapter_key or "").strip().lower()
+    if adapter_key == "nippon" and doc_type == "factsheet" and not docs:
+        listing_ext = Path(urlsplit(response.url or listing_url).path).suffix.lower() or ".html"
+        if listing_ext in {".html", ".htm"}:
+            combined = f"{_human_title_from_url(response.url or listing_url)} {response.url or listing_url}".lower()
+            docs.append(
+                DiscoveredDocument(
+                    amc_name=source.amc_name,
+                    amc_code=source.amc_code,
+                    document_type=doc_type,
+                    title=_human_title_from_url(response.url or listing_url),
+                    url=response.url or listing_url,
+                    discovery_page_url=response.url or listing_url,
+                    file_ext=listing_ext,
+                    report_month=_detect_report_month_from_text(combined),
+                    priority_score=_generic_base_score(ext=listing_ext, document_type=doc_type),
+                )
+            )
+
     if adapter_key == "hdfc":
         hdfc_extensions = (".pdf",) if doc_type == "factsheet" else (".xlsx", ".xlsm", ".xls", ".csv", ".zip", ".pdf")
         embedded_urls = _extract_embedded_file_urls(response.text or "", response.url or listing_url, extensions=hdfc_extensions)
@@ -536,10 +554,11 @@ def _validate_generic_download_response(
 
     content_type = str(response.headers.get("Content-Type") or "").lower()
     prefix = bytes(response.content[:8] or b"").lstrip()
-    if "text/html" in content_type or prefix.startswith((b"<html", b"<!doc")):
+    ext = Path(urlsplit(final_url).path).suffix.lower() or discovered.file_ext.lower()
+    html_factsheet_allowed = discovered.document_type == "factsheet" and ext in {".html", ".htm"}
+    if not html_factsheet_allowed and ("text/html" in content_type or prefix.startswith((b"<html", b"<!doc"))):
         raise RuntimeError(f"download_rejected_html_response url={final_url}")
 
-    ext = Path(urlsplit(final_url).path).suffix.lower() or discovered.file_ext.lower()
     adapter_key = (source.adapter_key or "").strip().lower()
     if adapter_key == "sbi" and discovered.document_type == "portfolio_disclosure":
         if not _sbi_guessed_portfolio_probe_is_valid(response, final_url):
@@ -933,6 +952,8 @@ def _generic_base_score(ext: str, document_type: str) -> int:
         }.get(ext, 90)
     return {
         ".pdf": 220,
+        ".html": 150,
+        ".htm": 150,
         ".xlsx": 140,
         ".xls": 130,
         ".xlsm": 125,
@@ -964,6 +985,10 @@ def _infer_file_ext_from_text(text: str) -> str:
         return ".zip"
     if ".pdf" in low:
         return ".pdf"
+    if ".html" in low:
+        return ".html"
+    if ".htm" in low:
+        return ".htm"
     return ""
 
 

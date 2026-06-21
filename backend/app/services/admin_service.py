@@ -22,6 +22,7 @@ from app.services.chat_service import (
     _supports_from_history_summary,
 )
 from app.services.provider_usage import build_usage_dashboard
+from app.services.supported_amcs import SUPPORTED_MF_AMC_MARKERS, supported_amc_label_from_text
 from app.utils.date_helpers import age_days as _age_days
 from app.utils.date_helpers import fmt_age as _fmt_age
 from app.utils.date_helpers import iso_or_none as _iso_or_none
@@ -85,23 +86,8 @@ def _has_metric_value(value: Any) -> bool:
     return value not in (None, "")
 
 
-SUPPORTED_MF_AMC_MARKERS = {
-    "HDFC": ("hdfc",),
-    "SBI": ("sbi",),
-    "ICICI": ("icici",),
-    "AXIS": ("axis",),
-    "PPFAS": ("ppfas", "parag parikh"),
-}
-
-
 def _supported_amc_label(value: Any) -> str | None:
-    text = str(value or "").strip().lower()
-    if not text:
-        return None
-    for label, markers in SUPPORTED_MF_AMC_MARKERS.items():
-        if any(marker in text for marker in markers):
-            return label
-    return None
+    return supported_amc_label_from_text(value)
 
 
 def _month_string(value: Any) -> str | None:

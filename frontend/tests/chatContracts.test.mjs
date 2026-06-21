@@ -38,3 +38,14 @@ test('inline copilot uses the real chat API request and response shape', () => {
   assert.doesNotMatch(source, /messages:\s*\[\{\s*role:\s*'user'/);
   assert.doesNotMatch(source, /data\.content \|\| data\.reply/);
 });
+
+test('comparison view syncs local ids when a new compare action arrives', () => {
+  const layout = readFileSync(new URL('../components/layout/DashboardLayout.tsx', import.meta.url), 'utf8');
+  const chat = readFileSync(new URL('../components/chat/ChatWindow.tsx', import.meta.url), 'utf8');
+  const comparison = readFileSync(new URL('../components/canvas/ComparisonView.tsx', import.meta.url), 'utf8');
+
+  assert.match(layout, /key=\{`comparison:\$\{selectedIds\.join\('\|'\)\}`\}/);
+  assert.match(layout, /key=\{`comparison-graph:\$\{selectedIds\.join\('\|'\)\}`\}/);
+  assert.match(chat, /key=\{\(msg\.metadata\.system_action_ids as string\[\]\)\.join\('\|'\)\}/);
+  assert.match(comparison, /setIds\(newIds\);\s*store\.setIds\(newIds\);/);
+});

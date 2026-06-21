@@ -143,3 +143,4 @@ def test_data_health_counts_aum_and_ter_outside_newest_nav_sample(monkeypatch):
     assert axis_quality["risk_label_coverage"] == 1.0
     assert axis_quality["parse_review_count"] == 1
     assert "% of NAV" in axis_quality["holdings_source_note"]
+    assert any(item["amc"] == "NIPPON" for item in payload["amc_parser_quality"])

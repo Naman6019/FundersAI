@@ -94,6 +94,34 @@ SOURCES: dict[str, AMCDocumentSource] = {
         confirmation_notes=None,
         enabled=True,
     ),
+    "motilal": AMCDocumentSource(
+        amc_name="Motilal Oswal Mutual Fund",
+        amc_code="MOTILAL",
+        adapter_key="motilal",
+        factsheet_page_url=_env_url("MF_MOTILAL_FACTSHEET_PAGE_URL", "https://www.motilaloswalmf.com/downloads/factsheets"),
+        portfolio_disclosure_page_url=_env_url("MF_MOTILAL_PORTFOLIO_PAGE_URL", "https://www.motilaloswalmf.com/downloads/scheme-portfolio-details"),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+    ),
+    "nippon": AMCDocumentSource(
+        amc_name="Nippon India Mutual Fund",
+        amc_code="NIPPON",
+        adapter_key="nippon",
+        factsheet_page_url=_env_url(
+            "MF_NIPPON_FACTSHEET_PAGE_URL",
+            "https://mf.nipponindiaim.com/InvestorServices/FactsheetsDocuments/Fundamentals-June-2026/index.html",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_NIPPON_PORTFOLIO_PAGE_URL",
+            "https://mf.nipponindiaim.com/investor-service/downloads/factsheet-portfolio-and-other-disclosures",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+    ),
 }
 
 

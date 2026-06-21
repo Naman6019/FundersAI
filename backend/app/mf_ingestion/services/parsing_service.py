@@ -20,6 +20,8 @@ from app.mf_ingestion.parsers.adapters.mirae_adapter import MiraeAdapter
 from app.mf_ingestion.parsers.adapters.ppfas_adapter import PPFASAdapter
 from app.mf_ingestion.parsers.adapters.sbi_adapter import SBIAdapter
 from app.mf_ingestion.parsers.adapters.axis_adapter import AxisAdapter
+from app.mf_ingestion.parsers.adapters.motilal_adapter import MotilalAdapter
+from app.mf_ingestion.parsers.adapters.nippon_adapter import NipponAdapter
 from app.mf_ingestion.parsers.base_parser import ParseContext
 from app.mf_ingestion.parsers.factsheet_parser import FactsheetParser
 from app.mf_ingestion.parsers.holdings_parser import HoldingsParser
@@ -59,6 +61,8 @@ class ParsingService:
             "icici": ICICIAdapter(),
             "sbi": SBIAdapter(),
             "axis": AxisAdapter(),
+            "motilal": MotilalAdapter(),
+            "nippon": NipponAdapter(),
         }
 
     def parse_latest_document_for_scheme(self, amc_code: str, scheme_name: str) -> dict[str, Any] | None:

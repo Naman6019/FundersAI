@@ -741,9 +741,20 @@ export default function DashboardLayout() {
       case 'COMPARISON':
         return (
           <ComparisonView
+            key={`comparison:${selectedIds.join('|')}`}
             ids={selectedIds}
             type={selectedIds[0]?.match(/^[0-9]+$/) ? 'MUTUAL_FUND' : 'STOCK'}
             auxiliaryData={auxiliaryData}
+          />
+        );
+      case 'COMPARISON_GRAPH_ONLY':
+        return (
+          <ComparisonView
+            key={`comparison-graph:${selectedIds.join('|')}`}
+            ids={selectedIds}
+            type={selectedIds[0]?.match(/^[0-9]+$/) ? 'MUTUAL_FUND' : 'STOCK'}
+            auxiliaryData={auxiliaryData}
+            variant="graph_only"
           />
         );
       case 'PORTFOLIO_REVIEW':

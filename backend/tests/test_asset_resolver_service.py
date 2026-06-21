@@ -99,6 +99,23 @@ def test_resolver_maps_axis_typo_to_high_confidence_fund():
     assert result.confidence >= 0.88
 
 
+def test_resolver_maps_nippon_small_cap_to_supported_fund():
+    resolver, _fake = _resolver([
+        {
+            "scheme_code": "119332",
+            "scheme_name": "Nippon India Small Cap Fund - Direct Plan - Growth",
+            "amc_name": "Nippon India Mutual Fund",
+        }
+    ])
+
+    result = resolver.resolve("Nippon small cap", asset_type="mutual_fund")
+
+    assert result.coverage_status == "supported"
+    assert result.resolved_name == "Nippon India Small Cap Fund - Direct Plan - Growth"
+    assert result.amc == "NIPPON"
+    assert result.confidence >= 0.88
+
+
 def test_resolver_maps_hdfc_mid_cpa_typo_to_mid_cap_fund():
     resolver, _fake = _resolver([
         {
@@ -140,6 +157,22 @@ def test_resolver_rejects_unsupported_amc_without_db_lookup():
     resolver, fake = _resolver([])
 
     result = resolver.resolve("Quant Small Cap Fund", asset_type="mutual_fund")
+
+    assert result.coverage_status == "unsupported"
+    assert result.confidence == 0
+    assert fake.calls == []
+
+
+def test_resolver_keeps_motilal_parser_only_until_coverage_is_promoted():
+    resolver, fake = _resolver([
+        {
+            "scheme_code": "motilal-101",
+            "scheme_name": "Motilal Oswal Midcap Fund Direct Growth",
+            "amc_name": "Motilal Oswal Mutual Fund",
+        }
+    ])
+
+    result = resolver.resolve("Motilal Midcap Fund", asset_type="mutual_fund")
 
     assert result.coverage_status == "unsupported"
     assert result.confidence == 0

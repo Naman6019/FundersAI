@@ -10,15 +10,10 @@ if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
 from app.database import supabase
+from app.services.supported_amcs import SUPPORTED_MF_AMC_MARKERS
 
 
-AMC_LABELS = {
-    "axis": ("axis",),
-    "hdfc": ("hdfc",),
-    "sbi": ("sbi",),
-    "icici": ("icici",),
-    "ppfas": ("ppfas", "parag parikh", "parag", "parikh"),
-}
+AMC_LABELS = {label.lower(): markers for label, markers in SUPPORTED_MF_AMC_MARKERS.items()}
 
 
 def _get_all(table: str, columns: str) -> list[dict[str, Any]]:
@@ -48,7 +43,7 @@ def _env_int(name: str, default: int) -> int:
 
 
 def _configured_amcs() -> list[str]:
-    raw = os.getenv("MF_DISCLOSURE_COVERAGE_AMCS", "axis,hdfc,sbi,icici,ppfas")
+    raw = os.getenv("MF_DISCLOSURE_COVERAGE_AMCS", "axis,hdfc,sbi,icici,ppfas,nippon")
     return [token.strip().lower() for token in raw.split(",") if token.strip()]
 
 

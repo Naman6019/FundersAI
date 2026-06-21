@@ -158,6 +158,58 @@ def test_compare_service_builds_holdings_overlap_from_local_rows():
     assert overlap["top_common_holdings"][0]["name"] == "HDFC Bank"
 
 
+def test_compare_service_loads_family_id_holdings_and_sectors():
+    fake = _FakeSupabase({
+        "mutual_fund_core_snapshot": [
+            {
+                "scheme_code": "301",
+                "scheme_name": "Nippon India Small Cap Fund - Direct Plan - Growth",
+                "amc_name": "Nippon India Mutual Fund",
+                "category": "Small Cap",
+                "benchmark": "Nifty Smallcap 250 TRI",
+                "nav": 180.0,
+                "nav_date": "2026-05-31",
+                "expense_ratio": 0.67,
+                "aum": 59456.65,
+            },
+        ],
+        "mutual_fund_nav_history": [],
+        "stock_prices_daily": [],
+        "mutual_fund_family_mapping": [{"scheme_code": "301", "family_id": "nippon-small"}],
+        "mutual_fund_holdings": [
+            {
+                "family_id": "nippon-small",
+                "as_of_date": "2026-05-31",
+                "security_name": "BSE Limited",
+                "isin": "INE118H01025",
+                "sector": "Capital Markets",
+                "weight_pct": 3.32,
+                "source": "amc_disclosure",
+            }
+        ],
+        "mutual_fund_sectors": [
+            {
+                "family_id": "nippon-small",
+                "sector": "Capital Markets",
+                "weight_pct": 12.5,
+                "stock_count": 8,
+                "source": "amc_disclosure",
+            }
+        ],
+    })
+    service = CompareDataService(fake)
+
+    result = asyncio.run(service.build_mutual_fund_compare(
+        ["Nippon India Small Cap"],
+        pre_resolutions=[_resolution("Nippon India Small Cap Fund - Direct Plan - Growth", "301", "NIPPON")],
+    ))
+
+    item = result["quant_data"]["comparison"]["Nippon India Small Cap Fund - Direct Plan - Growth"]
+    assert item["source_summary"]["holdings_as_of_date"] == "2026-05-31"
+    assert item["holdings"][0]["security_name"] == "BSE Limited"
+    assert item["sector_allocation"][0]["sector"] == "Capital Markets"
+
+
 def test_compare_service_accepts_axis_percent_nav_holdings_without_isin():
     fake = _FakeSupabase({
         "mutual_fund_core_snapshot": [

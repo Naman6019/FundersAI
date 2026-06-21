@@ -36,6 +36,7 @@ from app.services.fund_service import FundService
 from app.services.indianapi_quota_guard import evaluate as evaluate_indianapi_quota
 from app.services.mfapi_service import get_latest_nav as mfapi_get_latest_nav, get_nav_history as mfapi_get_nav_history, search_schemes as mfapi_search_schemes
 from app.services.quant_service import build_stock_compare, build_stock_profile, get_stock_financials, get_stock_price_history
+from app.services.supported_amcs import SUPPORTED_AMC_PIPELINE_COPY, SUPPORTED_MF_AMC_MARKERS
 from app.stock_universe import resolve_stock_symbol
 from app.utils.date_helpers import to_utc_datetime as _to_utc_datetime
 
@@ -43,14 +44,6 @@ logger = logging.getLogger(__name__)
 
 os.environ.setdefault("YFINANCE_CACHE_DIR", "/tmp/yfinance_cache")
 yf.set_tz_cache_location("/tmp/yfinance_tz_cache")
-
-SUPPORTED_MF_AMC_MARKERS = {
-    "HDFC": ("hdfc",),
-    "SBI": ("sbi",),
-    "ICICI": ("icici",),
-    "AXIS": ("axis",),
-    "PPFAS": ("ppfas", "parag parikh"),
-}
 
 _default_mf_repository = MutualFundRepository()
 _current_mf_repository: ContextVar[MutualFundRepository] = ContextVar("current_mf_repository", default=_default_mf_repository)
@@ -1154,6 +1147,10 @@ def _normalize_compare_entity_name(entity: str) -> str:
         return "ICICI Prudential Large Cap"
     if "sbi" in low and "blue" in low:
         return "SBI Bluechip"
+    if "nippon" in low and "small" in low:
+        return "Nippon India Small Cap"
+    if "nippon" in low and ("growth" in low or "mid" in low):
+        return "Nippon India Growth Mid Cap"
     if "flexi" in low and "cap" not in low:
         return f"{text} Cap"
     return text
@@ -1533,6 +1530,10 @@ def _normalize_portfolio_fund_name(name: str) -> str:
         return "ICICI Prudential Multi Asset"
     if "icici" in low and "flexi" in low:
         return "ICICI Prudential Flexicap"
+    if "nippon" in low and "small" in low:
+        return "Nippon India Small Cap"
+    if "nippon" in low and ("growth" in low or "mid" in low):
+        return "Nippon India Growth Mid Cap"
     return text
 
 def _portfolio_amc_terms(name: str) -> list[str]:
@@ -1545,6 +1546,8 @@ def _portfolio_amc_terms(name: str) -> list[str]:
         return ["icici", "prudential"]
     if "parag" in low or "ppfas" in low:
         return ["parag", "ppfas"]
+    if "nippon" in low:
+        return ["nippon"]
     return []
 
 def _portfolio_bucket_hint(name: str) -> str | None:
@@ -1746,19 +1749,8 @@ def _portfolio_bucket(category: Any) -> str:
 def _load_latest_fund_holdings(scheme_code_value: Any) -> tuple[list[dict[str, Any]], str | None]:
     if not get_mf_repository() or scheme_code_value in (None, ""):
         return [], None
-    scheme_code = str(scheme_code_value)
     try:
-        rows = (
-            get_mf_repository().table("mutual_fund_holdings")
-            .select("as_of_date,security_name,isin,sector,weight_pct,source,provider_payload")
-            .eq("scheme_code", int(scheme_code) if scheme_code.isdigit() else scheme_code)
-            .order("as_of_date", desc=True)
-            .order("weight_pct", desc=True)
-            .limit(500)
-            .execute()
-            .data
-            or []
-        )
+        rows = get_mf_repository().get_latest_holdings(scheme_code_value)
     except Exception:
         return [], None
 
@@ -3449,9 +3441,10 @@ Read the impact mainly through crude oil, INR/USD, inflation expectations, rates
     compare_direct_answer = _compare_direct_answer_markdown(quant_data) if intent == "compare" else ""
     followup_answer = _comparison_followup_answer_markdown(quant_data, intent_info.get("followup_question")) if intent == "compare" else ""
     comparison_summary = _comparison_summary_markdown(quant_data.get("comparison_summary")) if intent == "compare" and isinstance(quant_data, dict) else ""
+    is_mf = isinstance(quant_data, dict) and quant_data.get("asset_type") == "mutual_fund"
     plain_canvas_compare = (
         intent == "compare"
-        and comparison_view_mode == "canvas"
+        and (comparison_view_mode == "canvas" or is_mf)
         and not deep_research
         and not intent_info.get("followup_question")
         and not intent_info.get("followup_from_context")
@@ -3463,25 +3456,22 @@ Read the impact mainly through crude oil, INR/USD, inflation expectations, rates
             response_meta["model_status"] = "skipped"
             response_meta["status_flag"] = None
         title = "Quick Read"
+        view_text = "Canvas is open with the full metric view." if comparison_view_mode == "canvas" else "Here is the comparison snapshot."
+
         long_term_read = compare_direct_answer or (
-            "Use the canvas metrics to compare returns, volatility, drawdown, Sharpe ratio, expense ratio, AUM, and data freshness side by side."
+            "Use the metrics below to compare returns, volatility, expense ratio, AUM, and other factors."
         )
+
         glossary_markdown = ""
         if beginner_mode:
             glossary_markdown = "\n\n### Terms in Plain English\n- Sharpe ratio: return earned for each unit of risk.\n- Drawdown: how far the value fell from a recent high.\n- Beta: how much the asset tends to move compared with the market.\n- Expense ratio: the yearly fund cost charged as a percentage."
         return f"""### {subject} — {title}
-> Canvas is open with the full metric view. Here is the usable read from the data available now.
+> {view_text}
 
-### What the Data Says
-{long_term_read}
 {chr(10) + chr(10) + "### Comparison Snapshot" + chr(10) + comparison_summary if comparison_summary else ""}
+{chr(10) + chr(10) + "### What the Data Says" + chr(10) + long_term_read if long_term_read else ""}
 {chr(10) + chr(10) + "### Follow-up Answer" + chr(10) + followup_answer if followup_answer else ""}
-{glossary_markdown}
-
-### Best Follow-up
-- Compare downside protection and max drawdown.
-
-{DISCLAIMER}"""
+{glossary_markdown}"""
 
     system_prompt = """You are FundersAI, a research-only Indian market analyst.
 Write only the Trend Observation paragraph.
@@ -4134,16 +4124,16 @@ async def chat_endpoint(
     if is_unsupported_mf:
         coverage_status = "unsupported"
         status_flag = "unsupported_coverage"
-        advisory_message = """### ⚠️ FundersAI Premium Advisor Notice
+        advisory_message = f"""### ⚠️ FundersAI Premium Advisor Notice
 
-FundersAI currently has active mutual fund data pipelines for **PPFAS (Parag Parikh)**, **ICICI Prudential**, **HDFC**, **SBI**, and **Axis**.
+FundersAI currently has active mutual fund data pipelines for **{SUPPORTED_AMC_PIPELINE_COPY}**.
 
-Live ingestion, portfolio holdings tracking, and historical return pipelines are currently active for these five AMC families.
+Live ingestion, portfolio holdings tracking, and historical return pipelines are currently active for these six AMC families.
 Axis factsheet holdings are parsed as **% of NAV** rows from AMC factsheets; they are not ISIN-backed from that factsheet source.
-Other AMCs (such as **Nippon India**, **Quant**, **Kotak**, etc.) are still being configured.
+Other AMCs (such as **Quant**, **Kotak**, etc.) are still being configured.
 
 To experience FundersAI's advanced research capabilities, please try:
-- Comparing **Parag Parikh**, **ICICI**, **HDFC**, **SBI**, or **Axis** funds
+- Comparing **{SUPPORTED_AMC_PIPELINE_COPY}** funds
 - Inspecting sector allocations, risk metrics, or portfolio holdings for these supported funds
 - Asking about NAV trends, expense ratios, or Sharpe/Alpha comparisons across these supported AMCs."""
 

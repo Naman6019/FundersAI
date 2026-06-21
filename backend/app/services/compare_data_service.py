@@ -260,6 +260,10 @@ class CompareDataService:
         ]
         if benchmark_source == "nifty_fallback":
             missing_fields.append("fund_benchmark")
+
+        provider_payload = row.get("provider_payload") or {}
+        qualitative = provider_payload.get("qualitative_insights") or {}
+
         item = {
             "scheme_code": str(scheme_code) if scheme_code is not None else None,
             "name": row.get("scheme_name") or resolution.resolved_name,
@@ -273,6 +277,11 @@ class CompareDataService:
             "benchmark": benchmark,
             "benchmark_source": benchmark_source,
             "fund_manager": row.get("fund_manager"),
+            "main_style": qualitative.get("main_style"),
+            "minimum_sip": qualitative.get("minimum_sip"),
+            "mandate": qualitative.get("mandate"),
+            "best_for": qualitative.get("best_for"),
+            "main_risk": qualitative.get("main_risk"),
             "risk_level": row.get("risk_level"),
             "fund_house": row.get("amc_name") or row.get("fund_house"),
             "expense_ratio": row.get("expense_ratio"),
