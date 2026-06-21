@@ -1,6 +1,10 @@
 import logging
+import os
 import re
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import List, Optional
+from urllib.parse import urljoin, urlsplit
 
 import requests
 from bs4 import BeautifulSoup
@@ -35,6 +39,15 @@ class AxisAdapter(BaseAMCAdapter):
         )
 
     def fetch_documents(self, source: AMCDocumentSource, document_type: str) -> List[DiscoveredDocument]:
+        # Tier 0: Env-injected URLs (highest priority, used when site blocks CI runners)
+        env_docs = self._docs_from_env(source, document_type)
+        if env_docs:
+            logger.info("Axis: using %d document(s) from env var MF_AXIS_%s_DOCUMENT_URLS.",
+                        len(env_docs),
+                        "FACTSHEET" if document_type == "factsheet" else "PORTFOLIO")
+            return env_docs
+
+        # Tier 1: Static HTML / known API endpoint
         docs = self.fetch_from_axis_api_or_page(source, document_type)
 
         if not docs:
@@ -45,6 +58,42 @@ class AxisAdapter(BaseAMCAdapter):
             logger.info("AMFI fallback yielded no documents. Falling back to Playwright.")
             docs = self.fetch_with_playwright(source, document_type)
 
+        return docs
+
+    def _docs_from_env(self, source: AMCDocumentSource, document_type: str) -> List[DiscoveredDocument]:
+        """Read comma-separated direct document URLs from MF_AXIS_FACTSHEET_DOCUMENT_URLS
+        or MF_AXIS_PORTFOLIO_DOCUMENT_URLS, identical to the amc_downloader manual-URL pattern."""
+        suffix = "FACTSHEET_DOCUMENT_URLS" if document_type == "factsheet" else "PORTFOLIO_DOCUMENT_URLS"
+        env_name = f"MF_AXIS_{suffix}"
+        raw = str(os.getenv(env_name, "") or "").strip()
+        if not raw:
+            return []
+
+        listing_url = (
+            source.factsheet_page_url if document_type == "factsheet"
+            else source.portfolio_disclosure_page_url
+        ) or "https://www.axismf.com/downloads"
+
+        docs: List[DiscoveredDocument] = []
+        seen: set = set()
+        for token in raw.split(","):
+            url = token.strip()
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            ext = Path(urlsplit(url).path).suffix.lower() or (".pdf" if document_type == "factsheet" else ".xlsx")
+            title = Path(urlsplit(url).path).name or "document"
+            docs.append(DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type=document_type,
+                title=title,
+                url=url,
+                discovery_page_url=listing_url,
+                file_ext=ext,
+                report_month=None,
+                priority_score=9_000_000,
+            ))
         return docs
 
     def fetch_from_axis_api_or_page(self, source: AMCDocumentSource, document_type: str) -> List[DiscoveredDocument]:

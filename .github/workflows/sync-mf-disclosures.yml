@@ -82,6 +82,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
 
+      - name: Install Playwright browser (Axis only)
+        if: matrix.amc == 'axis'
+        run: playwright install chromium --with-deps
+
       - name: Ingest + parse disclosures
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -141,10 +145,27 @@ jobs:
           export MF_AXIS_PORTFOLIO_PAGE_URL="${MF_AXIS_PORTFOLIO_PAGE_URL:-https://www.axismf.com/downloads}"
           export MF_SBI_FACTSHEET_PAGE_URL="${MF_SBI_FACTSHEET_PAGE_URL:-https://www.sbimf.com/factsheets}"
           export MF_SBI_PORTFOLIO_PAGE_URL="${MF_SBI_PORTFOLIO_PAGE_URL:-https://www.sbimf.com/portfolios}"
-          export MF_NIPPON_FACTSHEET_PAGE_URL="${MF_NIPPON_FACTSHEET_PAGE_URL:-https://mf.nipponindiaim.com/InvestorServices/FactsheetsDocuments/Fundamentals-June-2026/index.html}"
+          _nippon_year=$(date -d "-1 month" +%Y 2>/dev/null || python3 -c "from datetime import date; from dateutil.relativedelta import relativedelta; d=date.today()-relativedelta(months=1); print(d.year)")
+          _nippon_month=$(date -d "-1 month" +%B 2>/dev/null || python3 -c "from datetime import date; from dateutil.relativedelta import relativedelta; d=date.today()-relativedelta(months=1); print(d.strftime('%B'))")
+          export MF_NIPPON_FACTSHEET_PAGE_URL="${MF_NIPPON_FACTSHEET_PAGE_URL:-https://mf.nipponindiaim.com/InvestorServices/FactsheetsDocuments/Fundamentals-${_nippon_month}-${_nippon_year}/index.html}"
+          echo "Nippon factsheet page URL: $MF_NIPPON_FACTSHEET_PAGE_URL"
           export MF_NIPPON_PORTFOLIO_PAGE_URL="${MF_NIPPON_PORTFOLIO_PAGE_URL:-https://mf.nipponindiaim.com/investor-service/downloads/factsheet-portfolio-and-other-disclosures}"
+
           if [ -n "${DISPATCH_HDFC_FACTSHEET_URLS:-}" ]; then
             export MF_HDFC_FACTSHEET_DOCUMENT_URLS="$DISPATCH_HDFC_FACTSHEET_URLS"
+          elif [ -z "${MF_HDFC_FACTSHEET_DOCUMENT_URLS:-}" ]; then
+            # Auto-derive HDFC factsheet URL for last 2 months.
+            # Pattern: https://files.hdfcfund.com/s3fs-public/YYYY-MM/HDFC%20MF%20Factsheet%20-%20{Month}%20{YYYY}.pdf
+            _hdfc_urls=""
+            for _offset in 1 2; do
+              _year=$(date -d "-${_offset} month" +%Y 2>/dev/null || python3 -c "from datetime import date; from dateutil.relativedelta import relativedelta; d=date.today()-relativedelta(months=${_offset}); print(d.year)")
+              _month_num=$(date -d "-${_offset} month" +%m 2>/dev/null || python3 -c "from datetime import date; from dateutil.relativedelta import relativedelta; d=date.today()-relativedelta(months=${_offset}); print(f'{d.month:02d}')")
+              _month_name=$(date -d "-${_offset} month" +%B 2>/dev/null || python3 -c "from datetime import date; from dateutil.relativedelta import relativedelta; d=date.today()-relativedelta(months=${_offset}); print(d.strftime('%B'))")
+              _hdfc_url="https://files.hdfcfund.com/s3fs-public/${_year}-${_month_num}/HDFC%20MF%20Factsheet%20-%20${_month_name}%20${_year}.pdf"
+              if [ -z "$_hdfc_urls" ]; then _hdfc_urls="$_hdfc_url"; else _hdfc_urls="${_hdfc_urls},${_hdfc_url}"; fi
+            done
+            export MF_HDFC_FACTSHEET_DOCUMENT_URLS="$_hdfc_urls"
+            echo "Auto-derived HDFC factsheet URLs: $MF_HDFC_FACTSHEET_DOCUMENT_URLS"
           fi
           if [ -n "${DISPATCH_HDFC_PORTFOLIO_URLS:-}" ]; then
             export MF_HDFC_PORTFOLIO_DOCUMENT_URLS="$DISPATCH_HDFC_PORTFOLIO_URLS"
@@ -154,7 +175,20 @@ jobs:
           fi
           if [ -n "${DISPATCH_AXIS_PORTFOLIO_URLS:-}" ]; then
             export MF_AXIS_PORTFOLIO_DOCUMENT_URLS="$DISPATCH_AXIS_PORTFOLIO_URLS"
+          elif [ -z "${MF_AXIS_PORTFOLIO_DOCUMENT_URLS:-}" ]; then
+            # Auto-derive Axis monthly portfolio URL for last 2 months.
+            # Pattern: https://cdn.axismf.com/assets/docs/portfolio-disclosure/Axis-MF-Monthly-Portfolio-{Month}-{YYYY}.xlsx
+            _axis_urls=""
+            for _offset in 1 2; do
+              _year=$(date -d "-${_offset} month" +%Y 2>/dev/null || python3 -c "from datetime import date; from dateutil.relativedelta import relativedelta; d=date.today()-relativedelta(months=${_offset}); print(d.year)")
+              _month_name=$(date -d "-${_offset} month" +%B 2>/dev/null || python3 -c "from datetime import date; from dateutil.relativedelta import relativedelta; d=date.today()-relativedelta(months=${_offset}); print(d.strftime('%B'))")
+              _axis_url="https://cdn.axismf.com/assets/docs/portfolio-disclosure/Axis-MF-Monthly-Portfolio-${_month_name}-${_year}.xlsx"
+              if [ -z "$_axis_urls" ]; then _axis_urls="$_axis_url"; else _axis_urls="${_axis_urls},${_axis_url}"; fi
+            done
+            export MF_AXIS_PORTFOLIO_DOCUMENT_URLS="$_axis_urls"
+            echo "Auto-derived Axis portfolio URLs: $MF_AXIS_PORTFOLIO_DOCUMENT_URLS"
           fi
+
           if [ -n "${DISPATCH_SBI_FACTSHEET_URLS:-}" ]; then
             export MF_SBI_FACTSHEET_DOCUMENT_URLS="$DISPATCH_SBI_FACTSHEET_URLS"
           fi

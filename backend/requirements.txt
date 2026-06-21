@@ -25,3 +25,4 @@ PyMuPDF
 rapidfuzz
 pytest
 razorpay
+playwright
