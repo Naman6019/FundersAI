@@ -15,6 +15,7 @@ import requests
 from bs4 import BeautifulSoup
 from app.mf_ingestion.downloaders.base_downloader import BaseDownloader, DiscoveredDocument, DownloadedDocument
 from app.mf_ingestion.parsers.adapters.ppfas_adapter import PPFASAdapter
+from app.mf_ingestion.parsers.adapters.axis_adapter import AxisAdapter
 from app.mf_ingestion.sources.registry import AMCDocumentSource
 
 logger = logging.getLogger(__name__)
@@ -109,7 +110,18 @@ class AMCDownloader(BaseDownloader):
                 len(docs),
             )
             return docs
-        if adapter_key in {"hdfc", "sbi", "axis", "motilal", "nippon"}:
+        if adapter_key == "axis":
+            adapter = AxisAdapter(user_agent=self.user_agent, timeout_seconds=int(self.timeout_seconds))
+            docs = adapter.discover_documents(self.source, document_type=document_type)
+            logger.info(
+                "event=amc_discovery_complete amc_code=%s adapter=%s document_type=%s count=%s",
+                self.source.amc_code,
+                adapter_key,
+                document_type,
+                len(docs),
+            )
+            return docs
+        if adapter_key in {"hdfc", "sbi", "motilal", "nippon"}:
             if adapter_key == "sbi" and (document_type or "").strip().lower() == "factsheet":
                 docs = _discover_sbi_factsheet_documents(
                     self.source,
@@ -587,7 +599,7 @@ def _manual_discovered_documents_for_source(
         absolute_url = urljoin(listing_url, url)
         ext = Path(urlsplit(absolute_url).path).suffix.lower() or _infer_file_ext_from_text(absolute_url)
         if ext not in SUPPORTED_FILE_EXTENSIONS:
-            continue
+            ext = ".pdf" if document_type == "factsheet" else ".xlsx"
         title = _human_title_from_url(absolute_url)
         combined = f"{title} {absolute_url}".lower()
         report_month = _detect_report_month_from_text(combined)
@@ -1021,6 +1033,17 @@ def _base_site_url(url: str) -> str:
     return url
 
 
+class _HttpxResponseWrapper:
+    def __init__(self, r):
+        self.r = r
+        self.status_code = r.status_code
+        self.text = r.text
+        self.content = r.content
+        self.url = str(r.url)
+        self.headers = {k.lower(): v for k, v in r.headers.items()}
+    def raise_for_status(self):
+        self.r.raise_for_status()
+
 def _request_with_retry(
     method: str,
     url: str,
@@ -1068,7 +1091,28 @@ def _request_with_retry(
                     params=params,
                     json=json_payload,
                 )
-            if response.status_code in RETRYABLE_STATUS_CODES and attempt < HTTP_MAX_RETRIES:
+
+            # --- Cloudflare/WAF Bypass fallback ---
+            if getattr(response, "status_code", 200) in {403, 406} and session is None and method_upper in {"GET", "POST"}:
+                try:
+                    import httpx
+                    with httpx.Client(http2=True) as client:
+                        h_resp = client.request(
+                            method=method_upper,
+                            url=url,
+                            headers=headers,
+                            params=params,
+                            json=json_payload,
+                            timeout=timeout_seconds,
+                            follow_redirects=True,
+                        )
+                        if h_resp.status_code not in {403, 406}:
+                            response = _HttpxResponseWrapper(h_resp) # type: ignore
+                except Exception as httpx_exc:
+                    logger.debug("httpx fallback failed: %s", httpx_exc)
+            # --------------------------------------
+
+            if getattr(response, "status_code", 200) in RETRYABLE_STATUS_CODES and attempt < HTTP_MAX_RETRIES:
                 time.sleep(HTTP_BACKOFF_SECONDS * (2 ** attempt))
                 continue
             response.raise_for_status()

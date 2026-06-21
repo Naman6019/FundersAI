@@ -183,6 +183,8 @@ def _extract_report_month(rows: list[list[object]]) -> date | None:
             try:
                 month = _month_number(match.group("month"))
                 year = int(match.group("year"))
+                if year > 2030 or year < 2010:
+                    continue
                 return date(year, month, 1)
             except Exception:
                 continue

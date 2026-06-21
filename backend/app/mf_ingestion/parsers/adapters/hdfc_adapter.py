@@ -133,53 +133,50 @@ def _parse_hdfc_frame(frame: pd.DataFrame, context: ParseContext, fallback_schem
     if page_number is not None and page_number < PDF_MIN_PORTFOLIO_PAGE:
         return None
 
-    rows = frame.where(pd.notna(frame), None).values.tolist()
+    raw_rows = frame.where(pd.notna(frame), None).values.tolist()
+    columns = list(frame.columns)
+    # Include columns as the first row to ensure header is not lost
+    rows = [columns] + raw_rows if raw_rows else [columns]
+    
     if not rows:
         return None
 
     page_text_full = str(frame.attrs.get("page_text_full") or "")
     flattened = " ".join(str(cell or "") for row in rows[:20] for cell in row).lower()
     page_low = page_text_full.lower()
-    if not _looks_like_hdfc_portfolio_page(flattened, page_low):
+    looks_like = _looks_like_hdfc_portfolio_page(flattened, page_low)
+    print(f"DEBUG: looks_like_hdfc_portfolio_page = {looks_like}")
+    if not looks_like:
         return None
 
     scheme_name = _extract_scheme_name(frame, rows, page_text_full=page_text_full) or (fallback_scheme or "")
     if scheme_name.strip().lower() == "hdfc mutual fund":
         scheme_name = fallback_scheme or ""
     if not scheme_name:
+        print("DEBUG: not scheme_name")
         return None
-
-    word_holdings = _extract_holdings_from_page_words(frame.attrs.get("page_words") or [])
-    if word_holdings:
-        total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in word_holdings), 6)
-        report_month = _extract_report_month(page_text_full, rows) or context.report_month
-        warnings: list[str] = []
-        if report_month is None:
-            warnings.append("report_month_not_detected")
-        if not (80.0 <= total_percent <= 120.0):
-            warnings.append("percent_aum_total_out_of_band")
-        return {
-            "scheme_name": scheme_name,
-            "report_month": report_month,
-            "holdings": word_holdings,
-            "metrics": {"total_percent_aum": total_percent},
-            "warnings": warnings,
-            "confidence_score": _compute_confidence(word_holdings, report_month, total_percent, scheme_name),
-            "selection_score": float(len(word_holdings)) + (30.0 if 80.0 <= total_percent <= 120.0 else 0.0),
-        }
 
     header_row_idx, instrument_idx, percent_idx, sector_idx = _locate_header_and_columns(rows)
     data_rows = rows[header_row_idx + 1 :] if header_row_idx is not None else rows
     holdings, total_percent = _extract_holdings(data_rows, instrument_idx, percent_idx, sector_idx)
+    
+    word_holdings = _extract_holdings_from_page_words(frame.attrs.get("page_words") or [])
+    if len(word_holdings) > len(holdings) and len(word_holdings) > 5:
+        holdings = word_holdings
+        total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in holdings), 6)
+        
     if not holdings:
         blob = _frame_blob_text(rows)
         holdings = _extract_holdings_from_blob(blob)
         total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in holdings), 6)
+
     if page_text_full and _page_text_scoped_to_scheme(page_text_full, scheme_name):
         holdings.extend(_extract_holdings_from_page_text(page_text_full))
         holdings = _dedupe_holdings(holdings)
         total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in holdings), 6)
+    
     if not holdings:
+        print("DEBUG: not holdings")
         return None
 
     report_month = _extract_report_month(page_text_full, rows) or context.report_month
@@ -264,13 +261,12 @@ def _extract_holdings_from_word_column(words: list[dict], bounds: tuple[float, f
         lines.append(current_group)
 
     holdings: list[dict] = []
+    pending_name = ""
     for line_words in lines:
         ordered = sorted(line_words, key=lambda item: float(item.get("x0") or 0.0))
         percent_words = [word for word in ordered if float(word.get("x0") or 0.0) >= percent_x0]
         percent = _parse_number("".join(str(word.get("text") or "") for word in percent_words))
-        if percent is None or percent <= 0.0 or percent > 100.0:
-            continue
-
+        
         left_words = [word for word in ordered if float(word.get("x0") or 0.0) < percent_x0]
         if not left_words:
             continue
@@ -296,10 +292,29 @@ def _extract_holdings_from_word_column(words: list[dict], bounds: tuple[float, f
             
         instrument_name = _clean_word_text([str(w.get("text") or "") for w in name_w])
         sector = _clean_word_text([str(w.get("text") or "") for w in sector_w]) or None
+
+        if percent is None:
+            if instrument_name:
+                if pending_name:
+                    pending_name += " " + instrument_name
+                else:
+                    pending_name = instrument_name
+            continue
+            
+        if percent <= 0.0 or percent > 100.0:
+            pending_name = ""
+            continue
+
         if not instrument_name or _is_summary_or_noise_row(instrument_name):
+            pending_name = ""
             continue
         if any(marker in instrument_name.lower() for marker in ("regular plan", "direct plan", "nav per", "expense ratio", "instrument", "company/instrument", "company")):
+            pending_name = ""
             continue
+
+        if pending_name:
+            instrument_name = pending_name + " " + instrument_name
+            pending_name = ""
 
         holdings.append(
             {
@@ -427,6 +442,7 @@ def _extract_holdings(
 ) -> tuple[list[dict], float]:
     holdings: list[dict] = []
     true_total_percent = 0.0
+    pending_name = ""
 
     for row in rows:
         # Extract direct percent
@@ -444,6 +460,26 @@ def _extract_holdings(
             percent = numeric_values[-1] if numeric_values else None
 
         if percent is None or percent <= 0.0 or percent > 100.0:
+            # Buffer name from row without percent
+            name_val = None
+            if instrument_idx is not None:
+                name_val = _safe_row_get(row, instrument_idx)
+            if not name_val:
+                for idx, value in enumerate(row):
+                    if idx in ([percent_idx, percent_idx + 1] if percent_idx is not None else []):
+                        continue
+                    text = normalize_instrument_name(value)
+                    if text and re.search(r"[A-Za-z]", text):
+                        name_val = text
+                        break
+            if name_val:
+                clean_name = normalize_instrument_name(name_val).encode("ascii", "ignore").decode("ascii")
+                if "\n" in clean_name:
+                    clean_name = clean_name.split("\n")[0].strip()
+                if pending_name:
+                    pending_name += " " + clean_name
+                else:
+                    pending_name = clean_name
             continue
 
         # Extract instrument name
@@ -463,6 +499,10 @@ def _extract_holdings(
         instrument_name = instrument_name.encode("ascii", "ignore").decode("ascii")
         if "\n" in str(name_value or ""):
             instrument_name = instrument_name.split("\n")[0].strip()
+            
+        if pending_name:
+            instrument_name = pending_name + " " + instrument_name
+            pending_name = ""
         
         if not instrument_name or len(re.findall(r"\d{1,2}\.\d{2}", instrument_name)) >= 2:
             continue

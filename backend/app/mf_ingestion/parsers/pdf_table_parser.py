@@ -36,9 +36,12 @@ class PDFTableParser:
                     for table in tables:
                         if not table:
                             continue
-                        header = table[0]
-                        rows = table[1:] if len(table) > 1 else []
-                        df = pd.DataFrame(rows, columns=header)
+                        df_raw = pd.DataFrame(table)
+                        if df_raw.empty:
+                            continue
+                        header = df_raw.iloc[0].tolist()
+                        df = df_raw.iloc[1:].copy()
+                        df.columns = [str(c) if c is not None else "" for c in header]
                         df = df.dropna(how="all")
                         if not df.empty:
                             df.attrs["page_number"] = page.page_number
