@@ -5,6 +5,39 @@ from typing import Any
 from app.database import supabase as default_supabase
 
 
+def _clean_variant_value(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _infer_plan_type(scheme_name: str) -> str | None:
+    name = scheme_name.lower()
+    if "direct" in name:
+        return "Direct"
+    if "regular" in name:
+        return "Regular"
+    return None
+
+
+def _infer_option_type(scheme_name: str) -> str | None:
+    name = scheme_name.lower()
+    if "growth" in name:
+        return "Growth"
+    if "idcw" in name or "dividend" in name:
+        return "IDCW"
+    return None
+
+
+def _with_normalized_variant_fields(row: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(row)
+    scheme_name = str(normalized.get("scheme_name") or "")
+    normalized["plan_type"] = _clean_variant_value(normalized.get("plan_type")) or _infer_plan_type(scheme_name)
+    normalized["option_type"] = _clean_variant_value(normalized.get("option_type")) or _infer_option_type(scheme_name)
+    return normalized
+
+
 class MutualFundRepository:
     def __init__(self, db_client: Any = None):
         self.client = db_client if db_client is not None else default_supabase
@@ -34,27 +67,31 @@ class MutualFundRepository:
                 return value
         return None
 
-    def search_mutual_funds(self, pattern: str, *, limit: int = 25) -> list[dict[str, Any]]:
-        rows = (
-            self.table("mutual_fund_core_snapshot")
-            .select("*")
-            .ilike("scheme_name", pattern)
-            .limit(limit)
-            .execute()
-            .data
-            or []
-        )
+    def search_mutual_funds(
+        self,
+        pattern: str,
+        *,
+        limit: int = 25,
+        plan_type: str | None = None,
+        option_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        query_snapshot = self.table("mutual_fund_core_snapshot").select("*").ilike("scheme_name", pattern)
+        if plan_type:
+            query_snapshot = query_snapshot.ilike("scheme_name", f"%{plan_type}%")
+        if option_type:
+            query_snapshot = query_snapshot.ilike("scheme_name", f"%{option_type}%")
+
+        rows = query_snapshot.limit(limit).execute().data or []
         if rows:
-            return rows
-        return (
-            self.table("mutual_funds")
-            .select("*")
-            .ilike("scheme_name", pattern)
-            .limit(limit)
-            .execute()
-            .data
-            or []
-        )
+            return [_with_normalized_variant_fields(row) for row in rows]
+
+        query_mf = self.table("mutual_funds").select("*").ilike("scheme_name", pattern)
+        if plan_type:
+            query_mf = query_mf.ilike("scheme_name", f"%{plan_type}%")
+        if option_type:
+            query_mf = query_mf.ilike("scheme_name", f"%{option_type}%")
+
+        return [_with_normalized_variant_fields(row) for row in query_mf.limit(limit).execute().data or []]
 
     def get_fund_by_scheme_code(self, scheme_code: Any) -> dict[str, Any] | None:
         code = int(str(scheme_code)) if str(scheme_code).isdigit() else scheme_code
@@ -68,7 +105,7 @@ class MutualFundRepository:
             or []
         )
         if rows:
-            return rows[0]
+            return _with_normalized_variant_fields(rows[0])
         rows = (
             self.table("mutual_funds")
             .select("*")
@@ -78,7 +115,7 @@ class MutualFundRepository:
             .data
             or []
         )
-        return rows[0] if rows else None
+        return _with_normalized_variant_fields(rows[0]) if rows else None
 
     def get_nav_history_rows(self, scheme_code: Any, *, fields: str, limit: int = 5000, desc: bool = False) -> list[dict[str, Any]]:
         code = int(str(scheme_code)) if str(scheme_code).isdigit() else scheme_code
@@ -105,7 +142,43 @@ class MutualFundRepository:
             or []
         )
 
+    def get_family_id_for_scheme(self, scheme_code: Any) -> str | None:
+        if scheme_code in (None, ""):
+            return None
+        code = str(scheme_code).strip()
+        if not code:
+            return None
+        rows = (
+            self.table("mutual_fund_family_mapping")
+            .select("family_id")
+            .eq("scheme_code", code)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        value = rows[0].get("family_id") if rows else None
+        return str(value) if value not in (None, "") else None
+
     def get_latest_holdings(self, scheme_code: Any) -> list[dict[str, Any]]:
+        try:
+            family_id = self.get_family_id_for_scheme(scheme_code)
+        except Exception:
+            family_id = None
+        if family_id:
+            rows = (
+                self.table("mutual_fund_holdings")
+                .select("as_of_date,security_name,isin,sector,weight_pct,source,provider_payload")
+                .eq("family_id", family_id)
+                .order("as_of_date", desc=True)
+                .order("weight_pct", desc=True)
+                .limit(500)
+                .execute()
+                .data
+                or []
+            )
+            if rows:
+                return rows
         code = int(str(scheme_code)) if str(scheme_code).isdigit() else scheme_code
         return (
             self.table("mutual_fund_holdings")
@@ -120,6 +193,23 @@ class MutualFundRepository:
         )
 
     def get_sector_rows(self, scheme_code: Any) -> list[dict[str, Any]]:
+        try:
+            family_id = self.get_family_id_for_scheme(scheme_code)
+        except Exception:
+            family_id = None
+        if family_id:
+            rows = (
+                self.table("mutual_fund_sectors")
+                .select("sector,weight_pct,stock_count,source,provider_payload,updated_at")
+                .eq("family_id", family_id)
+                .order("weight_pct", desc=True)
+                .limit(50)
+                .execute()
+                .data
+                or []
+            )
+            if rows:
+                return rows
         return (
             self.table("mutual_fund_sectors")
             .select("sector,weight_pct,stock_count,source,provider_payload,updated_at")

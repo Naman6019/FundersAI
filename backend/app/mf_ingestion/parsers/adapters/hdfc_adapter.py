@@ -243,34 +243,62 @@ def _extract_holdings_from_word_column(words: list[dict], bounds: tuple[float, f
             continue
         candidates.append(word)
 
-    line_map: dict[int, list[dict]] = {}
+    candidates.sort(key=lambda w: float(w.get("top") or 0.0))
+    lines: list[list[dict]] = []
+    current_group: list[dict] = []
+    current_top: float | None = None
+    
     for word in candidates:
-        bucket = int(round(float(word.get("top") or 0.0) / 2.0) * 2)
-        line_map.setdefault(bucket, []).append(word)
+        top = float(word.get("top") or 0.0)
+        if current_top is None:
+            current_top = top
+            current_group.append(word)
+        elif abs(top - current_top) < 5.0:
+            current_group.append(word)
+        else:
+            lines.append(current_group)
+            current_group = [word]
+            current_top = top
+            
+    if current_group:
+        lines.append(current_group)
 
     holdings: list[dict] = []
-    for line_words in line_map.values():
+    for line_words in lines:
         ordered = sorted(line_words, key=lambda item: float(item.get("x0") or 0.0))
         percent_words = [word for word in ordered if float(word.get("x0") or 0.0) >= percent_x0]
         percent = _parse_number("".join(str(word.get("text") or "") for word in percent_words))
         if percent is None or percent <= 0.0 or percent > 100.0:
             continue
 
-        name_words = [
-            str(word.get("text") or "")
-            for word in ordered
-            if name_x0 <= float(word.get("x0") or 0.0) < sector_x0
-        ]
-        sector_words = [
-            str(word.get("text") or "")
-            for word in ordered
-            if sector_x0 <= float(word.get("x0") or 0.0) < percent_x0
-        ]
-        instrument_name = _clean_word_text(name_words)
-        sector = _clean_word_text(sector_words) or None
+        left_words = [word for word in ordered if float(word.get("x0") or 0.0) < percent_x0]
+        if not left_words:
+            continue
+            
+        best_gap = -1.0
+        split_idx = len(left_words)
+        for i in range(len(left_words) - 1):
+            w1 = left_words[i]
+            w2 = left_words[i+1]
+            x1_1 = float(w1.get("x1") or float(w1.get("x0") or 0.0) + len(str(w1.get("text") or ""))*5.0)
+            x0_2 = float(w2.get("x0") or 0.0)
+            gap = x0_2 - x1_1
+            if gap > best_gap:
+                best_gap = gap
+                split_idx = i + 1
+        
+        if best_gap < 4.0:
+            name_w = left_words
+            sector_w = []
+        else:
+            name_w = left_words[:split_idx]
+            sector_w = left_words[split_idx:]
+            
+        instrument_name = _clean_word_text([str(w.get("text") or "") for w in name_w])
+        sector = _clean_word_text([str(w.get("text") or "") for w in sector_w]) or None
         if not instrument_name or _is_summary_or_noise_row(instrument_name):
             continue
-        if any(marker in instrument_name.lower() for marker in ("regular plan", "direct plan", "nav per", "expense ratio")):
+        if any(marker in instrument_name.lower() for marker in ("regular plan", "direct plan", "nav per", "expense ratio", "instrument", "company/instrument", "company")):
             continue
 
         holdings.append(

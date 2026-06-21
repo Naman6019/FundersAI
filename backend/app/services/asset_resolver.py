@@ -8,25 +8,10 @@ from difflib import SequenceMatcher
 from typing import Any
 
 from app.repositories.mutual_fund_repository import MutualFundRepository
+from app.services.supported_amcs import SUPPORTED_MF_AMC_MARKERS, UNSUPPORTED_MF_AMC_KEYWORDS
 from app.stock_universe import resolve_stock_symbol
 
 logger = logging.getLogger(__name__)
-
-SUPPORTED_MF_AMC_MARKERS: dict[str, tuple[str, ...]] = {
-    "HDFC": ("hdfc",),
-    "SBI": ("sbi",),
-    "ICICI": ("icici",),
-    "AXIS": ("axis",),
-    "PPFAS": ("ppfas", "parag parikh", "parag", "parikh"),
-}
-
-UNSUPPORTED_MF_AMC_KEYWORDS = (
-    "quant", "nippon", "kotak", "mirae", "uti", "dsp", "tata", "motilal",
-    "canara", "groww", "zerodha", "bandhan", "idfc", "franklin", "edelweiss",
-    "sundaram", "lic", "pgim", "invesco", "hsbc", "union", "baroda", "bnp",
-    "mahindra", "shriram", "whiteoak", "samco", "helios", "navi", "quantum",
-    "taurus", "360 one", "iifl", "jm financial",
-)
 
 HIGH_CONFIDENCE = 0.88
 MEDIUM_CONFIDENCE = 0.68
@@ -214,6 +199,10 @@ def canonical_fund_query(value: str) -> str:
         return "ICICI Prudential Large Cap"
     if "sbi" in text and ("blue" in text or "bluechip" in text):
         return "SBI Bluechip"
+    if "nippon" in text and "small" in text:
+        return "Nippon India Small Cap"
+    if "nippon" in text and ("growth" in text or "mid" in text):
+        return "Nippon India Growth Mid Cap"
     if "flexi" in text and "cap" not in text:
         return f"{value} Cap"
     return value
@@ -351,8 +340,23 @@ class AssetResolver:
         if not self.repository:
             return []
         pattern = _fund_search_pattern(query)
+        
+        query_lower = query.lower()
+        plan_type = "Direct"
+        if "regular" in query_lower:
+            plan_type = "Regular"
+            
+        option_type = "Growth"
+        if "idcw" in query_lower or "dividend" in query_lower:
+            option_type = None
+
         try:
-            return self.repository.search_mutual_funds(pattern, limit=25)
+            return self.repository.search_mutual_funds(
+                pattern, 
+                limit=25,
+                plan_type=plan_type,
+                option_type=option_type
+            )
         except Exception as exc:
             logger.warning("asset resolver candidate lookup failed for %r: %s", query, exc)
             return []
