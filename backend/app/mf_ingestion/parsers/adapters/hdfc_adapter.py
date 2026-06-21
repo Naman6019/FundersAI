@@ -295,10 +295,17 @@ def _extract_holdings_from_word_column(words: list[dict], bounds: tuple[float, f
 
         if percent is None:
             if instrument_name:
-                if pending_name:
-                    pending_name += " " + instrument_name
-                else:
-                    pending_name = instrument_name
+                low_nm = instrument_name.lower().strip()
+                is_section = any(m in low_nm for m in (
+                    "equity & equity", "debt & debt", "reit", "units issued",
+                    "government securities", "money market", "mutual fund unit",
+                    "listed / awaiting", "regular plan", "direct plan",
+                )) or low_nm in ("company", "instrument", "company/instrument")
+                if not is_section:
+                    if pending_name:
+                        pending_name += " " + instrument_name
+                    else:
+                        pending_name = instrument_name
             continue
             
         if percent <= 0.0 or percent > 100.0:
