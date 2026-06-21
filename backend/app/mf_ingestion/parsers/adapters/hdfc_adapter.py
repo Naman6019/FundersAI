@@ -145,7 +145,6 @@ def _parse_hdfc_frame(frame: pd.DataFrame, context: ParseContext, fallback_schem
     flattened = " ".join(str(cell or "") for row in rows[:20] for cell in row).lower()
     page_low = page_text_full.lower()
     looks_like = _looks_like_hdfc_portfolio_page(flattened, page_low)
-    print(f"DEBUG: looks_like_hdfc_portfolio_page = {looks_like}")
     if not looks_like:
         return None
 
@@ -153,7 +152,6 @@ def _parse_hdfc_frame(frame: pd.DataFrame, context: ParseContext, fallback_schem
     if scheme_name.strip().lower() == "hdfc mutual fund":
         scheme_name = fallback_scheme or ""
     if not scheme_name:
-        print("DEBUG: not scheme_name")
         return None
 
     header_row_idx, instrument_idx, percent_idx, sector_idx = _locate_header_and_columns(rows)
@@ -176,7 +174,6 @@ def _parse_hdfc_frame(frame: pd.DataFrame, context: ParseContext, fallback_schem
         total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in holdings), 6)
     
     if not holdings:
-        print("DEBUG: not holdings")
         return None
 
     report_month = _extract_report_month(page_text_full, rows) or context.report_month
