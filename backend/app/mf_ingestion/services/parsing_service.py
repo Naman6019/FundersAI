@@ -1443,19 +1443,32 @@ def _source_month_from_text(text: str) -> date | None:
         "december": 12,
     }
     name_pattern = "|".join(sorted(month_names, key=len, reverse=True))
+    current_year = datetime.now(timezone.utc).year
 
     for match in re.finditer(rf"\b\d{{1,2}}[-_\s]+({name_pattern})[-_\s]+(20\d{{2}})\b", text):
-        return date(int(match.group(2)), month_names[match.group(1)], 1)
+        year = int(match.group(2))
+        if 2000 <= year <= current_year + 1:
+            return date(year, month_names[match.group(1)], 1)
     for match in re.finditer(rf"\b({name_pattern})[-_\s]+\d{{1,2}}[-_\s]+(20\d{{2}})\b", text):
-        return date(int(match.group(2)), month_names[match.group(1)], 1)
+        year = int(match.group(2))
+        if 2000 <= year <= current_year + 1:
+            return date(year, month_names[match.group(1)], 1)
     for match in re.finditer(rf"\b({name_pattern})[-_\s]+(20\d{{2}})\b", text):
-        return date(int(match.group(2)), month_names[match.group(1)], 1)
+        year = int(match.group(2))
+        if 2000 <= year <= current_year + 1:
+            return date(year, month_names[match.group(1)], 1)
     for match in re.finditer(r"\b(20\d{2})[-_/](0[1-9]|1[0-2])\b", text):
-        return date(int(match.group(1)), int(match.group(2)), 1)
+        year = int(match.group(1))
+        if 2000 <= year <= current_year + 1:
+            return date(year, int(match.group(2)), 1)
     for match in re.finditer(r"\b(0[1-9]|1[0-2])[-_/](20\d{2})\b", text):
-        return date(int(match.group(2)), int(match.group(1)), 1)
+        year = int(match.group(2))
+        if 2000 <= year <= current_year + 1:
+            return date(year, int(match.group(1)), 1)
     for match in re.finditer(r"\b(0[1-9]|[12]\d|3[01])(0[1-9]|1[0-2])(20\d{2})\b", text):
-        return date(int(match.group(3)), int(match.group(2)), 1)
+        year = int(match.group(3))
+        if 2000 <= year <= current_year + 1:
+            return date(year, int(match.group(2)), 1)
     return None
 
 

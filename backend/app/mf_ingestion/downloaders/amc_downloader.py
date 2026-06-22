@@ -976,14 +976,22 @@ def _generic_base_score(ext: str, document_type: str) -> int:
 
 
 def _detect_report_month_from_text(text: str) -> date | None:
-    match = DAY_FIRST_MONTH_PATTERN.search(text or "")
-    if not match:
-        match = MONTH_PATTERN.search(text or "")
-    if not match:
-        return None
-    month = datetime.strptime(match.group("month")[:3], "%b").month
-    year = int(match.group("year"))
-    return date(year, month, 1)
+    current_year = datetime.now(UTC).year
+    # Try day-first matches first
+    for match in DAY_FIRST_MONTH_PATTERN.finditer(text or ""):
+        month = datetime.strptime(match.group("month")[:3], "%b").month
+        year = int(match.group("year"))
+        if 2000 <= year <= current_year + 1:
+            return date(year, month, 1)
+
+    # Try month-first/month-only matches
+    for match in MONTH_PATTERN.finditer(text or ""):
+        month = datetime.strptime(match.group("month")[:3], "%b").month
+        year = int(match.group("year"))
+        if 2000 <= year <= current_year + 1:
+            return date(year, month, 1)
+
+    return None
 
 
 def _infer_file_ext_from_text(text: str) -> str:
