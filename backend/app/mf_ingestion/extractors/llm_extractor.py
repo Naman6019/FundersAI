@@ -30,9 +30,9 @@ class StrictJSONLLMExtractor:
             payload = json.loads(Path(fixture_path).read_text(encoding="utf-8"))
             return parse_normalized_extraction(payload)
 
-        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        api_key, base_url, provider = _resolve_llm_api()
         if not api_key:
-            raise LLMExtractionUnavailable("openai_api_key_missing")
+            raise LLMExtractionUnavailable("llm_api_key_missing")
         if not self.model:
             raise LLMExtractionUnavailable("mf_llm_extractor_model_missing")
 
@@ -41,8 +41,8 @@ class StrictJSONLLMExtractor:
             raise LLMExtractionUnavailable("llm_source_text_empty")
 
         response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            f"{base_url.rstrip('/')}/chat/completions",
+            headers=_build_llm_headers(api_key, provider),
             timeout=90,
             json={
                 "model": self.model,
@@ -81,6 +81,36 @@ class StrictJSONLLMExtractor:
         extracted.setdefault("source_document_id", str(document.get("id") or ""))
         extracted["extractor_type"] = "llm"
         return parse_normalized_extraction(extracted)
+
+
+def _resolve_llm_api() -> tuple[str, str, str]:
+    openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    openai_key = os.getenv("OPENAI_API_KEY", "").strip()
+    configured_base_url = os.getenv("MF_LLM_BASE_URL", "").strip()
+
+    if openrouter_key:
+        return (
+            openrouter_key,
+            configured_base_url or "https://openrouter.ai/api/v1",
+            "openrouter",
+        )
+    return (
+        openai_key,
+        configured_base_url or "https://api.openai.com/v1",
+        "openai",
+    )
+
+
+def _build_llm_headers(api_key: str, provider: str) -> dict[str, str]:
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    if provider == "openrouter":
+        referer = os.getenv("MF_LLM_HTTP_REFERER", "").strip()
+        title = os.getenv("MF_LLM_APP_TITLE", "FundersAI").strip()
+        if referer:
+            headers["HTTP-Referer"] = referer
+        if title:
+            headers["X-Title"] = title
+    return headers
 
 
 def _extract_document_text(file_path: str) -> str:

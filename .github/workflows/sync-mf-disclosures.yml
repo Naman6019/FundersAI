@@ -65,6 +65,10 @@ on:
         description: 'LLM model for extraction'
         required: false
         default: ''
+      llm_base_url:
+        description: 'Optional LLM API base URL'
+        required: false
+        default: ''
       llm_min_write_confidence:
         description: 'Minimum confidence for LLM final writes'
         required: false
@@ -129,11 +133,16 @@ jobs:
           MF_MOTILAL_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_MOTILAL_PORTFOLIO_DOCUMENT_URLS }}
           MF_NIPPON_FACTSHEET_DOCUMENT_URLS: ${{ secrets.MF_NIPPON_FACTSHEET_DOCUMENT_URLS }}
           MF_NIPPON_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_NIPPON_PORTFOLIO_DOCUMENT_URLS }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO: ${{ github.event.inputs.allow_hdfc_factsheet_as_portfolio }}
           MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
           MF_EXTRACTOR_MODE: ${{ github.event.inputs.extractor_mode || vars.MF_EXTRACTOR_MODE || 'deterministic' }}
           MF_LLM_EXTRACTOR_ENABLED: ${{ github.event.inputs.llm_extractor_enabled || vars.MF_LLM_EXTRACTOR_ENABLED || 'false' }}
           MF_LLM_EXTRACTOR_MODEL: ${{ github.event.inputs.llm_extractor_model || vars.MF_LLM_EXTRACTOR_MODEL || '' }}
+          MF_LLM_BASE_URL: ${{ github.event.inputs.llm_base_url || vars.MF_LLM_BASE_URL || '' }}
+          MF_LLM_HTTP_REFERER: ${{ vars.MF_LLM_HTTP_REFERER || '' }}
+          MF_LLM_APP_TITLE: ${{ vars.MF_LLM_APP_TITLE || 'FundersAI' }}
           MF_LLM_MIN_WRITE_CONFIDENCE: ${{ github.event.inputs.llm_min_write_confidence || vars.MF_LLM_MIN_WRITE_CONFIDENCE || '90' }}
           MF_LLM_ALLOW_FINAL_WRITES: ${{ github.event.inputs.llm_allow_final_writes || vars.MF_LLM_ALLOW_FINAL_WRITES || 'false' }}
           MF_SOURCE_MANIFEST_PATH: ${{ vars.MF_SOURCE_MANIFEST_PATH || '' }}

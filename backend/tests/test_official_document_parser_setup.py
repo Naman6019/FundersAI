@@ -304,6 +304,76 @@ def test_invalid_llm_payload_falls_back_to_needs_review(monkeypatch, tmp_path: P
     assert not any(table in {"mutual_fund_holdings", "mutual_fund_core_snapshot"} for table, *_ in fake_supabase.upserts)
 
 
+def test_llm_extractor_uses_openrouter_when_key_is_configured(monkeypatch, tmp_path: Path):
+    from app.mf_ingestion.extractors import llm_extractor
+    from app.mf_ingestion.extractors.llm_extractor import StrictJSONLLMExtractor
+
+    raw_file = tmp_path / "factsheet.txt"
+    raw_file.write_text("scheme benchmark Nifty 500 TRI", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    class _FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "source_document_id": "doc-openrouter-1",
+                                    "extractor_type": "llm",
+                                    "records": [
+                                        {
+                                            "scheme_name": "ICICI Prudential Multi Asset Fund",
+                                            "report_month": "2026-04-01",
+                                            "holdings": [],
+                                            "aum": 1000.0,
+                                            "expense_ratio": 0.8,
+                                            "benchmark": "Nifty 500 TRI",
+                                            "fund_manager": "Test Manager",
+                                            "risk_level": "Very High",
+                                            "confidence_score": 95.0,
+                                            "validation_issues": [],
+                                        }
+                                    ],
+                                }
+                            )
+                        }
+                    }
+                ]
+            }
+
+    def fake_post(url, *, headers, timeout, json):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["timeout"] = timeout
+        captured["payload"] = json
+        return _FakeResponse()
+
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "openrouter-test-key")
+    monkeypatch.setenv("MF_LLM_HTTP_REFERER", "https://fundersai.test")
+    monkeypatch.setenv("MF_LLM_APP_TITLE", "FundersAI Test")
+    monkeypatch.delenv("MF_LLM_BASE_URL", raising=False)
+    monkeypatch.setattr(llm_extractor.requests, "post", fake_post)
+
+    extraction = StrictJSONLLMExtractor(
+        enabled=True,
+        mode="llm_then_deterministic",
+        model="nvidia/nemotron-3-ultra-550b-a55b",
+    ).extract(str(raw_file), {"id": "doc-openrouter-1", "amc_code": "ICICI", "document_type": "factsheet"})
+
+    assert captured["url"] == "https://openrouter.ai/api/v1/chat/completions"
+    assert captured["headers"]["Authorization"] == "Bearer openrouter-test-key"
+    assert captured["headers"]["HTTP-Referer"] == "https://fundersai.test"
+    assert captured["headers"]["X-Title"] == "FundersAI Test"
+    assert captured["payload"]["model"] == "nvidia/nemotron-3-ultra-550b-a55b"
+    assert extraction.records[0].benchmark == "Nifty 500 TRI"
+
+
 def test_llm_primary_dry_run_enqueues_review_and_uses_deterministic_fallback(monkeypatch, tmp_path: Path):
     from app.mf_ingestion.parsers.factsheet_parser import FactsheetRecord
     from app.mf_ingestion.services import parsing_service, review_service

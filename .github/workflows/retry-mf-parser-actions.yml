@@ -33,6 +33,10 @@ on:
         description: 'LLM model for extraction'
         required: false
         default: ''
+      llm_base_url:
+        description: 'Optional LLM API base URL'
+        required: false
+        default: ''
       llm_min_write_confidence:
         description: 'Minimum confidence for LLM final writes'
         required: false
@@ -76,10 +80,15 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_RAW_BUCKET: ${{ secrets.R2_RAW_BUCKET }}
           R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
           MF_EXTRACTOR_MODE: ${{ inputs.extractor_mode || vars.MF_EXTRACTOR_MODE || 'deterministic' }}
           MF_LLM_EXTRACTOR_ENABLED: ${{ inputs.llm_extractor_enabled || vars.MF_LLM_EXTRACTOR_ENABLED || 'false' }}
           MF_LLM_EXTRACTOR_MODEL: ${{ inputs.llm_extractor_model || vars.MF_LLM_EXTRACTOR_MODEL || '' }}
+          MF_LLM_BASE_URL: ${{ inputs.llm_base_url || vars.MF_LLM_BASE_URL || '' }}
+          MF_LLM_HTTP_REFERER: ${{ vars.MF_LLM_HTTP_REFERER || '' }}
+          MF_LLM_APP_TITLE: ${{ vars.MF_LLM_APP_TITLE || 'FundersAI' }}
           MF_LLM_MIN_WRITE_CONFIDENCE: ${{ inputs.llm_min_write_confidence || vars.MF_LLM_MIN_WRITE_CONFIDENCE || '90' }}
           MF_LLM_ALLOW_FINAL_WRITES: ${{ inputs.llm_allow_final_writes || vars.MF_LLM_ALLOW_FINAL_WRITES || 'false' }}
           ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "false"
