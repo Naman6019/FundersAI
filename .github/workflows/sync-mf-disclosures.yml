@@ -219,7 +219,8 @@ jobs:
           import sys
           from urllib.parse import urlparse
 
-          import requests
+          sys.path.insert(0, os.path.abspath('backend'))
+          from app.mf_ingestion.downloaders.amc_downloader import _request_with_retry
 
 
           def split_urls(name):
@@ -254,9 +255,8 @@ jobs:
                   failures.append(f"{document_type}:{url}:invalid_url")
                   continue
               try:
-                  response = requests.get(url, headers=headers, timeout=20, stream=True)
+                  response = _request_with_retry("GET", url, headers=headers, timeout_seconds=20)
                   status = response.status_code
-                  response.close()
               except Exception as exc:
                   failures.append(f"{document_type}:{url}:{exc}")
                   continue
