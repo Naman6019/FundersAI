@@ -21,6 +21,10 @@ on:
         description: 'How many parse rounds per AMC (each round uses parse_limit)'
         required: false
         default: '3'
+      parse_only:
+        description: 'Skip live AMC ingestion and only parse pending mf_raw_documents rows'
+        required: false
+        default: 'false'
       hdfc_factsheet_urls:
         description: 'Optional exact HDFC factsheet URLs, comma-separated'
         required: false
@@ -156,6 +160,7 @@ jobs:
           DISPATCH_MAX_DOCS: ${{ github.event.inputs.max_documents }}
           DISPATCH_PARSE_LIMIT: ${{ github.event.inputs.parse_limit }}
           DISPATCH_PARSE_ROUNDS: ${{ github.event.inputs.parse_rounds }}
+          DISPATCH_PARSE_ONLY: ${{ github.event.inputs.parse_only }}
           DISPATCH_HDFC_FACTSHEET_URLS: ${{ github.event.inputs.hdfc_factsheet_urls }}
           DISPATCH_HDFC_PORTFOLIO_URLS: ${{ github.event.inputs.hdfc_portfolio_urls }}
           DISPATCH_AXIS_FACTSHEET_URLS: ${{ github.event.inputs.axis_factsheet_urls }}
@@ -226,6 +231,7 @@ jobs:
           GLOBAL_MAX_DOCS="${DISPATCH_MAX_DOCS:-5}"
           GLOBAL_PARSE_LIMIT="${DISPATCH_PARSE_LIMIT:-800}"
           PARSE_ROUNDS="${DISPATCH_PARSE_ROUNDS:-3}"
+          PARSE_ONLY="${DISPATCH_PARSE_ONLY:-false}"
 
           # Check if the matrix amc is in the AMCS list
           # We add commas around both sides to ensure exact matching (e.g. ,axis, against ,axis,hdfc,)
@@ -251,11 +257,14 @@ jobs:
               nippon) max_docs=1; parse_limit=900 ;;
               *)     max_docs=1; parse_limit=600 ;;
             esac
+            if [ "$amc" = "axis" ] || [ "$amc" = "hdfc" ]; then
+              PARSE_ONLY="true"
+            fi
           fi
 
-          echo "Processing AMC=$amc max_docs=$max_docs parse_limit=$parse_limit parse_rounds=$PARSE_ROUNDS event=$EVENT_NAME"
+          echo "Processing AMC=$amc max_docs=$max_docs parse_limit=$parse_limit parse_rounds=$PARSE_ROUNDS parse_only=$PARSE_ONLY event=$EVENT_NAME"
 
-          if [ "$amc" = "hdfc" ]; then
+          if [ "$PARSE_ONLY" != "true" ] && [ "$amc" = "hdfc" ]; then
             python - <<'PY'
           import os
           import sys
@@ -313,9 +322,13 @@ jobs:
           PY
           fi
 
-          if ! timeout 40m python -m backend.app.mf_ingestion.jobs.ingest_latest_amc_docs --amc "$amc" --all-document-types --max-documents "$max_docs" --strict; then
-            echo "AMC ingest failed/timed out: $amc"
-            exit 1
+          if [ "$PARSE_ONLY" = "true" ]; then
+            echo "Skipping live AMC ingestion for $amc; parsing pending R2-backed rows only."
+          else
+            if ! timeout 40m python -m backend.app.mf_ingestion.jobs.ingest_latest_amc_docs --amc "$amc" --all-document-types --max-documents "$max_docs" --strict; then
+              echo "AMC ingest failed/timed out: $amc"
+              exit 1
+            fi
           fi
 
           amc_failed=false

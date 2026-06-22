@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import os
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 
 from app.repositories.mf_ingestion_repository import MfIngestionRepository
 from app.mf_ingestion.config import get_config
+from app.mf_ingestion.services.ingestion_service import IngestionService
 from app.mf_ingestion.storage.r2_store import R2Store, build_safe_key
 
 router = APIRouter(prefix="/api/internal/mf", tags=["mf-ingestion"])
@@ -13,6 +15,36 @@ router = APIRouter(prefix="/api/internal/mf", tags=["mf-ingestion"])
 
 def get_mf_ingestion_repository() -> MfIngestionRepository:
     return MfIngestionRepository()
+
+
+class AcquireDocumentItem(BaseModel):
+    source_url: str
+    document_type: str
+    expected_file_type: str | None = None
+    report_month: str | None = None
+    title: str | None = None
+    discovery_page_url: str | None = None
+    reuse_as_portfolio: bool = False
+
+
+class AcquireDocumentsRequest(BaseModel):
+    amc: str
+    report_month: str | None = None
+    documents: list[AcquireDocumentItem] = Field(default_factory=list)
+
+
+def _require_admin_auth(x_admin_key: str | None, token: str | None = None) -> None:
+    expected_admin_key = os.getenv("MF_INTERNAL_ADMIN_KEY", "").strip()
+    webhook_token = os.getenv("MF_INGESTION_WEBHOOK_TOKEN", "").strip()
+    supplied_header = str(x_admin_key or "").strip()
+    supplied_token = str(token or "").strip()
+    if expected_admin_key and supplied_header == expected_admin_key:
+        return
+    if webhook_token and supplied_token == webhook_token:
+        return
+    if expected_admin_key and supplied_token == expected_admin_key:
+        return
+    raise HTTPException(status_code=403, detail="admin_auth_required")
 
 
 @router.get("/schemes/{scheme_name}/holdings")
@@ -39,6 +71,51 @@ def get_scheme_holdings(
     }
 
 
+@router.post("/acquire-documents")
+def acquire_documents(
+    payload: AcquireDocumentsRequest,
+    token: str | None = Query(default=None),
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+):
+    _require_admin_auth(x_admin_key, token)
+    service = IngestionService()
+    return service.acquire_documents(
+        amc=payload.amc,
+        report_month=payload.report_month,
+        documents=[_model_to_dict(item) for item in payload.documents],
+    )
+
+
+@router.post("/upload-document")
+async def upload_document(
+    request: Request,
+    token: str | None = Query(default=None),
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+):
+    _require_admin_auth(x_admin_key, token)
+    form = await request.form()
+    uploaded = form.get("file")
+    if not hasattr(uploaded, "read") or not hasattr(uploaded, "filename"):
+        raise HTTPException(status_code=400, detail="file_required")
+    amc = str(form.get("amc") or "").strip()
+    document_type = str(form.get("document_type") or "").strip()
+    report_month = str(form.get("report_month") or "").strip() or None
+    source_url = str(form.get("source_url") or "").strip()
+    reuse_as_portfolio = str(form.get("reuse_as_portfolio") or "").strip().lower() in {"1", "true", "yes", "on"}
+    content = await uploaded.read()
+    service = IngestionService()
+    return service.upload_document(
+        amc=amc,
+        document_type=document_type,
+        report_month=report_month,
+        source_url=source_url,
+        file_name=uploaded.filename or "document",
+        content_type=uploaded.content_type,
+        file_bytes=content,
+        reuse_as_portfolio=reuse_as_portfolio,
+    )
+
+
 @router.get("/documents/{source_document_id}/signed-url")
 def get_document_signed_url(
     source_document_id: str,
@@ -46,9 +123,7 @@ def get_document_signed_url(
     x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
     repository: MfIngestionRepository = Depends(get_mf_ingestion_repository),
 ):
-    expected_admin_key = os.getenv("MF_INTERNAL_ADMIN_KEY", "").strip()
-    if not expected_admin_key or x_admin_key != expected_admin_key:
-        raise HTTPException(status_code=403, detail="admin_auth_required")
+    _require_admin_auth(x_admin_key)
     if not repository:
         raise HTTPException(status_code=500, detail="Supabase client not initialized")
 
@@ -100,3 +175,9 @@ def get_document_signed_url(
         "signed_url": signed_url,
         "expires_in_seconds": config.r2_signed_url_ttl_seconds,
     }
+
+
+def _model_to_dict(model: BaseModel) -> dict:
+    if hasattr(model, "model_dump"):
+        return model.model_dump()
+    return model.dict()

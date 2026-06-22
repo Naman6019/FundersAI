@@ -64,8 +64,6 @@ class _FakeTable:
                 rows = [row for row in rows if row.get(key) in values]
             for key, value in self._eq.items():
                 rows = [row for row in rows if row.get(key) == value]
-            if "checksum" in self._eq:
-                return SimpleNamespace(data=[])
             return SimpleNamespace(data=rows)
         if self.table_name == "mf_raw_documents" and self._update_payload is not None:
             self.root.updates.append((self.table_name, self._eq, self._update_payload))
@@ -157,6 +155,142 @@ def test_ingestion_writes_r2_storage_columns(monkeypatch):
     assert raw_insert["storage_bucket"]
     assert raw_insert["storage_key"].startswith("raw/ppfas/2026-04/factsheet/")
     assert raw_insert["storage_metadata"]["checksum"] == "fixed-checksum"
+
+
+def test_acquire_documents_inserts_exact_url_with_r2_metadata(monkeypatch):
+    from app.mf_ingestion.services import ingestion_service
+
+    fake_supabase = _FakeSupabase()
+    monkeypatch.setattr(ingestion_service, "supabase", fake_supabase)
+    monkeypatch.setattr(ingestion_service, "AMCDownloader", _FakeDownloader)
+    monkeypatch.setattr(ingestion_service, "sha256_bytes", lambda _bytes: "fixed-checksum")
+    monkeypatch.setattr(ingestion_service, "R2Store", _FakeR2Enabled)
+
+    result = IngestionService().acquire_documents(
+        amc="ppfas",
+        report_month="2026-04",
+        documents=[
+            {
+                "document_type": "factsheet",
+                "source_url": "https://amc.ppfas.com/downloads/factsheet-apr-2026.xlsx",
+                "expected_file_type": ".xlsx",
+            }
+        ],
+    )
+
+    assert result["status"] == "ok"
+    raw_insert = [payload for table, payload in fake_supabase.inserts if table == "mf_raw_documents"][0]
+    assert raw_insert["source_url"].endswith("factsheet-apr-2026.xlsx")
+    assert raw_insert["storage_backend"] == "r2"
+    assert raw_insert["storage_metadata"]["source_manifest"]["acquisition_status"] == "acquired"
+
+
+def test_acquire_documents_returns_download_403_without_parser_failure(monkeypatch):
+    from app.mf_ingestion.services import ingestion_service
+
+    class _ForbiddenDownloader(_FakeDownloader):
+        def download(self, discovered):
+            raise RuntimeError("http_request_failed method=GET url=https://example.test/hdfc.pdf reason=403 Forbidden")
+
+    fake_supabase = _FakeSupabase()
+    monkeypatch.setattr(ingestion_service, "supabase", fake_supabase)
+    monkeypatch.setattr(ingestion_service, "AMCDownloader", _ForbiddenDownloader)
+    monkeypatch.setattr(ingestion_service, "R2Store", _FakeR2Enabled)
+
+    result = IngestionService().acquire_documents(
+        amc="hdfc",
+        report_month="2026-05",
+        documents=[
+            {
+                "document_type": "factsheet",
+                "source_url": "https://files.hdfcfund.com/s3fs-public/2026-06/HDFC%20MF%20Factsheet%20-%20May%202026.pdf",
+            }
+        ],
+    )
+
+    assert result["status"] == "error"
+    assert result["failed_documents"][0]["reason"] == "download_403"
+    assert not any(table == "mf_raw_documents" for table, _payload in fake_supabase.inserts)
+
+
+def test_upload_document_reuse_creates_factsheet_and_portfolio_rows(monkeypatch):
+    from app.mf_ingestion.services import ingestion_service
+
+    fake_supabase = _FakeSupabase()
+    monkeypatch.setattr(ingestion_service, "supabase", fake_supabase)
+    monkeypatch.setattr(ingestion_service, "sha256_bytes", lambda _bytes: "shared-checksum")
+    monkeypatch.setattr(ingestion_service, "R2Store", _FakeR2Enabled)
+
+    result = IngestionService().upload_document(
+        amc="hdfc",
+        document_type="factsheet",
+        report_month="2026-05",
+        source_url="https://files.hdfcfund.com/s3fs-public/2026-06/HDFC%20MF%20Factsheet%20-%20May%202026.pdf",
+        file_name="hdfc-factsheet-may-2026.pdf",
+        content_type="application/pdf",
+        file_bytes=b"%PDF fake",
+        reuse_as_portfolio=True,
+    )
+
+    assert result["status"] == "ok"
+    raw_inserts = [payload for table, payload in fake_supabase.inserts if table == "mf_raw_documents"]
+    assert [row["document_type"] for row in raw_inserts] == ["factsheet", "portfolio_disclosure"]
+    assert raw_inserts[0]["checksum"] == raw_inserts[1]["checksum"] == "shared-checksum"
+
+
+def test_upload_document_duplicate_checksum_is_idempotent(monkeypatch):
+    from app.mf_ingestion.services import ingestion_service
+
+    fake_supabase = _FakeSupabase(
+        [
+            {
+                "id": "existing-doc-1",
+                "checksum": "fixed-checksum",
+                "amc_code": "HDFC",
+                "document_type": "factsheet",
+                "report_month": "2026-05-01",
+            }
+        ]
+    )
+    monkeypatch.setattr(ingestion_service, "supabase", fake_supabase)
+    monkeypatch.setattr(ingestion_service, "sha256_bytes", lambda _bytes: "fixed-checksum")
+    monkeypatch.setattr(ingestion_service, "R2Store", _FakeR2Enabled)
+
+    result = IngestionService().upload_document(
+        amc="hdfc",
+        document_type="factsheet",
+        report_month="2026-05",
+        source_url="https://files.hdfcfund.com/factsheet.pdf",
+        file_name="factsheet.pdf",
+        content_type="application/pdf",
+        file_bytes=b"%PDF fake",
+    )
+
+    assert result["status"] == "ok"
+    assert result["acquired_documents"][0]["status"] == "skipped"
+    assert result["acquired_documents"][0]["source_document_id"] == "existing-doc-1"
+    assert not any(table == "mf_raw_documents" for table, _payload in fake_supabase.inserts)
+
+
+def test_upload_document_rejects_non_pdf_non_excel(monkeypatch):
+    from app.mf_ingestion.services import ingestion_service
+
+    fake_supabase = _FakeSupabase()
+    monkeypatch.setattr(ingestion_service, "supabase", fake_supabase)
+    monkeypatch.setattr(ingestion_service, "R2Store", _FakeR2Enabled)
+
+    result = IngestionService().upload_document(
+        amc="hdfc",
+        document_type="factsheet",
+        report_month="2026-05",
+        source_url="https://files.hdfcfund.com/factsheet.txt",
+        file_name="factsheet.txt",
+        content_type="text/plain",
+        file_bytes=b"not a pdf",
+    )
+
+    assert result == {"status": "error", "reason": "unsupported_file_type", "file_ext": ".txt"}
+    assert not any(table == "mf_raw_documents" for table, _payload in fake_supabase.inserts)
 
 
 def test_parser_downloads_r2_file_before_parsing(monkeypatch):

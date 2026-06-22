@@ -523,3 +523,11 @@ def test_sync_workflow_does_not_fail_on_needs_review():
 
     assert "--fail-on-needs-review" not in workflow
     assert "MF_EXTRACTOR_MODE" in workflow
+
+
+def test_sync_workflow_has_parse_only_path_for_r2_first_acquisition():
+    workflow = Path(".github/workflows/sync-mf-disclosures.yml").read_text(encoding="utf-8")
+
+    assert "parse_only" in workflow
+    assert 'PARSE_ONLY="true"' in workflow
+    assert "Skipping live AMC ingestion" in workflow
