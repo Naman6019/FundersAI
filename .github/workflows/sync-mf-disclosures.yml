@@ -187,60 +187,60 @@ jobs:
 
           if [ "$amc" = "hdfc" ]; then
             python - <<'PY'
-import os
-import sys
-from urllib.parse import urlparse
+          import os
+          import sys
+          from urllib.parse import urlparse
 
-import requests
-
-
-def split_urls(name):
-    return [token.strip() for token in os.getenv(name, "").split(",") if token.strip()]
+          import requests
 
 
-def truthy(value):
-    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+          def split_urls(name):
+              return [token.strip() for token in os.getenv(name, "").split(",") if token.strip()]
 
 
-factsheet_urls = split_urls("MF_HDFC_FACTSHEET_DOCUMENT_URLS")
-portfolio_urls = split_urls("MF_HDFC_PORTFOLIO_DOCUMENT_URLS")
-allow_factsheet_as_portfolio = truthy(os.getenv("MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO"))
+          def truthy(value):
+              return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
-if not factsheet_urls:
-    print("Error: HDFC strict ingestion requires MF_HDFC_FACTSHEET_DOCUMENT_URLS or hdfc_factsheet_urls.")
-    sys.exit(1)
-if not portfolio_urls and not allow_factsheet_as_portfolio:
-    print("Error: HDFC strict ingestion requires MF_HDFC_PORTFOLIO_DOCUMENT_URLS or hdfc_portfolio_urls.")
-    sys.exit(1)
 
-checks = [("factsheet", url) for url in factsheet_urls]
-checks.extend(("portfolio_disclosure", url) for url in portfolio_urls)
-if allow_factsheet_as_portfolio and not portfolio_urls:
-    checks.extend(("portfolio_disclosure", url) for url in factsheet_urls)
+          factsheet_urls = split_urls("MF_HDFC_FACTSHEET_DOCUMENT_URLS")
+          portfolio_urls = split_urls("MF_HDFC_PORTFOLIO_DOCUMENT_URLS")
+          allow_factsheet_as_portfolio = truthy(os.getenv("MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO"))
 
-headers = {"User-Agent": os.getenv("MF_USER_AGENT", "Mozilla/5.0"), "Referer": "https://www.hdfcfund.com/"}
-failures = []
-for document_type, url in checks:
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        failures.append(f"{document_type}:{url}:invalid_url")
-        continue
-    try:
-        response = requests.get(url, headers=headers, timeout=20, stream=True)
-        status = response.status_code
-        response.close()
-    except Exception as exc:
-        failures.append(f"{document_type}:{url}:{exc}")
-        continue
-    if status >= 400:
-        failures.append(f"{document_type}:{url}:http_{status}")
+          if not factsheet_urls:
+              print("Error: HDFC strict ingestion requires MF_HDFC_FACTSHEET_DOCUMENT_URLS or hdfc_factsheet_urls.")
+              sys.exit(1)
+          if not portfolio_urls and not allow_factsheet_as_portfolio:
+              print("Error: HDFC strict ingestion requires MF_HDFC_PORTFOLIO_DOCUMENT_URLS or hdfc_portfolio_urls.")
+              sys.exit(1)
 
-if failures:
-    print("Error: HDFC preflight download checks failed:")
-    for failure in failures:
-        print(f"- {failure}")
-    sys.exit(1)
-PY
+          checks = [("factsheet", url) for url in factsheet_urls]
+          checks.extend(("portfolio_disclosure", url) for url in portfolio_urls)
+          if allow_factsheet_as_portfolio and not portfolio_urls:
+              checks.extend(("portfolio_disclosure", url) for url in factsheet_urls)
+
+          headers = {"User-Agent": os.getenv("MF_USER_AGENT", "Mozilla/5.0"), "Referer": "https://www.hdfcfund.com/"}
+          failures = []
+          for document_type, url in checks:
+              parsed = urlparse(url)
+              if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                  failures.append(f"{document_type}:{url}:invalid_url")
+                  continue
+              try:
+                  response = requests.get(url, headers=headers, timeout=20, stream=True)
+                  status = response.status_code
+                  response.close()
+              except Exception as exc:
+                  failures.append(f"{document_type}:{url}:{exc}")
+                  continue
+              if status >= 400:
+                  failures.append(f"{document_type}:{url}:http_{status}")
+
+          if failures:
+              print("Error: HDFC preflight download checks failed:")
+              for failure in failures:
+                  print(f"- {failure}")
+              sys.exit(1)
+          PY
           fi
 
           if ! timeout 40m python -m backend.app.mf_ingestion.jobs.ingest_latest_amc_docs --amc "$amc" --all-document-types --max-documents "$max_docs" --strict; then
