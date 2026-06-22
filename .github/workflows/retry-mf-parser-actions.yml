@@ -21,6 +21,26 @@ on:
         description: 'Comma-separated statuses to retry'
         required: false
         default: 'needs_review,failed,parsed_partial'
+      extractor_mode:
+        description: 'Parser mode: deterministic, deterministic_then_llm, llm_then_deterministic'
+        required: false
+        default: 'llm_then_deterministic'
+      llm_extractor_enabled:
+        description: 'Enable LLM extraction'
+        required: false
+        default: 'true'
+      llm_extractor_model:
+        description: 'LLM model for extraction'
+        required: false
+        default: ''
+      llm_min_write_confidence:
+        description: 'Minimum confidence for LLM final writes'
+        required: false
+        default: '90'
+      llm_allow_final_writes:
+        description: 'Allow validated LLM rows to write final tables'
+        required: false
+        default: 'false'
 
 concurrency:
   group: retry-mf-parser-actions-${{ github.ref }}
@@ -57,11 +77,11 @@ jobs:
           R2_RAW_BUCKET: ${{ secrets.R2_RAW_BUCKET }}
           R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
           MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
-          MF_EXTRACTOR_MODE: ${{ vars.MF_EXTRACTOR_MODE || 'deterministic' }}
-          MF_LLM_EXTRACTOR_ENABLED: ${{ vars.MF_LLM_EXTRACTOR_ENABLED || 'false' }}
-          MF_LLM_EXTRACTOR_MODEL: ${{ vars.MF_LLM_EXTRACTOR_MODEL || '' }}
-          MF_LLM_MIN_WRITE_CONFIDENCE: ${{ vars.MF_LLM_MIN_WRITE_CONFIDENCE || '90' }}
-          MF_LLM_ALLOW_FINAL_WRITES: ${{ vars.MF_LLM_ALLOW_FINAL_WRITES || 'false' }}
+          MF_EXTRACTOR_MODE: ${{ inputs.extractor_mode || vars.MF_EXTRACTOR_MODE || 'deterministic' }}
+          MF_LLM_EXTRACTOR_ENABLED: ${{ inputs.llm_extractor_enabled || vars.MF_LLM_EXTRACTOR_ENABLED || 'false' }}
+          MF_LLM_EXTRACTOR_MODEL: ${{ inputs.llm_extractor_model || vars.MF_LLM_EXTRACTOR_MODEL || '' }}
+          MF_LLM_MIN_WRITE_CONFIDENCE: ${{ inputs.llm_min_write_confidence || vars.MF_LLM_MIN_WRITE_CONFIDENCE || '90' }}
+          MF_LLM_ALLOW_FINAL_WRITES: ${{ inputs.llm_allow_final_writes || vars.MF_LLM_ALLOW_FINAL_WRITES || 'false' }}
           ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "false"
           DISPATCH_AMCS: ${{ inputs.amcs }}
           DISPATCH_LIMIT: ${{ inputs.limit }}

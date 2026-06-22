@@ -53,6 +53,26 @@ on:
         description: 'Allow HDFC factsheet URLs to be reused for portfolio extraction'
         required: false
         default: 'false'
+      extractor_mode:
+        description: 'Parser mode: deterministic, deterministic_then_llm, llm_then_deterministic'
+        required: false
+        default: 'llm_then_deterministic'
+      llm_extractor_enabled:
+        description: 'Enable LLM extraction'
+        required: false
+        default: 'true'
+      llm_extractor_model:
+        description: 'LLM model for extraction'
+        required: false
+        default: ''
+      llm_min_write_confidence:
+        description: 'Minimum confidence for LLM final writes'
+        required: false
+        default: '90'
+      llm_allow_final_writes:
+        description: 'Allow validated LLM rows to write final tables'
+        required: false
+        default: 'false'
 
 concurrency:
   group: sync-mf-disclosures-${{ github.ref }}
@@ -111,11 +131,11 @@ jobs:
           MF_NIPPON_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_NIPPON_PORTFOLIO_DOCUMENT_URLS }}
           MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO: ${{ github.event.inputs.allow_hdfc_factsheet_as_portfolio }}
           MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
-          MF_EXTRACTOR_MODE: ${{ vars.MF_EXTRACTOR_MODE || 'deterministic' }}
-          MF_LLM_EXTRACTOR_ENABLED: ${{ vars.MF_LLM_EXTRACTOR_ENABLED || 'false' }}
-          MF_LLM_EXTRACTOR_MODEL: ${{ vars.MF_LLM_EXTRACTOR_MODEL || '' }}
-          MF_LLM_MIN_WRITE_CONFIDENCE: ${{ vars.MF_LLM_MIN_WRITE_CONFIDENCE || '90' }}
-          MF_LLM_ALLOW_FINAL_WRITES: ${{ vars.MF_LLM_ALLOW_FINAL_WRITES || 'false' }}
+          MF_EXTRACTOR_MODE: ${{ github.event.inputs.extractor_mode || vars.MF_EXTRACTOR_MODE || 'deterministic' }}
+          MF_LLM_EXTRACTOR_ENABLED: ${{ github.event.inputs.llm_extractor_enabled || vars.MF_LLM_EXTRACTOR_ENABLED || 'false' }}
+          MF_LLM_EXTRACTOR_MODEL: ${{ github.event.inputs.llm_extractor_model || vars.MF_LLM_EXTRACTOR_MODEL || '' }}
+          MF_LLM_MIN_WRITE_CONFIDENCE: ${{ github.event.inputs.llm_min_write_confidence || vars.MF_LLM_MIN_WRITE_CONFIDENCE || '90' }}
+          MF_LLM_ALLOW_FINAL_WRITES: ${{ github.event.inputs.llm_allow_final_writes || vars.MF_LLM_ALLOW_FINAL_WRITES || 'false' }}
           MF_SOURCE_MANIFEST_PATH: ${{ vars.MF_SOURCE_MANIFEST_PATH || '' }}
           ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "false"
           DISPATCH_AMCS: ${{ github.event.inputs.amcs }}
