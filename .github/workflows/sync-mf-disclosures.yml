@@ -52,7 +52,11 @@ on:
       allow_hdfc_factsheet_as_portfolio:
         description: 'Allow HDFC factsheet URLs to be reused for portfolio extraction'
         required: false
-        default: 'false'
+        default: 'true'
+      allow_factsheet_as_portfolio:
+        description: 'Allow factsheet URLs to be reused for portfolio extraction'
+        required: false
+        default: 'true'
       extractor_mode:
         description: 'Parser mode: deterministic, deterministic_then_llm, llm_then_deterministic'
         required: false
@@ -135,7 +139,8 @@ jobs:
           MF_NIPPON_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_NIPPON_PORTFOLIO_DOCUMENT_URLS }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO: ${{ github.event.inputs.allow_hdfc_factsheet_as_portfolio }}
+          MF_ALLOW_FACTSHEET_AS_PORTFOLIO: ${{ github.event.inputs.allow_factsheet_as_portfolio || github.event.inputs.allow_hdfc_factsheet_as_portfolio || vars.MF_ALLOW_FACTSHEET_AS_PORTFOLIO || 'false' }}
+          MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO: ${{ github.event.inputs.allow_factsheet_as_portfolio || github.event.inputs.allow_hdfc_factsheet_as_portfolio || vars.MF_ALLOW_FACTSHEET_AS_PORTFOLIO || 'false' }}
           MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
           MF_EXTRACTOR_MODE: ${{ github.event.inputs.extractor_mode || vars.MF_EXTRACTOR_MODE || 'deterministic' }}
           MF_LLM_EXTRACTOR_ENABLED: ${{ github.event.inputs.llm_extractor_enabled || vars.MF_LLM_EXTRACTOR_ENABLED || 'false' }}
@@ -159,6 +164,7 @@ jobs:
           DISPATCH_NIPPON_FACTSHEET_URLS: ${{ github.event.inputs.nippon_factsheet_urls }}
           DISPATCH_MOTILAL_FACTSHEET_URLS: ${{ github.event.inputs.motilal_factsheet_urls }}
           DISPATCH_MOTILAL_PORTFOLIO_URLS: ${{ github.event.inputs.motilal_portfolio_urls }}
+          DISPATCH_ALLOW_FACTSHEET_AS_PORTFOLIO: ${{ github.event.inputs.allow_factsheet_as_portfolio || github.event.inputs.allow_hdfc_factsheet_as_portfolio }}
           DISPATCH_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO: ${{ github.event.inputs.allow_hdfc_factsheet_as_portfolio }}
         run: |
           set -euo pipefail
@@ -212,7 +218,8 @@ jobs:
             export MF_MOTILAL_PORTFOLIO_DOCUMENT_URLS="$DISPATCH_MOTILAL_PORTFOLIO_URLS"
           fi
 
-          export MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO="${MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO:-${DISPATCH_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO:-false}}"
+          export MF_ALLOW_FACTSHEET_AS_PORTFOLIO="${MF_ALLOW_FACTSHEET_AS_PORTFOLIO:-${DISPATCH_ALLOW_FACTSHEET_AS_PORTFOLIO:-${DISPATCH_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO:-false}}}"
+          export MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO="${MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO:-$MF_ALLOW_FACTSHEET_AS_PORTFOLIO}"
 
           EVENT_NAME="${GITHUB_EVENT_NAME:-workflow_dispatch}"
           AMCS="${DISPATCH_AMCS:-axis,hdfc,sbi,icici,ppfas,nippon,motilal}"

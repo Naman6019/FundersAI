@@ -92,6 +92,30 @@ def test_hdfc_factsheet_urls_can_be_reused_for_portfolios_when_enabled(monkeypat
     assert docs[0].url.endswith("May%202026.pdf")
 
 
+def test_hdfc_generic_factsheet_reuse_flag_is_supported(monkeypatch) -> None:
+    source = _source(
+        "hdfc",
+        "https://www.hdfcfund.com/factsheets",
+        "https://www.hdfcfund.com/statutory-disclosure/portfolio/monthly-portfolio",
+    )
+    monkeypatch.setenv("MF_ALLOW_FACTSHEET_AS_PORTFOLIO", "true")
+    monkeypatch.setenv(
+        "MF_HDFC_FACTSHEET_DOCUMENT_URLS",
+        "https://files.hdfcfund.com/s3fs-public/2026-05/HDFC%20MF%20Factsheet%20-%20May%202026.pdf",
+    )
+
+    def fail_request(*args, **kwargs):
+        raise RuntimeError("listing unavailable")
+
+    monkeypatch.setattr(amc_downloader, "_request_with_retry", fail_request)
+
+    docs = AMCDownloader(source, timeout_seconds=1, user_agent="test").list_documents("portfolio_disclosure")
+
+    assert len(docs) == 1
+    assert docs[0].document_type == "portfolio_disclosure"
+    assert docs[0].url.endswith("May%202026.pdf")
+
+
 def test_axis_manual_urls_are_used_before_dynamic_discovery(monkeypatch) -> None:
     source = _source("axis", "https://www.axismf.com/downloads")
     monkeypatch.setenv(
@@ -110,6 +134,28 @@ def test_axis_manual_urls_are_used_before_dynamic_discovery(monkeypatch) -> None
 
     assert len(docs) == 1
     assert docs[0].url.endswith("Axis-MF-Monthly-Portfolio-May-2026.xlsx")
+
+
+def test_axis_factsheet_urls_can_be_reused_for_portfolios_when_enabled(monkeypatch) -> None:
+    source = _source("axis", "https://www.axismf.com/downloads")
+    monkeypatch.setenv("MF_ALLOW_FACTSHEET_AS_PORTFOLIO", "true")
+    monkeypatch.setenv(
+        "MF_AXIS_FACTSHEET_DOCUMENT_URLS",
+        "https://www.axismf.com/1/5/1423/1426/2680/AxisFundFactsheetMarch2026.pdf",
+    )
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("dynamic discovery should not run when factsheet reuse is configured")
+
+    monkeypatch.setattr(AxisAdapter, "fetch_from_axis_api_or_page", fail_if_called)
+    monkeypatch.setattr(AxisAdapter, "fetch_from_amfi", fail_if_called)
+    monkeypatch.setattr(AxisAdapter, "fetch_with_playwright", fail_if_called)
+
+    docs = AxisAdapter().fetch_documents(source, "portfolio_disclosure")
+
+    assert len(docs) == 1
+    assert docs[0].document_type == "portfolio_disclosure"
+    assert docs[0].url.endswith("AxisFundFactsheetMarch2026.pdf")
 
 
 def test_axis_workflow_does_not_generate_dead_cdn_urls() -> None:

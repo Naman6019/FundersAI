@@ -204,6 +204,55 @@ Investors understand that their principal will be at Very High risk
     assert records[0].risk_level == "Very High"
 
 
+def test_factsheet_parser_rejects_product_labelling_as_benchmark():
+    text = """
+HDFC Arbitrage Fund
+Benchmark
+Product Labelling
+Assets Under Management
+Rs. 25,084.91 Crores
+Direct Plan: 0.01%
+"""
+    records = FactsheetParser().parse_text(text=text, report_month=date(2026, 5, 1))
+
+    assert len(records) == 1
+    assert records[0].benchmark is None
+
+
+def test_factsheet_parser_extracts_hdfc_benchmark_index_label():
+    text = """
+HDFC Large Cap Fund
+ASSETS UNDER MANAGEMENT
+As on May 31, 2026
+37,808.31Cr.
+EXPENSE RATIO
+Direct: 0.99%
+#BENCHMARK INDEX
+NIFTY 100 Total Returns Index (TRI)
+##ADDL. BENCHMARK INDEX
+BSE SENSEX Index (TRI)
+"""
+    records = FactsheetParser().parse_text(text=text, report_month=date(2026, 5, 1))
+
+    assert len(records) == 1
+    assert records[0].benchmark == "NIFTY 100 Total Returns Index (TRI)"
+
+
+def test_factsheet_parser_rejects_returns_table_label_as_benchmark():
+    text = """
+HDFC BSE 500 ETF
+Benchmark
+Returns
+Assets Under Management
+Rs. 100 Crores
+Direct Plan: 0.20%
+"""
+    records = FactsheetParser().parse_text(text=text, report_month=date(2026, 5, 1))
+
+    assert len(records) == 1
+    assert records[0].benchmark is None
+
+
 def test_factsheet_parser_ignores_malformed_riskometer_text():
     text = """
 SBI Large Cap Fund

@@ -496,6 +496,7 @@ def _extract_benchmark(chunk: str) -> str | None:
     patterns = (
         r"AMFI\s+Tier\s+I\s+Benchmark\s+Index\s+([^\n]{3,90})",
         r"AMFI\s+Tier\s+I\s+Benchmark\s+Index\s*\n\s*([^\n]{3,90})",
+        r"#?\s*Benchmark\s+Index\s*\n\s*([^\n]{3,100})",
         r"Benchmark\s*\n\s*([^\n]{3,90})",
         r"\(Benchmark\)\s*\n\s*([^\n]{3,90})",
     )
@@ -560,12 +561,15 @@ def _is_plausible_benchmark(value: str) -> bool:
         return False
     if re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", clean):
         return False
+    if clean.lower() in {"returns", "benchmark returns", "additional benchmark returns"}:
+        return False
     invalid_phrases = (
         "this product labelling is applicable only to the scheme",
+        "product labelling",
+        "product labeling",
         "investors should consult",
         "riskometer",
         "performance of the scheme",
-        "returns",
         "the risk of",
         "notes",
     )
