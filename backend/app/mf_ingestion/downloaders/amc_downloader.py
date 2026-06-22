@@ -1057,6 +1057,12 @@ def _request_with_retry(
 ) -> requests.Response:
     method_upper = method.upper()
     last_exc: Exception | None = None
+    
+    proxy_url = str(os.getenv("MF_HTTP_PROXY", "") or "").strip()
+    proxies = None
+    if proxy_url:
+        proxies = {"http": proxy_url, "https": proxy_url}
+
     for attempt in range(HTTP_MAX_RETRIES + 1):
         try:
             if session is not None:
@@ -1067,6 +1073,8 @@ def _request_with_retry(
                     headers=headers,
                     params=params,
                     json=json_payload,
+                    proxies=proxies,
+                    verify=not bool(proxies),
                 )
             elif method_upper == "GET":
                 response = requests.get(
@@ -1074,6 +1082,8 @@ def _request_with_retry(
                     timeout=timeout_seconds,
                     headers=headers,
                     params=params,
+                    proxies=proxies,
+                    verify=not bool(proxies),
                 )
             elif method_upper == "POST":
                 response = requests.post(
@@ -1082,6 +1092,8 @@ def _request_with_retry(
                     headers=headers,
                     params=params,
                     json=json_payload,
+                    proxies=proxies,
+                    verify=not bool(proxies),
                 )
             else:
                 response = requests.request(
@@ -1091,13 +1103,18 @@ def _request_with_retry(
                     headers=headers,
                     params=params,
                     json=json_payload,
+                    proxies=proxies,
+                    verify=not bool(proxies),
                 )
 
             # --- Cloudflare/WAF Bypass fallback ---
             if getattr(response, "status_code", 200) in {403, 406} and session is None and method_upper in {"GET", "POST"}:
                 try:
                     import httpx
-                    with httpx.Client(http2=True) as client:
+                    client_kwargs = {"http2": True, "verify": not bool(proxies)}
+                    if proxies:
+                        client_kwargs["proxy"] = proxy_url
+                    with httpx.Client(**client_kwargs) as client:
                         h_resp = client.request(
                             method=method_upper,
                             url=url,

@@ -203,10 +203,17 @@ class AxisAdapter(BaseAMCAdapter):
             return []
 
         try:
+            proxy_url = str(os.getenv("MF_HTTP_PROXY", "") or "").strip()
+            proxies = None
+            if proxy_url:
+                proxies = {"http": proxy_url, "https": proxy_url}
+
             response = requests.get(
                 page_url, 
                 headers={"User-Agent": self.user_agent}, 
-                timeout=self.timeout_seconds
+                timeout=self.timeout_seconds,
+                proxies=proxies,
+                verify=not bool(proxies)
             )
             response.raise_for_status()
             
