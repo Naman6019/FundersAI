@@ -99,18 +99,18 @@ jobs:
           MF_SBI_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_SBI_PORTFOLIO_DOCUMENT_URLS }}
           MF_NIPPON_FACTSHEET_DOCUMENT_URLS: ${{ secrets.MF_NIPPON_FACTSHEET_DOCUMENT_URLS }}
           MF_NIPPON_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_NIPPON_PORTFOLIO_DOCUMENT_URLS }}
-          MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO: ${{ inputs.allow_hdfc_factsheet_as_portfolio }}
+          MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO: ${{ github.event.inputs.allow_hdfc_factsheet_as_portfolio }}
           MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
           ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "false"
-          DISPATCH_AMCS: ${{ inputs.amcs }}
-          DISPATCH_MAX_DOCS: ${{ inputs.max_documents }}
-          DISPATCH_PARSE_LIMIT: ${{ inputs.parse_limit }}
-          DISPATCH_PARSE_ROUNDS: ${{ inputs.parse_rounds }}
-          DISPATCH_HDFC_FACTSHEET_URLS: ${{ inputs.hdfc_factsheet_urls }}
-          DISPATCH_HDFC_PORTFOLIO_URLS: ${{ inputs.hdfc_portfolio_urls }}
-          DISPATCH_AXIS_FACTSHEET_URLS: ${{ inputs.axis_factsheet_urls }}
-          DISPATCH_AXIS_PORTFOLIO_URLS: ${{ inputs.axis_portfolio_urls }}
-          DISPATCH_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO: ${{ inputs.allow_hdfc_factsheet_as_portfolio }}
+          DISPATCH_AMCS: ${{ github.event.inputs.amcs }}
+          DISPATCH_MAX_DOCS: ${{ github.event.inputs.max_documents }}
+          DISPATCH_PARSE_LIMIT: ${{ github.event.inputs.parse_limit }}
+          DISPATCH_PARSE_ROUNDS: ${{ github.event.inputs.parse_rounds }}
+          DISPATCH_HDFC_FACTSHEET_URLS: ${{ github.event.inputs.hdfc_factsheet_urls }}
+          DISPATCH_HDFC_PORTFOLIO_URLS: ${{ github.event.inputs.hdfc_portfolio_urls }}
+          DISPATCH_AXIS_FACTSHEET_URLS: ${{ github.event.inputs.axis_factsheet_urls }}
+          DISPATCH_AXIS_PORTFOLIO_URLS: ${{ github.event.inputs.axis_portfolio_urls }}
+          DISPATCH_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO: ${{ github.event.inputs.allow_hdfc_factsheet_as_portfolio }}
         run: |
           set -euo pipefail
 
@@ -286,7 +286,7 @@ PY
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           MF_DISCLOSURE_COVERAGE_AMCS: axis,hdfc,sbi,icici,ppfas,nippon
-          MF_DISCLOSURE_STRICT_COVERAGE_AMCS: ${{ inputs.strict_coverage_amcs || 'axis,hdfc,sbi,icici,ppfas' }}
+          MF_DISCLOSURE_STRICT_COVERAGE_AMCS: ${{ github.event.inputs.strict_coverage_amcs || 'axis,hdfc,sbi,icici,ppfas' }}
           MF_DISCLOSURE_MIN_FIELD_COUNT: "1"
           MF_DISCLOSURE_MIN_CORE_FIELD_RATIO: "0.01"
           MF_DISCLOSURE_MIN_PORTFOLIO_FAMILY_RATIO: "0.01"
