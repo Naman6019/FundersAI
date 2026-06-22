@@ -79,6 +79,56 @@ Fund Manager
     assert {row.get("instrument_name") for row in record.holdings}.isdisjoint({"Grand Total", "EQUITY"})
 
 
+def test_axis_combined_factsheet_portfolio_snapshot_layout():
+    text_fixture = """
+AXIS LARGE CAP FUND
+Portfolio Snapshot
+March2026
+Instrument Type/Issuer Name
+Industry
+% of NAV
+EQUITY
+100.00%
+ICICI Bank Limited
+Banks
+8.84%
+HDFC Bank Limited
+Banks
+7.71%
+Reliance Industries Limited
+Petroleum Products
+5.08%
+Infosys Limited
+IT - Software
+4.81%
+Axis Bank Limited
+Banks
+1.34%
+Axis NIFTY 50 ETF
+Others
+0.83%
+Mutual Fund Units
+1.23%
+Axis Money Market Fund - Direct Plan - Growth Option
+1.23%
+Grand Total
+100.00%
+"""
+
+    records = AxisAdapter().parse_pdf_text_many(text_fixture, _axis_context())
+
+    assert len(records) == 1
+    record = records[0]
+    assert record.scheme_name == "Axis Large Cap Fund"
+    assert record.report_month == date(2026, 3, 1)
+    assert record.metrics["total_percent_aum"] == pytest.approx(29.84)
+    names = {row.get("instrument_name") for row in record.holdings}
+    assert "ICICI Bank Limited" in names
+    assert "Axis NIFTY 50 ETF" in names
+    assert "Grand Total" not in names
+    assert "Mutual Fund Units" not in names
+
+
 @pytest.mark.skipif(not AXIS_FACTSHEET.exists(), reason="backend/axis_factsheet.pdf is not available")
 def test_axis_factsheet_metrics_are_deduped_and_sane():
     records = FactsheetParser().parse(str(AXIS_FACTSHEET), _axis_context())
