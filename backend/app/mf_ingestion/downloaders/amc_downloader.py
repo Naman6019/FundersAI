@@ -976,20 +976,23 @@ def _generic_base_score(ext: str, document_type: str) -> int:
 
 
 def _detect_report_month_from_text(text: str) -> date | None:
-    current_year = datetime.now(UTC).year
+    today = datetime.now(UTC).date()
+    limit_date = date(today.year, today.month, 1)
     # Try day-first matches first
     for match in DAY_FIRST_MONTH_PATTERN.finditer(text or ""):
         month = datetime.strptime(match.group("month")[:3], "%b").month
         year = int(match.group("year"))
-        if 2000 <= year <= current_year + 1:
-            return date(year, month, 1)
+        parsed_dt = date(year, month, 1)
+        if 2000 <= year and parsed_dt <= limit_date:
+            return parsed_dt
 
     # Try month-first/month-only matches
     for match in MONTH_PATTERN.finditer(text or ""):
         month = datetime.strptime(match.group("month")[:3], "%b").month
         year = int(match.group("year"))
-        if 2000 <= year <= current_year + 1:
-            return date(year, month, 1)
+        parsed_dt = date(year, month, 1)
+        if 2000 <= year and parsed_dt <= limit_date:
+            return parsed_dt
 
     return None
 
