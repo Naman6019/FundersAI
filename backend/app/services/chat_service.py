@@ -3442,14 +3442,7 @@ Read the impact mainly through crude oil, INR/USD, inflation expectations, rates
     followup_answer = _comparison_followup_answer_markdown(quant_data, intent_info.get("followup_question")) if intent == "compare" else ""
     comparison_summary = _comparison_summary_markdown(quant_data.get("comparison_summary")) if intent == "compare" and isinstance(quant_data, dict) else ""
     is_mf = isinstance(quant_data, dict) and quant_data.get("asset_type") == "mutual_fund"
-    plain_canvas_compare = (
-        intent == "compare"
-        and (comparison_view_mode == "canvas" or is_mf)
-        and not deep_research
-        and not intent_info.get("followup_question")
-        and not intent_info.get("followup_from_context")
-        and not intent_info.get("followup_from_history")
-    )
+    plain_canvas_compare = False
 
     if plain_canvas_compare:
         if response_meta is not None:
