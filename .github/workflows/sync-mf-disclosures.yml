@@ -99,6 +99,7 @@ jobs:
           MF_SBI_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_SBI_PORTFOLIO_DOCUMENT_URLS }}
           MF_NIPPON_FACTSHEET_DOCUMENT_URLS: ${{ secrets.MF_NIPPON_FACTSHEET_DOCUMENT_URLS }}
           MF_NIPPON_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_NIPPON_PORTFOLIO_DOCUMENT_URLS }}
+          MF_HTTP_PROXY: ${{ secrets.MF_HTTP_PROXY }}
           MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO: ${{ github.event.inputs.allow_hdfc_factsheet_as_portfolio }}
           MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
           ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "false"
@@ -205,12 +206,13 @@ jobs:
           factsheet_urls = split_urls("MF_HDFC_FACTSHEET_DOCUMENT_URLS")
           portfolio_urls = split_urls("MF_HDFC_PORTFOLIO_DOCUMENT_URLS")
           allow_factsheet_as_portfolio = truthy(os.getenv("MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO"))
+          has_proxy = bool(str(os.getenv("MF_HTTP_PROXY", "") or "").strip())
 
-          if not factsheet_urls:
-              print("Error: HDFC strict ingestion requires MF_HDFC_FACTSHEET_DOCUMENT_URLS or hdfc_factsheet_urls.")
+          if not factsheet_urls and not has_proxy:
+              print("Error: HDFC strict ingestion requires MF_HDFC_FACTSHEET_DOCUMENT_URLS or hdfc_factsheet_urls (or MF_HTTP_PROXY).")
               sys.exit(1)
-          if not portfolio_urls and not allow_factsheet_as_portfolio:
-              print("Error: HDFC strict ingestion requires MF_HDFC_PORTFOLIO_DOCUMENT_URLS or hdfc_portfolio_urls.")
+          if not portfolio_urls and not allow_factsheet_as_portfolio and not has_proxy:
+              print("Error: HDFC strict ingestion requires MF_HDFC_PORTFOLIO_DOCUMENT_URLS or hdfc_portfolio_urls (or MF_HTTP_PROXY).")
               sys.exit(1)
 
           checks = [("factsheet", url) for url in factsheet_urls]
