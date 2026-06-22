@@ -222,7 +222,10 @@ class IngestionService:
                 result = self._store_downloaded_document(target, source=source)
                 if target_type != document_type:
                     result["reused_from_document_type"] = document_type
-                acquired.append(result)
+                if str(result.get("status") or "").lower() == "error":
+                    failed.append(result)
+                else:
+                    acquired.append(result)
 
         status = "ok" if acquired and not failed else "partial" if acquired else "error"
         return {"status": status, "acquired_documents": acquired, "failed_documents": failed}
@@ -287,7 +290,8 @@ class IngestionService:
             if target_type != normalized_type:
                 result["reused_from_document_type"] = normalized_type
             acquired.append(result)
-        return {"status": "ok", "acquired_documents": acquired}
+        status = "ok" if all(str(item.get("status") or "").lower() != "error" for item in acquired) else "partial"
+        return {"status": status, "acquired_documents": acquired}
 
     def _store_downloaded_document(self, downloaded: DownloadedDocument, *, source: AMCDocumentSource) -> dict[str, Any]:
         checksum = sha256_bytes(downloaded.file_bytes)
@@ -353,7 +357,23 @@ class IngestionService:
             "downloaded_at": now_iso,
             "parser_version": self.config.parser_version,
         }
-        inserted = supabase.table("mf_raw_documents").insert(payload).execute()
+        try:
+            inserted = supabase.table("mf_raw_documents").insert(payload).execute()
+        except Exception as exc:
+            if _is_global_checksum_constraint_violation(exc):
+                return {
+                    "status": "error",
+                    "reason": "schema_requires_checksum_constraint_migration",
+                    "message": (
+                        "Run backend/migrations/20260622_relax_mf_raw_document_checksum_uniqueness.sql "
+                        "so one official file can create factsheet and portfolio_disclosure rows."
+                    ),
+                    "checksum": checksum,
+                    "source_url": downloaded.source_url,
+                    "document_type": downloaded.document_type,
+                    "report_month": downloaded.report_month.isoformat() if downloaded.report_month else None,
+                }
+            raise
         source_document_id = str((inserted.data or [{}])[0].get("id") or "")
         logger.info(
             "event=raw_document_inserted amc_code=%s document_type=%s source_document_id=%s",
@@ -525,6 +545,13 @@ def _download_failure_reason(exc: Exception) -> str:
     if "404" in text or "not found" in text:
         return "download_404"
     return "download_failed"
+
+
+def _is_global_checksum_constraint_violation(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "mf_raw_documents_checksum_key" in text or (
+        "duplicate key value" in text and "key (checksum)=" in text
+    )
 
 
 def _dedupe_discovered_documents(documents: list[Any]) -> list[Any]:

@@ -27,6 +27,7 @@ class _FakeTable:
         self._eq: dict[str, object] = {}
         self._in: dict[str, list[object]] = {}
         self._update_payload: dict | None = None
+        self._insert_payload: dict | None = None
 
     def select(self, _selected: str):
         return self
@@ -46,6 +47,7 @@ class _FakeTable:
         return self
 
     def insert(self, payload: dict):
+        self._insert_payload = payload
         self.root.inserts.append((self.table_name, payload))
         return self
 
@@ -58,6 +60,8 @@ class _FakeTable:
         return self
 
     def execute(self):
+        if self._insert_payload is not None:
+            return SimpleNamespace(data=[{"id": "doc-1", **self._insert_payload}])
         if self.table_name == "mf_raw_documents" and self._update_payload is None:
             rows = list(self.root.docs)
             for key, values in self._in.items():
@@ -291,6 +295,47 @@ def test_upload_document_rejects_non_pdf_non_excel(monkeypatch):
 
     assert result == {"status": "error", "reason": "unsupported_file_type", "file_ext": ".txt"}
     assert not any(table == "mf_raw_documents" for table, _payload in fake_supabase.inserts)
+
+
+def test_reused_document_returns_schema_migration_error_for_legacy_checksum_constraint(monkeypatch):
+    from app.mf_ingestion.services import ingestion_service
+
+    class _LegacyConstraintTable(_FakeTable):
+        def execute(self):
+            if self.table_name == "mf_raw_documents" and self._insert_payload is not None:
+                payload = self._insert_payload
+                if payload.get("document_type") == "portfolio_disclosure":
+                    raise Exception(
+                        "{'message': 'duplicate key value violates unique constraint "
+                        '"mf_raw_documents_checksum_key"', "'code': '23505', "
+                        "'details': 'Key (checksum)=(fixed-checksum) already exists.'}"
+                    )
+            return super().execute()
+
+    class _LegacyConstraintSupabase(_FakeSupabase):
+        def table(self, table_name: str):
+            return _LegacyConstraintTable(self, table_name)
+
+    fake_supabase = _LegacyConstraintSupabase()
+    monkeypatch.setattr(ingestion_service, "supabase", fake_supabase)
+    monkeypatch.setattr(ingestion_service, "sha256_bytes", lambda _bytes: "fixed-checksum")
+    monkeypatch.setattr(ingestion_service, "R2Store", _FakeR2Enabled)
+
+    result = IngestionService().upload_document(
+        amc="axis",
+        document_type="factsheet",
+        report_month="2026-03",
+        source_url="https://www.axismf.com/axis.pdf",
+        file_name="axis.pdf",
+        content_type="application/pdf",
+        file_bytes=b"%PDF fake",
+        reuse_as_portfolio=True,
+    )
+
+    assert result["status"] == "partial"
+    assert result["acquired_documents"][0]["status"] == "ingested"
+    assert result["acquired_documents"][1]["status"] == "error"
+    assert result["acquired_documents"][1]["reason"] == "schema_requires_checksum_constraint_migration"
 
 
 def test_parser_downloads_r2_file_before_parsing(monkeypatch):
