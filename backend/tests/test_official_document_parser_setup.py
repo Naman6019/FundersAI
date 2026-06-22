@@ -120,6 +120,23 @@ class _ManifestDownloader:
         )
 
 
+class _FakeCoreRepository:
+    supabase = object()
+
+    def __init__(self) -> None:
+        self.upserts: list[dict] = []
+
+    def get_mutual_fund_core_snapshot(self, scheme_code):
+        return {
+            "scheme_code": str(scheme_code),
+            "scheme_name": "ICICI Prudential Multi Asset Fund",
+            "provider_payload": {},
+        }
+
+    def upsert_mutual_fund_core_snapshot_rows(self, rows):
+        self.upserts.extend(rows)
+
+
 def test_source_manifest_loads_exact_official_documents(tmp_path: Path):
     manifest = tmp_path / "mf-source-manifest.json"
     manifest.write_text(
@@ -285,6 +302,150 @@ def test_invalid_llm_payload_falls_back_to_needs_review(monkeypatch, tmp_path: P
 
     assert result["processed"][0]["status"] == "needs_review"
     assert not any(table in {"mutual_fund_holdings", "mutual_fund_core_snapshot"} for table, *_ in fake_supabase.upserts)
+
+
+def test_llm_primary_dry_run_enqueues_review_and_uses_deterministic_fallback(monkeypatch, tmp_path: Path):
+    from app.mf_ingestion.parsers.factsheet_parser import FactsheetRecord
+    from app.mf_ingestion.services import parsing_service, review_service
+
+    raw_file = tmp_path / "factsheet.txt"
+    raw_file.write_text("messy official factsheet text", encoding="utf-8")
+    fixture = tmp_path / "llm-output.json"
+    fixture.write_text(
+        json.dumps(
+            {
+                "source_document_id": "doc-llm-primary-dry-1",
+                "extractor_type": "llm",
+                "records": [
+                    {
+                        "scheme_name": "ICICI Prudential Multi Asset Fund",
+                        "report_month": "2026-04-01",
+                        "holdings": [],
+                        "aum": 1000.0,
+                        "expense_ratio": 0.8,
+                        "benchmark": "NIFTY 50 Hybrid Composite Debt 50:50 Index",
+                        "fund_manager": "Test Manager",
+                        "risk_level": "Very High",
+                        "confidence_score": 95.0,
+                        "validation_issues": [],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    fake_supabase = _FakeSupabase(
+        [
+            {
+                "id": "doc-llm-primary-dry-1",
+                "amc_code": "ICICI",
+                "document_type": "factsheet",
+                "source_url": "https://example.test/factsheet.pdf",
+                "storage_path": str(raw_file),
+                "parse_status": "pending",
+                "parser_version": "test",
+            }
+        ]
+    )
+    repo = _FakeCoreRepository()
+    monkeypatch.setenv("MF_EXTRACTOR_MODE", "llm_then_deterministic")
+    monkeypatch.setenv("MF_LLM_EXTRACTOR_ENABLED", "true")
+    monkeypatch.setenv("MF_LLM_EXTRACTOR_MODEL", "test-model")
+    monkeypatch.setenv("MF_LLM_EXTRACTOR_FIXTURE_PATH", str(fixture))
+    monkeypatch.setenv("MF_LLM_ALLOW_FINAL_WRITES", "false")
+    monkeypatch.setattr(parsing_service, "supabase", fake_supabase)
+    monkeypatch.setattr(review_service, "supabase", fake_supabase)
+    monkeypatch.setattr(parsing_service, "R2Store", _FakeR2Disabled)
+    monkeypatch.setattr(
+        parsing_service.FactsheetParser,
+        "parse",
+        lambda *_args, **_kwargs: [
+            FactsheetRecord(
+                scheme_name="ICICI Prudential Multi Asset Fund",
+                report_month=date(2026, 4, 1),
+                benchmark="Nifty 500 TRI",
+                confidence_score=95.0,
+            )
+        ],
+    )
+
+    service = ParsingService()
+    service.repository = repo
+    service._resolve_scheme_code_for_scheme = lambda _name: "101144"
+    result = service.parse_pending_documents(limit=1, amc_code="ICICI")
+
+    assert result["processed"][0]["status"] == "parsed"
+    assert any(table == "mf_parse_review_queue" for table, _payload in fake_supabase.inserts)
+    assert repo.upserts[0]["benchmark"] == "Nifty 500 TRI"
+
+
+def test_llm_primary_writes_core_fields_when_enabled(monkeypatch, tmp_path: Path):
+    from app.mf_ingestion.services import parsing_service, review_service
+
+    raw_file = tmp_path / "factsheet.txt"
+    raw_file.write_text("messy official factsheet text", encoding="utf-8")
+    fixture = tmp_path / "llm-output.json"
+    fixture.write_text(
+        json.dumps(
+            {
+                "source_document_id": "doc-llm-primary-write-1",
+                "extractor_type": "llm",
+                "records": [
+                    {
+                        "scheme_name": "ICICI Prudential Multi Asset Fund",
+                        "report_month": "2026-04-01",
+                        "holdings": [],
+                        "aum": 1000.0,
+                        "expense_ratio": 0.8,
+                        "benchmark": "NIFTY 50 Hybrid Composite Debt 50:50 Index",
+                        "fund_manager": "Test Manager",
+                        "risk_level": "Very High",
+                        "confidence_score": 95.0,
+                        "validation_issues": [],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    fake_supabase = _FakeSupabase(
+        [
+            {
+                "id": "doc-llm-primary-write-1",
+                "amc_code": "ICICI",
+                "document_type": "factsheet",
+                "source_url": "https://example.test/factsheet.pdf",
+                "storage_path": str(raw_file),
+                "parse_status": "pending",
+                "parser_version": "test",
+            }
+        ]
+    )
+    repo = _FakeCoreRepository()
+    monkeypatch.setenv("MF_EXTRACTOR_MODE", "llm_then_deterministic")
+    monkeypatch.setenv("MF_LLM_EXTRACTOR_ENABLED", "true")
+    monkeypatch.setenv("MF_LLM_EXTRACTOR_MODEL", "test-model")
+    monkeypatch.setenv("MF_LLM_EXTRACTOR_FIXTURE_PATH", str(fixture))
+    monkeypatch.setenv("MF_LLM_ALLOW_FINAL_WRITES", "true")
+    monkeypatch.setenv("MF_LLM_MIN_WRITE_CONFIDENCE", "90")
+    monkeypatch.setattr(parsing_service, "supabase", fake_supabase)
+    monkeypatch.setattr(review_service, "supabase", fake_supabase)
+    monkeypatch.setattr(parsing_service, "R2Store", _FakeR2Disabled)
+    monkeypatch.setattr(parsing_service.FactsheetParser, "parse", lambda *_args, **_kwargs: [])
+
+    service = ParsingService()
+    service.repository = repo
+    service._resolve_scheme_code_for_scheme = lambda _name: "101144"
+    result = service.parse_pending_documents(limit=1, amc_code="ICICI")
+
+    assert result["processed"][0]["status"] == "parsed"
+    assert result["processed"][0]["extractor_type"] == "llm"
+    row = repo.upserts[0]
+    assert row["benchmark"] == "NIFTY 50 Hybrid Composite Debt 50:50 Index"
+    trace = row["provider_payload"]["amc_trace"]["benchmark"]
+    assert trace["extractor_type"] == "llm"
+    assert trace["extractor_model"] == "test-model"
+    assert trace["confidence_score"] == 95.0
 
 
 def test_sync_workflow_does_not_fail_on_needs_review():

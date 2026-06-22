@@ -22,7 +22,7 @@ class StrictJSONLLMExtractor:
         self.model = model
 
     def extract(self, file_path: str, document: dict[str, Any]) -> NormalizedExtraction:
-        if not self.enabled or self.mode != "deterministic_then_llm":
+        if not self.enabled or self.mode not in {"deterministic_then_llm", "llm_then_deterministic"}:
             raise LLMExtractionUnavailable("llm_extractor_disabled")
 
         fixture_path = os.getenv("MF_LLM_EXTRACTOR_FIXTURE_PATH", "").strip()
@@ -52,9 +52,10 @@ class StrictJSONLLMExtractor:
                         "role": "system",
                         "content": (
                             "Extract Indian mutual fund factsheet or portfolio data. "
-                            "Return only strict JSON with these keys: scheme_name, report_month, holdings, "
-                            "aum, expense_ratio, benchmark, fund_manager, risk_level, source_document_id, "
-                            "extractor_type, confidence_score, validation_issues. Set extractor_type to llm."
+                            "Return only strict JSON with source_document_id, extractor_type, and records. "
+                            "Each records item must contain scheme_name, report_month, holdings, aum, "
+                            "expense_ratio, benchmark, fund_manager, risk_level, confidence_score, "
+                            "and validation_issues. Set extractor_type to llm."
                         ),
                     },
                     {

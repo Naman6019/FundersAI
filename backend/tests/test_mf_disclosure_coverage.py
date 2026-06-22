@@ -144,3 +144,28 @@ def test_disclosure_coverage_fails_when_configured_amc_has_no_snapshot_rows(monk
     monkeypatch.setenv("MF_DISCLOSURE_COVERAGE_AMCS", "motilal")
 
     assert check_mf_disclosure_coverage.check_disclosure_coverage() == 1
+
+
+def test_empty_strict_coverage_amcs_reports_without_failing(monkeypatch):
+    fake_supabase = _FakeSupabase(
+        {
+            "mutual_fund_family_mapping": [{"scheme_code": "101", "family_id": "axis-midcap"}],
+            "mutual_fund_core_snapshot": [
+                {
+                    "scheme_code": "101",
+                    "scheme_name": "Axis Midcap Fund - Direct Plan - Growth",
+                    "amc_name": "Axis Mutual Fund",
+                    "aum": 30205.58,
+                    "expense_ratio": 0.54,
+                    "benchmark": None,
+                }
+            ],
+            "mutual_fund_holdings": [],
+            "mutual_fund_sectors": [],
+        }
+    )
+    monkeypatch.setattr(check_mf_disclosure_coverage, "supabase", fake_supabase)
+    monkeypatch.setenv("MF_DISCLOSURE_COVERAGE_AMCS", "axis")
+    monkeypatch.setenv("MF_DISCLOSURE_STRICT_COVERAGE_AMCS", "")
+
+    assert check_mf_disclosure_coverage.check_disclosure_coverage() == 0

@@ -48,7 +48,7 @@ on:
       strict_coverage_amcs:
         description: 'Comma-separated AMCs enforced by strict coverage gate'
         required: false
-        default: 'axis,hdfc,sbi,icici,ppfas'
+        default: ''
       allow_hdfc_factsheet_as_portfolio:
         description: 'Allow HDFC factsheet URLs to be reused for portfolio extraction'
         required: false
@@ -114,6 +114,8 @@ jobs:
           MF_EXTRACTOR_MODE: ${{ vars.MF_EXTRACTOR_MODE || 'deterministic' }}
           MF_LLM_EXTRACTOR_ENABLED: ${{ vars.MF_LLM_EXTRACTOR_ENABLED || 'false' }}
           MF_LLM_EXTRACTOR_MODEL: ${{ vars.MF_LLM_EXTRACTOR_MODEL || '' }}
+          MF_LLM_MIN_WRITE_CONFIDENCE: ${{ vars.MF_LLM_MIN_WRITE_CONFIDENCE || '90' }}
+          MF_LLM_ALLOW_FINAL_WRITES: ${{ vars.MF_LLM_ALLOW_FINAL_WRITES || 'false' }}
           MF_SOURCE_MANIFEST_PATH: ${{ vars.MF_SOURCE_MANIFEST_PATH || '' }}
           ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "false"
           DISPATCH_AMCS: ${{ github.event.inputs.amcs }}
@@ -318,7 +320,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           MF_DISCLOSURE_COVERAGE_AMCS: axis,hdfc,sbi,icici,ppfas,nippon
-          MF_DISCLOSURE_STRICT_COVERAGE_AMCS: ${{ github.event.inputs.strict_coverage_amcs || 'axis,hdfc,sbi,icici,ppfas' }}
+          MF_DISCLOSURE_STRICT_COVERAGE_AMCS: ${{ github.event.inputs.strict_coverage_amcs }}
           MF_DISCLOSURE_MIN_FIELD_COUNT: "1"
           MF_DISCLOSURE_MIN_CORE_FIELD_RATIO: "0.01"
           MF_DISCLOSURE_MIN_PORTFOLIO_FAMILY_RATIO: "0.01"

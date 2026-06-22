@@ -13,6 +13,7 @@ from urllib.parse import unquote
 
 from app.database import supabase
 from app.mf_ingestion.constants import VALIDATION_STATUS_INVALID, VALIDATION_STATUS_REVIEW
+from app.mf_ingestion.extractors.contracts import NormalizedExtraction, NormalizedExtractionRecord
 from app.mf_ingestion.extractors.llm_extractor import LLMExtractionUnavailable, StrictJSONLLMExtractor
 from app.mf_ingestion.normalizers.scheme_name_normalizer import match_scheme_name
 from app.mf_ingestion.parsers.adapters.hdfc_adapter import HDFCAdapter
@@ -158,6 +159,11 @@ class ParsingService:
             )
 
         try:
+            if self.config.extractor_mode == "llm_then_deterministic":
+                llm_primary_result = self._try_llm_primary(document=document, file_path=resolved_path)
+                if llm_primary_result:
+                    return _attach_extraction_metadata(llm_primary_result, classification)
+
             if document_type in FACTSHEET_SUPPORTED_DOCUMENT_TYPES:
                 factsheet_result = self._parse_factsheet_document(document, resolved_path, target_scheme_name=target_scheme_name)
                 # HDFC and Axis combined factsheets also contain portfolio tables.
@@ -490,40 +496,174 @@ class ParsingService:
             logger.exception("event=llm_extraction_failed source_document_id=%s reason=%s", document_id, exc)
             return None
 
-        validation_issues = sorted(set([*issues, *extraction.validation_issues, "llm_extraction_requires_review"]))
-        if extraction.holdings:
-            validation = validate_holdings(
-                extraction.holdings,
-                scheme_match_confidence=float(extraction.confidence_score or 0.0),
-                report_month_present=bool(extraction.report_month),
-            )
-            validation_issues = sorted(set([*validation_issues, *validation.issues]))
-
-        payload = extraction.to_dict()
-        payload["validation_issues"] = validation_issues
+        payloads = self._build_llm_review_payloads(
+            extraction,
+            source_document_id=document_id,
+            issues=[*issues, "llm_extraction_requires_review"],
+        )
+        validation_issues = sorted({issue for payload in payloads for issue in payload["validation_issues"]})
         self.review_service.enqueue_document_review(
             source_document_id=document_id,
             amc_code=str(document.get("amc_code") or ""),
-            report_month=extraction.report_month or str(document.get("report_month") or "") or None,
+            report_month=str(document.get("report_month") or "") or None,
             source_url=document.get("source_url"),
             validation_issues=validation_issues,
-            confidence_score=float(extraction.confidence_score or 0.0),
+            confidence_score=max([float(payload.get("confidence_score") or 0.0) for payload in payloads], default=0.0),
             parser_version=str(document.get("parser_version") or ""),
-            sample_rows=[payload],
+            sample_rows=payloads,
         )
         self._mark_document(document_id, "fallback_needs_review", validation_issues)
         self._upload_parse_debug_snapshot(
             document=document,
             artifact="llm_fallback_extraction",
-            payload=payload,
+            payload={"records": payloads},
         )
         return {
             "source_document_id": document_id,
             "status": "fallback_needs_review",
             "extractor_type": "llm",
-            "normalized_extraction": payload,
+            "normalized_extraction": {"records": payloads},
             "validation_issues": validation_issues,
         }
+
+    def _try_llm_primary(self, *, document: dict[str, Any], file_path: str) -> dict[str, Any] | None:
+        document_id = str(document.get("id") or "")
+        try:
+            extraction = self.llm_extractor.extract(file_path, document)
+        except LLMExtractionUnavailable as exc:
+            logger.info("event=llm_primary_unavailable source_document_id=%s reason=%s", document_id, exc)
+            return None
+        except Exception as exc:
+            logger.exception("event=llm_primary_failed source_document_id=%s reason=%s", document_id, exc)
+            return None
+
+        accepted = []
+        rejected = []
+        for record in extraction.records:
+            issues = self._llm_record_write_issues(document, record)
+            if issues:
+                rejected.append((record, issues))
+                continue
+
+            written = self._upsert_amc_core_fields(
+                amc_code=str(document.get("amc_code") or ""),
+                scheme_name=record.scheme_name,
+                report_month=_to_date_or_none(record.report_month),
+                source_document_id=document_id,
+                source_url=str(document.get("source_url") or ""),
+                parser_version=str(document.get("parser_version") or ""),
+                aum=record.aum,
+                expense_ratio=record.expense_ratio,
+                benchmark=record.benchmark,
+                fund_manager=record.fund_manager,
+                risk_level=record.risk_level,
+                extractor_type="llm",
+                extractor_model=self.config.llm_extractor_model,
+                confidence_score=float(record.confidence_score or 0.0),
+            )
+            if written:
+                accepted.append(record)
+            else:
+                rejected.append((record, ["llm_scheme_match_or_field_write_failed"]))
+
+        if rejected:
+            payloads = [
+                self._llm_record_payload(
+                    record,
+                    source_document_id=document_id,
+                    issues=[*issues, "llm_primary_requires_review"],
+                )
+                for record, issues in rejected
+            ]
+            self.review_service.enqueue_document_review(
+                source_document_id=document_id,
+                amc_code=str(document.get("amc_code") or ""),
+                report_month=str(document.get("report_month") or "") or None,
+                source_url=document.get("source_url"),
+                validation_issues=sorted({issue for _record, issues in rejected for issue in issues}),
+                confidence_score=max([float(record.confidence_score or 0.0) for record, _issues in rejected], default=0.0),
+                parser_version=str(document.get("parser_version") or ""),
+                sample_rows=payloads,
+            )
+
+        if not self.config.llm_allow_final_writes:
+            return None
+
+        if not accepted:
+            return None
+
+        status = "parsed" if not rejected else "parsed_partial"
+        issues = ["llm_partial_review_required"] if rejected else []
+        self._mark_document(document_id, status, issues)
+        self._upload_parse_debug_snapshot(
+            document=document,
+            artifact="llm_primary_extraction",
+            payload={
+                "accepted_records": [record.to_dict() for record in accepted],
+                "rejected_records": [
+                    self._llm_record_payload(record, source_document_id=document_id, issues=issues)
+                    for record, issues in rejected
+                ],
+            },
+        )
+        return {
+            "source_document_id": document_id,
+            "status": status,
+            "extractor_type": "llm",
+            "updated_schemes": len(accepted),
+            "review_schemes": len(rejected),
+            "validation_issues": issues,
+        }
+
+    def _build_llm_review_payloads(
+        self,
+        extraction: NormalizedExtraction,
+        *,
+        source_document_id: str,
+        issues: list[str],
+    ) -> list[dict[str, Any]]:
+        return [
+            self._llm_record_payload(
+                record,
+                source_document_id=source_document_id,
+                issues=[*issues, *self._llm_record_validation_issues(record)],
+            )
+            for record in extraction.records
+        ]
+
+    def _llm_record_payload(self, record: NormalizedExtractionRecord, *, source_document_id: str, issues: list[str]) -> dict[str, Any]:
+        payload = record.to_dict()
+        payload["source_document_id"] = source_document_id
+        payload["extractor_type"] = "llm"
+        payload["validation_issues"] = sorted(set([*payload.get("validation_issues", []), *issues]))
+        return payload
+
+    def _llm_record_write_issues(self, document: dict[str, Any], record: NormalizedExtractionRecord) -> list[str]:
+        issues = self._llm_record_validation_issues(record)
+        if not self.config.llm_allow_final_writes:
+            issues.append("llm_final_writes_disabled")
+        if not str(document.get("source_url") or "").strip():
+            issues.append("source_url_missing")
+        if float(record.confidence_score or 0.0) < float(self.config.llm_min_write_confidence):
+            issues.append("llm_confidence_below_write_threshold")
+        if not any(value not in (None, "") for value in (record.aum, record.expense_ratio, record.benchmark, record.fund_manager, record.risk_level)):
+            issues.append("llm_no_core_fields")
+        if record.holdings:
+            issues.append("llm_holdings_require_review")
+        return sorted(set(issues))
+
+    def _llm_record_validation_issues(self, record: NormalizedExtractionRecord) -> list[str]:
+        issues = list(record.validation_issues or [])
+        if not record.report_month:
+            issues.append("report_month_missing")
+        if record.holdings:
+            validation = validate_holdings(
+                record.holdings,
+                scheme_match_confidence=float(record.confidence_score or 0.0),
+                report_month_present=bool(record.report_month),
+            )
+            issues.extend(validation.issues)
+        return sorted(set(issues))
 
     def _already_parsed(self, source_document_id: str) -> bool:
         res = (
@@ -897,6 +1037,9 @@ class ParsingService:
         benchmark: str | None,
         fund_manager: str | None,
         risk_level: str | None,
+        extractor_type: str = "deterministic",
+        extractor_model: str | None = None,
+        confidence_score: float | None = None,
     ) -> bool:
         scheme_code = self._resolve_scheme_code_for_scheme(scheme_name)
         if not scheme_code:
@@ -945,6 +1088,9 @@ class ParsingService:
                 "source_url": source_url,
                 "report_month": report_month_iso,
                 "parser_version": parser_version,
+                "extractor_type": extractor_type,
+                "extractor_model": extractor_model,
+                "confidence_score": confidence_score,
                 "value": value,
                 "updated_at": updated_at,
             }

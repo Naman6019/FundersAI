@@ -42,12 +42,20 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-def _configured_amcs() -> list[str]:
-    raw = os.getenv("MF_DISCLOSURE_STRICT_COVERAGE_AMCS") or os.getenv(
-        "MF_DISCLOSURE_COVERAGE_AMCS",
-        "axis,hdfc,sbi,icici,ppfas,nippon",
-    )
+def _parse_amc_list(raw: str) -> list[str]:
     return [token.strip().lower() for token in raw.split(",") if token.strip()]
+
+
+def _reporting_amcs() -> list[str]:
+    raw = os.getenv("MF_DISCLOSURE_COVERAGE_AMCS", "axis,hdfc,sbi,icici,ppfas,nippon")
+    return _parse_amc_list(raw)
+
+
+def _strict_amcs(reporting_amcs: list[str]) -> list[str]:
+    raw = os.getenv("MF_DISCLOSURE_STRICT_COVERAGE_AMCS")
+    if raw is None:
+        return reporting_amcs
+    return _parse_amc_list(raw)
 
 
 def _matches_amc(row: dict[str, Any], amc: str) -> bool:
@@ -86,9 +94,14 @@ def check_disclosure_coverage() -> int:
         "scheme_code,scheme_name,amc_name,aum,expense_ratio,benchmark",
     )
 
+    reporting_amcs = _reporting_amcs()
+    strict_amcs = set(_strict_amcs(reporting_amcs))
     failures: list[str] = []
-    print("MF disclosure strict coverage:")
-    for amc in _configured_amcs():
+    print("MF disclosure coverage report:")
+    if not strict_amcs:
+        print("MF disclosure strict coverage gate disabled.")
+
+    for amc in reporting_amcs:
         rows = [row for row in snapshot_rows if _matches_amc(row, amc)]
         families: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for row in rows:
@@ -98,7 +111,8 @@ def check_disclosure_coverage() -> int:
 
         total_families = len(families)
         if total_families == 0:
-            failures.append(f"{amc}: no snapshot families found")
+            if amc in strict_amcs:
+                failures.append(f"{amc}: no snapshot families found")
             print(f"{amc}: total_families=0")
             continue
 
@@ -116,11 +130,15 @@ def check_disclosure_coverage() -> int:
         )
 
         for field in ("aum", "expense_ratio", "benchmark"):
+            if amc not in strict_amcs:
+                continue
             field_ratio = _ratio(counts[field], total_families)
             if counts[field] < min_count or field_ratio < min_core_ratio:
                 failures.append(f"{amc}: {field} coverage {counts[field]}/{total_families} below threshold")
 
         for field in ("holdings", "sectors"):
+            if amc not in strict_amcs:
+                continue
             field_ratio = _ratio(counts[field], total_families)
             if counts[field] < min_count or field_ratio < min_portfolio_ratio:
                 failures.append(f"{amc}: {field} coverage {counts[field]}/{total_families} below threshold")

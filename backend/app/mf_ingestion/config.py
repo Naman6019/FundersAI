@@ -14,6 +14,8 @@ class IngestionConfig:
     extractor_mode: str
     llm_extractor_enabled: bool
     llm_extractor_model: str
+    llm_min_write_confidence: float
+    llm_allow_final_writes: bool
     source_manifest_path: str
     r2_endpoint: str
     r2_access_key_id: str
@@ -38,6 +40,8 @@ def get_config() -> IngestionConfig:
         extractor_mode=os.getenv("MF_EXTRACTOR_MODE", "deterministic").strip().lower(),
         llm_extractor_enabled=os.getenv("MF_LLM_EXTRACTOR_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"},
         llm_extractor_model=os.getenv("MF_LLM_EXTRACTOR_MODEL", "").strip(),
+        llm_min_write_confidence=float(os.getenv("MF_LLM_MIN_WRITE_CONFIDENCE", "90")),
+        llm_allow_final_writes=os.getenv("MF_LLM_ALLOW_FINAL_WRITES", "false").strip().lower() in {"1", "true", "yes", "on"},
         source_manifest_path=os.getenv("MF_SOURCE_MANIFEST_PATH", "").strip(),
         r2_endpoint=os.getenv("R2_ENDPOINT", "").strip(),
         r2_access_key_id=os.getenv("R2_ACCESS_KEY_ID", "").strip(),
