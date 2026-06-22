@@ -163,6 +163,13 @@ class AxisAdapter(BaseAMCAdapter):
         suffix = "FACTSHEET_DOCUMENT_URLS" if document_type == "factsheet" else "PORTFOLIO_DOCUMENT_URLS"
         env_name = f"MF_AXIS_{suffix}"
         raw = str(os.getenv(env_name, "") or "").strip()
+
+        allow_factsheet_as_portfolio = str(
+            os.getenv("MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO", "") or ""
+        ).strip().lower() in {"1", "true", "yes", "on"}
+        if document_type == "portfolio_disclosure" and allow_factsheet_as_portfolio and not raw:
+            raw = str(os.getenv("MF_AXIS_FACTSHEET_DOCUMENT_URLS", "") or "").strip()
+
         if not raw:
             return []
 
