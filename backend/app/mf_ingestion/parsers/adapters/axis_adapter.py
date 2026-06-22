@@ -92,6 +92,187 @@ class AxisAdapter(BaseAMCAdapter):
             confidence_score=0.0
         )
 
+    def parse_pdf_file_many(self, file_path: str, context: ParseContext) -> list[ParsedDocument]:
+        """Crop-based PDF extraction for Axis two-column factsheet layout.
+
+        Axis factsheets have metadata on the left column and the portfolio table on
+        the right column.  pdfplumber's full-page text extraction garbles both columns
+        together.  We crop to the right ~55% of each page (where the portfolio table
+        lives) to get clean instrument/sector/% rows.
+
+        Page detection: pages that start with an UPPERCASE scheme name (e.g.
+        'AXISLARGE CAP FUND') are fund pages.  We skip cover/TOC/disclaimer pages.
+        """
+        try:
+            import pdfplumber
+        except ImportError:
+            logger.warning("pdfplumber not available; falling back to text-based Axis parsing")
+            return []
+
+        by_scheme: dict[str, ParsedDocument] = {}
+        AXIS_FUND_PAGE_STOP_WORDS = {
+            "i n d e x", "index", "tax reckoner", "how to read", "disclaimer",
+            "equity outlook", "debt outlook", "market review",
+        }
+
+        try:
+            with pdfplumber.open(file_path) as pdf:
+                # First pass: find all pages that start a scheme
+                scheme_starts: list[tuple[int, str]] = []
+                for idx, page in enumerate(pdf.pages):
+                    lines = (page.extract_text() or "").splitlines()
+                    if not lines:
+                        continue
+                    for line in lines[:5]:
+                        clean = _axis_clean_line(line)
+                        normalized = re.sub(r"(?i)^Axis(?=[A-Z])", "Axis ", clean)
+                        is_fund_page = (
+                            bool(AXIS_SCHEME_RE.match(normalized) or AXIS_SCHEME_RE.match(clean))
+                            and clean[:4].isupper()
+                            and not re.search(r"\.{3,}|\s\d{1,3}$|%$", clean)
+                            and clean.lower() not in AXIS_FUND_PAGE_STOP_WORDS
+                        )
+                        if is_fund_page:
+                            scheme_name = _axis_extract_scheme_name(normalized)
+                            if scheme_name:
+                                scheme_starts.append((idx, scheme_name))
+                                break
+
+                # Second pass: extract holdings from each page block
+                for i, (start_idx, scheme_name) in enumerate(scheme_starts):
+                    end_idx = scheme_starts[i + 1][0] if i + 1 < len(scheme_starts) else len(pdf.pages)
+                    
+                    holdings = []
+                    report_month = context.report_month
+                    for page_idx in range(start_idx, end_idx):
+                        page = pdf.pages[page_idx]
+                        
+                        # Check for page level stop words in full page text
+                        page_text = page.extract_text() or ""
+                        AXIS_PAGE_STOP_WORDS = {"performance", "sipperformance", "product labelling", "annexure", "expense ratio", "nav", "minimum investment", "fixed", "key highlights", "sip performance", "outlook", "market review"}
+                        if page_idx > start_idx and any(stop in page_text.lower() for stop in AXIS_PAGE_STOP_WORDS):
+                            continue
+                            
+                        w = page.width
+                        h = page.height
+                        
+                        page_words = page.extract_words()
+                        # Extract words with x0 >= 320 (right column)
+                        right_words = [wd for wd in page_words if wd["x0"] >= 320]
+                        
+                        # Group by top coordinate (tolerance 2.5 points)
+                        name_groups_dict = {}
+                        sector_groups_dict = {}
+                        pct_groups_dict = {}
+                        
+                        for wd in right_words:
+                            x0 = wd["x0"]
+                            top = wd["top"]
+                            
+                            # Determine column
+                            if x0 < 435:
+                                target_dict = name_groups_dict
+                            elif x0 < 502:
+                                target_dict = sector_groups_dict
+                            else:
+                                target_dict = pct_groups_dict
+                                
+                            found = False
+                            for t_val in target_dict:
+                                if abs(top - t_val) < 2.5:
+                                    target_dict[t_val].append(wd)
+                                    found = True
+                                    break
+                            if not found:
+                                target_dict[top] = [wd]
+                                
+                        # Reconstruct segments sorted by top coordinate
+                        name_segments = []
+                        for t_val, wds in name_groups_dict.items():
+                            wds_sorted = sorted(wds, key=lambda x: x["x0"])
+                            name_segments.append((t_val, " ".join(w["text"] for w in wds_sorted)))
+                        name_segments.sort(key=lambda x: x[0])
+                        
+                        sector_segments = []
+                        for t_val, wds in sector_groups_dict.items():
+                            wds_sorted = sorted(wds, key=lambda x: x["x0"])
+                            sector_segments.append((t_val, "".join(w["text"] for w in wds_sorted)))
+                        sector_segments.sort(key=lambda x: x[0])
+                        
+                        pct_segments = []
+                        for t_val, wds in pct_groups_dict.items():
+                            wds_sorted = sorted(wds, key=lambda x: x["x0"])
+                            pct_segments.append((t_val, "".join(w["text"] for w in wds_sorted)))
+                        pct_segments.sort(key=lambda x: x[0])
+                        
+                        # Parse report month from the page lines if possible
+                        all_lines = [_axis_clean_line(ln) for ln in page_text.splitlines() if _axis_clean_line(ln)]
+                        p_month = _axis_extract_report_month(all_lines)
+                        if p_month:
+                            report_month = p_month
+                            
+                        # Filter valid pcts
+                        valid_pcts = []
+                        for t_val, pct_str in pct_segments:
+                            percent = _axis_percent_value(pct_str)
+                            if percent is None:
+                                match = re.search(r"(?P<pct>-?\d{1,3}(?:,\d{2,3})*(?:\.\d+)?)%?$", pct_str)
+                                if match:
+                                    percent = _axis_percent_value(match.group("pct"))
+                            if percent is not None and 0 < percent <= 100:
+                                valid_pcts.append((t_val, percent))
+                                
+                        valid_pcts.sort(key=lambda x: x[0])
+                        
+                        # Align name/sector with each valid pct by vertical range
+                        for j, (pct_top, percent) in enumerate(valid_pcts):
+                            T_start = pct_top - 4.0
+                            T_end = valid_pcts[j+1][0] - 4.0 if j + 1 < len(valid_pcts) else h
+                            
+                            name_parts = [name_str for (t_val, name_str) in name_segments if T_start <= t_val < T_end]
+                            name_str = " ".join(name_parts).strip()
+                            
+                            sector_parts = [sec_str for (t_val, sec_str) in sector_segments if T_start <= t_val < T_end]
+                            sector_str = "".join(sector_parts).strip()
+                            
+                            clean_name = _axis_clean_line(name_str).strip(" -")
+                            if clean_name and not _axis_should_skip_holding_line(clean_name):
+                                norm_sector = _axis_normalize_sector(sector_str)
+                                holdings.append({
+                                    "instrument_name": clean_name,
+                                    "isin": None,
+                                    "sector": norm_sector,
+                                    "percent_aum": percent,
+                                })
+                                
+                    holdings = _axis_dedupe_holdings(holdings)
+                    if not holdings:
+                        continue
+                        
+                    total_percent = sum(row["percent_aum"] for row in holdings)
+                    warnings: list[str] = []
+                    if total_percent and not (85.0 <= total_percent <= 115.0):
+                        warnings.append("percent_aum_total_out_of_band")
+                        
+                    parsed = ParsedDocument(
+                        scheme_name=scheme_name,
+                        report_month=report_month,
+                        holdings=holdings,
+                        metrics={"total_percent_aum": round(total_percent, 6)},
+                        warnings=warnings,
+                        confidence_score=90.0,
+                    )
+                    key = _axis_scheme_key(scheme_name)
+                    existing = by_scheme.get(key)
+                    if not existing or len(parsed.holdings) > len(existing.holdings):
+                        by_scheme[key] = parsed
+
+        except Exception:
+            logger.exception("axis:parse_pdf_file_many failed file=%s", file_path)
+            return []
+
+        return list(by_scheme.values())
+
     def parse_pdf_text_many(self, pdf_text: str, context: ParseContext) -> list[ParsedDocument]:
         lines = [_axis_clean_line(line) for line in (pdf_text or "").splitlines()]
         lines = [line for line in lines if line]
@@ -345,7 +526,32 @@ def _axis_scheme_key(value: str) -> str:
 
 
 def _axis_portfolio_blocks(lines: list[str]) -> list[tuple[int, int]]:
-    blocks: list[tuple[int, int]] = []
+    """Identify per-fund portfolio blocks from the PDF text.
+
+    Primary: each fund page starts with a line matching AXIS_SCHEME_RE.
+    Fallback: legacy AXIS_PORTFOLIO_HEADER line approach.
+    """
+    scheme_starts: list[int] = []
+    for idx, line in enumerate(lines):
+        text = _axis_clean_line(line)
+        if not text:
+            continue
+        normalized = re.sub(r"(?i)^Axis(?=[A-Z])", "Axis ", text)
+        if (AXIS_SCHEME_RE.match(normalized) or AXIS_SCHEME_RE.match(text)) and text[:4].isupper():
+            # Reject TOC lines (dots), page-number-only endings, and inline holdings (% at end)
+            if re.search(r"\.{3,}|\s\d{1,3}$|%$", text):
+                continue
+            scheme_starts.append(idx)
+    if scheme_starts:
+        blocks: list[tuple[int, int]] = []
+        for i, start_idx in enumerate(scheme_starts):
+            block_start = start_idx + 1
+            block_end = scheme_starts[i + 1] if i + 1 < len(scheme_starts) else len(lines)
+            if block_end > block_start:
+                blocks.append((block_start, block_end))
+        return blocks
+
+    blocks = []
     for index, line in enumerate(lines):
         if AXIS_PORTFOLIO_HEADER not in line.lower():
             continue
@@ -386,7 +592,8 @@ def _axis_extract_scheme_name(line: str) -> str:
     text = _axis_clean_line(line)
     if not text:
         return ""
-    match = AXIS_SCHEME_RE.search(text)
+    normalized = re.sub(r"(?i)^Axis(?=[A-Z])", "Axis ", text)
+    match = AXIS_SCHEME_RE.search(normalized) or AXIS_SCHEME_RE.search(text)
     if not match:
         return ""
     name = match.group(0)
@@ -414,6 +621,14 @@ def _axis_title_scheme_name(name: str) -> str:
 
 
 def _axis_extract_holdings(lines: list[str]) -> tuple[list[dict], float]:
+    """Extract holdings from a per-fund block of PDF text lines.
+
+    Axis PDFs use a two-column layout: left=fund stats, right=portfolio table.
+    pdfplumber merges both columns into single lines, so each line may contain
+    e.g. "BSE 100 TRI Beta ... Reliance Industries Petroleum Products 5.08%".
+    We use _axis_parse_inline_holding to regex-extract the "Name Sector X.XX%"
+    portion from anywhere in the line, regardless of leading metadata.
+    """
     holdings: list[dict] = []
     index = 0
     while index < len(lines):
@@ -424,41 +639,23 @@ def _axis_extract_holdings(lines: list[str]) -> tuple[list[dict], float]:
             continue
         if any(low.startswith(marker) for marker in AXIS_HOLDING_STOP_MARKERS):
             break
-        if _axis_should_skip_holding_line(line) or _axis_percent_value(line) is not None:
-            index += 1
-            continue
-
+        # Try to extract an inline holding from anywhere in the line
         inline = _axis_parse_inline_holding(line)
         if inline:
             holdings.append(inline)
             index += 1
             continue
-
-        percent_index = None
-        for candidate_index in range(index + 1, min(index + 5, len(lines))):
-            if _axis_percent_value(lines[candidate_index]) is not None:
-                percent_index = candidate_index
-                break
-        if percent_index is None:
-            index += 1
-            continue
-
-        percent = _axis_percent_value(lines[percent_index])
-        sector_lines = [
-            _axis_clean_line(item)
-            for item in lines[index + 1:percent_index]
-            if _axis_clean_line(item) and not _axis_should_skip_holding_line(item)
-        ]
-        holding = _axis_build_holding(name=line, sector=" ".join(sector_lines) or None, percent=percent)
-        if holding:
-            holdings.append(holding)
-        index = percent_index + 1
+        index += 1
 
     total_percent = sum(float(row.get("percent_aum") or 0.0) for row in holdings)
     return _axis_dedupe_holdings(holdings), total_percent
-
-
 def _axis_parse_inline_holding(line: str) -> dict | None:
+    """Try to extract a holding from a line that may contain both metadata and portfolio data.
+
+    Returns a holding dict only when we can identify a known SEBI sector in the line,
+    which acts as the delimiter between the instrument name and the percentage.
+    Lines without a recognised sector are silently skipped to avoid false positives.
+    """
     match = re.search(r"(?P<body>.+?)\s+(?P<pct>-?\d{1,3}(?:,\d{2,3})*(?:\.\d+)?)%?$", line)
     if not match:
         return None
@@ -467,6 +664,9 @@ def _axis_parse_inline_holding(line: str) -> dict | None:
     if percent is None or _axis_should_skip_holding_line(body):
         return None
     name, sector = _axis_split_inline_name_sector(body)
+    # Only emit if we have a real sector split; otherwise too many false positives
+    if not sector:
+        return None
     return _axis_build_holding(name=name, sector=sector, percent=percent)
 
 
@@ -475,26 +675,43 @@ def _axis_split_inline_name_sector(body: str) -> tuple[str, str | None]:
         "Banks",
         "Petroleum Products",
         "IT - Software",
+        "IT -Software",
         "Telecom - Services",
+        "Telecom -Services",
         "Construction",
         "Automobiles",
         "Finance",
+        "Cement & Cement Products",
         "Cement",
         "Healthcare Services",
         "Retailing",
         "Consumer Durables",
+        "Pharmaceuticals & Biotechnology",
         "Pharmaceuticals",
         "Biotechnology",
         "Power",
         "Transport Services",
+        "Chemicals & Petrochemicals",
         "Chemicals",
         "Petrochemicals",
+        "Aerospace & Defence",
         "Aerospace",
         "Defense",
+        "Defence",
         "Electrical Equipment",
         "Food Products",
         "Insurance",
         "Capital Markets",
+        "Agricultural Food & other Products",
+        "Agricultural",
+        "Leisure Services",
+        "Metals & Mining",
+        "Metals",
+        "Mining",
+        "Realty",
+        "Textiles",
+        "Gas",
+        "Others",
         "Index",
     )
     for marker in sector_markers:
@@ -505,8 +722,6 @@ def _axis_split_inline_name_sector(body: str) -> tuple[str, str | None]:
             if name:
                 return name, sector
     return body, None
-
-
 def _axis_build_holding(name: str, sector: str | None, percent: float | None) -> dict | None:
     clean_name = _axis_clean_line(name).strip(" -")
     if not clean_name or percent is None or _axis_should_skip_holding_line(clean_name):
@@ -575,3 +790,75 @@ def _axis_extract_report_month(lines: list[str]) -> date | None:
             continue
         return date(int(match.group("year")), month, 1)
     return None
+
+
+def _axis_normalize_sector(sector_str: str) -> str:
+    if not sector_str:
+        return "Others"
+    clean = re.sub(r"[^a-z0-9]", "", sector_str.lower())
+    mapping = {
+        "banks": "Banks",
+        "petroleumproducts": "Petroleum Products",
+        "itsoftware": "IT - Software",
+        "telecomservices": "Telecom - Services",
+        "construction": "Construction",
+        "automobiles": "Automobiles",
+        "finance": "Finance",
+        "cementcementproducts": "Cement & Cement Products",
+        "cement": "Cement & Cement Products",
+        "healthcareservices": "Healthcare Services",
+        "healthcare": "Healthcare Services",
+        "retailing": "Retailing",
+        "consumerdurables": "Consumer Durables",
+        "pharmaceuticalsbiotechnology": "Pharmaceuticals & Biotechnology",
+        "pharmaceuticals": "Pharmaceuticals & Biotechnology",
+        "biotechnology": "Pharmaceuticals & Biotechnology",
+        "pharmabiotechnology": "Pharmaceuticals & Biotechnology",
+        "phar": "Pharmaceuticals & Biotechnology",
+        "power": "Power",
+        "transportservices": "Transport Services",
+        "transport": "Transport Services",
+        "chemicalspetrochemicals": "Chemicals & Petrochemicals",
+        "chemicals": "Chemicals & Petrochemicals",
+        "petrochemicals": "Chemicals & Petrochemicals",
+        "aerospacedefence": "Aerospace & Defence",
+        "aerospace": "Aerospace & Defence",
+        "defense": "Aerospace & Defence",
+        "defence": "Aerospace & Defence",
+        "aerospacedefense": "Aerospace & Defence",
+        "electricalequipment": "Electrical Equipment",
+        "foodproducts": "Food Products",
+        "insurance": "Insurance",
+        "capitalmarkets": "Capital Markets",
+        "agriculturalfoodotherproducts": "Agricultural Food & other Products",
+        "agricultural": "Agricultural Food & other Products",
+        "agri": "Agricultural Food & other Products",
+        "leisureservices": "Leisure Services",
+        "metalsmining": "Metals & Mining",
+        "metals": "Metals & Mining",
+        "mining": "Metals & Mining",
+        "realty": "Realty",
+        "textiles": "Textiles",
+        "gas": "Gas",
+        "diversifiedmetals": "Diversified Metals",
+        "nonferrous": "Non-Ferrous",
+        "consumablefuels": "Consumable Fuels",
+        "industrialproducts": "Industrial Products",
+        "beverages": "Beverages",
+        "financialservices": "Financial Services",
+        "mutualfundunits": "Mutual Fund Units",
+        "exchangetradedfunds": "Exchange Traded Funds",
+        "governmentbond": "Sovereign",
+        "sovereign": "Sovereign",
+        "autocomponents": "Auto Components",
+        "industrialmanufacturing": "Industrial Manufacturing",
+        "itservices": "IT - Services",
+        "householdproducts": "Household Products",
+        "financialtechnologyfintech": "Financial Technology (Fintech)",
+    }
+    if clean in mapping:
+        return mapping[clean]
+    for key, val in mapping.items():
+        if key in clean or clean in key:
+            return val
+    return "Others"

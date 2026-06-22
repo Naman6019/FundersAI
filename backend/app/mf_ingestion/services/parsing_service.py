@@ -842,14 +842,19 @@ class ParsingService:
         parsed_fields = {key: value for key, value in field_values.items() if value not in (None, "")}
         if not parsed_fields:
             return False
+        # benchmark and fund_manager should always reflect the latest AMC document.
+        # aum and expense_ratio are also refreshed every run (they change monthly).
+        # Only risk_level has its own staleness logic.
+        ALWAYS_REFRESH = {"benchmark", "fund_manager", "aum", "expense_ratio"}
         write_fields: dict[str, Any] = {}
         for key, value in parsed_fields.items():
             if key == "risk_level":
                 if _should_write_risk_level(existing, report_month):
                     write_fields[key] = value
-                continue
-            if existing.get(key) in (None, ""):
-                write_fields[key] = value
+            elif key in ALWAYS_REFRESH:
+                write_fields[key] = value  # always overwrite with fresh AMC data
+            elif existing.get(key) in (None, ""):
+                write_fields[key] = value  # write-once for anything else
         if not write_fields:
             return True
 
