@@ -57,6 +57,14 @@ on:
         description: 'Optional exact Nippon portfolio URLs, comma-separated'
         required: false
         default: ''
+      strict_coverage_amcs:
+        description: 'Comma-separated AMCs enforced by strict coverage gate'
+        required: false
+        default: 'axis,hdfc,sbi,icici,ppfas'
+      allow_hdfc_factsheet_as_portfolio:
+        description: 'Allow HDFC factsheet URLs to be reused for portfolio extraction'
+        required: false
+        default: 'false'
 
 concurrency:
   group: sync-mf-disclosures-${{ github.ref }}
@@ -111,6 +119,7 @@ jobs:
           MF_SBI_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_SBI_PORTFOLIO_DOCUMENT_URLS }}
           MF_NIPPON_FACTSHEET_DOCUMENT_URLS: ${{ secrets.MF_NIPPON_FACTSHEET_DOCUMENT_URLS }}
           MF_NIPPON_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_NIPPON_PORTFOLIO_DOCUMENT_URLS }}
+          MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO: ${{ inputs.allow_hdfc_factsheet_as_portfolio }}
           MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
           ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "false"
           DISPATCH_AMCS: ${{ inputs.amcs }}
@@ -126,6 +135,7 @@ jobs:
           DISPATCH_AXIS_PORTFOLIO_URLS: ${{ inputs.axis_portfolio_urls }}
           DISPATCH_NIPPON_FACTSHEET_URLS: ${{ inputs.nippon_factsheet_urls }}
           DISPATCH_NIPPON_PORTFOLIO_URLS: ${{ inputs.nippon_portfolio_urls }}
+          DISPATCH_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO: ${{ inputs.allow_hdfc_factsheet_as_portfolio }}
         run: |
           set -euo pipefail
 
@@ -153,19 +163,6 @@ jobs:
 
           if [ -n "${DISPATCH_HDFC_FACTSHEET_URLS:-}" ]; then
             export MF_HDFC_FACTSHEET_DOCUMENT_URLS="$DISPATCH_HDFC_FACTSHEET_URLS"
-          elif [ -z "${MF_HDFC_FACTSHEET_DOCUMENT_URLS:-}" ]; then
-            # Auto-derive HDFC factsheet URL for last 2 months.
-            # Pattern: https://files.hdfcfund.com/s3fs-public/YYYY-MM/HDFC%20MF%20Factsheet%20-%20{Month}%20{YYYY}.pdf
-            _hdfc_urls=""
-            for _offset in 1 2; do
-              _year=$(date -d "-${_offset} month" +%Y 2>/dev/null || python3 -c "from datetime import date; from dateutil.relativedelta import relativedelta; d=date.today()-relativedelta(months=${_offset}); print(d.year)")
-              _month_num=$(date -d "-${_offset} month" +%m 2>/dev/null || python3 -c "from datetime import date; from dateutil.relativedelta import relativedelta; d=date.today()-relativedelta(months=${_offset}); print(f'{d.month:02d}')")
-              _month_name=$(date -d "-${_offset} month" +%B 2>/dev/null || python3 -c "from datetime import date; from dateutil.relativedelta import relativedelta; d=date.today()-relativedelta(months=${_offset}); print(d.strftime('%B'))")
-              _hdfc_url="https://files.hdfcfund.com/s3fs-public/${_year}-${_month_num}/HDFC%20MF%20Factsheet%20-%20${_month_name}%20${_year}.pdf"
-              if [ -z "$_hdfc_urls" ]; then _hdfc_urls="$_hdfc_url"; else _hdfc_urls="${_hdfc_urls},${_hdfc_url}"; fi
-            done
-            export MF_HDFC_FACTSHEET_DOCUMENT_URLS="$_hdfc_urls"
-            echo "Auto-derived HDFC factsheet URLs: $MF_HDFC_FACTSHEET_DOCUMENT_URLS"
           fi
           if [ -n "${DISPATCH_HDFC_PORTFOLIO_URLS:-}" ]; then
             export MF_HDFC_PORTFOLIO_DOCUMENT_URLS="$DISPATCH_HDFC_PORTFOLIO_URLS"
@@ -175,18 +172,6 @@ jobs:
           fi
           if [ -n "${DISPATCH_AXIS_PORTFOLIO_URLS:-}" ]; then
             export MF_AXIS_PORTFOLIO_DOCUMENT_URLS="$DISPATCH_AXIS_PORTFOLIO_URLS"
-          elif [ -z "${MF_AXIS_PORTFOLIO_DOCUMENT_URLS:-}" ]; then
-            # Auto-derive Axis monthly portfolio URL for last 2 months.
-            # Pattern: https://cdn.axismf.com/assets/docs/portfolio-disclosure/Axis-MF-Monthly-Portfolio-{Month}-{YYYY}.xlsx
-            _axis_urls=""
-            for _offset in 1 2; do
-              _year=$(date -d "-${_offset} month" +%Y 2>/dev/null || python3 -c "from datetime import date; from dateutil.relativedelta import relativedelta; d=date.today()-relativedelta(months=${_offset}); print(d.year)")
-              _month_name=$(date -d "-${_offset} month" +%B 2>/dev/null || python3 -c "from datetime import date; from dateutil.relativedelta import relativedelta; d=date.today()-relativedelta(months=${_offset}); print(d.strftime('%B'))")
-              _axis_url="https://cdn.axismf.com/assets/docs/portfolio-disclosure/Axis-MF-Monthly-Portfolio-${_month_name}-${_year}.xlsx"
-              if [ -z "$_axis_urls" ]; then _axis_urls="$_axis_url"; else _axis_urls="${_axis_urls},${_axis_url}"; fi
-            done
-            export MF_AXIS_PORTFOLIO_DOCUMENT_URLS="$_axis_urls"
-            echo "Auto-derived Axis portfolio URLs: $MF_AXIS_PORTFOLIO_DOCUMENT_URLS"
           fi
 
           if [ -n "${DISPATCH_SBI_FACTSHEET_URLS:-}" ]; then
@@ -204,6 +189,7 @@ jobs:
           if [ -n "${DISPATCH_NIPPON_PORTFOLIO_URLS:-}" ]; then
             export MF_NIPPON_PORTFOLIO_DOCUMENT_URLS="$DISPATCH_NIPPON_PORTFOLIO_URLS"
           fi
+          export MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO="${MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO:-${DISPATCH_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO:-false}}"
 
           EVENT_NAME="${GITHUB_EVENT_NAME:-workflow_dispatch}"
           AMCS="${DISPATCH_AMCS:-axis,hdfc,sbi,icici,ppfas,nippon}"
@@ -238,6 +224,64 @@ jobs:
           fi
 
           echo "Processing AMC=$amc max_docs=$max_docs parse_limit=$parse_limit parse_rounds=$PARSE_ROUNDS event=$EVENT_NAME"
+
+          if [ "$amc" = "hdfc" ]; then
+            python - <<'PY'
+import os
+import sys
+from urllib.parse import urlparse
+
+import requests
+
+
+def split_urls(name):
+    return [token.strip() for token in os.getenv(name, "").split(",") if token.strip()]
+
+
+def truthy(value):
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+factsheet_urls = split_urls("MF_HDFC_FACTSHEET_DOCUMENT_URLS")
+portfolio_urls = split_urls("MF_HDFC_PORTFOLIO_DOCUMENT_URLS")
+allow_factsheet_as_portfolio = truthy(os.getenv("MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO"))
+
+if not factsheet_urls:
+    print("Error: HDFC strict ingestion requires MF_HDFC_FACTSHEET_DOCUMENT_URLS or hdfc_factsheet_urls.")
+    sys.exit(1)
+if not portfolio_urls and not allow_factsheet_as_portfolio:
+    print("Error: HDFC strict ingestion requires MF_HDFC_PORTFOLIO_DOCUMENT_URLS or hdfc_portfolio_urls.")
+    sys.exit(1)
+
+checks = [("factsheet", url) for url in factsheet_urls]
+checks.extend(("portfolio_disclosure", url) for url in portfolio_urls)
+if allow_factsheet_as_portfolio and not portfolio_urls:
+    checks.extend(("portfolio_disclosure", url) for url in factsheet_urls)
+
+headers = {"User-Agent": os.getenv("MF_USER_AGENT", "Mozilla/5.0"), "Referer": "https://www.hdfcfund.com/"}
+failures = []
+for document_type, url in checks:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        failures.append(f"{document_type}:{url}:invalid_url")
+        continue
+    try:
+        response = requests.get(url, headers=headers, timeout=20, stream=True)
+        status = response.status_code
+        response.close()
+    except Exception as exc:
+        failures.append(f"{document_type}:{url}:{exc}")
+        continue
+    if status >= 400:
+        failures.append(f"{document_type}:{url}:http_{status}")
+
+if failures:
+    print("Error: HDFC preflight download checks failed:")
+    for failure in failures:
+        print(f"- {failure}")
+    sys.exit(1)
+PY
+          fi
 
           if ! timeout 40m python -m backend.app.mf_ingestion.jobs.ingest_latest_amc_docs --amc "$amc" --all-document-types --max-documents "$max_docs" --strict; then
             echo "AMC ingest failed/timed out: $amc"
@@ -282,6 +326,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           MF_DISCLOSURE_COVERAGE_AMCS: axis,hdfc,sbi,icici,ppfas,nippon
+          MF_DISCLOSURE_STRICT_COVERAGE_AMCS: ${{ inputs.strict_coverage_amcs || 'axis,hdfc,sbi,icici,ppfas' }}
           MF_DISCLOSURE_MIN_FIELD_COUNT: "1"
           MF_DISCLOSURE_MIN_CORE_FIELD_RATIO: "0.01"
           MF_DISCLOSURE_MIN_PORTFOLIO_FAMILY_RATIO: "0.01"

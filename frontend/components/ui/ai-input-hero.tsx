@@ -245,7 +245,19 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
     while (waveContainer.firstChild) {
       waveContainer.removeChild(waveContainer.firstChild);
     }
-    const waveRenderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
+    let waveRenderer: THREE.WebGLRenderer;
+    try {
+      const testCanvas = document.createElement('canvas');
+      const gl = testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
+      if (!gl) {
+        console.warn("WebGL not supported, skipping HeroWave animation");
+        return;
+      }
+      waveRenderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
+    } catch (e) {
+      console.warn("WebGL not supported in this browser, skipping HeroWave animation. Enable Hardware Acceleration for 3D waves.");
+      return;
+    }
     waveRenderer.setPixelRatio(EFFECT_PR);
     waveRenderer.toneMapping = THREE.ACESFilmicToneMapping;
     waveRenderer.toneMappingExposure = 1.0;

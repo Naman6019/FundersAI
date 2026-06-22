@@ -235,7 +235,7 @@ export default function FundersAILandingPage() {
   const reduceMotion = useReducedMotion();
 
   return (
-    <main className="landing-editorial relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] text-[var(--text-primary)] selection:bg-[var(--accent-crimson)] selection:text-[var(--bg-base)]">
+    <main className="landing-editorial relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] text-[var(--text-primary)]  selection:bg-[var(--accent-crimson)] selection:text-[var(--bg-base)]">
       <NoiseOverlay />
 
       <header className="fixed top-0 z-40 w-full border-b border-[var(--line)] bg-[var(--bg-base)]/88 backdrop-blur-xl">
@@ -244,12 +244,12 @@ export default function FundersAILandingPage() {
             <Image 
               src="/FUNDERSAI-nobackground.png" 
               alt="FundersAI Logo" 
-              width={40} 
+              width={160} 
               height={40} 
               unoptimized 
-              className="h-10 w-10 rounded-xl border border-white/10 bg-white/5 p-1 object-contain backdrop-blur-md"
+              className="h-10 w-auto object-contain"
+              style={{ width: 'auto' }}
             />
-            <span className="text-sm font-semibold tracking-tight text-white">FundersAI</span>
           </Link>
           <nav className="hidden items-center gap-8 text-sm font-semibold text-[var(--text-muted)] md:flex">
             <a href="#flow" className="transition hover:text-[var(--text-primary)]">Flow</a>
@@ -390,12 +390,12 @@ export default function FundersAILandingPage() {
             <Image 
               src="/FUNDERSAI-nobackground.png" 
               alt="FundersAI Logo" 
-              width={40} 
+              width={160} 
               height={40} 
               unoptimized 
-              className="h-10 w-10 rounded-xl border border-white/10 bg-white/5 p-1 object-contain backdrop-blur-md"
+              className="h-10 w-auto object-contain"
+              style={{ width: 'auto' }}
             />
-            <span className="text-sm font-semibold text-white">FundersAI</span>
           </div>
           <div className="flex flex-wrap gap-6 text-sm font-semibold text-[var(--text-muted)]">
             <a href="#flow" className="transition hover:text-[var(--text-primary)]">Flow</a>

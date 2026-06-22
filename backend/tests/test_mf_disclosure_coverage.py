@@ -58,6 +58,31 @@ def test_disclosure_coverage_passes_when_supported_amc_has_required_data(monkeyp
     assert check_mf_disclosure_coverage.check_disclosure_coverage() == 0
 
 
+def test_strict_coverage_amcs_override_reporting_amcs(monkeypatch):
+    fake_supabase = _FakeSupabase(
+        {
+            "mutual_fund_family_mapping": [{"scheme_code": "101", "family_id": "axis-midcap"}],
+            "mutual_fund_core_snapshot": [
+                {
+                    "scheme_code": "101",
+                    "scheme_name": "Axis Midcap Fund - Direct Plan - Growth",
+                    "amc_name": "Axis Mutual Fund",
+                    "aum": 30205.58,
+                    "expense_ratio": 0.54,
+                    "benchmark": "BSE Midcap 150 TRI",
+                }
+            ],
+            "mutual_fund_holdings": [{"family_id": "axis-midcap"}],
+            "mutual_fund_sectors": [{"family_id": "axis-midcap"}],
+        }
+    )
+    monkeypatch.setattr(check_mf_disclosure_coverage, "supabase", fake_supabase)
+    monkeypatch.setenv("MF_DISCLOSURE_COVERAGE_AMCS", "nippon")
+    monkeypatch.setenv("MF_DISCLOSURE_STRICT_COVERAGE_AMCS", "axis")
+
+    assert check_mf_disclosure_coverage.check_disclosure_coverage() == 0
+
+
 def test_disclosure_coverage_matches_nippon_supported_amc(monkeypatch):
     fake_supabase = _FakeSupabase(
         {

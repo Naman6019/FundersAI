@@ -39,7 +39,9 @@ class AxisAdapter(BaseAMCAdapter):
         )
 
     def fetch_documents(self, source: AMCDocumentSource, document_type: str) -> List[DiscoveredDocument]:
-        # Tier 0: Env-injected URLs (highest priority, used when site blocks CI runners)
+        attempted_tiers: list[str] = []
+
+        attempted_tiers.append("manual_env")
         env_docs = self._docs_from_env(source, document_type)
         if env_docs:
             logger.info("Axis: using %d document(s) from env var MF_AXIS_%s_DOCUMENT_URLS.",
@@ -47,17 +49,25 @@ class AxisAdapter(BaseAMCAdapter):
                         "FACTSHEET" if document_type == "factsheet" else "PORTFOLIO")
             return env_docs
 
-        # Tier 1: Static HTML / known API endpoint
+        attempted_tiers.append("axis_page")
         docs = self.fetch_from_axis_api_or_page(source, document_type)
 
         if not docs:
             logger.info("Axis API/Page fetch yielded no documents. Falling back to AMFI.")
+            attempted_tiers.append("amfi")
             docs = self.fetch_from_amfi(source, document_type)
 
         if not docs:
             logger.info("AMFI fallback yielded no documents. Falling back to Playwright.")
+            attempted_tiers.append("playwright")
             docs = self.fetch_with_playwright(source, document_type)
 
+        if not docs:
+            logger.warning(
+                "axis:no_source_documents_found document_type=%s attempted_tiers=%s",
+                document_type,
+                ",".join(attempted_tiers),
+            )
         return docs
 
     def _docs_from_env(self, source: AMCDocumentSource, document_type: str) -> List[DiscoveredDocument]:
@@ -163,27 +173,17 @@ class AxisAdapter(BaseAMCAdapter):
                 context = browser.new_context(user_agent=self.user_agent)
                 page = context.new_page()
                 
-                # Navigate and wait for SPA to load
-                page.goto(page_url, wait_until="networkidle", timeout=20000)
-                
-                # We wait a bit extra for React components to finish rendering their tables
+                page.goto(page_url, wait_until="domcontentloaded", timeout=20000)
+                try:
+                    page.wait_for_load_state("load", timeout=10000)
+                except Exception:
+                    logger.info("Axis Playwright load wait timed out; parsing current DOM.")
                 page.wait_for_timeout(3000)
                 
                 html = page.content()
                 browser.close()
                 
-            # Now parse the fully rendered HTML
-            soup = BeautifulSoup(html, "html.parser")
-            links = []
-            for a in soup.find_all("a", href=True):
-                href = a["href"]
-                if ".pdf" in href.lower() or ".xlsx" in href.lower() or ".xls" in href.lower():
-                    links.append({
-                        "title": a.get_text(strip=True) or href.split("/")[-1],
-                        "url": href if href.startswith("http") else f"https://www.axismf.com{href}",
-                        "context_text": a.parent.get_text(strip=True) if a.parent else a.get_text(strip=True),
-                        "file_ext": detect_file_ext(href)
-                    })
+            links = _axis_download_links_from_html(html, page_url)
                     
             docs = classify_documents(source, document_type, links, page_url)
             docs.sort(key=lambda d: d.priority_score, reverse=True)
@@ -192,3 +192,44 @@ class AxisAdapter(BaseAMCAdapter):
         except Exception as e:
             logger.warning(f"Error fetching via Playwright fallback: {e}")
             return []
+
+
+def _axis_download_links_from_html(html: str, page_url: str) -> list[dict[str, str]]:
+    soup = BeautifulSoup(html or "", "html.parser")
+    links: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for anchor in soup.find_all("a", href=True):
+        href = str(anchor.get("href") or "").strip()
+        if not _axis_is_download_url(href):
+            continue
+        absolute_url = urljoin(page_url, href)
+        if absolute_url in seen:
+            continue
+        seen.add(absolute_url)
+        title = anchor.get_text(strip=True) or Path(urlsplit(absolute_url).path).name
+        links.append(
+            {
+                "title": title,
+                "url": absolute_url,
+                "context_text": anchor.parent.get_text(" ", strip=True) if anchor.parent else title,
+                "file_ext": detect_file_ext(absolute_url),
+            }
+        )
+    for match in re.finditer(r"https?://[^\s\"'<>]+?\.(?:pdf|xlsx?|xlsm)(?:\?[^\s\"'<>]*)?", html or "", re.IGNORECASE):
+        absolute_url = match.group(0)
+        if absolute_url in seen:
+            continue
+        seen.add(absolute_url)
+        links.append(
+            {
+                "title": Path(urlsplit(absolute_url).path).name,
+                "url": absolute_url,
+                "context_text": absolute_url,
+                "file_ext": detect_file_ext(absolute_url),
+            }
+        )
+    return links
+
+
+def _axis_is_download_url(value: str) -> bool:
+    return bool(re.search(r"\.(?:pdf|xlsx?|xlsm)(?:\?|$)", value or "", flags=re.IGNORECASE))
