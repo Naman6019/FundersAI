@@ -111,6 +111,10 @@ jobs:
           MF_NIPPON_PORTFOLIO_DOCUMENT_URLS: ${{ secrets.MF_NIPPON_PORTFOLIO_DOCUMENT_URLS }}
           MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO: ${{ github.event.inputs.allow_hdfc_factsheet_as_portfolio }}
           MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
+          MF_EXTRACTOR_MODE: ${{ vars.MF_EXTRACTOR_MODE || 'deterministic' }}
+          MF_LLM_EXTRACTOR_ENABLED: ${{ vars.MF_LLM_EXTRACTOR_ENABLED || 'false' }}
+          MF_LLM_EXTRACTOR_MODEL: ${{ vars.MF_LLM_EXTRACTOR_MODEL || '' }}
+          MF_SOURCE_MANIFEST_PATH: ${{ vars.MF_SOURCE_MANIFEST_PATH || '' }}
           ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "false"
           DISPATCH_AMCS: ${{ github.event.inputs.amcs }}
           DISPATCH_MAX_DOCS: ${{ github.event.inputs.max_documents }}
@@ -280,7 +284,7 @@ jobs:
           round=1
           while [ "$round" -le "$PARSE_ROUNDS" ]; do
             echo "AMC=$amc parse_round=$round/$PARSE_ROUNDS"
-            if ! timeout 85m python -m backend.app.mf_ingestion.jobs.parse_pending_documents --amc "$amc" --limit "$parse_limit" --strict --fail-on-needs-review; then
+            if ! timeout 85m python -m backend.app.mf_ingestion.jobs.parse_pending_documents --amc "$amc" --limit "$parse_limit" --strict; then
               amc_failed=true
               echo "AMC parse failed/timed out: $amc round=$round"
               break

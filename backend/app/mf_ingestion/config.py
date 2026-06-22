@@ -11,6 +11,10 @@ class IngestionConfig:
     request_timeout_seconds: float
     parser_version: str
     user_agent: str
+    extractor_mode: str
+    llm_extractor_enabled: bool
+    llm_extractor_model: str
+    source_manifest_path: str
     r2_endpoint: str
     r2_access_key_id: str
     r2_secret_access_key: str
@@ -31,6 +35,10 @@ def get_config() -> IngestionConfig:
             "MF_INGESTION_USER_AGENT",
             "FundersAIResearchBot/1.0 contact: YOUR_EMAIL_HERE",
         ),
+        extractor_mode=os.getenv("MF_EXTRACTOR_MODE", "deterministic").strip().lower(),
+        llm_extractor_enabled=os.getenv("MF_LLM_EXTRACTOR_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"},
+        llm_extractor_model=os.getenv("MF_LLM_EXTRACTOR_MODEL", "").strip(),
+        source_manifest_path=os.getenv("MF_SOURCE_MANIFEST_PATH", "").strip(),
         r2_endpoint=os.getenv("R2_ENDPOINT", "").strip(),
         r2_access_key_id=os.getenv("R2_ACCESS_KEY_ID", "").strip(),
         r2_secret_access_key=os.getenv("R2_SECRET_ACCESS_KEY", "").strip(),

@@ -57,6 +57,9 @@ jobs:
           R2_RAW_BUCKET: ${{ secrets.R2_RAW_BUCKET }}
           R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
           MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
+          MF_EXTRACTOR_MODE: ${{ vars.MF_EXTRACTOR_MODE || 'deterministic' }}
+          MF_LLM_EXTRACTOR_ENABLED: ${{ vars.MF_LLM_EXTRACTOR_ENABLED || 'false' }}
+          MF_LLM_EXTRACTOR_MODEL: ${{ vars.MF_LLM_EXTRACTOR_MODEL || '' }}
           ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "false"
           DISPATCH_AMCS: ${{ inputs.amcs }}
           DISPATCH_LIMIT: ${{ inputs.limit }}

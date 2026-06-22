@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+from typing import Any
+
+import requests
+
+from app.mf_ingestion.extractors.contracts import NormalizedExtraction, parse_normalized_extraction
+from app.mf_ingestion.parsers.pdf_text_parser import PDFTextParser
+
+
+class LLMExtractionUnavailable(RuntimeError):
+    pass
+
+
+class StrictJSONLLMExtractor:
+    def __init__(self, *, enabled: bool, mode: str, model: str) -> None:
+        self.enabled = enabled
+        self.mode = mode
+        self.model = model
+
+    def extract(self, file_path: str, document: dict[str, Any]) -> NormalizedExtraction:
+        if not self.enabled or self.mode != "deterministic_then_llm":
+            raise LLMExtractionUnavailable("llm_extractor_disabled")
+
+        fixture_path = os.getenv("MF_LLM_EXTRACTOR_FIXTURE_PATH", "").strip()
+        if fixture_path:
+            payload = json.loads(Path(fixture_path).read_text(encoding="utf-8"))
+            return parse_normalized_extraction(payload)
+
+        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        if not api_key:
+            raise LLMExtractionUnavailable("openai_api_key_missing")
+        if not self.model:
+            raise LLMExtractionUnavailable("mf_llm_extractor_model_missing")
+
+        text = _extract_document_text(file_path)
+        if not text:
+            raise LLMExtractionUnavailable("llm_source_text_empty")
+
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            timeout=90,
+            json={
+                "model": self.model,
+                "response_format": {"type": "json_object"},
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "Extract Indian mutual fund factsheet or portfolio data. "
+                            "Return only strict JSON with these keys: scheme_name, report_month, holdings, "
+                            "aum, expense_ratio, benchmark, fund_manager, risk_level, source_document_id, "
+                            "extractor_type, confidence_score, validation_issues. Set extractor_type to llm."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {
+                                "source_document_id": document.get("id"),
+                                "amc_code": document.get("amc_code"),
+                                "document_type": document.get("document_type"),
+                                "report_month": document.get("report_month"),
+                                "text": text[:50000],
+                            },
+                            default=str,
+                        ),
+                    },
+                ],
+            },
+        )
+        response.raise_for_status()
+        payload = response.json()
+        content = payload["choices"][0]["message"]["content"]
+        extracted = json.loads(content)
+        extracted.setdefault("source_document_id", str(document.get("id") or ""))
+        extracted["extractor_type"] = "llm"
+        return parse_normalized_extraction(extracted)
+
+
+def _extract_document_text(file_path: str) -> str:
+    path = Path(file_path)
+    if path.suffix.lower() == ".pdf":
+        return PDFTextParser().extract_text(str(path))
+    try:
+        return path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return ""

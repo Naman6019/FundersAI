@@ -13,6 +13,7 @@ from app.mf_ingestion.sources.registry import AMCDocumentSource, get_source
 from app.mf_ingestion.storage.checksum import sha256_bytes
 from app.mf_ingestion.storage.raw_file_store import RawFileStore
 from app.mf_ingestion.storage.r2_store import R2Store, build_safe_key
+from app.mf_ingestion.services.source_manifest import build_source_manifest, load_source_manifest_documents
 
 logger = logging.getLogger(__name__)
 
@@ -50,18 +51,37 @@ class IngestionService:
         self._upsert_source_row(source)
 
         downloader = AMCDownloader(source, self.config.request_timeout_seconds, self.config.user_agent)
+        manifest_docs = load_source_manifest_documents(self.config.source_manifest_path, source, document_type)
         try:
-            discovered_docs = downloader.list_documents(document_type=document_type)
-        except Exception as exc:
-            logger.error(
-                "event=amc_discovery_failed amc_code=%s document_type=%s reason=%s",
-                source.amc_code,
-                document_type,
-                exc,
+            discovered_docs = _dedupe_discovered_documents(
+                [*manifest_docs, *downloader.list_documents(document_type=document_type)]
             )
-            return {"status": "error", "reason": str(exc)}
+        except Exception as exc:
+            if manifest_docs:
+                logger.warning(
+                    "event=amc_discovery_failed_using_manifest amc_code=%s document_type=%s manifest_count=%s reason=%s",
+                    source.amc_code,
+                    document_type,
+                    len(manifest_docs),
+                    exc,
+                )
+                discovered_docs = manifest_docs
+            else:
+                logger.error(
+                    "event=amc_discovery_failed amc_code=%s document_type=%s reason=%s",
+                    source.amc_code,
+                    document_type,
+                    exc,
+                )
+                return {"status": "error", "reason": str(exc)}
 
         if not discovered_docs:
+            logger.error(
+                "event=amc_discovery_empty amc_code=%s document_type=%s manifest_count=%s",
+                source.amc_code,
+                document_type,
+                len(manifest_docs),
+            )
             return {"status": "skipped", "reason": "no_documents_found", "document_type": document_type}
 
         selected = discovered_docs[: max(max_documents, 1)]
@@ -124,6 +144,16 @@ class IngestionService:
             raw_path, storage_backend, storage_bucket, storage_key, storage_metadata = self._persist_raw_document(
                 downloaded=downloaded,
                 checksum=checksum,
+            )
+            storage_metadata["source_manifest"] = build_source_manifest(
+                source=source,
+                document_type=downloaded.document_type,
+                source_url=downloaded.source_url,
+                discovery_page_url=downloaded.discovery_page_url,
+                report_month=downloaded.report_month,
+                expected_file_type=downloaded.file_ext or downloaded.file_name,
+                checksum=checksum,
+                acquisition_status="acquired",
             )
             now_iso = datetime.now(timezone.utc).isoformat()
             payload = {
@@ -249,3 +279,16 @@ def _safe_extension(file_name: str) -> str:
     if "." not in file_name:
         return ".bin"
     return "." + file_name.rsplit(".", 1)[-1].lower()
+
+
+def _dedupe_discovered_documents(documents: list[Any]) -> list[Any]:
+    deduped: list[Any] = []
+    seen: set[str] = set()
+    for document in documents:
+        url = str(getattr(document, "url", "") or "").strip()
+        key = url.lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(document)
+    return deduped

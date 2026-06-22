@@ -13,6 +13,7 @@ from urllib.parse import unquote
 
 from app.database import supabase
 from app.mf_ingestion.constants import VALIDATION_STATUS_INVALID, VALIDATION_STATUS_REVIEW
+from app.mf_ingestion.extractors.llm_extractor import LLMExtractionUnavailable, StrictJSONLLMExtractor
 from app.mf_ingestion.normalizers.scheme_name_normalizer import match_scheme_name
 from app.mf_ingestion.parsers.adapters.hdfc_adapter import HDFCAdapter
 from app.mf_ingestion.parsers.adapters.icici_adapter import ICICIAdapter
@@ -28,6 +29,7 @@ from app.mf_ingestion.parsers.holdings_parser import HoldingsParser
 from app.mf_ingestion.config import get_config
 from app.mf_ingestion.storage.r2_store import R2Store, build_safe_key
 from app.repositories.stock_repository import StockRepository
+from app.mf_ingestion.services.document_classifier import DocumentClassification, classify_raw_document
 from app.mf_ingestion.services.review_service import ReviewService
 from app.mf_ingestion.validators.holdings_validator import validate_holdings
 
@@ -64,6 +66,11 @@ class ParsingService:
             "motilal": MotilalAdapter(),
             "nippon": NipponAdapter(),
         }
+        self.llm_extractor = StrictJSONLLMExtractor(
+            enabled=self.config.llm_extractor_enabled,
+            mode=self.config.extractor_mode,
+            model=self.config.llm_extractor_model,
+        )
 
     def parse_latest_document_for_scheme(self, amc_code: str, scheme_name: str) -> dict[str, Any] | None:
         """Runs the parser on the latest raw document for an AMC, strictly filtering for a specific scheme."""
@@ -117,25 +124,38 @@ class ParsingService:
         document_id = str(document.get("id"))
         amc_code = str(document.get("amc_code") or "")
         document_type = str(document.get("document_type") or document.get("source_document_type") or "").strip().lower()
+        classification = classify_raw_document(document, set(self.adapters))
         irrelevant_issue = _irrelevant_document_issue(document)
         if irrelevant_issue:
             self._mark_document(document_id, "skipped_not_supported", [irrelevant_issue])
-            return {"source_document_id": document_id, "status": "skipped", "reason": irrelevant_issue}
+            return _attach_extraction_metadata(
+                {"source_document_id": document_id, "status": "skipped", "reason": irrelevant_issue},
+                classification,
+            )
         if document_type and document_type not in HOLDINGS_SUPPORTED_DOCUMENT_TYPES and document_type not in FACTSHEET_SUPPORTED_DOCUMENT_TYPES:
             issue = f"unsupported_document_type:{document_type}"
             self._mark_document(document_id, "skipped_not_supported", [issue])
-            return {"source_document_id": document_id, "status": "skipped", "reason": issue}
+            return _attach_extraction_metadata(
+                {"source_document_id": document_id, "status": "skipped", "reason": issue},
+                classification,
+            )
 
         if not bypass_official_coverage:
             api_coverage_issue = self._api_coverage_issue(document)
             if api_coverage_issue:
                 self._mark_document(document_id, "official_source_covered", [api_coverage_issue])
-                return {"source_document_id": document_id, "status": "official_source_covered", "reason": api_coverage_issue}
+                return _attach_extraction_metadata(
+                    {"source_document_id": document_id, "status": "official_source_covered", "reason": api_coverage_issue},
+                    classification,
+                )
 
         resolved_path, temp_downloaded = self._resolve_document_path(document)
         if not resolved_path:
             self._mark_document(document_id, "failed", ["raw_file_missing"])
-            return {"source_document_id": document_id, "status": "failed", "reason": "raw_file_missing"}
+            return _attach_extraction_metadata(
+                {"source_document_id": document_id, "status": "failed", "reason": "raw_file_missing"},
+                classification,
+            )
 
         try:
             if document_type in FACTSHEET_SUPPORTED_DOCUMENT_TYPES:
@@ -145,14 +165,20 @@ class ParsingService:
                     adapter = self.adapters.get(amc_code.lower())
                     if adapter:
                         holdings_result = self._parse_holdings_document(document, adapter, resolved_path, target_scheme_name=target_scheme_name)
-                        return _merge_parse_outcomes(factsheet_result, holdings_result)
-                return factsheet_result
+                        return _attach_extraction_metadata(_merge_parse_outcomes(factsheet_result, holdings_result), classification)
+                return _attach_extraction_metadata(factsheet_result, classification)
 
             adapter = self.adapters.get(amc_code.lower())
             if not adapter:
                 self._mark_document(document_id, "failed", ["adapter_not_found"])
-                return {"source_document_id": document_id, "status": "failed", "reason": "adapter_not_found"}
-            return self._parse_holdings_document(document, adapter, resolved_path, target_scheme_name=target_scheme_name)
+                return _attach_extraction_metadata(
+                    {"source_document_id": document_id, "status": "failed", "reason": "adapter_not_found"},
+                    classification,
+                )
+            return _attach_extraction_metadata(
+                self._parse_holdings_document(document, adapter, resolved_path, target_scheme_name=target_scheme_name),
+                classification,
+            )
         finally:
             if temp_downloaded:
                 try:
@@ -193,6 +219,9 @@ class ParsingService:
 
         if not parsed_documents:
             issue = "holdings_not_found_in_document"
+            llm_result = self._try_llm_fallback(document=document, file_path=file_path, issues=[issue])
+            if llm_result:
+                return llm_result
             self._upload_parse_debug_snapshot(
                 document=document,
                 artifact="holdings_parse_failure",
@@ -341,6 +370,7 @@ class ParsingService:
             return {
                 "source_document_id": document_id,
                 "status": status,
+                "extractor_type": "deterministic",
                 "scheme_name": result["scheme_name"],
                 "scheme_match_confidence": result["scheme_match_confidence"],
                 "confidence_score": result["confidence_score"],
@@ -350,6 +380,7 @@ class ParsingService:
         return {
             "source_document_id": document_id,
             "status": status,
+            "extractor_type": "deterministic",
             "parsed_schemes": len(results),
             "inserted_holdings": inserted_total,
             "validation_issues": dedup_issues,
@@ -373,6 +404,9 @@ class ParsingService:
 
         if not records:
             issue = "factsheet_fields_not_extracted"
+            llm_result = self._try_llm_fallback(document=document, file_path=file_path, issues=[issue])
+            if llm_result:
+                return llm_result
             self._mark_document(document_id, "needs_review", [issue])
             return {"source_document_id": document_id, "status": "needs_review", "reason": issue}
 
@@ -439,9 +473,56 @@ class ParsingService:
         return {
             "source_document_id": document_id,
             "status": status,
+            "extractor_type": "deterministic",
             "updated_schemes": updated,
             "unmatched_schemes": unmatched,
             "validation_issues": issues,
+        }
+
+    def _try_llm_fallback(self, *, document: dict[str, Any], file_path: str, issues: list[str]) -> dict[str, Any] | None:
+        document_id = str(document.get("id") or "")
+        try:
+            extraction = self.llm_extractor.extract(file_path, document)
+        except LLMExtractionUnavailable as exc:
+            logger.info("event=llm_extraction_unavailable source_document_id=%s reason=%s", document_id, exc)
+            return None
+        except Exception as exc:
+            logger.exception("event=llm_extraction_failed source_document_id=%s reason=%s", document_id, exc)
+            return None
+
+        validation_issues = sorted(set([*issues, *extraction.validation_issues, "llm_extraction_requires_review"]))
+        if extraction.holdings:
+            validation = validate_holdings(
+                extraction.holdings,
+                scheme_match_confidence=float(extraction.confidence_score or 0.0),
+                report_month_present=bool(extraction.report_month),
+            )
+            validation_issues = sorted(set([*validation_issues, *validation.issues]))
+
+        payload = extraction.to_dict()
+        payload["validation_issues"] = validation_issues
+        self.review_service.enqueue_document_review(
+            source_document_id=document_id,
+            amc_code=str(document.get("amc_code") or ""),
+            report_month=extraction.report_month or str(document.get("report_month") or "") or None,
+            source_url=document.get("source_url"),
+            validation_issues=validation_issues,
+            confidence_score=float(extraction.confidence_score or 0.0),
+            parser_version=str(document.get("parser_version") or ""),
+            sample_rows=[payload],
+        )
+        self._mark_document(document_id, "fallback_needs_review", validation_issues)
+        self._upload_parse_debug_snapshot(
+            document=document,
+            artifact="llm_fallback_extraction",
+            payload=payload,
+        )
+        return {
+            "source_document_id": document_id,
+            "status": "fallback_needs_review",
+            "extractor_type": "llm",
+            "normalized_extraction": payload,
+            "validation_issues": validation_issues,
         }
 
     def _already_parsed(self, source_document_id: str) -> bool:
@@ -1298,6 +1379,7 @@ def _merge_parse_outcomes(primary: dict[str, Any], secondary: dict[str, Any]) ->
     severity = {
         "failed": 5,
         "error": 5,
+        "fallback_needs_review": 4,
         "needs_review": 4,
         "parsed_partial": 3,
         "partial": 3,
@@ -1313,6 +1395,13 @@ def _merge_parse_outcomes(primary: dict[str, Any], secondary: dict[str, Any]) ->
     merged["factsheet"] = primary
     merged["holdings"] = secondary
     return merged
+
+
+def _attach_extraction_metadata(result: dict[str, Any], classification: DocumentClassification) -> dict[str, Any]:
+    enriched = dict(result)
+    enriched.setdefault("extractor_type", "deterministic")
+    enriched["document_classification"] = classification.to_dict()
+    return enriched
 
 
 def _irrelevant_document_issue(document: dict[str, Any]) -> str | None:
