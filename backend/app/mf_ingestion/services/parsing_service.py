@@ -150,6 +150,14 @@ class ParsingService:
                     classification,
                 )
 
+        unavailable_issue = self._r2_required_storage_issue(document)
+        if unavailable_issue:
+            self._mark_document(document_id, "skipped_no_source_data", [unavailable_issue])
+            return _attach_extraction_metadata(
+                {"source_document_id": document_id, "status": "skipped", "reason": unavailable_issue},
+                classification,
+            )
+
         resolved_path, temp_downloaded = self._resolve_document_path(document)
         if not resolved_path:
             self._mark_document(document_id, "failed", ["raw_file_missing"])
@@ -191,6 +199,22 @@ class ParsingService:
                     Path(temp_downloaded).unlink(missing_ok=True)
                 except Exception:
                     logger.warning("event=temp_file_cleanup_failed path=%s", temp_downloaded)
+
+    def _r2_required_storage_issue(self, document: dict[str, Any]) -> str | None:
+        if not self.config.require_r2_for_raw_storage:
+            return None
+        storage_backend = str(document.get("storage_backend") or "local").strip().lower()
+        if storage_backend != "r2":
+            return "raw_file_unavailable_in_r2_required_runtime"
+        storage_key = str(document.get("storage_key") or "").strip()
+        if not storage_key:
+            return "missing_r2_storage_key"
+        if not self.r2_store.object_exists(
+            storage_key,
+            bucket=str(document.get("storage_bucket") or "").strip() or self.config.r2_raw_bucket,
+        ):
+            return "missing_r2_object"
+        return None
 
     def _parse_holdings_document(self, document: dict[str, Any], adapter: Any, file_path: str, target_scheme_name: str | None = None) -> dict[str, Any]:
         document_id = str(document.get("id"))

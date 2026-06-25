@@ -304,6 +304,42 @@ def test_invalid_llm_payload_falls_back_to_needs_review(monkeypatch, tmp_path: P
     assert not any(table in {"mutual_fund_holdings", "mutual_fund_core_snapshot"} for table, *_ in fake_supabase.upserts)
 
 
+def test_r2_required_parser_skips_local_only_raw_documents(monkeypatch):
+    from app.mf_ingestion.services import parsing_service
+
+    fake_supabase = _FakeSupabase(
+        [
+            {
+                "id": "axis-local-only",
+                "amc_code": "AXIS",
+                "document_type": "factsheet",
+                "storage_backend": "local",
+                "storage_path": "/opt/render/project/src/backend/data/mf_raw_docs/AXIS/missing.pdf",
+                "parse_status": "pending",
+            }
+        ]
+    )
+    monkeypatch.setenv("MF_REQUIRE_R2_FOR_RAW_STORAGE", "true")
+    monkeypatch.setattr(parsing_service, "supabase", fake_supabase)
+    monkeypatch.setattr(parsing_service, "R2Store", _FakeR2Disabled)
+
+    result = ParsingService().parse_pending_documents(limit=1, amc_code="AXIS")
+
+    assert result["processed"][0]["status"] == "skipped"
+    assert result["processed"][0]["reason"] == "raw_file_unavailable_in_r2_required_runtime"
+    assert fake_supabase.updates == [
+        (
+            "mf_raw_documents",
+            {"id": "axis-local-only"},
+            {
+                "parse_status": "skipped_no_source_data",
+                "validation_issues": ["raw_file_unavailable_in_r2_required_runtime"],
+                "parsed_at": fake_supabase.updates[0][2]["parsed_at"],
+            },
+        )
+    ]
+
+
 def test_llm_extractor_uses_openrouter_when_key_is_configured(monkeypatch, tmp_path: Path):
     from app.mf_ingestion.extractors import llm_extractor
     from app.mf_ingestion.extractors.llm_extractor import StrictJSONLLMExtractor
@@ -531,3 +567,45 @@ def test_sync_workflow_has_parse_only_path_for_r2_first_acquisition():
     assert "parse_only" in workflow
     assert 'PARSE_ONLY="true"' in workflow
     assert "Skipping live AMC ingestion" in workflow
+
+
+def test_sync_workflow_uses_manifest_and_link_preflight():
+    workflow = Path(".github/workflows/sync-mf-disclosures.yml").read_text(encoding="utf-8")
+
+    assert "backend/config/mf_document_sources.json" in workflow
+    assert "preflight_mf_document_links.py" in workflow
+    assert "--manifest-path \"$MF_SOURCE_MANIFEST_PATH\"" in workflow
+
+
+def test_reacquire_workflow_runs_reacquire_job():
+    workflow = Path(".github/workflows/reacquire-mf-raw-to-r2.yml").read_text(encoding="utf-8")
+
+    assert "reacquire_local_raw_documents" in workflow
+    assert "MF_REQUIRE_R2_FOR_RAW_STORAGE" in workflow
+
+
+def test_supabase_edge_function_acquires_official_docs_to_r2():
+    function_source = Path("supabase/functions/mf-acquire-docs/index.ts").read_text(encoding="utf-8")
+    config = Path("supabase/config.toml").read_text(encoding="utf-8")
+
+    assert "MF_EDGE_ACQUIRE_KEY" in function_source
+    assert "AwsClient" in function_source
+    assert "R2_RAW_BUCKET" in function_source
+    assert "SUPABASE_SERVICE_ROLE_KEY" in function_source
+    assert "mf_raw_documents" in function_source
+    assert "storage_backend: \"r2\"" in function_source
+    assert "third_party_source_blocked" in function_source
+    assert "groww.in" in function_source
+    assert "discoverOfficialDocuments" in function_source
+    assert "extractAnchorDocumentLinks" in function_source
+    assert "MF_EDGE_MAX_DISCOVERED_DOCUMENTS" in function_source
+    assert "[functions.mf-acquire-docs]" in config
+
+
+def test_sync_workflow_can_call_supabase_edge_acquisition():
+    workflow = Path(".github/workflows/sync-mf-disclosures.yml").read_text(encoding="utf-8")
+
+    assert "MF_EDGE_ACQUIRE_URL" in workflow
+    assert "MF_EDGE_ACQUIRE_KEY" in workflow
+    assert "Requesting Supabase Edge document acquisition" in workflow
+    assert "curl -fsS -X POST \"$MF_EDGE_ACQUIRE_URL\"" in workflow

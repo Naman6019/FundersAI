@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 from app.mf_ingestion.jobs import reparse_needs_review
 
@@ -175,3 +176,22 @@ def test_reparse_documents_keeps_parsed_partial_actionable(monkeypatch):
     assert summary["success_count"] == 0
     assert summary["still_actionable_count"] == 1
     assert fake_supabase.deletes == []
+
+
+def test_retry_exit_code_can_fail_on_still_actionable():
+    summary = {
+        "success_count": 0,
+        "still_actionable_count": 1,
+        "runtime_error_count": 0,
+        "skipped_duplicate_count": 0,
+    }
+
+    assert reparse_needs_review.retry_exit_code(summary, fail_on_still_actionable=False) == 0
+    assert reparse_needs_review.retry_exit_code(summary, fail_on_still_actionable=True) == 1
+
+
+def test_retry_workflow_enables_strict_scheduled_retries():
+    workflow = Path(".github/workflows/retry-mf-parser-actions.yml").read_text(encoding="utf-8")
+
+    assert "fail_on_still_actionable" in workflow
+    assert "--fail-on-still-actionable" in workflow

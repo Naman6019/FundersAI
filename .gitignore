@@ -84,6 +84,8 @@ stitch_downloads/
 *.json
 *.yaml
 *.yml
+!backend/config/mf_document_sources.json
+!.github/workflows/reacquire-mf-raw-to-r2.yml
 *.log
 *.markdown
 *.rst

@@ -145,12 +145,25 @@ def reparse_documents(documents: list[dict[str, Any]], service: ParsingService) 
     }
 
 
+def retry_exit_code(summary: dict[str, int], *, fail_on_still_actionable: bool = False) -> int:
+    if summary["runtime_error_count"] > 0:
+        return 1
+    if fail_on_still_actionable and summary["still_actionable_count"] > 0:
+        return 1
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--amc", default=None, help="Filter by AMC code (e.g., ppfas, icici)")
     parser.add_argument("--limit", type=int, default=50, help="Max docs to retry.")
     parser.add_argument("--min-age-hours", type=float, default=6.0, help="Retry only docs older than this many hours.")
     parser.add_argument("--statuses", default="needs_review,failed,parsed_partial", help="Comma-separated parse statuses to retry.")
+    parser.add_argument(
+        "--fail-on-still-actionable",
+        action="store_true",
+        help="Exit non-zero when retried docs remain failed, needs_review, or parsed_partial.",
+    )
     args = parser.parse_args()
 
     if not supabase:
@@ -179,7 +192,7 @@ def main() -> int:
     logger.info("Found %s eligible documents to retry.", len(documents))
     summary = reparse_documents(documents, service)
     logger.info("Reparse retry complete: %s", json.dumps(summary, sort_keys=True))
-    return 1 if summary["runtime_error_count"] > 0 else 0
+    return retry_exit_code(summary, fail_on_still_actionable=args.fail_on_still_actionable)
 
 
 if __name__ == "__main__":

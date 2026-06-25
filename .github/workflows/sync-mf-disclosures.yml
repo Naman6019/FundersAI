@@ -123,6 +123,8 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_RAW_BUCKET: ${{ secrets.R2_RAW_BUCKET }}
           R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
+          MF_EDGE_ACQUIRE_URL: ${{ secrets.MF_EDGE_ACQUIRE_URL }}
+          MF_EDGE_ACQUIRE_KEY: ${{ secrets.MF_EDGE_ACQUIRE_KEY }}
           MF_HDFC_FACTSHEET_PAGE_URL: ${{ secrets.MF_HDFC_FACTSHEET_PAGE_URL }}
           MF_HDFC_PORTFOLIO_PAGE_URL: ${{ secrets.MF_HDFC_PORTFOLIO_PAGE_URL }}
           MF_AXIS_FACTSHEET_PAGE_URL: ${{ secrets.MF_AXIS_FACTSHEET_PAGE_URL }}
@@ -154,7 +156,7 @@ jobs:
           MF_LLM_APP_TITLE: ${{ vars.MF_LLM_APP_TITLE || 'FundersAI' }}
           MF_LLM_MIN_WRITE_CONFIDENCE: ${{ github.event.inputs.llm_min_write_confidence || vars.MF_LLM_MIN_WRITE_CONFIDENCE || '90' }}
           MF_LLM_ALLOW_FINAL_WRITES: ${{ github.event.inputs.llm_allow_final_writes || vars.MF_LLM_ALLOW_FINAL_WRITES || 'false' }}
-          MF_SOURCE_MANIFEST_PATH: ${{ vars.MF_SOURCE_MANIFEST_PATH || '' }}
+          MF_SOURCE_MANIFEST_PATH: ${{ vars.MF_SOURCE_MANIFEST_PATH || 'backend/config/mf_document_sources.json' }}
           ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "false"
           DISPATCH_AMCS: ${{ github.event.inputs.amcs }}
           DISPATCH_MAX_DOCS: ${{ github.event.inputs.max_documents }}
@@ -223,6 +225,7 @@ jobs:
             export MF_MOTILAL_PORTFOLIO_DOCUMENT_URLS="$DISPATCH_MOTILAL_PORTFOLIO_URLS"
           fi
 
+          export MF_SOURCE_MANIFEST_PATH="${MF_SOURCE_MANIFEST_PATH:-backend/config/mf_document_sources.json}"
           export MF_ALLOW_FACTSHEET_AS_PORTFOLIO="${MF_ALLOW_FACTSHEET_AS_PORTFOLIO:-${DISPATCH_ALLOW_FACTSHEET_AS_PORTFOLIO:-${DISPATCH_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO:-false}}}"
           export MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO="${MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO:-$MF_ALLOW_FACTSHEET_AS_PORTFOLIO}"
 
@@ -263,6 +266,24 @@ jobs:
           fi
 
           echo "Processing AMC=$amc max_docs=$max_docs parse_limit=$parse_limit parse_rounds=$PARSE_ROUNDS parse_only=$PARSE_ONLY event=$EVENT_NAME"
+          python backend/scripts/preflight_mf_document_links.py \
+            --amcs "$amc" \
+            --manifest-path "$MF_SOURCE_MANIFEST_PATH" \
+            --max-stale-months 2
+
+          if [ "$PARSE_ONLY" = "true" ] && { [ "$amc" = "axis" ] || [ "$amc" = "hdfc" ]; }; then
+            if [ -n "${MF_EDGE_ACQUIRE_URL:-}" ] && [ -n "${MF_EDGE_ACQUIRE_KEY:-}" ]; then
+              echo "Requesting Supabase Edge document acquisition for $amc before parse-only."
+              edge_payload=$(printf '{"amc":"%s"}' "$amc")
+              curl -fsS -X POST "$MF_EDGE_ACQUIRE_URL" \
+                -H "Authorization: Bearer $MF_EDGE_ACQUIRE_KEY" \
+                -H "Content-Type: application/json" \
+                --data "$edge_payload"
+              echo
+            else
+              echo "Supabase Edge acquisition not configured; continuing parse-only for $amc."
+            fi
+          fi
 
           if [ "$PARSE_ONLY" != "true" ] && [ "$amc" = "hdfc" ]; then
             python - <<'PY'

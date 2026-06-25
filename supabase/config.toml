@@ -1,0 +1,4 @@
+project_id = "fundersai"
+
+[functions.mf-acquire-docs]
+verify_jwt = false

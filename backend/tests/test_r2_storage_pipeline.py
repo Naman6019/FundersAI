@@ -59,6 +59,9 @@ class _FakeTable:
         self._update_payload = payload
         return self
 
+    def delete(self):
+        return self
+
     def execute(self):
         if self._insert_payload is not None:
             return SimpleNamespace(data=[{"id": "doc-1", **self._insert_payload}])
@@ -136,6 +139,11 @@ class _FakeR2Enabled:
         return f"https://example.com/{key}"
 
 
+class _FakeR2Missing(_FakeR2Enabled):
+    def object_exists(self, key: str, *, bucket=None) -> bool:
+        return False
+
+
 def test_build_safe_key_sanitizes_path_tokens():
     key = build_safe_key("RAW", "PPFAS", "../2026-04", "factsheet", "ABC 123.pdf")
     assert key == "raw/ppfas/2026-04/factsheet/abc-123.pdf"
@@ -159,6 +167,32 @@ def test_ingestion_writes_r2_storage_columns(monkeypatch):
     assert raw_insert["storage_bucket"]
     assert raw_insert["storage_key"].startswith("raw/ppfas/2026-04/factsheet/")
     assert raw_insert["storage_metadata"]["checksum"] == "fixed-checksum"
+
+
+def test_ingestion_uses_manifest_before_discovered_links(monkeypatch, tmp_path):
+    from app.mf_ingestion.services import ingestion_service
+
+    manifest = tmp_path / "mf_document_sources.json"
+    manifest.write_text(
+        (
+            '{"documents":[{"amc":"PPFAS","document_type":"factsheet","report_month":"2026-05",'
+            '"source_url":"https://amc.ppfas.com/downloads/factsheet-may-2026.xlsx",'
+            '"expected_file_type":".xlsx"}]}'
+        ),
+        encoding="utf-8",
+    )
+    fake_supabase = _FakeSupabase()
+    monkeypatch.setenv("MF_SOURCE_MANIFEST_PATH", str(manifest))
+    monkeypatch.setattr(ingestion_service, "supabase", fake_supabase)
+    monkeypatch.setattr(ingestion_service, "AMCDownloader", _FakeDownloader)
+    monkeypatch.setattr(ingestion_service, "sha256_bytes", lambda _bytes: "fixed-checksum")
+    monkeypatch.setattr(ingestion_service, "R2Store", _FakeR2Enabled)
+
+    result = IngestionService().ingest_documents(amc="ppfas", document_type="factsheet", max_documents=1)
+
+    assert result["status"] == "ok"
+    raw_insert = [payload for table, payload in fake_supabase.inserts if table == "mf_raw_documents"][0]
+    assert raw_insert["source_url"].endswith("factsheet-may-2026.xlsx")
 
 
 def test_acquire_documents_inserts_exact_url_with_r2_metadata(monkeypatch):
@@ -362,6 +396,30 @@ def test_parser_downloads_r2_file_before_parsing(monkeypatch):
     assert result["count"] == 1
     assert result["processed"][0]["status"] == "needs_review"
     assert service.r2_store.downloaded == ["raw/icici/2026-04/factsheet/fixed.pdf"]
+
+
+def test_parser_skips_missing_r2_object_before_download(monkeypatch):
+    from app.mf_ingestion.services import parsing_service
+
+    fake_doc = {
+        "id": "doc-r2-missing",
+        "amc_code": "ICICI",
+        "document_type": "factsheet",
+        "storage_backend": "r2",
+        "storage_bucket": "raw-bucket",
+        "storage_key": "raw/icici/2026-04/factsheet/missing.pdf",
+        "parse_status": "pending",
+    }
+    fake_supabase = _FakeSupabase([fake_doc])
+    monkeypatch.setenv("MF_REQUIRE_R2_FOR_RAW_STORAGE", "true")
+    monkeypatch.setattr(parsing_service, "supabase", fake_supabase)
+    monkeypatch.setattr(parsing_service, "R2Store", _FakeR2Missing)
+
+    result = ParsingService().parse_pending_documents(limit=1, amc_code="ICICI")
+
+    assert result["processed"][0]["status"] == "skipped"
+    assert result["processed"][0]["reason"] == "missing_r2_object"
+    assert fake_supabase.updates[0][2]["parse_status"] == "skipped_no_source_data"
 
 
 def test_r2_store_signed_url_and_exists(monkeypatch):

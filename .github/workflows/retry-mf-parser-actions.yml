@@ -45,6 +45,10 @@ on:
         description: 'Allow validated LLM rows to write final tables'
         required: false
         default: 'false'
+      fail_on_still_actionable:
+        description: 'Fail when retried docs remain failed, needs_review, or parsed_partial'
+        required: false
+        default: 'false'
 
 concurrency:
   group: retry-mf-parser-actions-${{ github.ref }}
@@ -96,6 +100,7 @@ jobs:
           DISPATCH_LIMIT: ${{ inputs.limit }}
           DISPATCH_MIN_AGE_HOURS: ${{ inputs.min_age_hours }}
           DISPATCH_STATUSES: ${{ inputs.statuses }}
+          DISPATCH_FAIL_ON_STILL_ACTIONABLE: ${{ inputs.fail_on_still_actionable }}
         run: |
           set -euo pipefail
 
@@ -125,6 +130,10 @@ jobs:
           fi
           MIN_AGE_HOURS="${DISPATCH_MIN_AGE_HOURS:-6}"
           STATUSES="${DISPATCH_STATUSES:-needs_review,failed,parsed_partial}"
+          STRICT_RETRY_FLAG=""
+          if [ "$EVENT_NAME" = "schedule" ] || [ "${DISPATCH_FAIL_ON_STILL_ACTIONABLE:-false}" = "true" ]; then
+            STRICT_RETRY_FLAG="--fail-on-still-actionable"
+          fi
           amc="${{ matrix.amc }}"
 
           echo "Retrying parser actions for AMC=$amc limit=$LIMIT min_age_hours=$MIN_AGE_HOURS statuses=$STATUSES"
@@ -132,4 +141,5 @@ jobs:
             --amc "$amc" \
             --limit "$LIMIT" \
             --min-age-hours "$MIN_AGE_HOURS" \
-            --statuses "$STATUSES"
+            --statuses "$STATUSES" \
+            $STRICT_RETRY_FLAG
