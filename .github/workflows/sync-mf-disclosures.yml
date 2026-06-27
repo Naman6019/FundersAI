@@ -322,10 +322,17 @@ jobs:
           print(json.dumps(payload))
           PY
           )
-              curl -fsS -X POST "$MF_EDGE_ACQUIRE_URL" \
+              edge_response_file="$(mktemp)"
+              edge_status="$(curl -sS -o "$edge_response_file" -w "%{http_code}" -X POST "$MF_EDGE_ACQUIRE_URL" \
                 -H "Authorization: Bearer $MF_EDGE_ACQUIRE_KEY" \
                 -H "Content-Type: application/json" \
-                --data "$edge_payload"
+                --data "$edge_payload")"
+              cat "$edge_response_file"
+              echo
+              if [ "$edge_status" -lt 200 ] || [ "$edge_status" -ge 300 ]; then
+                echo "Error: Supabase Edge acquisition failed for $amc with HTTP $edge_status."
+                exit 1
+              fi
               echo
             else
               echo "Error: Edge acquisition is required for $amc but MF_EDGE_ACQUIRE_URL or MF_EDGE_ACQUIRE_KEY is missing."

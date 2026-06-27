@@ -653,7 +653,8 @@ def test_sync_workflow_can_call_supabase_edge_acquisition():
     assert "Skipping GitHub runner link preflight" in workflow
     assert "Requesting Supabase Edge document acquisition" in workflow
     assert '"documents"] = documents' in workflow
-    assert "curl -fsS -X POST \"$MF_EDGE_ACQUIRE_URL\"" in workflow
+    assert "curl -sS -o \"$edge_response_file\"" in workflow
+    assert "Supabase Edge acquisition failed for $amc with HTTP $edge_status." in workflow
 
 
 def test_supabase_edge_function_returns_non_200_when_no_documents_acquired():
