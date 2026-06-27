@@ -1,4 +1,4 @@
-import { AwsClient } from "https://deno.land/x/aws4fetch@1.0.20/mod.ts";
+import { AwsClient } from "npm:aws4fetch@1.0.20";
 
 type DocumentInput = {
   document_type?: string;
@@ -124,7 +124,8 @@ Deno.serve(async (request) => {
   }
 
   const status = acquired.length && !failed.length ? "ok" : acquired.length ? "partial" : "error";
-  return jsonResponse({ status, amc: source.code, dry_run: dryRun, acquired_documents: acquired, failed_documents: failed });
+  const responseStatus = status === "error" ? 502 : 200;
+  return jsonResponse({ status, amc: source.code, dry_run: dryRun, acquired_documents: acquired, failed_documents: failed }, responseStatus);
 });
 
 function validateAuth(request: Request): { ok: true } | { ok: false; status: number; reason: string } {

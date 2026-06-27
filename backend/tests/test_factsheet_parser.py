@@ -238,6 +238,45 @@ BSE SENSEX Index (TRI)
     assert records[0].benchmark == "NIFTY 100 Total Returns Index (TRI)"
 
 
+def test_factsheet_parser_extracts_sbi_same_line_benchmark_index_label():
+    text = """
+SBI Large & Midcap Fund
+Benchmark Index: Nifty LargeMidcap 250 TRI
+Assets Under Management Rs. 24,500 crores
+Direct Plan: 0.72%
+"""
+    records = FactsheetParser().parse_text(text=text, report_month=date(2026, 5, 1))
+
+    assert len(records) == 1
+    assert records[0].benchmark == "Nifty LargeMidcap 250 TRI"
+
+
+def test_factsheet_parser_extracts_nippon_tier_one_benchmark_label():
+    text = """
+Nippon India Small Cap Fund
+Tier I Benchmark: Nifty Smallcap 250 TRI
+Assets Under Management Rs. 59,456.65 crores
+Direct Plan: 0.67%
+"""
+    records = FactsheetParser().parse_text(text=text, report_month=date(2026, 5, 1))
+
+    assert len(records) == 1
+    assert records[0].benchmark == "Nifty Smallcap 250 TRI"
+
+
+def test_factsheet_parser_extracts_icici_scheme_benchmark_label():
+    text = """
+ICICI Prudential Multi Asset Fund
+Scheme Benchmark - NIFTY 50 Hybrid Composite Debt 50:50 Index
+Closing AUM as on 31-May-26 : Rs. 50,000 crores
+Direct : 0.82% p. a.
+"""
+    records = FactsheetParser().parse_text(text=text, report_month=date(2026, 5, 1))
+
+    assert len(records) == 1
+    assert records[0].benchmark == "NIFTY 50 Hybrid Composite Debt 50:50 Index"
+
+
 def test_factsheet_parser_rejects_returns_table_label_as_benchmark():
     text = """
 HDFC BSE 500 ETF

@@ -6,6 +6,8 @@ from types import SimpleNamespace
 import pandas as pd
 
 from app.mf_ingestion.parsers.adapters.sbi_adapter import SBIAdapter
+from app.mf_ingestion.parsers.base_parser import ParseContext
+from app.mf_ingestion.parsers.holdings_parser import HoldingsParser
 
 
 def test_sbi_parse_holdings_extracts_rows_and_normalizes_percent():
@@ -96,6 +98,36 @@ def test_sbi_parse_holdings_does_not_mix_repeated_scheme_sections():
     assert len(parsed.holdings) == 2
     assert parsed.metrics["total_percent_aum"] == 100.0
     assert "percent_aum_total_out_of_band" not in parsed.warnings
+
+
+def test_sbi_sheet_emits_each_repeated_scheme_section():
+    frame = pd.DataFrame(
+        [
+            ["SCHEME NAME :", "SBI First Fund", None, None, None, None],
+            ["PORTFOLIO STATEMENT AS ON :", "2026-04-30", None, None, None, None],
+            ["Name of the Instrument / Issuer", "ISIN", "Rating / Industry^", "Quantity", "Market value", "% to AUM"],
+            ["HDFC Bank Ltd.", "INE040A01034", "Banks", 100.0, 5000.0, 60.0],
+            ["ICICI Bank Ltd.", "INE090A01021", "Banks", 100.0, 5000.0, 40.0],
+            ["SCHEME NAME :", "SBI Second Fund", None, None, None, None],
+            ["PORTFOLIO STATEMENT AS ON :", "2026-04-30", None, None, None, None],
+            ["Name of the Instrument / Issuer", "ISIN", "Rating / Industry^", "Quantity", "Market value", "% to AUM"],
+            ["Infosys Ltd.", "INE009A01021", "IT", 100.0, 5000.0, 55.0],
+            ["TCS Ltd.", "INE467B01029", "IT", 100.0, 5000.0, 45.0],
+        ],
+        columns=["c1", "c2", "c3", "c4", "c5", "c6"],
+    )
+
+    records = HoldingsParser(SBIAdapter())._parse_excel_frames(
+        [frame],
+        ParseContext(source_document_id="doc-sbi-many", source_url="local", report_month=None),
+    )
+    by_name = {record.scheme_name: record for record in records}
+
+    assert set(by_name) == {"SBI First Fund", "SBI Second Fund"}
+    assert len(by_name["SBI First Fund"].holdings) == 2
+    assert len(by_name["SBI Second Fund"].holdings) == 2
+    assert by_name["SBI First Fund"].metrics["total_percent_aum"] == 100.0
+    assert by_name["SBI Second Fund"].metrics["total_percent_aum"] == 100.0
 
 
 def test_sbi_total_percent_includes_non_isin_cash_rows_without_storing_them():

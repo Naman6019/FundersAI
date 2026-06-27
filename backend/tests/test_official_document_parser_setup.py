@@ -569,6 +569,13 @@ def test_sync_workflow_has_parse_only_path_for_r2_first_acquisition():
     assert "Skipping live AMC ingestion" in workflow
 
 
+def test_sync_workflow_prints_disclosure_diagnostics_before_coverage_gate():
+    workflow = Path(".github/workflows/sync-mf-disclosures.yml").read_text(encoding="utf-8")
+
+    assert "backend/scripts/report_mf_disclosure_diagnostics.py" in workflow
+    assert workflow.index("report_mf_disclosure_diagnostics.py") < workflow.index("check_mf_disclosure_coverage.py")
+
+
 def test_sync_workflow_uses_manifest_and_link_preflight():
     workflow = Path(".github/workflows/sync-mf-disclosures.yml").read_text(encoding="utf-8")
 
@@ -602,10 +609,55 @@ def test_supabase_edge_function_acquires_official_docs_to_r2():
     assert "[functions.mf-acquire-docs]" in config
 
 
+def test_amc_derived_view_sync_passes_family_id_to_final_tables(monkeypatch):
+    from app.mf_ingestion.services import parsing_service
+
+    service = object.__new__(parsing_service.ParsingService)
+    calls: list[tuple[str, str | None]] = []
+
+    monkeypatch.setattr(service, "_resolve_scheme_code_for_scheme", lambda _scheme_name: "101")
+    monkeypatch.setattr(service, "_resolve_family_id_for_scheme", lambda _scheme_code: "sbi-first")
+    monkeypatch.setattr(
+        service,
+        "_upsert_mutual_fund_holdings",
+        lambda *_args: calls.append(("holdings", _args[-1])),
+    )
+    monkeypatch.setattr(
+        service,
+        "_upsert_mutual_fund_sectors",
+        lambda *_args: calls.append(("sectors", _args[-1])),
+    )
+    monkeypatch.setattr(service, "_upsert_mutual_fund_core_trace", lambda **_kwargs: None)
+
+    service._sync_amc_derived_views(
+        amc_code="sbi",
+        scheme_name="SBI First Fund",
+        report_month=date(2026, 5, 1),
+        source_document_id="doc-sbi-1",
+        source_url="local",
+        parser_version="test",
+        holdings=[{"instrument_name": "HDFC Bank Ltd.", "isin": "INE040A01034", "sector": "Banks", "percent_aum": 100.0}],
+    )
+
+    assert calls == [("holdings", "sbi-first"), ("sectors", "sbi-first")]
+
+
 def test_sync_workflow_can_call_supabase_edge_acquisition():
     workflow = Path(".github/workflows/sync-mf-disclosures.yml").read_text(encoding="utf-8")
 
     assert "MF_EDGE_ACQUIRE_URL" in workflow
     assert "MF_EDGE_ACQUIRE_KEY" in workflow
+    assert "MF_EDGE_ACQUIRED_AMCS" in workflow
+    assert 'EDGE_ACQUIRED="true"' in workflow
+    assert 'PARSE_ONLY="true"' in workflow
+    assert "Skipping GitHub runner link preflight" in workflow
     assert "Requesting Supabase Edge document acquisition" in workflow
+    assert '"documents"] = documents' in workflow
     assert "curl -fsS -X POST \"$MF_EDGE_ACQUIRE_URL\"" in workflow
+
+
+def test_supabase_edge_function_returns_non_200_when_no_documents_acquired():
+    function_source = Path("supabase/functions/mf-acquire-docs/index.ts").read_text(encoding="utf-8")
+
+    assert 'const responseStatus = status === "error" ? 502 : 200;' in function_source
+    assert "failed_documents: failed }, responseStatus" in function_source

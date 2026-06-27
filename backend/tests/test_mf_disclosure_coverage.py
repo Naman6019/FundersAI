@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from scripts import check_mf_disclosure_coverage
+from scripts import check_mf_disclosure_coverage, report_mf_disclosure_diagnostics
 
 
 class _FakeResponse:
@@ -169,3 +169,55 @@ def test_empty_strict_coverage_amcs_reports_without_failing(monkeypatch):
     monkeypatch.setenv("MF_DISCLOSURE_STRICT_COVERAGE_AMCS", "")
 
     assert check_mf_disclosure_coverage.check_disclosure_coverage() == 0
+
+
+def test_disclosure_diagnostics_reports_document_review_and_family_gaps(monkeypatch):
+    fake_supabase = _FakeSupabase(
+        {
+            "mf_raw_documents": [
+                {
+                    "id": "doc-sbi-1",
+                    "amc_code": "sbi",
+                    "document_type": "portfolio_disclosure",
+                    "parse_status": "parsed_partial",
+                    "validation_issues": ["percent_aum_out_of_band"],
+                },
+                {
+                    "id": "doc-sbi-2",
+                    "amc_code": "sbi",
+                    "document_type": "factsheet",
+                    "parse_status": "parsed",
+                    "validation_issues": [],
+                },
+            ],
+            "mf_parse_review_queue": [
+                {
+                    "source_document_id": "doc-sbi-1",
+                    "amc_code": "sbi",
+                    "validation_issues": ["holdings_not_found_in_document"],
+                }
+            ],
+            "mf_schemes": [{"id": "scheme-1", "amc_code": "sbi", "scheme_name": "SBI First Fund"}],
+            "mf_scheme_holdings": [{"scheme_id": "scheme-1"}],
+            "mutual_fund_family_mapping": [{"scheme_code": "101", "family_id": "sbi-first"}],
+            "mutual_fund_core_snapshot": [
+                {"scheme_code": "101", "scheme_name": "SBI First Fund", "amc_name": "SBI Mutual Fund"}
+            ],
+            "mutual_fund_holdings": [{"scheme_code": "101", "family_id": "sbi-first"}],
+            "mutual_fund_sectors": [],
+        }
+    )
+    monkeypatch.setattr(report_mf_disclosure_diagnostics, "supabase", fake_supabase)
+
+    report = report_mf_disclosure_diagnostics.build_diagnostics(["sbi"])
+    sbi = report["amcs"]["sbi"]
+
+    assert sbi["documents_by_status"] == {"parsed": 1, "parsed_partial": 1}
+    assert sbi["documents_by_type_status"]["portfolio_disclosure"]["parsed_partial"] == 1
+    assert sbi["review_issue_counts"]["holdings_not_found_in_document"] == 1
+    assert sbi["review_issue_counts"]["percent_aum_out_of_band"] == 1
+    assert sbi["parser_scheme_holdings_count"] == 1
+    assert sbi["snapshot_family_count"] == 1
+    assert sbi["final_holding_family_count"] == 1
+    assert sbi["final_sector_family_count"] == 0
+    assert sbi["missing_final_sector_family_count"] == 1

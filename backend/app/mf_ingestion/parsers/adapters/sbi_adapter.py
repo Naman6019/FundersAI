@@ -28,6 +28,12 @@ SUMMARY_ROW_MARKERS = (
 class SBIAdapter(BaseAMCAdapter):
     amc_code = AMC_SBI
 
+    def parse_excel_frame_many(self, frame: pd.DataFrame, context: ParseContext) -> list[ParsedDocument]:
+        return [_to_parsed_document(item, context) for item in _parse_sbi_frame_many(frame, context)]
+
+    def parse_pdf_frame_many(self, frame: pd.DataFrame, context: ParseContext) -> list[ParsedDocument]:
+        return self.parse_excel_frame_many(frame, context)
+
     def parse_holdings(
         self,
         excel_frames: list[pd.DataFrame],
@@ -37,14 +43,10 @@ class SBIAdapter(BaseAMCAdapter):
     ) -> ParsedDocument:
         candidates: list[dict] = []
         for frame in excel_frames:
-            parsed = _parse_sbi_frame(frame, context)
-            if parsed:
-                candidates.append(parsed)
+            candidates.extend(_parse_sbi_frame_many(frame, context))
 
         for frame in pdf_table_frames:
-            parsed = _parse_sbi_frame(frame, context)
-            if parsed:
-                candidates.append(parsed)
+            candidates.extend(_parse_sbi_frame_many(frame, context))
 
         if not candidates:
             return ParsedDocument(
@@ -56,27 +58,39 @@ class SBIAdapter(BaseAMCAdapter):
             )
 
         best = max(candidates, key=lambda item: item.get("selection_score", 0.0))
-        return ParsedDocument(
-            scheme_name=best.get("scheme_name") or "",
-            report_month=best.get("report_month") or context.report_month,
-            holdings=best.get("holdings", []),
-            metrics=best.get("metrics", {}),
-            warnings=best.get("warnings", []),
-            confidence_score=float(best.get("confidence_score", 0.0)),
-        )
+        return _to_parsed_document(best, context)
+
+
+def _to_parsed_document(parsed: dict, context: ParseContext) -> ParsedDocument:
+    return ParsedDocument(
+        scheme_name=parsed.get("scheme_name") or "",
+        report_month=parsed.get("report_month") or context.report_month,
+        holdings=parsed.get("holdings", []),
+        metrics=parsed.get("metrics", {}),
+        warnings=parsed.get("warnings", []),
+        confidence_score=float(parsed.get("confidence_score", 0.0)),
+    )
 
 
 def _parse_sbi_frame(frame: pd.DataFrame, context: ParseContext) -> dict | None:
-    if frame is None or frame.empty:
+    candidates = _parse_sbi_frame_many(frame, context)
+    if not candidates:
         return None
+    return max(candidates, key=lambda item: item.get("selection_score", 0.0))
+
+
+def _parse_sbi_frame_many(frame: pd.DataFrame, context: ParseContext) -> list[dict]:
+    if frame is None or frame.empty:
+        return []
 
     raw_rows = frame.where(pd.notna(frame), None).values.tolist()
     if not raw_rows:
-        return None
+        return []
 
     headers = _find_all_header_rows(raw_rows)
     if len(headers) <= 1:
-        return _parse_sbi_segment(raw_rows, context)
+        parsed = _parse_sbi_segment(raw_rows, context)
+        return [parsed] if parsed else []
 
     candidates: list[dict] = []
     for index, (header_row_idx, _header_values) in enumerate(headers):
@@ -85,9 +99,7 @@ def _parse_sbi_frame(frame: pd.DataFrame, context: ParseContext) -> dict | None:
         parsed = _parse_sbi_segment(raw_rows[segment_start:next_header_idx], context)
         if parsed:
             candidates.append(parsed)
-    if not candidates:
-        return None
-    return max(candidates, key=lambda item: item.get("selection_score", 0.0))
+    return candidates
 
 
 def _parse_sbi_segment(rows: list[list[object]], context: ParseContext) -> dict | None:

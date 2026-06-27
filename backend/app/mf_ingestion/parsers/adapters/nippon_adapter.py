@@ -41,6 +41,13 @@ SUMMARY_ROW_MARKERS = (
 class NipponAdapter(BaseAMCAdapter):
     amc_code = AMC_NIPPON
 
+    def parse_excel_frame_many(self, frame: pd.DataFrame, context: ParseContext) -> list[ParsedDocument]:
+        parsed = _parse_nippon_frame(frame, context)
+        return [_to_parsed_document(parsed, context)] if parsed else []
+
+    def parse_pdf_frame_many(self, frame: pd.DataFrame, context: ParseContext) -> list[ParsedDocument]:
+        return self.parse_excel_frame_many(frame, context)
+
     def parse_holdings(
         self,
         excel_frames: list[pd.DataFrame],
@@ -69,14 +76,18 @@ class NipponAdapter(BaseAMCAdapter):
             )
 
         best = max(candidates, key=lambda item: item.get("selection_score", 0.0))
-        return ParsedDocument(
-            scheme_name=str(best.get("scheme_name") or ""),
-            report_month=best.get("report_month") or context.report_month,
-            holdings=best.get("holdings", []),
-            metrics=best.get("metrics", {}),
-            warnings=best.get("warnings", []),
-            confidence_score=float(best.get("confidence_score", 0.0)),
-        )
+        return _to_parsed_document(best, context)
+
+
+def _to_parsed_document(parsed: dict[str, Any], context: ParseContext) -> ParsedDocument:
+    return ParsedDocument(
+        scheme_name=str(parsed.get("scheme_name") or ""),
+        report_month=parsed.get("report_month") or context.report_month,
+        holdings=parsed.get("holdings", []),
+        metrics=parsed.get("metrics", {}),
+        warnings=parsed.get("warnings", []),
+        confidence_score=float(parsed.get("confidence_score", 0.0)),
+    )
 
 
 def _parse_nippon_frame(frame: pd.DataFrame, context: ParseContext) -> dict[str, Any] | None:

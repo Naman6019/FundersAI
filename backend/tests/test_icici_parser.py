@@ -6,6 +6,8 @@ from types import SimpleNamespace
 import pandas as pd
 
 from app.mf_ingestion.parsers.adapters.icici_adapter import ICICIAdapter
+from app.mf_ingestion.parsers.base_parser import ParseContext
+from app.mf_ingestion.parsers.holdings_parser import HoldingsParser
 
 
 def test_icici_parse_holdings_extracts_rows_from_icici_style_frame():
@@ -70,6 +72,41 @@ def test_icici_parse_holdings_prefers_non_empty_sheet():
     assert parsed.scheme_name == "ICICI Prudential Active Momentum Fund"
     assert len(parsed.holdings) == 1
     assert parsed.holdings[0]["isin"] == "INE040A01034"
+
+
+def test_icici_workbook_emits_each_valid_scheme_sheet():
+    first_frame = pd.DataFrame(
+        [
+            [None, "ICICI Prudential Mutual Fund", None, None, None, None],
+            [None, "ICICI Prudential First Fund", None, None, None, None],
+            [None, "Portfolio as on Apr 30,2026", None, None, None, None],
+            [None, "Company/Issuer/Instrument Name", "ISIN", "Industry/Rating", "Quantity", "% to Nav"],
+            [None, "HDFC Bank Ltd.", "INE040A01034", "Banks", 100, 60.0],
+            [None, "ICICI Bank Ltd.", "INE090A01021", "Banks", 100, 40.0],
+        ],
+        columns=["Unnamed: 0", "ICICI Prudential Mutual Fund", "Unnamed: 2", "Unnamed: 3", "Unnamed: 4", "Unnamed: 5"],
+    )
+    second_frame = pd.DataFrame(
+        [
+            [None, "ICICI Prudential Mutual Fund", None, None, None, None],
+            [None, "ICICI Prudential Second Fund", None, None, None, None],
+            [None, "Portfolio as on Apr 30,2026", None, None, None, None],
+            [None, "Company/Issuer/Instrument Name", "ISIN", "Industry/Rating", "Quantity", "% to Nav"],
+            [None, "Infosys Ltd.", "INE009A01021", "IT", 100, 55.0],
+            [None, "TCS Ltd.", "INE467B01029", "IT", 100, 45.0],
+        ],
+        columns=["Unnamed: 0", "ICICI Prudential Mutual Fund", "Unnamed: 2", "Unnamed: 3", "Unnamed: 4", "Unnamed: 5"],
+    )
+
+    records = HoldingsParser(ICICIAdapter())._parse_excel_frames(
+        [first_frame, second_frame],
+        ParseContext(source_document_id="doc-icici-many", source_url="local", report_month=None),
+    )
+    by_name = {record.scheme_name: record for record in records}
+
+    assert set(by_name) == {"ICICI Prudential First Fund", "ICICI Prudential Second Fund"}
+    assert len(by_name["ICICI Prudential First Fund"].holdings) == 2
+    assert len(by_name["ICICI Prudential Second Fund"].holdings) == 2
 
 
 def test_icici_total_percent_includes_non_isin_cash_rows_without_storing_them():

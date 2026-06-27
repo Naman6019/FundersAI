@@ -79,17 +79,20 @@ class HoldingsParser:
         by_scheme: dict[str, ParsedDocument] = {}
         for frame in frames:
             try:
-                parsed = self.adapter.parse_holdings([frame], [], "", context)
+                parse_frame_many = getattr(self.adapter, "parse_excel_frame_many", None)
+                if callable(parse_frame_many):
+                    parsed_documents = parse_frame_many(frame, context)
+                else:
+                    parsed = self.adapter.parse_holdings([frame], [], "", context)
+                    parsed_documents = [parsed]
             except Exception:
                 logger.exception("event=excel_sheet_parse_failed source_document_id=%s", context.source_document_id)
                 continue
-            if not parsed.holdings:
-                continue
 
-            scheme_key = " ".join(str(parsed.scheme_name or "").lower().split())
-            existing = by_scheme.get(scheme_key)
-            if not existing or len(parsed.holdings) > len(existing.holdings):
-                by_scheme[scheme_key] = parsed
+            for parsed in parsed_documents:
+                if not parsed.holdings:
+                    continue
+                self._upsert_best_by_scheme(by_scheme, parsed)
 
         return list(by_scheme.values())
 
@@ -126,13 +129,19 @@ class HoldingsParser:
         by_scheme: dict[str, ParsedDocument] = {}
         for frame in frames:
             try:
-                parsed = self.adapter.parse_holdings([], [frame], "", context)
+                parse_frame_many = getattr(self.adapter, "parse_pdf_frame_many", None)
+                if callable(parse_frame_many):
+                    parsed_documents = parse_frame_many(frame, context)
+                else:
+                    parsed = self.adapter.parse_holdings([], [frame], "", context)
+                    parsed_documents = [parsed]
             except Exception:
                 logger.exception("event=pdf_frame_parse_failed source_document_id=%s", context.source_document_id)
                 continue
-            if not parsed.holdings:
-                continue
-            self._upsert_best_by_scheme(by_scheme, parsed)
+            for parsed in parsed_documents:
+                if not parsed.holdings:
+                    continue
+                self._upsert_best_by_scheme(by_scheme, parsed)
         return list(by_scheme.values())
 
     def _upsert_best_by_scheme(self, by_scheme: dict[str, ParsedDocument], parsed: ParsedDocument) -> None:

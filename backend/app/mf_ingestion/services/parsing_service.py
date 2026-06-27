@@ -838,6 +838,14 @@ class ParsingService:
             return
 
         family_id = self._resolve_family_id_for_scheme(scheme_code)
+        if not family_id:
+            logger.warning(
+                "event=amc_family_mapping_missing amc_code=%s scheme_code=%s scheme_name=%s source_document_id=%s",
+                amc_code,
+                scheme_code,
+                scheme_name,
+                source_document_id,
+            )
         self._upsert_mutual_fund_holdings(
             scheme_code,
             report_month,

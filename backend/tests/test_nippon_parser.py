@@ -71,6 +71,34 @@ def test_nippon_synthetic_frame_scales_percent_and_uses_non_isin_rows_for_total_
     assert all(row["isin"] for row in parsed.holdings)
 
 
+def test_nippon_workbook_emits_each_valid_scheme_sheet():
+    first_frame = pd.DataFrame(
+        [
+            ["RLMF001", "Nippon India First Fund", None, None, None, None, None],
+            [None, "Monthly Portfolio Statement as on May 31,2026", None, None, None, None, None],
+            [None, "ISIN", "Name of the Instrument", "Industry / Rating", "Quantity", "Market/Fair Value", "% to NAV"],
+            ["HDFB03", "INE040A01034", "HDFC Bank Limited", "Banks", 1000, 5000.0, 60.0],
+            ["IBCL05", "INE090A01021", "ICICI Bank Limited", "Banks", 2000, 6000.0, 40.0],
+        ]
+    )
+    second_frame = pd.DataFrame(
+        [
+            ["RLMF002", "Nippon India Second Fund", None, None, None, None, None],
+            [None, "Monthly Portfolio Statement as on May 31,2026", None, None, None, None, None],
+            [None, "ISIN", "Name of the Instrument", "Industry / Rating", "Quantity", "Market/Fair Value", "% to NAV"],
+            ["INFY01", "INE009A01021", "Infosys Limited", "IT", 1000, 5000.0, 55.0],
+            ["TCS001", "INE467B01029", "TCS Limited", "IT", 2000, 6000.0, 45.0],
+        ]
+    )
+
+    records = HoldingsParser(NipponAdapter())._parse_excel_frames([first_frame, second_frame], _context())
+    by_name = {record.scheme_name: record for record in records}
+
+    assert set(by_name) == {"Nippon India First Fund", "Nippon India Second Fund"}
+    assert len(by_name["Nippon India First Fund"].holdings) == 2
+    assert len(by_name["Nippon India Second Fund"].holdings) == 2
+
+
 def test_nippon_factsheet_parser_accepts_html_files(tmp_path):
     html = """
     <html><body>

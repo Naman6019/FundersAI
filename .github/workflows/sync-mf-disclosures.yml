@@ -125,6 +125,7 @@ jobs:
           R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
           MF_EDGE_ACQUIRE_URL: ${{ secrets.MF_EDGE_ACQUIRE_URL }}
           MF_EDGE_ACQUIRE_KEY: ${{ secrets.MF_EDGE_ACQUIRE_KEY }}
+          MF_EDGE_ACQUIRED_AMCS: ${{ vars.MF_EDGE_ACQUIRED_AMCS || 'axis,hdfc' }}
           MF_HDFC_FACTSHEET_PAGE_URL: ${{ secrets.MF_HDFC_FACTSHEET_PAGE_URL }}
           MF_HDFC_PORTFOLIO_PAGE_URL: ${{ secrets.MF_HDFC_PORTFOLIO_PAGE_URL }}
           MF_AXIS_FACTSHEET_PAGE_URL: ${{ secrets.MF_AXIS_FACTSHEET_PAGE_URL }}
@@ -260,28 +261,75 @@ jobs:
               nippon) max_docs=1; parse_limit=900 ;;
               *)     max_docs=1; parse_limit=600 ;;
             esac
-            if [ "$amc" = "axis" ] || [ "$amc" = "hdfc" ]; then
-              PARSE_ONLY="true"
-            fi
           fi
 
-          echo "Processing AMC=$amc max_docs=$max_docs parse_limit=$parse_limit parse_rounds=$PARSE_ROUNDS parse_only=$PARSE_ONLY event=$EVENT_NAME"
-          python backend/scripts/preflight_mf_document_links.py \
-            --amcs "$amc" \
-            --manifest-path "$MF_SOURCE_MANIFEST_PATH" \
-            --max-stale-months 2
+          edge_acquired_amcs=$(echo "${MF_EDGE_ACQUIRED_AMCS:-axis,hdfc}" | tr '[:upper:]' '[:lower:]' | tr -d ' ')
+          EDGE_ACQUIRED="false"
+          if [[ ",$edge_acquired_amcs," == *",$amc,"* ]]; then
+            EDGE_ACQUIRED="true"
+            PARSE_ONLY="true"
+          fi
 
-          if [ "$PARSE_ONLY" = "true" ] && { [ "$amc" = "axis" ] || [ "$amc" = "hdfc" ]; }; then
+          echo "Processing AMC=$amc max_docs=$max_docs parse_limit=$parse_limit parse_rounds=$PARSE_ROUNDS parse_only=$PARSE_ONLY edge_acquired=$EDGE_ACQUIRED event=$EVENT_NAME"
+          if [ "$EDGE_ACQUIRED" = "true" ]; then
+            echo "Skipping GitHub runner link preflight for $amc; Supabase Edge acquisition validates and downloads official links."
+          else
+            python backend/scripts/preflight_mf_document_links.py \
+              --amcs "$amc" \
+              --manifest-path "$MF_SOURCE_MANIFEST_PATH" \
+              --max-stale-months 2
+          fi
+
+          if [ "$EDGE_ACQUIRED" = "true" ]; then
             if [ -n "${MF_EDGE_ACQUIRE_URL:-}" ] && [ -n "${MF_EDGE_ACQUIRE_KEY:-}" ]; then
-              echo "Requesting Supabase Edge document acquisition for $amc before parse-only."
-              edge_payload=$(printf '{"amc":"%s"}' "$amc")
+              echo "Requesting Supabase Edge document acquisition for $amc before parsing."
+              edge_payload=$(CURRENT_AMC="$amc" EDGE_MAX_DOCS="$max_docs" python - <<'PY'
+          import json
+          import os
+
+
+          def split_urls(name):
+              return [token.strip() for token in os.getenv(name, "").replace("\n", ",").split(",") if token.strip()]
+
+
+          def truthy(value):
+              return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+          amc = os.environ["CURRENT_AMC"]
+          prefix = f"MF_{amc.upper()}"
+          payload = {
+              "amc": amc,
+              "max_documents": int(os.getenv("EDGE_MAX_DOCS") or "5"),
+          }
+          factsheet_page_url = os.getenv(f"{prefix}_FACTSHEET_PAGE_URL")
+          portfolio_page_url = os.getenv(f"{prefix}_PORTFOLIO_PAGE_URL")
+          if factsheet_page_url:
+              payload["factsheet_page_url"] = factsheet_page_url
+          if portfolio_page_url:
+              payload["portfolio_page_url"] = portfolio_page_url
+
+          documents = []
+          for document_type, suffix in (("factsheet", "FACTSHEET"), ("portfolio_disclosure", "PORTFOLIO")):
+              for url in split_urls(f"{prefix}_{suffix}_DOCUMENT_URLS"):
+                  doc = {"document_type": document_type, "source_url": url}
+                  if document_type == "factsheet" and truthy(os.getenv("MF_ALLOW_FACTSHEET_AS_PORTFOLIO")):
+                      doc["reuse_as_portfolio"] = True
+                  documents.append(doc)
+          if documents:
+              payload["documents"] = documents
+
+          print(json.dumps(payload))
+          PY
+          )
               curl -fsS -X POST "$MF_EDGE_ACQUIRE_URL" \
                 -H "Authorization: Bearer $MF_EDGE_ACQUIRE_KEY" \
                 -H "Content-Type: application/json" \
                 --data "$edge_payload"
               echo
             else
-              echo "Supabase Edge acquisition not configured; continuing parse-only for $amc."
+              echo "Error: Edge acquisition is required for $amc but MF_EDGE_ACQUIRE_URL or MF_EDGE_ACQUIRE_KEY is missing."
+              exit 1
             fi
           fi
 
@@ -395,5 +443,6 @@ jobs:
           MF_DISCLOSURE_MIN_CORE_FIELD_RATIO: "0.01"
           MF_DISCLOSURE_MIN_PORTFOLIO_FAMILY_RATIO: "0.01"
         run: |
+          python backend/scripts/report_mf_disclosure_diagnostics.py
           python backend/scripts/check_coverage.py
           python backend/scripts/check_mf_disclosure_coverage.py

@@ -496,6 +496,10 @@ def _extract_benchmark(chunk: str) -> str | None:
     patterns = (
         r"AMFI\s+Tier\s+I\s+Benchmark\s+Index\s+([^\n]{3,90})",
         r"AMFI\s+Tier\s+I\s+Benchmark\s+Index\s*\n\s*([^\n]{3,90})",
+        r"(?:Tier\s*I|Tier\s*1)\s+Benchmark(?:\s+Index)?\s*[:\-]\s*([^\n]{3,100})",
+        r"Scheme\s+Benchmark(?:\s+Index)?\s*[:\-]\s*([^\n]{3,100})",
+        r"Benchmark\s+(?:Name|Index)\s*[:\-]\s*([^\n]{3,100})",
+        r"Benchmark\s*[:\-]\s*([^\n]{3,100})",
         r"#?\s*Benchmark\s+Index\s*\n\s*([^\n]{3,100})",
         r"Benchmark\s*\n\s*([^\n]{3,90})",
         r"\(Benchmark\)\s*\n\s*([^\n]{3,90})",
