@@ -113,18 +113,22 @@ class _FakeRepo:
         self.supabase = client
 
 
+class _FakeConfig:
+    def __init__(self):
+        self.require_r2_for_raw_storage = False
+
 def _service(fake_supabase):
     service = object.__new__(parsing_service.ParsingService)
     service.repository = _FakeRepo(fake_supabase)
+    service.adapters = {}
+    service.config = _FakeConfig()
+    service.r2_store = None
     return service
-
 
 def test_official_source_covered_portfolio_document_does_not_skip_amc_parser(monkeypatch):
     fake = _FakeSupabase()
     monkeypatch.setattr(parsing_service, "supabase", fake)
     service = _service(fake)
-    service.r2_store = None
-    service.config = None
 
     result = service._parse_one(
         {
@@ -147,8 +151,6 @@ def test_missing_api_coverage_falls_back_to_existing_parser_path(monkeypatch):
     fake.tables["mutual_fund_holdings"] = []
     monkeypatch.setattr(parsing_service, "supabase", fake)
     service = _service(fake)
-    service.r2_store = None
-    service.config = None
 
     result = service._parse_one(
         {
@@ -171,8 +173,6 @@ def test_factsheet_with_existing_aum_still_parses_when_risk_label_missing(monkey
     fake.tables["mutual_fund_core_snapshot"][0]["amc_name"] = "ICICI Prudential Mutual Fund"
     monkeypatch.setattr(parsing_service, "supabase", fake)
     service = _service(fake)
-    service.r2_store = None
-    service.config = None
 
     result = service._parse_one(
         {

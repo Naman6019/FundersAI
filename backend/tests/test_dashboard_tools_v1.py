@@ -59,6 +59,10 @@ class _FakeSupabase:
     def table(self, name: str):
         return _FakeQuery(self, name)
 
+    def get_latest_holdings(self, scheme_code: str) -> list[dict]:
+        holdings = self.tables.get("mutual_fund_holdings", [])
+        return [h for h in holdings if str(h.get("scheme_code")) == str(scheme_code)]
+
 
 def test_sip_projection_uses_standard_monthly_formula():
     from app.services import chat_service as app_main
@@ -157,8 +161,8 @@ def test_category_list_includes_unsupported_as_coming_soon(monkeypatch):
                 },
                 {
                     "scheme_code": "2",
-                    "scheme_name": "Axis Large Cap Fund",
-                    "amc_name": "Axis Mutual Fund",
+                    "scheme_name": "Quant Large Cap Fund",
+                    "amc_name": "Quant Mutual Fund",
                     "category": "Large Cap",
                     "return_3y": 16.0,
                     "aum": 2000,
@@ -173,7 +177,7 @@ def test_category_list_includes_unsupported_as_coming_soon(monkeypatch):
     payload = app_main._category_list_payload("large_cap")
 
     assert len(payload["rows"]) == 2
-    unsupported = [row for row in payload["rows"] if row["scheme_name"] == "Axis Large Cap Fund"][0]
+    unsupported = [row for row in payload["rows"] if row["scheme_name"] == "Quant Large Cap Fund"][0]
     assert unsupported["is_supported"] is False
     assert unsupported["disabled_reason"] == "Coming Soon"
     supported = [row for row in payload["rows"] if row["scheme_name"] == "HDFC Large Cap Fund"][0]
@@ -189,7 +193,7 @@ def test_category_compare_rejects_unsupported_fund(monkeypatch):
         {
             "mutual_fund_core_snapshot": [
                 {"scheme_code": "1", "scheme_name": "HDFC Large Cap Fund", "amc_name": "HDFC Mutual Fund", "category": "Large Cap"},
-                {"scheme_code": "2", "scheme_name": "Axis Large Cap Fund", "amc_name": "Axis Mutual Fund", "category": "Large Cap"},
+                {"scheme_code": "2", "scheme_name": "Quant Large Cap Fund", "amc_name": "Quant Mutual Fund", "category": "Large Cap"},
             ]
         }
     )

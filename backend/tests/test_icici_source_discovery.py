@@ -33,6 +33,7 @@ class _FakeSession:
         headers: dict | None = None,
         params: dict | None = None,
         json: dict | None = None,
+        **kwargs,
     ) -> _FakeResponse:
         if method.upper() == "GET":
             return self.get(url, params=params, timeout=timeout)

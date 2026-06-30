@@ -3513,8 +3513,14 @@ Controlled Web Context:
         {"role": "user", "content": context}
     ]
 
-    model_timeout = 20.0 if intent == "compare" and comparison_view_mode == "canvas" else 60.0
-    trend = await function_ollama_chat(messages, format="text", usage_collector=usage_collector, timeout_seconds=model_timeout)
+    has_followup = bool(intent_info.get("followup_question"))
+    is_deep_or_advanced = research_depth == "deep" or explanation_mode == "advanced"
+    
+    if intent == "compare" and comparison_view_mode == "canvas" and not has_followup and not is_deep_or_advanced:
+        trend = None
+    else:
+        model_timeout = 20.0 if intent == "compare" and comparison_view_mode == "canvas" else 60.0
+        trend = await function_ollama_chat(messages, format="text", usage_collector=usage_collector, timeout_seconds=model_timeout)
     if response_meta is not None:
         response_meta["model_status"] = "completed" if trend else "timeout_or_error"
         if not trend:
