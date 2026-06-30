@@ -359,7 +359,7 @@ class AxisAdapter(BaseAMCAdapter):
         listing_url = (
             source.factsheet_page_url if document_type == "factsheet"
             else source.portfolio_disclosure_page_url
-        ) or "https://www.axismf.com/downloads"
+        ) or "https://www.axismf.com/cms/latestupdates"
 
         docs: List[DiscoveredDocument] = []
         seen: set = set()

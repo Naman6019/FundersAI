@@ -189,8 +189,8 @@ jobs:
           # Force stable source URLs even when optional URL secrets are unset.
           export MF_HDFC_FACTSHEET_PAGE_URL="${MF_HDFC_FACTSHEET_PAGE_URL:-https://www.hdfcfund.com/mutual-funds/factsheets}"
           export MF_HDFC_PORTFOLIO_PAGE_URL="${MF_HDFC_PORTFOLIO_PAGE_URL:-https://www.hdfcfund.com/statutory-disclosure/portfolio/monthly-portfolio}"
-          export MF_AXIS_FACTSHEET_PAGE_URL="${MF_AXIS_FACTSHEET_PAGE_URL:-https://www.axismf.com/downloads}"
-          export MF_AXIS_PORTFOLIO_PAGE_URL="${MF_AXIS_PORTFOLIO_PAGE_URL:-https://www.axismf.com/downloads}"
+          export MF_AXIS_FACTSHEET_PAGE_URL="${MF_AXIS_FACTSHEET_PAGE_URL:-https://www.axismf.com/cms/latestupdates}"
+          export MF_AXIS_PORTFOLIO_PAGE_URL="${MF_AXIS_PORTFOLIO_PAGE_URL:-https://www.axismf.com/cms/latestupdates}"
           export MF_SBI_FACTSHEET_PAGE_URL="${MF_SBI_FACTSHEET_PAGE_URL:-https://www.sbimf.com/factsheets}"
           export MF_SBI_PORTFOLIO_PAGE_URL="${MF_SBI_PORTFOLIO_PAGE_URL:-https://www.sbimf.com/portfolios}"
           _nippon_year=$(date -d "-1 month" +%Y 2>/dev/null || python3 -c "from datetime import date; from dateutil.relativedelta import relativedelta; d=date.today()-relativedelta(months=1); print(d.year)")
@@ -286,6 +286,9 @@ jobs:
               edge_payload=$(CURRENT_AMC="$amc" EDGE_MAX_DOCS="$max_docs" python - <<'PY'
           import json
           import os
+          import re
+          import urllib.parse
+          import urllib.request
 
 
           def split_urls(name):
@@ -296,11 +299,58 @@ jobs:
               return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+          def discover_hdfc_edge_documents(factsheet_page_url, max_documents):
+              if not factsheet_page_url:
+                  return []
+              request = urllib.request.Request(
+                  factsheet_page_url,
+                  headers={
+                      "User-Agent": os.getenv("MF_USER_AGENT", "Mozilla/5.0 FundersAI/1.0"),
+                      "Accept": "text/html,application/xhtml+xml,application/json,*/*",
+                      "Referer": "https://www.hdfcfund.com/",
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=25) as response:
+                      page = response.read().decode("utf-8", errors="ignore")
+              except Exception as exc:
+                  print(f"HDFC edge document discovery skipped: {exc}", file=os.sys.stderr)
+                  return []
+
+              candidates = []
+              for match in re.finditer(r"https?:\\?/\\?/[^\s\"'<>]+?\.pdf(?:\?[^\s\"'<>]*)?", page, re.I):
+                  source_url = match.group(0).replace("\\/", "/")
+                  parsed = urllib.parse.urlparse(source_url)
+                  if not parsed.hostname or not parsed.hostname.lower().endswith(".hdfcfund.com"):
+                      continue
+                  text = urllib.parse.unquote(source_url).lower()
+                  if "factsheet" not in text:
+                      continue
+                  score = 100
+                  if "hdfc mf factsheet" in text:
+                      score += 100
+                  if "index solutions" in text:
+                      score -= 25
+                  if re.search(r"\b20\d{2}\b", text):
+                      score += 10
+                  candidates.append((score, source_url))
+
+              best_by_url = {}
+              for score, source_url in candidates:
+                  best_by_url[source_url] = max(score, best_by_url.get(source_url, 0))
+              ordered = sorted(best_by_url.items(), key=lambda item: item[1], reverse=True)
+              return [
+                  {"document_type": "factsheet", "source_url": source_url}
+                  for source_url, _score in ordered[:max_documents]
+              ]
+
+
           amc = os.environ["CURRENT_AMC"]
           prefix = f"MF_{amc.upper()}"
+          max_documents = int(os.getenv("EDGE_MAX_DOCS") or "5")
           payload = {
               "amc": amc,
-              "max_documents": int(os.getenv("EDGE_MAX_DOCS") or "5"),
+              "max_documents": max_documents,
           }
           factsheet_page_url = os.getenv(f"{prefix}_FACTSHEET_PAGE_URL")
           portfolio_page_url = os.getenv(f"{prefix}_PORTFOLIO_PAGE_URL")
@@ -316,6 +366,8 @@ jobs:
                   if document_type == "factsheet" and truthy(os.getenv("MF_ALLOW_FACTSHEET_AS_PORTFOLIO")):
                       doc["reuse_as_portfolio"] = True
                   documents.append(doc)
+          if not documents and amc == "hdfc":
+              documents.extend(discover_hdfc_edge_documents(factsheet_page_url, max_documents))
           if documents:
               payload["documents"] = documents
 

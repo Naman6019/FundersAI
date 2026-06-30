@@ -30,8 +30,8 @@ const AMCS: Record<string, AmcSource> = {
     code: "AXIS",
     name: "Axis Mutual Fund",
     baseUrl: "https://www.axismf.com",
-    factsheetPageUrl: "https://www.axismf.com/downloads",
-    portfolioPageUrl: "https://www.axismf.com/downloads",
+    factsheetPageUrl: "https://www.axismf.com/cms/latestupdates",
+    portfolioPageUrl: "https://www.axismf.com/cms/latestupdates",
     allowedHostSuffixes: ["axismf.com"],
   },
   hdfc: {
