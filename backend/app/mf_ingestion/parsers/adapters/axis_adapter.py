@@ -549,9 +549,11 @@ def _axis_portfolio_blocks(lines: list[str]) -> list[tuple[int, int]]:
         for i, start_idx in enumerate(scheme_starts):
             block_start = start_idx + 1
             block_end = scheme_starts[i + 1] if i + 1 < len(scheme_starts) else len(lines)
-            if block_end > block_start:
+            block_lines = lines[block_start:block_end]
+            if block_end > block_start and _axis_block_has_portfolio_content(block_lines):
                 blocks.append((block_start, block_end))
-        return blocks
+        if blocks:
+            return blocks
 
     blocks = []
     for index, line in enumerate(lines):
@@ -588,6 +590,18 @@ def _axis_find_scheme_name(lines: list[str], start: int, end: int) -> str:
         if name:
             return name
     return ""
+
+
+def _axis_block_has_portfolio_content(lines: list[str]) -> bool:
+    for line in lines:
+        low = _axis_clean_line(line).lower()
+        if not low:
+            continue
+        if AXIS_PORTFOLIO_HEADER in low or low.startswith("portfolio snapshot"):
+            return True
+        if _axis_parse_inline_holding(line):
+            return True
+    return False
 
 
 def _axis_extract_scheme_name(line: str) -> str:
@@ -647,10 +661,59 @@ def _axis_extract_holdings(lines: list[str]) -> tuple[list[dict], float]:
             holdings.append(inline)
             index += 1
             continue
+        fund_unit = _axis_parse_fund_unit_holding(lines, index)
+        if fund_unit:
+            holding, next_index = fund_unit
+            holdings.append(holding)
+            index = next_index
+            continue
+        separated = _axis_parse_separated_holding(lines, index)
+        if separated:
+            holding, next_index = separated
+            holdings.append(holding)
+            index = next_index
+            continue
         index += 1
 
     total_percent = sum(float(row.get("percent_aum") or 0.0) for row in holdings)
     return _axis_dedupe_holdings(holdings), total_percent
+
+
+def _axis_parse_separated_holding(lines: list[str], index: int) -> tuple[dict, int] | None:
+    name = _axis_clean_line(lines[index] if index < len(lines) else "")
+    if not name or _axis_should_skip_holding_line(name) or _axis_percent_value(name) is not None:
+        return None
+    if index + 2 >= len(lines):
+        return None
+
+    sector = _axis_clean_line(lines[index + 1])
+    percent = _axis_percent_value(lines[index + 2])
+    if percent is None:
+        return None
+    if _axis_should_skip_holding_line(sector) or _axis_percent_value(sector) is not None:
+        return None
+
+    holding = _axis_build_holding(name=name, sector=sector, percent=percent)
+    if not holding:
+        return None
+    return holding, index + 3
+
+
+def _axis_parse_fund_unit_holding(lines: list[str], index: int) -> tuple[dict, int] | None:
+    name = _axis_clean_line(lines[index] if index < len(lines) else "")
+    if not name or _axis_should_skip_holding_line(name) or index + 1 >= len(lines):
+        return None
+    if not (AXIS_SCHEME_RE.search(name) or re.search(r"\bETF\b", name, flags=re.IGNORECASE)):
+        return None
+    percent = _axis_percent_value(lines[index + 1])
+    if percent is None:
+        return None
+    holding = _axis_build_holding(name=name, sector="Mutual Fund Units", percent=percent)
+    if not holding:
+        return None
+    return holding, index + 2
+
+
 def _axis_parse_inline_holding(line: str) -> dict | None:
     """Try to extract a holding from a line that may contain both metadata and portfolio data.
 

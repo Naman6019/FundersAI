@@ -576,6 +576,14 @@ def test_sync_workflow_prints_disclosure_diagnostics_before_coverage_gate():
     assert workflow.index("report_mf_disclosure_diagnostics.py") < workflow.index("check_mf_disclosure_coverage.py")
 
 
+def test_sync_workflow_has_strict_scheduled_coverage_defaults():
+    workflow = Path(".github/workflows/sync-mf-disclosures.yml").read_text(encoding="utf-8")
+
+    assert "github.event.inputs.strict_coverage_amcs || 'axis,hdfc,sbi,icici,ppfas,nippon'" in workflow
+    assert 'MF_DISCLOSURE_MIN_CORE_FIELD_RATIO: "0.80"' in workflow
+    assert 'MF_DISCLOSURE_MIN_PORTFOLIO_FAMILY_RATIO: "0.80"' in workflow
+
+
 def test_sync_workflow_uses_manifest_and_link_preflight():
     workflow = Path(".github/workflows/sync-mf-disclosures.yml").read_text(encoding="utf-8")
 
@@ -655,6 +663,21 @@ def test_sync_workflow_can_call_supabase_edge_acquisition():
     assert '"documents"] = documents' in workflow
     assert "curl -sS -o \"$edge_response_file\"" in workflow
     assert "Supabase Edge acquisition failed for $amc with HTTP $edge_status." in workflow
+
+
+def test_sync_workflow_discovers_hdfc_factsheet_before_edge_acquisition():
+    workflow = Path(".github/workflows/sync-mf-disclosures.yml").read_text(encoding="utf-8")
+
+    assert "discover_hdfc_edge_documents" in workflow
+    assert "hdfc_factsheet_docs_from_payload" in workflow
+    assert "__NEXT_DATA__" in workflow
+    assert "latestInvestorsDocuments" in workflow
+    assert "factsheetfile" in workflow
+    assert "/_next/data/{build_id}/mutual-funds/factsheets.json" in workflow
+    assert "https://www.hdfcfund.com/" in workflow
+    assert '"document_type": "factsheet"' in workflow
+    assert 'if not documents and amc == "hdfc":' in workflow
+    assert "documents.extend(discover_hdfc_edge_documents(factsheet_page_url, max_documents))" in workflow
 
 
 def test_supabase_edge_function_returns_non_200_when_no_documents_acquired():

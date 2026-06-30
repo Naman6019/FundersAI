@@ -287,6 +287,7 @@ jobs:
           import json
           import os
           import re
+          import html
           import urllib.parse
           import urllib.request
 
@@ -297,6 +298,34 @@ jobs:
 
           def truthy(value):
               return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+          def hdfc_factsheet_docs_from_payload(payload, max_documents):
+              docs = []
+              latest = (
+                  payload.get("props", {})
+                  .get("pageProps", {})
+                  .get("factSheetResponse", {})
+                  .get("data", {})
+                  .get("latestInvestorsDocuments", [])
+              )
+              for item in latest:
+                  for file_info in item.get("factsheetfile", []) or []:
+                      source_url = str(file_info.get("path") or "").strip()
+                      title = str(file_info.get("title") or "")
+                      parsed = urllib.parse.urlparse(source_url)
+                      if parsed.scheme != "https" or not parsed.hostname or not parsed.hostname.lower().endswith(".hdfcfund.com"):
+                          continue
+                      if "factsheet" not in urllib.parse.unquote(f"{title} {source_url}").lower():
+                          continue
+                      docs.append({
+                          "document_type": "factsheet",
+                          "source_url": source_url,
+                          "title": title,
+                      })
+                      if len(docs) >= max_documents:
+                          return docs
+              return docs
 
 
           def discover_hdfc_edge_documents(factsheet_page_url, max_documents):
@@ -316,6 +345,38 @@ jobs:
               except Exception as exc:
                   print(f"HDFC edge document discovery skipped: {exc}", file=os.sys.stderr)
                   return []
+
+              next_data_match = re.search(
+                  r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>',
+                  page,
+                  re.I | re.S,
+              )
+              if next_data_match:
+                  try:
+                      payload = json.loads(html.unescape(next_data_match.group(1)))
+                      docs = hdfc_factsheet_docs_from_payload(payload, max_documents)
+                      if docs:
+                          return docs
+                      build_id = str(payload.get("buildId") or "").strip()
+                      if build_id:
+                          data_url = urllib.parse.urljoin(
+                              factsheet_page_url,
+                              f"/_next/data/{build_id}/mutual-funds/factsheets.json",
+                          )
+                          data_request = urllib.request.Request(
+                              data_url,
+                              headers={
+                                  "User-Agent": os.getenv("MF_USER_AGENT", "Mozilla/5.0 FundersAI/1.0"),
+                                  "Accept": "application/json,*/*",
+                                  "Referer": factsheet_page_url,
+                              },
+                          )
+                          with urllib.request.urlopen(data_request, timeout=25) as response:
+                              docs = hdfc_factsheet_docs_from_payload(json.loads(response.read().decode("utf-8")), max_documents)
+                              if docs:
+                                  return docs
+                  except Exception as exc:
+                      print(f"HDFC Next data discovery skipped: {exc}", file=os.sys.stderr)
 
               candidates = []
               for match in re.finditer(r"https?:\\?/\\?/[^\s\"'<>]+?\.pdf(?:\?[^\s\"'<>]*)?", page, re.I):
@@ -497,10 +558,10 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           MF_DISCLOSURE_COVERAGE_AMCS: axis,hdfc,sbi,icici,ppfas,nippon
-          MF_DISCLOSURE_STRICT_COVERAGE_AMCS: ${{ github.event.inputs.strict_coverage_amcs }}
+          MF_DISCLOSURE_STRICT_COVERAGE_AMCS: ${{ github.event.inputs.strict_coverage_amcs || 'axis,hdfc,sbi,icici,ppfas,nippon' }}
           MF_DISCLOSURE_MIN_FIELD_COUNT: "1"
-          MF_DISCLOSURE_MIN_CORE_FIELD_RATIO: "0.01"
-          MF_DISCLOSURE_MIN_PORTFOLIO_FAMILY_RATIO: "0.01"
+          MF_DISCLOSURE_MIN_CORE_FIELD_RATIO: "0.80"
+          MF_DISCLOSURE_MIN_PORTFOLIO_FAMILY_RATIO: "0.80"
         run: |
           python backend/scripts/report_mf_disclosure_diagnostics.py
           python backend/scripts/check_coverage.py

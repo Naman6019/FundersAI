@@ -46,6 +46,8 @@ def test_disclosure_coverage_passes_when_supported_amc_has_required_data(monkeyp
                     "aum": 30205.58,
                     "expense_ratio": 0.54,
                     "benchmark": "BSE Midcap 150 TRI",
+                    "fund_manager": "Test Manager",
+                    "risk_level": "Very High",
                 }
             ],
             "mutual_fund_holdings": [{"family_id": "axis-midcap"}],
@@ -70,6 +72,8 @@ def test_strict_coverage_amcs_override_reporting_amcs(monkeypatch):
                     "aum": 30205.58,
                     "expense_ratio": 0.54,
                     "benchmark": "BSE Midcap 150 TRI",
+                    "fund_manager": "Test Manager",
+                    "risk_level": "Very High",
                 }
             ],
             "mutual_fund_holdings": [{"family_id": "axis-midcap"}],
@@ -95,6 +99,8 @@ def test_disclosure_coverage_matches_nippon_supported_amc(monkeypatch):
                     "aum": 59456.65,
                     "expense_ratio": 0.67,
                     "benchmark": "Nifty Smallcap 250 TRI",
+                    "fund_manager": "Mr. Samir Rachh",
+                    "risk_level": "Very High",
                 }
             ],
             "mutual_fund_holdings": [{"family_id": "nippon-small"}],
@@ -123,6 +129,58 @@ def test_disclosure_coverage_fails_when_benchmark_or_holdings_are_missing(monkey
             ],
             "mutual_fund_holdings": [],
             "mutual_fund_sectors": [],
+        }
+    )
+    monkeypatch.setattr(check_mf_disclosure_coverage, "supabase", fake_supabase)
+    monkeypatch.setenv("MF_DISCLOSURE_COVERAGE_AMCS", "axis")
+
+    assert check_mf_disclosure_coverage.check_disclosure_coverage() == 1
+
+
+def test_disclosure_coverage_fails_when_fund_manager_is_missing(monkeypatch):
+    fake_supabase = _FakeSupabase(
+        {
+            "mutual_fund_family_mapping": [{"scheme_code": "101", "family_id": "axis-midcap"}],
+            "mutual_fund_core_snapshot": [
+                {
+                    "scheme_code": "101",
+                    "scheme_name": "Axis Midcap Fund - Direct Plan - Growth",
+                    "amc_name": "Axis Mutual Fund",
+                    "aum": 30205.58,
+                    "expense_ratio": 0.54,
+                    "benchmark": "BSE Midcap 150 TRI",
+                    "fund_manager": None,
+                    "risk_level": "Very High",
+                }
+            ],
+            "mutual_fund_holdings": [{"family_id": "axis-midcap"}],
+            "mutual_fund_sectors": [{"family_id": "axis-midcap"}],
+        }
+    )
+    monkeypatch.setattr(check_mf_disclosure_coverage, "supabase", fake_supabase)
+    monkeypatch.setenv("MF_DISCLOSURE_COVERAGE_AMCS", "axis")
+
+    assert check_mf_disclosure_coverage.check_disclosure_coverage() == 1
+
+
+def test_disclosure_coverage_fails_when_risk_level_is_missing(monkeypatch):
+    fake_supabase = _FakeSupabase(
+        {
+            "mutual_fund_family_mapping": [{"scheme_code": "101", "family_id": "axis-midcap"}],
+            "mutual_fund_core_snapshot": [
+                {
+                    "scheme_code": "101",
+                    "scheme_name": "Axis Midcap Fund - Direct Plan - Growth",
+                    "amc_name": "Axis Mutual Fund",
+                    "aum": 30205.58,
+                    "expense_ratio": 0.54,
+                    "benchmark": "BSE Midcap 150 TRI",
+                    "fund_manager": "Test Manager",
+                    "risk_level": None,
+                }
+            ],
+            "mutual_fund_holdings": [{"family_id": "axis-midcap"}],
+            "mutual_fund_sectors": [{"family_id": "axis-midcap"}],
         }
     )
     monkeypatch.setattr(check_mf_disclosure_coverage, "supabase", fake_supabase)
@@ -201,7 +259,16 @@ def test_disclosure_diagnostics_reports_document_review_and_family_gaps(monkeypa
             "mf_scheme_holdings": [{"scheme_id": "scheme-1"}],
             "mutual_fund_family_mapping": [{"scheme_code": "101", "family_id": "sbi-first"}],
             "mutual_fund_core_snapshot": [
-                {"scheme_code": "101", "scheme_name": "SBI First Fund", "amc_name": "SBI Mutual Fund"}
+                {
+                    "scheme_code": "101",
+                    "scheme_name": "SBI First Fund",
+                    "amc_name": "SBI Mutual Fund",
+                    "aum": 1000.0,
+                    "expense_ratio": 0.8,
+                    "benchmark": "Nifty 500 TRI",
+                    "fund_manager": "Test Manager",
+                    "risk_level": "Very High",
+                }
             ],
             "mutual_fund_holdings": [{"scheme_code": "101", "family_id": "sbi-first"}],
             "mutual_fund_sectors": [],
@@ -218,6 +285,11 @@ def test_disclosure_diagnostics_reports_document_review_and_family_gaps(monkeypa
     assert sbi["review_issue_counts"]["percent_aum_out_of_band"] == 1
     assert sbi["parser_scheme_holdings_count"] == 1
     assert sbi["snapshot_family_count"] == 1
+    assert sbi["aum_family_count"] == 1
+    assert sbi["expense_ratio_family_count"] == 1
+    assert sbi["benchmark_family_count"] == 1
+    assert sbi["fund_manager_family_count"] == 1
+    assert sbi["risk_level_family_count"] == 1
     assert sbi["final_holding_family_count"] == 1
     assert sbi["final_sector_family_count"] == 0
     assert sbi["missing_final_sector_family_count"] == 1

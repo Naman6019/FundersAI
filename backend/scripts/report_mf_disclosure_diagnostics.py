@@ -60,7 +60,10 @@ def build_diagnostics(amcs: list[str] | None = None) -> dict[str, Any]:
     family_mapping = _get_all("mutual_fund_family_mapping", "scheme_code,family_id")
     final_holdings = _get_all("mutual_fund_holdings", "scheme_code,family_id")
     final_sectors = _get_all("mutual_fund_sectors", "scheme_code,family_id")
-    snapshot_rows = _get_all("mutual_fund_core_snapshot", "scheme_code,scheme_name,amc_name")
+    snapshot_rows = _get_all(
+        "mutual_fund_core_snapshot",
+        "scheme_code,scheme_name,amc_name,aum,expense_ratio,benchmark,fund_manager,risk_level",
+    )
 
     scheme_to_amc = {str(row.get("id")): str(row.get("amc_code") or "").lower() for row in schemes if row.get("id")}
     parsed_scheme_counts: Counter[str] = Counter(
@@ -104,12 +107,36 @@ def build_diagnostics(amcs: list[str] | None = None) -> dict[str, Any]:
             issue_counts.update(issues)
 
         families = snapshot_family_by_amc.get(amc, set())
+        family_rows = [
+            row
+            for row in snapshot_rows
+            if _matches_amc(row, amc)
+            and (scheme_to_family.get(str(row.get("scheme_code") or "")) or f"scheme-{row.get('scheme_code') or ''}") in families
+        ]
+        rows_by_family: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in family_rows:
+            scheme_code = str(row.get("scheme_code") or "")
+            family_id = scheme_to_family.get(scheme_code) or f"scheme-{scheme_code}"
+            rows_by_family[family_id].append(row)
+        core_counts = {
+            field: sum(
+                1
+                for rows in rows_by_family.values()
+                if any(row.get(field) not in (None, "") for row in rows)
+            )
+            for field in ("aum", "expense_ratio", "benchmark", "fund_manager", "risk_level")
+        }
         report["amcs"][amc] = {
             "documents_by_status": dict(sorted(doc_status.items())),
             "documents_by_type_status": {key: dict(sorted(value.items())) for key, value in sorted(doc_type_status.items())},
             "review_issue_counts": dict(issue_counts.most_common(12)),
             "parser_scheme_holdings_count": parsed_scheme_counts.get(amc, 0),
             "snapshot_family_count": len(families),
+            "aum_family_count": core_counts["aum"],
+            "expense_ratio_family_count": core_counts["expense_ratio"],
+            "benchmark_family_count": core_counts["benchmark"],
+            "fund_manager_family_count": core_counts["fund_manager"],
+            "risk_level_family_count": core_counts["risk_level"],
             "final_holding_family_count": len(families & final_holding_families),
             "final_sector_family_count": len(families & final_sector_families),
             "missing_final_holding_family_count": len(families - final_holding_families),

@@ -91,7 +91,7 @@ def check_disclosure_coverage() -> int:
 
     snapshot_rows = _get_all(
         "mutual_fund_core_snapshot",
-        "scheme_code,scheme_name,amc_name,aum,expense_ratio,benchmark",
+        "scheme_code,scheme_name,amc_name,aum,expense_ratio,benchmark,fund_manager,risk_level",
     )
 
     reporting_amcs = _reporting_amcs()
@@ -120,16 +120,19 @@ def check_disclosure_coverage() -> int:
             "aum": sum(1 for family_rows in families.values() if any(_has_value(row.get("aum")) for row in family_rows)),
             "expense_ratio": sum(1 for family_rows in families.values() if any(_has_value(row.get("expense_ratio")) for row in family_rows)),
             "benchmark": sum(1 for family_rows in families.values() if any(_has_value(row.get("benchmark")) for row in family_rows)),
+            "fund_manager": sum(1 for family_rows in families.values() if any(_has_value(row.get("fund_manager")) for row in family_rows)),
+            "risk_level": sum(1 for family_rows in families.values() if any(_has_value(row.get("risk_level")) for row in family_rows)),
             "holdings": sum(1 for family_id in families if family_id in holding_families),
             "sectors": sum(1 for family_id in families if family_id in sector_families),
         }
         print(
             f"{amc}: total_families={total_families} "
             f"aum={counts['aum']} expense_ratio={counts['expense_ratio']} "
-            f"benchmark={counts['benchmark']} holdings={counts['holdings']} sectors={counts['sectors']}"
+            f"benchmark={counts['benchmark']} fund_manager={counts['fund_manager']} "
+            f"risk_level={counts['risk_level']} holdings={counts['holdings']} sectors={counts['sectors']}"
         )
 
-        for field in ("aum", "expense_ratio", "benchmark"):
+        for field in ("aum", "expense_ratio", "benchmark", "fund_manager", "risk_level"):
             if amc not in strict_amcs:
                 continue
             field_ratio = _ratio(counts[field], total_families)
