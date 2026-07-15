@@ -27,4 +27,4 @@ rapidfuzz
 pytest
 razorpay
 playwright
-langfuse
+langfuse==4.14.0

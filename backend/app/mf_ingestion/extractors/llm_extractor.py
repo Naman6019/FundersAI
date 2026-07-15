@@ -6,10 +6,13 @@ from pathlib import Path
 from typing import Any
 
 import requests
+from langfuse import get_client, observe
 
 from app.mf_ingestion.extractors.contracts import NormalizedExtraction, parse_normalized_extraction
-from langfuse.decorators import observe, langfuse_context
 from app.mf_ingestion.parsers.pdf_text_parser import PDFTextParser
+
+
+langfuse = get_client()
 
 
 class LLMExtractionUnavailable(RuntimeError):
@@ -38,13 +41,13 @@ class StrictJSONLLMExtractor:
         if not self.model:
             raise LLMExtractionUnavailable("mf_llm_extractor_model_missing")
 
-        langfuse_context.update_current_observation(model=self.model)
+        langfuse.update_current_generation(model=self.model)
 
         text = _extract_document_text(file_path)
         if not text:
             raise LLMExtractionUnavailable("llm_source_text_empty")
 
-        langfuse_context.update_current_observation(
+        langfuse.update_current_generation(
             input={"document_id": document.get("id"), "text": text[:50000]}
         )
 
@@ -87,8 +90,8 @@ class StrictJSONLLMExtractor:
         
         usage = payload.get("usage")
         if isinstance(usage, dict):
-            langfuse_context.update_current_observation(
-                usage={
+            langfuse.update_current_generation(
+                usage_details={
                     "input": int(usage.get("prompt_tokens") or 0),
                     "output": int(usage.get("completion_tokens") or 0),
                     "total": int(usage.get("total_tokens") or 0),
