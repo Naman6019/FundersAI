@@ -233,3 +233,13 @@ class MutualFundRepository:
             .data
             or []
         )
+
+    def list_document_chunks(self, *, filters: dict[str, Any], limit: int = 30) -> list[dict[str, Any]]:
+        query = self.table("amc_document_chunks").select("id,document_id,chunk_text,metadata")
+        for key, value in filters.items():
+            query = query.contains("metadata", {key: value})
+        return query.limit(max(1, min(limit, 100))).execute().data or []
+
+    def upsert_document_chunks(self, rows: list[dict[str, Any]]) -> None:
+        if rows:
+            self.table("amc_document_chunks").upsert(rows, on_conflict="document_id,chunk_hash").execute()

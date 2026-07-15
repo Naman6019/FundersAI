@@ -238,6 +238,7 @@ def _iso_or_none(value: datetime | None) -> str | None:
 
 class AdminDocumentReviewAction(BaseModel):
     reviewer_notes: str | None = None
+    issue_category: str | None = None
 
 
 def _review_action_notes(payload: AdminDocumentReviewAction | None) -> str | None:
@@ -245,6 +246,11 @@ def _review_action_notes(payload: AdminDocumentReviewAction | None) -> str | Non
         return None
     notes = payload.reviewer_notes.strip()
     return notes or None
+
+
+def _review_issue_category(payload: AdminDocumentReviewAction | None) -> str | None:
+    value = str(payload.issue_category or "").strip() if payload else ""
+    return value or None
 
 
 def _load_mf_review_document(document_id: str) -> dict[str, Any]:
@@ -265,7 +271,7 @@ def _load_mf_review_document(document_id: str) -> dict[str, Any]:
     return rows[0]
 
 
-def _mark_review_queue(document_id: str, status: str, reviewer_notes: str | None) -> None:
+def _mark_review_queue(document_id: str, status: str, reviewer_notes: str | None, issue_category: str | None = None) -> None:
     if not get_admin_repository():
         return
 
@@ -275,6 +281,11 @@ def _mark_review_queue(document_id: str, status: str, reviewer_notes: str | None
     }
     if reviewer_notes:
         payload["reviewer_notes"] = reviewer_notes
+    if issue_category:
+        payload["issue_category"] = issue_category.strip().lower()[:80]
+    if status in {"approved", "skipped"}:
+        payload["reviewer_decision"] = status
+        payload["reviewed_at"] = payload["updated_at"]
 
     try:
         (
@@ -288,7 +299,7 @@ def _mark_review_queue(document_id: str, status: str, reviewer_notes: str | None
         logger.warning("event=review_queue_update_failed source_document_id=%s reason=%s", document_id, exc)
 
 
-def _request_mf_document_reparse(document_id: str, reviewer_notes: str | None = None) -> dict[str, Any]:
+def _request_mf_document_reparse(document_id: str, reviewer_notes: str | None = None, issue_category: str | None = None) -> dict[str, Any]:
     document = _load_mf_review_document(document_id)
     current_status = str(document.get("parse_status") or "").strip().lower()
     if current_status not in {"needs_review", "failed"}:
@@ -301,7 +312,7 @@ def _request_mf_document_reparse(document_id: str, reviewer_notes: str | None = 
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
     ).eq("id", document_id).execute()
-    _mark_review_queue(document_id, "reparse_requested", reviewer_notes)
+    _mark_review_queue(document_id, "reparse_requested", reviewer_notes, issue_category)
     return {
         "status": "ok",
         "action": "reparse_requested",
@@ -310,7 +321,7 @@ def _request_mf_document_reparse(document_id: str, reviewer_notes: str | None = 
     }
 
 
-def _resolve_mf_document_review(document_id: str, reviewer_notes: str | None = None) -> dict[str, Any]:
+def _resolve_mf_document_review(document_id: str, reviewer_notes: str | None = None, issue_category: str | None = None) -> dict[str, Any]:
     document = _load_mf_review_document(document_id)
     current_status = str(document.get("parse_status") or "").strip().lower()
     if current_status != "needs_review":
@@ -325,7 +336,7 @@ def _resolve_mf_document_review(document_id: str, reviewer_notes: str | None = N
             "updated_at": now,
         }
     ).eq("id", document_id).execute()
-    _mark_review_queue(document_id, "approved", reviewer_notes)
+    _mark_review_queue(document_id, "approved", reviewer_notes, issue_category)
     return {
         "status": "ok",
         "action": "resolved",
@@ -334,7 +345,7 @@ def _resolve_mf_document_review(document_id: str, reviewer_notes: str | None = N
     }
 
 
-def _skip_mf_document_review(document_id: str, reviewer_notes: str | None = None) -> dict[str, Any]:
+def _skip_mf_document_review(document_id: str, reviewer_notes: str | None = None, issue_category: str | None = None) -> dict[str, Any]:
     document = _load_mf_review_document(document_id)
     current_status = str(document.get("parse_status") or "").strip().lower()
     if current_status not in {"needs_review", "failed", "needs_reparse"}:
@@ -354,7 +365,7 @@ def _skip_mf_document_review(document_id: str, reviewer_notes: str | None = None
             "updated_at": now,
         }
     ).eq("id", document_id).execute()
-    _mark_review_queue(document_id, "skipped", reviewer_notes)
+    _mark_review_queue(document_id, "skipped", reviewer_notes, issue_category)
     return {
         "status": "ok",
         "action": "skipped",
@@ -882,7 +893,7 @@ def admin_request_mf_document_reparse(
     x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
 ):
     _require_admin_key(x_admin_key)
-    return _request_mf_document_reparse(document_id, _review_action_notes(payload))
+    return _request_mf_document_reparse(document_id, _review_action_notes(payload), _review_issue_category(payload))
 
 
 def admin_resolve_mf_document_review(
@@ -891,7 +902,7 @@ def admin_resolve_mf_document_review(
     x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
 ):
     _require_admin_key(x_admin_key)
-    return _resolve_mf_document_review(document_id, _review_action_notes(payload))
+    return _resolve_mf_document_review(document_id, _review_action_notes(payload), _review_issue_category(payload))
 
 
 def admin_skip_mf_document_review(
@@ -900,7 +911,7 @@ def admin_skip_mf_document_review(
     x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
 ):
     _require_admin_key(x_admin_key)
-    return _skip_mf_document_review(document_id, _review_action_notes(payload))
+    return _skip_mf_document_review(document_id, _review_action_notes(payload), _review_issue_category(payload))
 
 
 def admin_mf_resolver_debug(

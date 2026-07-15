@@ -11,6 +11,16 @@ CREATE TABLE IF NOT EXISTS public.amc_document_chunks (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
+ALTER TABLE public.amc_document_chunks
+  ADD COLUMN IF NOT EXISTS chunk_hash text,
+  ADD COLUMN IF NOT EXISTS embedding_model text,
+  ADD COLUMN IF NOT EXISTS embedding_version text,
+  ADD COLUMN IF NOT EXISTS parser_version text,
+  ADD COLUMN IF NOT EXISTS source_url text;
+
+CREATE UNIQUE INDEX IF NOT EXISTS amc_document_chunks_document_hash_idx
+  ON public.amc_document_chunks (document_id, chunk_hash);
+
 -- Create an HNSW index for fast nearest-neighbor search
 CREATE INDEX ON public.amc_document_chunks USING hnsw (embedding vector_cosine_ops);
 
@@ -60,3 +70,10 @@ BEGIN
     LIMIT match_count;
 END;
 $$;
+
+ALTER TABLE public.mf_parse_review_queue
+  ADD COLUMN IF NOT EXISTS reviewer_decision text,
+  ADD COLUMN IF NOT EXISTS issue_category text,
+  ADD COLUMN IF NOT EXISTS reparse_succeeded boolean,
+  ADD COLUMN IF NOT EXISTS reviewed_at timestamptz,
+  ADD COLUMN IF NOT EXISTS review_duration_seconds integer;

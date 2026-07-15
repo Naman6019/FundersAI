@@ -6,7 +6,7 @@ import numpy as np
 
 from app.repositories.mutual_fund_repository import MutualFundRepository
 
-FEATURE_VERSION = "mf_similarity_numeric_v1"
+FEATURE_VERSION = "mf_similarity_numeric_holdings_v2"
 _FEATURES = (
     ("return_1m", "1M return", False),
     ("return_3m", "3M return", False),
@@ -115,6 +115,7 @@ class FundSimilarityService:
         labels = _cluster_labels(standardized)
 
         target_cluster = int(labels[target_eligible_index])
+        target_holdings = self._holding_weights(target_code)
         candidates = []
         for index, row in enumerate(eligible_rows):
             if index == target_eligible_index:
@@ -128,6 +129,7 @@ class FundSimilarityService:
                     "risk_level": row.get("risk_level"),
                     "similarity_score": round(float((cosine[index] + 1.0) / 2.0), 4),
                     "same_cluster": int(labels[index]) == target_cluster,
+                    "holdings_evidence": self._holdings_evidence(target_holdings, self._holding_weights(row.get("scheme_code"))),
                     "matching_factors": self._matching_factors(
                         raw_matrix[np.flatnonzero(eligible)[target_eligible_index]],
                         raw_matrix[np.flatnonzero(eligible)[index]],
@@ -156,9 +158,28 @@ class FundSimilarityService:
             "peers": candidates[: max(1, min(limit, 20))],
             "limitations": [
                 "Similarity is a research aid based on stored snapshot metrics, not a performance forecast or recommendation.",
-                "Holdings and document-text embeddings are not part of this first numeric feature set.",
+                "Holdings overlap is a separate supporting signal; the numeric similarity score is not a forecast or recommendation.",
             ],
         }
+
+    def _holding_weights(self, scheme_code: Any) -> dict[str, float]:
+        if not hasattr(self.repository, "get_latest_holdings"):
+            return {}
+        values: dict[str, float] = {}
+        for row in self.repository.get_latest_holdings(scheme_code) or []:
+            key = str(row.get("isin") or row.get("security_name") or "").strip().lower()
+            value = _to_float(row.get("weight_pct"))
+            if key and value is not None:
+                values[key] = max(values.get(key, 0.0), value)
+        return values
+
+    @staticmethod
+    def _holdings_evidence(target: dict[str, float], peer: dict[str, float]) -> dict[str, Any]:
+        if not target or not peer:
+            return {"status": "insufficient_data", "overlap_weight": None, "shared_holdings": []}
+        shared = sorted(set(target) & set(peer), key=lambda key: -(min(target[key], peer[key])))
+        overlap = sum(min(target[key], peer[key]) for key in shared) / 100.0
+        return {"status": "available", "overlap_weight": round(overlap, 4), "shared_holdings": shared[:5]}
 
     @staticmethod
     def _matching_factors(
