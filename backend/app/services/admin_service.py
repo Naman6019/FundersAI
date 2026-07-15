@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from app.exceptions import AuthorizationError, ConflictError, DataUnavailableError, EntityNotFoundError
 from app.repositories.admin_ops_repository import AdminOpsRepository
+from app.services.review_priority_service import ReviewPriorityService
 from app.services import cache_policy
 from app.services.chat_service import (
     _normalize_fund_text,
@@ -867,6 +868,14 @@ def admin_ops_overview(x_admin_key: str | None = Header(default=None, alias="X-A
     }
 
 
+def admin_mf_review_priorities(limit: int, x_admin_key: str | None) -> dict[str, Any]:
+    _require_admin_key(x_admin_key)
+    repository = get_admin_repository()
+    if not repository:
+        raise DataUnavailableError("supabase_unavailable")
+    return ReviewPriorityService(repository).list_prioritized(limit=limit)
+
+
 def admin_request_mf_document_reparse(
     document_id: str,
     payload: AdminDocumentReviewAction | None = None,
@@ -1030,6 +1039,13 @@ class AdminService:
         token = _current_admin_repository.set(self.repository)
         try:
             return admin_ops_overview(x_admin_key)
+        finally:
+            _current_admin_repository.reset(token)
+
+    def review_priorities(self, limit: int, x_admin_key: str | None) -> dict[str, Any]:
+        token = _current_admin_repository.set(self.repository)
+        try:
+            return admin_mf_review_priorities(limit, x_admin_key)
         finally:
             _current_admin_repository.reset(token)
 

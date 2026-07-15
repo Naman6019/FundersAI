@@ -117,6 +117,19 @@ class MutualFundRepository:
         )
         return _with_normalized_variant_fields(rows[0]) if rows else None
 
+    def list_core_snapshot_rows(self, *, category: str | None = None, limit: int = 5000) -> list[dict[str, Any]]:
+        """Return the stable numeric snapshot fields used by research ML features."""
+        fields = (
+            "scheme_code,scheme_name,amc_name,category,sub_category,nav_date,last_updated,"
+            "return_1m,return_3m,return_6m,return_1y,return_3y,return_5y,"
+            "volatility_1y,max_drawdown_1y,expense_ratio,aum,alpha,beta,sharpe_ratio,risk_level"
+        )
+        query = self.table("mutual_fund_core_snapshot").select(fields)
+        if category:
+            query = query.eq("category", category)
+        rows = query.order("scheme_code").limit(max(1, min(limit, 5000))).execute().data or []
+        return [_with_normalized_variant_fields(row) for row in rows]
+
     def get_nav_history_rows(self, scheme_code: Any, *, fields: str, limit: int = 5000, desc: bool = False) -> list[dict[str, Any]]:
         code = int(str(scheme_code)) if str(scheme_code).isdigit() else scheme_code
         return (

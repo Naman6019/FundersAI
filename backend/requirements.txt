@@ -27,3 +27,4 @@ rapidfuzz
 pytest
 razorpay
 playwright
+langfuse

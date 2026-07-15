@@ -8,6 +8,7 @@ from typing import Any
 import requests
 
 from app.mf_ingestion.extractors.contracts import NormalizedExtraction, parse_normalized_extraction
+from langfuse.decorators import observe, langfuse_context
 from app.mf_ingestion.parsers.pdf_text_parser import PDFTextParser
 
 
@@ -21,6 +22,7 @@ class StrictJSONLLMExtractor:
         self.mode = mode
         self.model = model
 
+    @observe(as_type="generation", name="document_extraction")
     def extract(self, file_path: str, document: dict[str, Any]) -> NormalizedExtraction:
         if not self.enabled or self.mode not in {"deterministic_then_llm", "llm_then_deterministic"}:
             raise LLMExtractionUnavailable("llm_extractor_disabled")
@@ -36,9 +38,15 @@ class StrictJSONLLMExtractor:
         if not self.model:
             raise LLMExtractionUnavailable("mf_llm_extractor_model_missing")
 
+        langfuse_context.update_current_observation(model=self.model)
+
         text = _extract_document_text(file_path)
         if not text:
             raise LLMExtractionUnavailable("llm_source_text_empty")
+
+        langfuse_context.update_current_observation(
+            input={"document_id": document.get("id"), "text": text[:50000]}
+        )
 
         response = requests.post(
             f"{base_url.rstrip('/')}/chat/completions",
@@ -76,6 +84,17 @@ class StrictJSONLLMExtractor:
         )
         response.raise_for_status()
         payload = response.json()
+        
+        usage = payload.get("usage")
+        if isinstance(usage, dict):
+            langfuse_context.update_current_observation(
+                usage={
+                    "input": int(usage.get("prompt_tokens") or 0),
+                    "output": int(usage.get("completion_tokens") or 0),
+                    "total": int(usage.get("total_tokens") or 0),
+                }
+            )
+
         content = payload["choices"][0]["message"]["content"]
         extracted = json.loads(content)
         extracted.setdefault("source_document_id", str(document.get("id") or ""))

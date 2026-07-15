@@ -26,6 +26,7 @@ Designed with a **Supabase-first runtime**, **deterministic AI comparisons**, an
 - 🔒 **Quota-Safe Architecture**: Designed for resilience. Query-critical data is served directly from normalized Supabase tables, protected by intelligent quota guards for third-party enrichments (IndianAPI).
 - 💼 **Auth & Subscriptions**: Secure workspace powered by Supabase Auth (Email & Google OAuth) with a Razorpay-backed subscription foundation for tiered access (Free, Pro, Ultra).
 - 🛠️ **Comprehensive Admin Controls**: Built-in Admin Dashboard for tracking AI usage, data coverage triage, parser diagnostics, and user management.
+- 🧠 **Explainable ML Foundations**: Numeric mutual-fund similarity/clustering and human-in-the-loop parser-review prioritization, both grounded in stored data rather than investment recommendations.
 
 ## 🛠️ Tech Stack
 
@@ -95,7 +96,7 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 ## 📖 Documentation
-For agents and contributors, read the `AGENTS.md` file and the `docs/` folder. The primary source of truth is `docs/CURRENT_STATE.md`.
+For agents and contributors, read the `AGENTS.md` file and the `docs/` folder. The primary source of truth is `docs/CURRENT_STATE.md`; see [the ML guide](docs/11_ML_SYSTEMS.md) and [the interviewer guide](docs/12_INTERVIEW_GUIDE.md) for project explanations.
 
 ## 🛡️ Provider Architecture (Quota-Safe)
 - Supabase normalized tables are the primary read path for app/chat/comparison:

@@ -1,6 +1,6 @@
 # Current State
 
-**Last Updated**: 2026-06-12
+**Last Updated**: 2026-07-11
 
 ## Project Summary
 FundersAI is a research-first Indian stocks + mutual funds app with deterministic comparison outputs, Supabase-first runtime reads, and workflow-driven data ingestion.
@@ -64,6 +64,10 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 - Mutual-fund AUM/TER data health diagnostics read `mutual_fund_core_snapshot` enrichment rows and report AUM rows, TER rows, both, and supported AMC coverage.
 - Exposed mutual fund `risk_level` and `fund_manager` on the UI dashboard based on successful AMC factsheet parsing.
 - Backfilled 10 years of NIFTY 50 EOD history via a manual yfinance pipeline, fixing the alpha/beta metric calculations for older mutual funds.
+- Explainable ML foundations:
+  - numeric mutual-fund similarity and deterministic clustering, scoped to a fund category and backed by stored snapshot data;
+  - admin-only, non-mutating parser-review prioritization with explicit score reasons;
+  - feature/priority version markers and focused automated tests.
 
 ## In Progress
 - Increase mutual-fund field coverage depth beyond AUM/TER/holdings for PPFAS, ICICI, HDFC, SBI (benchmark/risk/ratios completeness).

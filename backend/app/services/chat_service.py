@@ -22,6 +22,7 @@ import pytz
 import yfinance as yf
 from fastapi import BackgroundTasks, Header, Query
 from pydantic import BaseModel, Field
+from langfuse.decorators import observe, langfuse_context
 
 from app.exceptions import AppServiceError, BadRequestError, DataUnavailableError, EntityNotFoundError, UnsupportedEntityError
 from app.fetcher import run_eod_fetch
@@ -169,6 +170,7 @@ def _summarize_openrouter_usage(usage_collector: list[dict[str, Any]] | None) ->
     }
 
 
+@observe(as_type="generation", name="llm_generation")
 async def function_ollama_chat(
     messages,
     format="json",
@@ -188,6 +190,7 @@ async def function_ollama_chat(
     is_groq = api_key == groq_key
     base_url = "https://api.groq.com/openai/v1/chat/completions" if is_groq else OPENROUTER_BASE_URL
     model = "llama-3.3-70b-versatile" if is_groq else OPENROUTER_MODEL
+    langfuse_context.update_current_observation(model=model, input=messages)
 
     req_messages = [dict(m) for m in messages]
     payload = {
@@ -215,13 +218,24 @@ async def function_ollama_chat(
             response = await client.post(base_url, headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()
+            usage = data.get("usage")
+            if isinstance(usage, dict):
+                langfuse_context.update_current_observation(
+                    usage={
+                        "input": int(usage.get("prompt_tokens") or 0),
+                        "output": int(usage.get("completion_tokens") or 0),
+                        "total": int(usage.get("total_tokens") or 0),
+                    }
+                )
             _append_openrouter_usage(usage_collector, data)
             return data["choices"][0]["message"]["content"]
         except Exception as e:
             logger.error(f"LLM API Error: {e}")
             return None
 
+@observe(name="intent_routing")
 async def route_query(query: str, asset_type: str = "auto", usage_collector: list[dict[str, Any]] | None = None) -> dict:
+    langfuse_context.update_current_observation(input=query)
     """Agent 1: Router"""
     def _has_downside_focus(text: str) -> bool:
         q = str(text or "").lower()
@@ -678,7 +692,9 @@ def fetch_quant_data(ticker: str, period: str = "1mo") -> dict:
             return cache_and_return(local_data)
         return {"error": str(e)}
 
+@observe(name="sentiment_analysis")
 async def analyze_news_sentiment(news_items: list, usage_collector: list[dict[str, Any]] | None = None) -> list:
+    langfuse_context.update_current_observation(input=[n['title'] for n in news_items])
     """Agent: Sentiment Analyzer"""
     if not news_items: return []
 

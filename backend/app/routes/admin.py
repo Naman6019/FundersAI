@@ -24,6 +24,15 @@ def admin_ops_overview(
     return service.ops_overview(x_admin_key)
 
 
+@router.get("/mf-review-priorities")
+def admin_mf_review_priorities(
+    limit: int = Query(100, ge=1, le=500),
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+    service: AdminService = Depends(get_admin_service),
+):
+    return service.review_priorities(limit, x_admin_key)
+
+
 @router.post("/mf-documents/{document_id}/request-reparse")
 def admin_request_mf_document_reparse(
     document_id: str,

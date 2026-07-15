@@ -72,9 +72,16 @@ Auth behavior:
 ### Chat
 - `POST /api/chat`: synthesized markdown plus structured `quant_data` / optional `system_action`.
 
+### Mutual-Fund ML Research
+- `GET /api/funds/{scheme_code}/similar?limit=5`: category-scoped, numeric peer discovery.
+  - Returns `feature_version`, method, target cluster, peers with `similarity_score` and matching factors, plus explicit limitations.
+  - Returns `not_found` or `insufficient_data` with no peers when the target/pool cannot support the calculation.
+  - This is a research similarity signal, not a forecast or recommendation; it uses the existing `mf-detail` rate-limit group.
+
 ### Admin Internal Backend Endpoints (X-Admin-Key required)
 - `GET /api/admin/ops-overview`
 - `GET /api/admin/mf-resolver-debug?query=...&horizon=1Y|3Y|5Y`
+- `GET /api/admin/mf-review-priorities?limit=1..500`: ranks `pending_review` parser items with explicit rule-based reasons. It is read-only and never performs a review action.
 
 ### Optional IndianAPI Helper Endpoints
 Prefix: `/api/provider/indianapi`

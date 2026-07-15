@@ -58,3 +58,18 @@ class AdminOpsRepository(MutualFundRepository):
             .count
             or 0
         )
+
+    def list_pending_review_items(self, *, limit: int = 100) -> list[dict[str, Any]]:
+        return (
+            self.table("mf_parse_review_queue")
+            .select(
+                "source_document_id,amc_code,report_month,validation_issues,confidence_score,"
+                "parser_version,status,sample_rows,source_url,created_at,updated_at"
+            )
+            .eq("status", "pending_review")
+            .order("created_at")
+            .limit(max(1, min(limit, 500)))
+            .execute()
+            .data
+            or []
+        )

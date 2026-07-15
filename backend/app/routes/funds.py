@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 from app.repositories.mutual_fund_repository import MutualFundRepository
 from app.services.fund_category_service import CategoryCompareRequest, FundCategoryService, MutualFundDetailService
 from app.services.compare_data_service import CompareDataService
+from app.services.fund_similarity_service import FundSimilarityService
 from pydantic import BaseModel
 
 router = APIRouter(tags=["funds"])
@@ -20,6 +21,10 @@ def get_category_service(repository: MutualFundRepository = Depends(get_mutual_f
 
 def get_mf_detail_service(repository: MutualFundRepository = Depends(get_mutual_fund_repository)) -> MutualFundDetailService:
     return MutualFundDetailService(repository)
+
+
+def get_fund_similarity_service(repository: MutualFundRepository = Depends(get_mutual_fund_repository)) -> FundSimilarityService:
+    return FundSimilarityService(repository)
 
 
 @router.get("/api/funds/search")
@@ -56,6 +61,15 @@ def category_funds_compare_endpoint(
     service: FundCategoryService = Depends(get_category_service),
 ):
     return service.compare_category(req)
+
+
+@router.get("/api/funds/{scheme_code}/similar")
+def similar_funds_endpoint(
+    scheme_code: int,
+    limit: int = 5,
+    service: FundSimilarityService = Depends(get_fund_similarity_service),
+):
+    return service.find_similar(scheme_code, limit=limit)
 
 
 @router.get("/api/mf/{scheme_code}")
