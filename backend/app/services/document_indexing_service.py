@@ -45,6 +45,10 @@ class DocumentIndexingService:
         values = self._embed([query])
         return values[0]
 
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        """Explicit evaluation hook; production indexing should continue to call index()."""
+        return self._embed(texts)
+
     def _embed(self, chunks: list[str]) -> list[list[float]]:
         key = os.getenv("OPENROUTER_API_KEY", "").strip()
         if not key:

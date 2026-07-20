@@ -81,7 +81,9 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - MLflow 3.14 integration that logs only trained models and blocks registry aliases for unverified exports;
   - `amc_lexical_rerank_v2`, whose relevance gate improves the fixture seed from 12/14 to 14/14 passing cases while preserving seeded retrieval recall;
   - opt-in query-vector RPC integration with explicit lexical fallback and cost visibility;
-  - bounded `fund_research_graph_v1` cited-excerpt/abstention endpoint;
+  - bounded `fund_research_graph_v2` with deterministic/optional LLM relevance grading, one official-corpus rewrite, claim-level citation support validation, and abstention;
+  - opt-in `amc_hybrid_cross_encoder_v3` using reciprocal-rank fusion plus a Cohere cross-encoder adapter with deterministic RRF fallback;
+  - provider-free v2/v3 comparison artifact, optional live-embedding/cross-encoder benchmark flags, Langfuse experiment runner, and judge-facing `/dashboard/research-evidence` trace/evaluation view;
   - separate API/Prefect-worker containers, GCP deployment and alert-setup scripts, workflow telemetry, and offline review-feature drift checks.
 
 ## In Progress
@@ -94,7 +96,8 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 
 ## Known Gaps
 - The first golden dataset is a development seed rather than a production gate. V2 passes it completely, but that does not establish quality on real official-document questions.
-- Vector retrieval is implemented but disabled by default until reviewer-verified quality, latency, and embedding-cost evidence exists.
+- V3 vector retrieval, the cross-encoder, and the LLM relevance grader are implemented behind independent flags and remain disabled by default until reviewer-verified quality, latency, and provider-cost evidence exists.
+- The committed v2/v3 judge report is provider-free and shows benchmark plumbing, not live cross-encoder quality; run the explicit live flags only with configured provider credentials.
 - No persisted production evaluation-run history, Prefect deployment, Cloud Run proof, or production-trained review-priority model/registry alias is active yet.
 - Docker/GCP files are reproducible proof scaffolding only; the current production topology is still Vercel + Render + Supabase + R2 + GitHub Actions.
 - Scheduled fundamentals keep shareholding sparse when `ENABLE_SHAREHOLDING_SYNC=false`.

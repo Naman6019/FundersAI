@@ -6,10 +6,12 @@ import re
 from collections import Counter
 from typing import Any
 
+import requests
 from rapidfuzz import fuzz
 
 BASELINE_RETRIEVAL_VERSION = "amc_hybrid_retrieval_v1"
 RETRIEVAL_VERSION = "amc_lexical_rerank_v2"
+V3_RETRIEVAL_VERSION = "amc_hybrid_cross_encoder_v3"
 EMBEDDING_VERSION = "amc_document_embedding_v1"
 EMBEDDING_MODEL = "openai/text-embedding-3-small"
 EMBEDDING_DIMENSIONS = 1_536
@@ -56,6 +58,36 @@ def _meaningful_query_tokens(query: str) -> set[str]:
     return _tokens(query) - _QUERY_STOPWORDS
 
 
+def _enabled(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
+
+
+class CohereCrossEncoderReranker:
+    """Managed cross-encoder adapter; callers must keep a deterministic fallback."""
+
+    def __init__(self, *, http_post=requests.post):
+        self.http_post = http_post
+        self.model = os.getenv("MF_RESEARCH_CROSS_ENCODER_MODEL", "rerank-v4.0-fast").strip()
+
+    def rerank(self, query: str, documents: list[str]) -> list[float]:
+        key = os.getenv("COHERE_API_KEY", "").strip()
+        if not key:
+            raise RuntimeError("cohere_api_key_missing")
+        response = self.http_post(
+            os.getenv("COHERE_RERANK_URL", "https://api.cohere.com/v2/rerank"),
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"model": self.model, "query": query, "documents": documents, "top_n": len(documents)},
+            timeout=30,
+        )
+        response.raise_for_status()
+        scores = [0.0] * len(documents)
+        for item in response.json().get("results", []):
+            index = int(item.get("index", -1))
+            if 0 <= index < len(scores):
+                scores[index] = float(item.get("relevance_score") or 0.0)
+        return scores
+
+
 class DocumentRetrievalService:
     """Hybrid ranking over already embedded, official AMC document chunks."""
 
@@ -69,6 +101,8 @@ class DocumentRetrievalService:
         vector_search_enabled: bool = False,
         query_embedder: Any = None,
         minimum_query_coverage: float = 0.5,
+        rank_fusion_enabled: bool = False,
+        cross_encoder_reranker: Any = None,
     ):
         self.repository = repository
         self.retrieval_version = retrieval_version
@@ -77,16 +111,47 @@ class DocumentRetrievalService:
         self.vector_search_enabled = vector_search_enabled
         self.query_embedder = query_embedder
         self.minimum_query_coverage = minimum_query_coverage
+        self.rank_fusion_enabled = rank_fusion_enabled
+        self.cross_encoder_reranker = cross_encoder_reranker
 
     @classmethod
     def configured(cls, repository: Any) -> "DocumentRetrievalService":
-        vector_enabled = os.getenv("MF_RESEARCH_VECTOR_SEARCH_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+        vector_enabled = _enabled("MF_RESEARCH_VECTOR_SEARCH_ENABLED")
+        v3_enabled = _enabled("MF_RESEARCH_RETRIEVAL_V3_ENABLED")
         query_embedder = None
         if vector_enabled:
             from app.services.document_indexing_service import DocumentIndexingService
 
             query_embedder = DocumentIndexingService(repository).embed_query
-        return cls(repository, vector_search_enabled=vector_enabled, query_embedder=query_embedder)
+        cross_encoder = CohereCrossEncoderReranker() if v3_enabled and _enabled("MF_RESEARCH_CROSS_ENCODER_ENABLED") else None
+        return cls(
+            repository,
+            retrieval_version=V3_RETRIEVAL_VERSION if v3_enabled else RETRIEVAL_VERSION,
+            vector_search_enabled=vector_enabled,
+            query_embedder=query_embedder,
+            relevance_gate_enabled=True,
+            rank_fusion_enabled=v3_enabled,
+            cross_encoder_reranker=cross_encoder,
+        )
+
+    @classmethod
+    def v3(
+        cls,
+        repository: Any,
+        *,
+        vector_search_enabled: bool = False,
+        query_embedder: Any = None,
+        cross_encoder_reranker: Any = None,
+    ) -> "DocumentRetrievalService":
+        return cls(
+            repository,
+            retrieval_version=V3_RETRIEVAL_VERSION,
+            relevance_gate_enabled=True,
+            vector_search_enabled=vector_search_enabled,
+            query_embedder=query_embedder,
+            rank_fusion_enabled=True,
+            cross_encoder_reranker=cross_encoder_reranker,
+        )
 
     @classmethod
     def lexical_baseline(cls, repository: Any) -> "DocumentRetrievalService":
@@ -128,21 +193,7 @@ class DocumentRetrievalService:
         if self.relevance_gate_enabled and meaningful_tokens and query_coverage < self.minimum_query_coverage:
             return self._empty_result(query_coverage=query_coverage, vector_status=vector_status)
 
-        scored = []
-        for row in rows:
-            chunk_text = str(row.get("chunk_text") or "")
-            lexical = len(query_tokens & _tokens(chunk_text)) / max(1, len(query_tokens))
-            vector = float(row.get("similarity") or 0.0)
-            if self.reranker_enabled:
-                fuzzy = fuzz.token_set_ratio(query, chunk_text) / 100.0
-                score = 0.55 * vector + 0.3 * lexical + 0.15 * fuzzy if vector else 0.7 * lexical + 0.3 * fuzzy
-            else:
-                score = 0.65 * vector + 0.35 * lexical
-            score = round(score, 5)
-            if score <= 0:
-                continue
-            metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
-            scored.append((score, row, metadata))
+        scored, reranker_version, cross_encoder_status = self._score_rows(query, rows, query_tokens)
         scored.sort(key=lambda item: (-item[0], str(item[1].get("id") or "")))
         sources = [
             {
@@ -160,9 +211,10 @@ class DocumentRetrievalService:
         ]
         return {
             "retrieval_version": self.retrieval_version,
-            "reranker_version": "rapidfuzz_token_set_v1" if self.reranker_enabled else None,
-            "retrieval_mode": "hybrid" if vector_status == "active" else "lexical",
+            "reranker_version": reranker_version,
+            "retrieval_mode": "hybrid" if vector_status == "active" else ("sparse" if self.rank_fusion_enabled else "lexical"),
             "vector_status": vector_status,
+            "cross_encoder_status": cross_encoder_status,
             "query_coverage": round(query_coverage, 4),
             "grounded": bool(sources),
             "abstain": not bool(sources),
@@ -173,15 +225,92 @@ class DocumentRetrievalService:
     def _empty_result(self, *, query_coverage: float, vector_status: str) -> dict[str, Any]:
         return {
             "retrieval_version": self.retrieval_version,
-            "reranker_version": "rapidfuzz_token_set_v1" if self.reranker_enabled else None,
-            "retrieval_mode": "hybrid" if vector_status == "active" else "lexical",
+            "reranker_version": "rrf_fusion_v1" if self.rank_fusion_enabled else ("rapidfuzz_token_set_v1" if self.reranker_enabled else None),
+            "retrieval_mode": "hybrid" if vector_status == "active" else ("sparse" if self.rank_fusion_enabled else "lexical"),
             "vector_status": vector_status,
+            "cross_encoder_status": "not_run" if self.cross_encoder_reranker else "disabled",
             "query_coverage": round(query_coverage, 4),
             "grounded": False,
             "abstain": True,
             "sources": [],
             "context": "",
         }
+
+    def _score_rows(
+        self,
+        query: str,
+        rows: list[dict[str, Any]],
+        query_tokens: set[str],
+    ) -> tuple[list[tuple[float, dict[str, Any], dict[str, Any]]], str | None, str]:
+        if not self.rank_fusion_enabled:
+            scored = []
+            for row in rows:
+                chunk_text = str(row.get("chunk_text") or "")
+                lexical = len(query_tokens & _tokens(chunk_text)) / max(1, len(query_tokens))
+                vector = float(row.get("similarity") or 0.0)
+                if self.reranker_enabled:
+                    fuzzy = fuzz.token_set_ratio(query, chunk_text) / 100.0
+                    score = 0.55 * vector + 0.3 * lexical + 0.15 * fuzzy if vector else 0.7 * lexical + 0.3 * fuzzy
+                else:
+                    score = 0.65 * vector + 0.35 * lexical
+                if score <= 0:
+                    continue
+                metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+                scored.append((round(score, 5), row, metadata))
+            return scored, "rapidfuzz_token_set_v1" if self.reranker_enabled else None, "disabled"
+
+        def row_key(row: dict[str, Any]) -> str:
+            return str(row.get("id") or row.get("document_id") or chunk_hash(str(row.get("chunk_text") or "")))
+
+        sparse_scores = {
+            row_key(row): 0.7 * (len(query_tokens & _tokens(str(row.get("chunk_text") or ""))) / max(1, len(query_tokens)))
+            + 0.3 * (fuzz.token_set_ratio(query, str(row.get("chunk_text") or "")) / 100.0)
+            for row in rows
+        }
+        dense_scores = {row_key(row): float(row.get("similarity") or 0.0) for row in rows}
+        sparse_rank = {
+            key: index for index, (key, score) in enumerate(sorted(sparse_scores.items(), key=lambda item: (-item[1], item[0])), start=1) if score > 0
+        }
+        dense_rank = {
+            key: index for index, (key, score) in enumerate(sorted(dense_scores.items(), key=lambda item: (-item[1], item[0])), start=1) if score > 0
+        }
+        fusion_scores: dict[str, float] = {}
+        for row in rows:
+            key = row_key(row)
+            fusion_scores[key] = (1 / (60 + sparse_rank[key]) if key in sparse_rank else 0.0) + (
+                1 / (60 + dense_rank[key]) if key in dense_rank else 0.0
+            )
+        maximum = max(fusion_scores.values(), default=0.0)
+        if maximum:
+            fusion_scores = {key: value / maximum for key, value in fusion_scores.items()}
+
+        ordered = sorted(rows, key=lambda row: (-fusion_scores.get(row_key(row), 0.0), row_key(row)))
+        cross_scores: dict[str, float] = {}
+        cross_encoder_status = "disabled"
+        reranker_version = "rrf_fusion_v1"
+        if self.cross_encoder_reranker and ordered:
+            candidates = ordered[:20]
+            try:
+                values = self.cross_encoder_reranker.rerank(query, [str(row.get("chunk_text") or "") for row in candidates])
+                if len(values) != len(candidates):
+                    raise ValueError("cross_encoder_result_length_mismatch")
+                cross_scores = {row_key(row): max(0.0, min(float(score), 1.0)) for row, score in zip(candidates, values)}
+                cross_encoder_status = "active"
+                model = getattr(self.cross_encoder_reranker, "model", "cross_encoder")
+                reranker_version = f"{model}_v1"
+            except Exception:
+                cross_encoder_status = "fallback_rrf"
+
+        scored = []
+        for row in rows:
+            key = row_key(row)
+            fusion = fusion_scores.get(key, 0.0)
+            score = 0.35 * fusion + 0.65 * cross_scores[key] if key in cross_scores else fusion
+            if score <= 0:
+                continue
+            metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+            scored.append((round(score, 5), row, metadata))
+        return scored, reranker_version, cross_encoder_status
 
     @staticmethod
     def _merge_rows(primary: list[dict[str, Any]], secondary: list[dict[str, Any]]) -> list[dict[str, Any]]:

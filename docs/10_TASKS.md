@@ -179,11 +179,14 @@
 - [ ] Retrieval improvement experiment
   - [x] Wire opt-in query embeddings to the pgvector match function with lexical fallback.
   - [x] Record a deterministic reranker/relevance-gate experiment against the lexical baseline.
+  - [x] Add versioned v3 rank fusion and a feature-flagged cross-encoder with deterministic fallback.
+  - [x] Add a reproducible v2/v3 report plus a Langfuse dataset experiment runner.
   - [ ] Compare lexical, vector, hybrid, and hybrid-plus-reranker variants on the same golden dataset.
   - [ ] Accept a variant only when quality improves enough to justify latency and cost.
 - [x] Bounded LangGraph workflow
   - [x] Limit the graph to official-document research questions.
-  - [x] Trace request normalization, retrieval, evidence synthesis, citation validation, and abstention.
+  - [x] Trace request normalization, retrieval, relevance grading, one official-corpus rewrite, evidence synthesis, claim validation, and abstention.
+  - [x] Expose the trace, sources, claim-support result, retrieval configuration, and development-seed benchmark in a judge-facing UI.
   - [x] Keep deterministic fund details and comparisons outside the graph.
 - [ ] Deployment and operations proof
   - [x] Containerize FastAPI and background jobs separately.

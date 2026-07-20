@@ -1,4 +1,5 @@
-from evals.run_retrieval_evaluation import DEFAULT_DATASET_DIR, load_dataset, run_evaluation
+from evals.run_retrieval_evaluation import DEFAULT_DATASET_DIR, load_dataset, run_evaluation, run_v2_v3_comparison
+from evals.run_langfuse_retrieval_experiment import _retrieval_evaluator
 
 
 def test_seed_dataset_is_versioned_and_covers_retrieval_and_abstention() -> None:
@@ -32,3 +33,26 @@ def test_relevance_gate_fixes_seed_abstention_failures_without_losing_recall() -
     assert report["all_relevant_rate_at_k"] == 1.0
     assert report["abstention_accuracy"] == 1.0
     assert report["passed_cases"] == report["cases"]
+
+
+def test_v2_v3_comparison_is_reproducible_and_truthful_about_provider_status() -> None:
+    report = run_v2_v3_comparison()
+
+    assert report["experiment"] == "fund_research_v2_vs_v3"
+    assert report["production_claim"] is False
+    assert [variant["configuration"]["variant"] for variant in report["variants"]] == [
+        "lexical_rerank_v2",
+        "hybrid_cross_encoder_v3",
+    ]
+    assert report["variants"][1]["configuration"]["live_embeddings"] is False
+    assert report["variants"][1]["configuration"]["live_cross_encoder"] is False
+
+
+def test_langfuse_experiment_evaluator_returns_typed_boolean_scores() -> None:
+    scores = _retrieval_evaluator(
+        output={"sources": [{"document_id": "doc-1"}], "abstain": False},
+        expected_output={"document_ids": ["doc-1"], "abstain": False},
+    )
+
+    assert [score.name for score in scores] == ["retrieval_pass", "abstention_correct"]
+    assert all(score.value is True for score in scores)

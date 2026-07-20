@@ -202,7 +202,8 @@ The offline review-priority path also includes a feature-drift report. Numeric f
 - **Prefect deployment:** exercise the implemented flow with live credentials and keep GitHub Actions authoritative until equivalent run evidence exists.
 - **Supervised review classifier:** run the guarded trainer on live reviewer outcomes, inspect the chronological holdout metrics, and register a candidate only when it improves the operational review-capacity metric.
 - **Vector retrieval:** compare the implemented opt-in pgvector path against v1 and v2 on reviewer-verified cases, including latency and provider cost.
-- **LangGraph extension:** add entity/structured-fact nodes or a cited generator only after the bounded excerpt workflow has production evaluation coverage.
+- **LangGraph extension:** `fund_research_graph_v2` now adds one bounded official-corpus rewrite and claim-level support validation; add entity/structured-fact nodes only after reviewer-verified production evaluation coverage.
+- **Retrieval v3:** reciprocal-rank fusion and the Cohere cross-encoder adapter are independently feature-flagged. The cross-encoder must fall back to deterministic fusion and cannot be promoted until the same reviewer-verified set establishes quality, latency, and cost improvement.
 - **Deployment and observability:** run the container/GCP proof, capture smoke-test and alert evidence, then add persisted freshness, index-lag, retrieval-quality, latency, and cost dashboards.
 - **Fine-tuning:** consider it only for narrowly scoped, reviewer-verified document extraction/classification. Do not fine-tune general chat or use it for financial return prediction.
 

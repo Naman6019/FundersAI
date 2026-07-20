@@ -680,6 +680,13 @@ export default function DashboardLayout() {
             <div className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 rounded-xl p-6 shadow-lg">
               <h3 className="font-serif text-lg font-medium text-white mb-4">Investor Tools</h3>
               <div className="space-y-2">
+                <Link href="/dashboard/research-evidence" className="w-full text-left p-3 rounded-lg border border-[#00FF9D]/20 bg-[#00FF9D]/[0.06] hover:bg-[#00FF9D]/10 hover:border-[#00FF9D]/30 transition-all cursor-pointer flex items-center justify-between group">
+                  <div>
+                    <div className="text-[13px] font-medium text-white">Official Evidence Lab</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">Inspect retrieval, citations, traces, and evals</div>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-[#00FF9D] transition-colors" />
+                </Link>
                 <Link href="/dashboard/sip-calculator" className="w-full text-left p-3 rounded-lg border border-white/10 bg-black/20 hover:bg-[#00FF9D]/10 hover:border-[#00FF9D]/30 transition-all cursor-pointer flex items-center justify-between group">
                   <div>
                     <div className="text-[13px] font-medium text-white">SIP Calculator</div>

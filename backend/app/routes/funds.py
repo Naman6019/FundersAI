@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from fastapi import APIRouter, BackgroundTasks, Depends
 
 from app.repositories.mutual_fund_repository import MutualFundRepository
@@ -11,6 +14,7 @@ from app.workflows.fund_research_graph import run_fund_research_workflow
 from pydantic import BaseModel
 
 router = APIRouter(tags=["funds"])
+JUDGE_REPORT_PATH = Path(__file__).resolve().parents[2] / "evals" / "fund_research_v1" / "judge_report.json"
 
 
 def get_mutual_fund_repository() -> MutualFundRepository:
@@ -99,6 +103,16 @@ def research_document_answer(
     filters = {"amc_code": request.amc_code, "document_type": request.document_type, "report_month": request.report_month}
     service = DocumentRetrievalService.configured(repository)
     return run_fund_research_workflow(service, query=request.query, filters=filters, limit=request.limit)
+
+
+@router.get("/api/funds/research/evaluation")
+def research_evaluation_report():
+    if not JUDGE_REPORT_PATH.exists():
+        return {
+            "status": "not_generated",
+            "message": "Run `python -m evals.run_retrieval_evaluation --variant compare --output evals/fund_research_v1/judge_report.json`.",
+        }
+    return json.loads(JUDGE_REPORT_PATH.read_text(encoding="utf-8"))
 
 
 @router.get("/api/mf/{scheme_code}")

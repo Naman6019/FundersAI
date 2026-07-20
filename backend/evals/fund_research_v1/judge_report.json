@@ -1,0 +1,518 @@
+{
+  "dataset_status": "development_seed",
+  "dataset_version": "fund_research_golden_v1",
+  "delta_v3_minus_v2": {
+    "abstention_accuracy": 0.0,
+    "all_relevant_rate_at_k": 0.0,
+    "hit_rate_at_k": 0.0,
+    "mean_reciprocal_rank": 0.0,
+    "recall_at_k": 0.0
+  },
+  "evaluated_at": "2026-07-20T16:58:15.699515+00:00",
+  "experiment": "fund_research_v2_vs_v3",
+  "production_claim": false,
+  "variants": [
+    {
+      "abstention_accuracy": 1.0,
+      "abstention_cases": 3,
+      "all_relevant_rate_at_k": 1.0,
+      "case_results": [
+        {
+          "actual_abstain": false,
+          "case_id": "hdfc-expense-ratio",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-hdfc-factsheet-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-hdfc-factsheet-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-hdfc-factsheet-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "hdfc-holdings-fields",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-hdfc-portfolio-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-hdfc-portfolio-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-hdfc-portfolio-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "icici-benchmark-manager",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-icici-factsheet-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-icici-factsheet-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-icici-factsheet-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "icici-sector-allocation",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-icici-portfolio-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-icici-portfolio-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-icici-portfolio-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "sbi-exit-load",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-sbi-factsheet-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-sbi-factsheet-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-sbi-factsheet-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "sbi-cash-treps",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-sbi-portfolio-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-sbi-portfolio-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-sbi-portfolio-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "ppfas-objective",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-ppfas-factsheet-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-ppfas-factsheet-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-ppfas-factsheet-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "ppfas-overseas-allocation",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-ppfas-portfolio-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-ppfas-portfolio-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-ppfas-portfolio-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "axis-minimum-investment",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-axis-factsheet-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-axis-factsheet-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-axis-factsheet-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "axis-concentration",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-axis-portfolio-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-axis-portfolio-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-axis-portfolio-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "cross-document-riskometer",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-hdfc-factsheet-2026-04",
+            "doc-icici-factsheet-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-hdfc-factsheet-2026-04",
+            "doc-icici-factsheet-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-icici-factsheet-2026-04",
+            "doc-hdfc-factsheet-2026-04",
+            "doc-sbi-factsheet-2026-04",
+            "doc-axis-factsheet-2026-04",
+            "doc-ppfas-factsheet-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": true,
+          "case_id": "missing-lunar-mining",
+          "expected_abstain": true,
+          "expected_document_ids": [],
+          "matched_document_ids": [],
+          "passed": true,
+          "recall_at_k": null,
+          "reciprocal_rank": null,
+          "retrieved_document_ids": []
+        },
+        {
+          "actual_abstain": true,
+          "case_id": "missing-insurance-claim",
+          "expected_abstain": true,
+          "expected_document_ids": [],
+          "matched_document_ids": [],
+          "passed": true,
+          "recall_at_k": null,
+          "reciprocal_rank": null,
+          "retrieved_document_ids": []
+        },
+        {
+          "actual_abstain": true,
+          "case_id": "missing-future-month",
+          "expected_abstain": true,
+          "expected_document_ids": [],
+          "matched_document_ids": [],
+          "passed": true,
+          "recall_at_k": null,
+          "reciprocal_rank": null,
+          "retrieved_document_ids": []
+        }
+      ],
+      "cases": 14,
+      "configuration": {
+        "corpus_chunks": 10,
+        "limit": 5,
+        "live_cross_encoder": false,
+        "live_embeddings": false,
+        "variant": "lexical_rerank_v2"
+      },
+      "dataset_status": "development_seed",
+      "dataset_version": "fund_research_golden_v1",
+      "evaluated_at": "2026-07-20T16:58:15.698240+00:00",
+      "grounded_answer_rate": 0.7857,
+      "hit_rate_at_k": 1.0,
+      "mean_reciprocal_rank": 1.0,
+      "passed_cases": 14,
+      "recall_at_k": 1.0,
+      "retrieval_cases": 11,
+      "retrieval_version": "amc_lexical_rerank_v2"
+    },
+    {
+      "abstention_accuracy": 1.0,
+      "abstention_cases": 3,
+      "all_relevant_rate_at_k": 1.0,
+      "case_results": [
+        {
+          "actual_abstain": false,
+          "case_id": "hdfc-expense-ratio",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-hdfc-factsheet-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-hdfc-factsheet-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-hdfc-factsheet-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "hdfc-holdings-fields",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-hdfc-portfolio-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-hdfc-portfolio-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-hdfc-portfolio-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "icici-benchmark-manager",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-icici-factsheet-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-icici-factsheet-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-icici-factsheet-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "icici-sector-allocation",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-icici-portfolio-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-icici-portfolio-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-icici-portfolio-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "sbi-exit-load",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-sbi-factsheet-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-sbi-factsheet-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-sbi-factsheet-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "sbi-cash-treps",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-sbi-portfolio-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-sbi-portfolio-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-sbi-portfolio-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "ppfas-objective",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-ppfas-factsheet-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-ppfas-factsheet-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-ppfas-factsheet-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "ppfas-overseas-allocation",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-ppfas-portfolio-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-ppfas-portfolio-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-ppfas-portfolio-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "axis-minimum-investment",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-axis-factsheet-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-axis-factsheet-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-axis-factsheet-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "axis-concentration",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-axis-portfolio-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-axis-portfolio-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-axis-portfolio-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": false,
+          "case_id": "cross-document-riskometer",
+          "expected_abstain": false,
+          "expected_document_ids": [
+            "doc-hdfc-factsheet-2026-04",
+            "doc-icici-factsheet-2026-04"
+          ],
+          "matched_document_ids": [
+            "doc-hdfc-factsheet-2026-04",
+            "doc-icici-factsheet-2026-04"
+          ],
+          "passed": true,
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_document_ids": [
+            "doc-icici-factsheet-2026-04",
+            "doc-hdfc-factsheet-2026-04",
+            "doc-sbi-factsheet-2026-04",
+            "doc-axis-factsheet-2026-04",
+            "doc-ppfas-factsheet-2026-04"
+          ]
+        },
+        {
+          "actual_abstain": true,
+          "case_id": "missing-lunar-mining",
+          "expected_abstain": true,
+          "expected_document_ids": [],
+          "matched_document_ids": [],
+          "passed": true,
+          "recall_at_k": null,
+          "reciprocal_rank": null,
+          "retrieved_document_ids": []
+        },
+        {
+          "actual_abstain": true,
+          "case_id": "missing-insurance-claim",
+          "expected_abstain": true,
+          "expected_document_ids": [],
+          "matched_document_ids": [],
+          "passed": true,
+          "recall_at_k": null,
+          "reciprocal_rank": null,
+          "retrieved_document_ids": []
+        },
+        {
+          "actual_abstain": true,
+          "case_id": "missing-future-month",
+          "expected_abstain": true,
+          "expected_document_ids": [],
+          "matched_document_ids": [],
+          "passed": true,
+          "recall_at_k": null,
+          "reciprocal_rank": null,
+          "retrieved_document_ids": []
+        }
+      ],
+      "cases": 14,
+      "configuration": {
+        "corpus_chunks": 10,
+        "limit": 5,
+        "live_cross_encoder": false,
+        "live_embeddings": false,
+        "variant": "hybrid_cross_encoder_v3"
+      },
+      "dataset_status": "development_seed",
+      "dataset_version": "fund_research_golden_v1",
+      "evaluated_at": "2026-07-20T16:58:15.699501+00:00",
+      "grounded_answer_rate": 0.7857,
+      "hit_rate_at_k": 1.0,
+      "mean_reciprocal_rank": 1.0,
+      "passed_cases": 14,
+      "recall_at_k": 1.0,
+      "retrieval_cases": 11,
+      "retrieval_version": "amc_hybrid_cross_encoder_v3"
+    }
+  ]
+}

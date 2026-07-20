@@ -86,6 +86,7 @@ stitch_downloads/
 *.webp
 *.ico
 *.json
+!backend/evals/fund_research_v1/judge_report.json
 *.yaml
 *.yml
 !backend/config/mf_document_sources.json

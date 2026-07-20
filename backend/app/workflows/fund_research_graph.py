@@ -1,18 +1,24 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
+import uuid
 from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-WORKFLOW_VERSION = "fund_research_graph_v1"
+from app.services.research_quality_service import OfficialEvidenceRelevanceGrader, validate_claim_citations
+
+WORKFLOW_VERSION = "fund_research_graph_v2"
 ABSTENTION_MESSAGE = "I could not find enough matching official-document evidence to answer this question."
 logger = logging.getLogger(__name__)
 
 
 class FundResearchState(TypedDict, total=False):
     query: str
+    original_query: str
+    rewrite_count: int
     filters: dict[str, Any]
     limit: int
     retrieval: dict[str, Any]
@@ -21,26 +27,92 @@ class FundResearchState(TypedDict, total=False):
     grounded: bool
     abstain: bool
     trace: list[str]
+    trace_details: list[dict[str, Any]]
+    relevance_grade: dict[str, Any]
+    claim_validation: dict[str, Any]
     workflow_version: str
 
 
-def build_fund_research_graph(retrieval_service: Any):
+def build_fund_research_graph(retrieval_service: Any, relevance_grader: Any | None = None):
+    grader = relevance_grader or OfficialEvidenceRelevanceGrader()
+
     def normalize_request(state: FundResearchState) -> FundResearchState:
         filters = {key: value for key, value in (state.get("filters") or {}).items() if value not in (None, "")}
+        query = str(state.get("query") or "").strip()
         return {
-            "query": str(state.get("query") or "").strip(),
+            "query": query,
+            "original_query": query,
+            "rewrite_count": 0,
             "filters": filters,
             "limit": max(1, min(int(state.get("limit") or 5), 10)),
             "trace": ["normalize_request"],
+            "trace_details": [{"node": "normalize_request", "status": "ok", "query": query}],
             "workflow_version": WORKFLOW_VERSION,
         }
 
     def retrieve_evidence(state: FundResearchState) -> FundResearchState:
         retrieval = retrieval_service.search(state["query"], filters=state["filters"], limit=state["limit"])
-        return {"retrieval": retrieval, "trace": [*state["trace"], "retrieve_evidence"]}
+        return {
+            "retrieval": retrieval,
+            "trace": [*state["trace"], "retrieve_evidence"],
+            "trace_details": [
+                *state["trace_details"],
+                {
+                    "node": "retrieve_evidence",
+                    "status": "ok" if retrieval.get("sources") else "limited",
+                    "query": state["query"],
+                    "source_count": len(retrieval.get("sources") or []),
+                    "retrieval_version": retrieval.get("retrieval_version"),
+                    "mode": retrieval.get("retrieval_mode"),
+                },
+            ],
+        }
 
-    def route_after_retrieval(state: FundResearchState) -> str:
-        return "abstain" if state["retrieval"].get("abstain") else "synthesize"
+    def grade_retrieval(state: FundResearchState) -> FundResearchState:
+        grade = grader.grade(
+            state["query"],
+            state["retrieval"],
+            allow_rewrite=int(state.get("rewrite_count") or 0) < 1,
+        )
+        return {
+            "relevance_grade": grade,
+            "trace": [*state["trace"], "grade_retrieval"],
+            "trace_details": [
+                *state["trace_details"],
+                {
+                    "node": "grade_retrieval",
+                    "status": "ok" if grade.get("relevant") else "limited",
+                    "score": grade.get("score"),
+                    "grader_version": grade.get("grader_version"),
+                    "model_status": grade.get("model_status"),
+                },
+            ],
+        }
+
+    def route_after_grade(state: FundResearchState) -> str:
+        grade = state.get("relevance_grade") or {}
+        if grade.get("relevant") and state["retrieval"].get("sources"):
+            return "synthesize"
+        if int(state.get("rewrite_count") or 0) < 1 and str(grade.get("rewritten_query") or "").strip():
+            return "rewrite"
+        return "abstain"
+
+    def rewrite_query(state: FundResearchState) -> FundResearchState:
+        rewritten = str((state.get("relevance_grade") or {}).get("rewritten_query") or "").strip()
+        return {
+            "query": rewritten,
+            "rewrite_count": 1,
+            "trace": [*state["trace"], "rewrite_query"],
+            "trace_details": [
+                *state["trace_details"],
+                {
+                    "node": "rewrite_query",
+                    "status": "ok",
+                    "query": rewritten,
+                    "scope": "official_document_corpus",
+                },
+            ],
+        }
 
     def synthesize_from_evidence(state: FundResearchState) -> FundResearchState:
         sources = state["retrieval"].get("sources") or []
@@ -52,24 +124,52 @@ def build_fund_research_graph(retrieval_service: Any):
             "grounded": True,
             "abstain": False,
             "trace": [*state["trace"], "synthesize_from_evidence"],
+            "trace_details": [
+                *state["trace_details"],
+                {"node": "synthesize_from_evidence", "status": "ok", "claim_count": len(sources)},
+            ],
         }
 
     def validate_citations(state: FundResearchState) -> FundResearchState:
         sources = state.get("sources") or []
         answer = state.get("answer") or ""
-        valid = bool(sources) and all(
+        url_valid = bool(sources) and all(
             str(source.get("source_url") or "").startswith("https://") and f"[{index}]" in answer
             for index, source in enumerate(sources, start=1)
         )
+        validation = validate_claim_citations(answer, sources)
+        valid = url_valid and bool(validation.get("valid"))
         if not valid:
             return {
                 "answer": ABSTENTION_MESSAGE,
                 "sources": [],
                 "grounded": False,
                 "abstain": True,
+                "claim_validation": validation,
                 "trace": [*state["trace"], "validate_citations", "citation_validation_failed"],
+                "trace_details": [
+                    *state["trace_details"],
+                    {
+                        "node": "validate_citations",
+                        "status": "failed",
+                        "url_valid": url_valid,
+                        "support_rate": validation.get("support_rate"),
+                    },
+                ],
             }
-        return {"trace": [*state["trace"], "validate_citations"]}
+        return {
+            "claim_validation": validation,
+            "trace": [*state["trace"], "validate_citations"],
+            "trace_details": [
+                *state["trace_details"],
+                {
+                    "node": "validate_citations",
+                    "status": "ok",
+                    "support_rate": validation.get("support_rate"),
+                    "supported_claims": validation.get("supported_claims"),
+                },
+            ],
+        }
 
     def abstain(state: FundResearchState) -> FundResearchState:
         return {
@@ -78,21 +178,29 @@ def build_fund_research_graph(retrieval_service: Any):
             "grounded": False,
             "abstain": True,
             "trace": [*state["trace"], "abstain"],
+            "trace_details": [
+                *state["trace_details"],
+                {"node": "abstain", "status": "safe", "reason": (state.get("relevance_grade") or {}).get("reason")},
+            ],
         }
 
     graph = StateGraph(FundResearchState)
     graph.add_node("normalize_request", normalize_request)
     graph.add_node("retrieve_evidence", retrieve_evidence)
+    graph.add_node("grade_retrieval", grade_retrieval)
+    graph.add_node("rewrite_query", rewrite_query)
     graph.add_node("synthesize_from_evidence", synthesize_from_evidence)
     graph.add_node("validate_citations", validate_citations)
     graph.add_node("abstain", abstain)
     graph.add_edge(START, "normalize_request")
     graph.add_edge("normalize_request", "retrieve_evidence")
+    graph.add_edge("retrieve_evidence", "grade_retrieval")
     graph.add_conditional_edges(
-        "retrieve_evidence",
-        route_after_retrieval,
-        {"synthesize": "synthesize_from_evidence", "abstain": "abstain"},
+        "grade_retrieval",
+        route_after_grade,
+        {"synthesize": "synthesize_from_evidence", "rewrite": "rewrite_query", "abstain": "abstain"},
     )
+    graph.add_edge("rewrite_query", "retrieve_evidence")
     graph.add_edge("synthesize_from_evidence", "validate_citations")
     graph.add_edge("validate_citations", END)
     graph.add_edge("abstain", END)
@@ -105,39 +213,71 @@ def run_fund_research_workflow(
     query: str,
     filters: dict[str, Any] | None = None,
     limit: int = 5,
+    relevance_grader: Any | None = None,
 ) -> dict[str, Any]:
     started_at = time.perf_counter()
+    run_id = uuid.uuid4().hex
     try:
-        result = build_fund_research_graph(retrieval_service).invoke(
-            {"query": query, "filters": filters or {}, "limit": limit}
-        )
+        graph = build_fund_research_graph(retrieval_service, relevance_grader=relevance_grader)
+        payload = {"query": query, "filters": filters or {}, "limit": limit}
+        tracing_enabled = os.getenv("MF_RESEARCH_LANGFUSE_TRACING_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+        if tracing_enabled and os.getenv("LANGFUSE_PUBLIC_KEY", "").strip() and os.getenv("LANGFUSE_SECRET_KEY", "").strip():
+            from langfuse import get_client
+
+            langfuse = get_client()
+            with langfuse.start_as_current_observation(
+                name="fund_research_workflow",
+                as_type="chain",
+                input=payload,
+                version=WORKFLOW_VERSION,
+            ) as span:
+                result = graph.invoke(payload)
+                langfuse.update_current_span(
+                    output={"grounded": result.get("grounded"), "abstain": result.get("abstain"), "trace": result.get("trace")},
+                    metadata={"retrieval_version": (result.get("retrieval") or {}).get("retrieval_version")},
+                )
+                langfuse.score_current_span(name="grounded", value=bool(result.get("grounded")), data_type="BOOLEAN")
+                run_id = langfuse.get_current_trace_id() or run_id
+                span.update()
+        else:
+            result = graph.invoke(payload)
     except Exception:
         logger.exception("event=fund_research_failed workflow_version=%s", WORKFLOW_VERSION)
         raise
     retrieval = result.get("retrieval") or {}
     response = {
         "workflow_version": result.get("workflow_version", WORKFLOW_VERSION),
+        "trace_id": run_id,
         "retrieval_version": retrieval.get("retrieval_version"),
         "answer": result.get("answer", ABSTENTION_MESSAGE),
         "grounded": bool(result.get("grounded")),
         "abstain": bool(result.get("abstain", True)),
         "sources": result.get("sources") or [],
         "trace": result.get("trace") or [],
+        "trace_details": result.get("trace_details") or [],
+        "original_query": result.get("original_query", query),
+        "resolved_query": result.get("query", query),
+        "rewrite_count": int(result.get("rewrite_count") or 0),
+        "relevance_grade": result.get("relevance_grade") or {},
+        "claim_validation": result.get("claim_validation") or {},
         "retrieval": {
             "mode": retrieval.get("retrieval_mode"),
             "vector_status": retrieval.get("vector_status"),
+            "cross_encoder_status": retrieval.get("cross_encoder_status"),
+            "reranker_version": retrieval.get("reranker_version"),
             "query_coverage": retrieval.get("query_coverage"),
         },
     }
     logger.info(
         "event=fund_research_completed workflow_version=%s retrieval_version=%s grounded=%s abstain=%s "
-        "vector_status=%s source_count=%s latency_ms=%s",
+        "vector_status=%s source_count=%s rewrite_count=%s latency_ms=%s",
         WORKFLOW_VERSION,
         retrieval.get("retrieval_version"),
         str(response["grounded"]).lower(),
         str(response["abstain"]).lower(),
         retrieval.get("vector_status"),
         len(response["sources"]),
+        response["rewrite_count"],
         round((time.perf_counter() - started_at) * 1000, 2),
     )
     return response

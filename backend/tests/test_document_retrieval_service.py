@@ -1,4 +1,5 @@
 from app.services.document_retrieval_service import DocumentRetrievalService, chunk_document_text, evaluate_retrieval
+from app.services.research_quality_service import validate_claim_citations
 
 
 class _Repository:
@@ -65,3 +66,51 @@ def test_vector_failure_falls_back_to_lexical_search():
     assert result["grounded"] is True
     assert result["retrieval_mode"] == "lexical"
     assert result["vector_status"] == "fallback_lexical"
+
+
+class _FakeCrossEncoder:
+    model = "test-cross-encoder"
+
+    def rerank(self, query, documents):
+        assert query == "official factsheet expense ratio"
+        return [0.95 if "0.45" in document else 0.1 for document in documents]
+
+
+def test_v3_cross_encoder_is_feature_isolated_and_reported():
+    service = DocumentRetrievalService.v3(_Repository(), cross_encoder_reranker=_FakeCrossEncoder())
+
+    result = service.search("official factsheet expense ratio", filters={})
+
+    assert result["retrieval_version"] == "amc_hybrid_cross_encoder_v3"
+    assert result["cross_encoder_status"] == "active"
+    assert result["reranker_version"] == "test-cross-encoder_v1"
+    assert result["sources"][0]["document_id"] == "doc-1"
+
+
+def test_v3_cross_encoder_failure_falls_back_to_rank_fusion():
+    class _FailingCrossEncoder:
+        model = "unavailable-cross-encoder"
+
+        def rerank(self, query, documents):
+            raise RuntimeError("provider unavailable")
+
+    result = DocumentRetrievalService.v3(
+        _Repository(),
+        cross_encoder_reranker=_FailingCrossEncoder(),
+    ).search("official factsheet expense ratio", filters={})
+
+    assert result["grounded"] is True
+    assert result["cross_encoder_status"] == "fallback_rrf"
+    assert result["reranker_version"] == "rrf_fusion_v1"
+
+
+def test_claim_validation_rejects_uncited_or_unsupported_claims():
+    sources = [{"excerpt": "The official factsheet states expense ratio is 0.45 percent."}]
+
+    valid = validate_claim_citations("- [1] The official factsheet states expense ratio is 0.45 percent.", sources)
+    invalid = validate_claim_citations("- The expense ratio is guaranteed to remain low.", sources)
+
+    assert valid["valid"] is True
+    assert valid["support_rate"] == 1.0
+    assert invalid["valid"] is False
+    assert invalid["support_rate"] == 0.0
