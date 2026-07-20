@@ -9,7 +9,7 @@ import requests
 from app.services.document_retrieval_service import (
     EMBEDDING_DIMENSIONS,
     EMBEDDING_MODEL,
-    RETRIEVAL_VERSION,
+    EMBEDDING_VERSION,
     chunk_document_text,
     chunk_hash,
 )
@@ -35,11 +35,15 @@ class DocumentIndexingService:
         rows = [{
             "document_id": document["id"], "chunk_text": chunk, "embedding": embedding,
             "chunk_hash": chunk_hash(chunk), "embedding_model": EMBEDDING_MODEL,
-            "embedding_version": RETRIEVAL_VERSION, "parser_version": document.get("parser_version"), "source_url": source_url,
+            "embedding_version": EMBEDDING_VERSION, "parser_version": document.get("parser_version"), "source_url": source_url,
             "metadata": {"amc_code": document.get("amc_code"), "document_type": document.get("document_type") or document.get("source_document_type"), "report_month": document.get("report_month"), "source_url": source_url, "chunk_number": index, "indexed_at": datetime.now(timezone.utc).isoformat()},
         } for index, (chunk, embedding) in enumerate(zip(chunks, embeddings), start=1)]
         self.repository.upsert_document_chunks(rows)
         return len(rows)
+
+    def embed_query(self, query: str) -> list[float]:
+        values = self._embed([query])
+        return values[0]
 
     def _embed(self, chunks: list[str]) -> list[list[float]]:
         key = os.getenv("OPENROUTER_API_KEY", "").strip()
@@ -53,7 +57,7 @@ class DocumentIndexingService:
         if title:
             headers["X-Title"] = title
         response = self.http_post(
-            os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/") + "/embeddings",
+            os.getenv("OPENROUTER_EMBEDDINGS_URL", "https://openrouter.ai/api/v1/embeddings"),
             headers=headers,
             json={"model": EMBEDDING_MODEL, "input": chunks, "dimensions": EMBEDDING_DIMENSIONS},
             timeout=60,

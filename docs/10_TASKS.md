@@ -160,6 +160,44 @@
 - Why this matters:
   - Ensures the platform remains fast, reliable, and cost-effective as traffic and data volume grows.
 
+### 12. Fund Research Evidence Pipeline
+- [ ] Golden evaluation baseline
+  - [x] Commit a versioned development-seed dataset with relevant-source and abstention expectations.
+  - [x] Add an offline runner that records dataset version, retrieval version, configuration, per-case results, and aggregate metrics.
+  - [x] Capture the current lexical baseline before enabling query-vector retrieval.
+  - [ ] Replace fixture cases with at least 50 reviewer-verified official-document cases.
+- [ ] Prefect orchestration
+  - [x] Wrap existing acquire, parse, index, and evaluate entry points as tasks without copying business logic.
+  - [x] Add a safe dry-run plan that requires an explicit `--execute` flag before live jobs run.
+  - [ ] Keep GitHub Actions active until a Prefect deployment has equivalent retries, logs, parameters, and operator documentation.
+- [ ] Reviewer-label and trained-model path
+  - [x] Export reviewer outcomes from `mf_parse_review_queue` without reviewer notes or sample contents.
+  - [x] Refuse training when label count or class coverage is insufficient.
+  - [x] Compare the trained classifier with `mf_review_rule_based_v1` at the actual review-capacity cutoff.
+  - [x] Add guarded MLflow tracking and registry integration with a reproducible dataset version.
+  - [ ] Run on enough live reviewer outcomes and promote a model only if the chronological holdout beats the rule baseline.
+- [ ] Retrieval improvement experiment
+  - [x] Wire opt-in query embeddings to the pgvector match function with lexical fallback.
+  - [x] Record a deterministic reranker/relevance-gate experiment against the lexical baseline.
+  - [ ] Compare lexical, vector, hybrid, and hybrid-plus-reranker variants on the same golden dataset.
+  - [ ] Accept a variant only when quality improves enough to justify latency and cost.
+- [x] Bounded LangGraph workflow
+  - [x] Limit the graph to official-document research questions.
+  - [x] Trace request normalization, retrieval, evidence synthesis, citation validation, and abstention.
+  - [x] Keep deterministic fund details and comparisons outside the graph.
+- [ ] Deployment and operations proof
+  - [x] Containerize FastAPI and background jobs separately.
+  - [x] Add a reproducible Cloud Run service/job deployment script without replacing Supabase/R2.
+  - [x] Add workflow telemetry, offline review-feature drift checks, log-based metrics, and alert-policy setup.
+  - [ ] Add persisted retrieval regression, freshness, queue-age, index-lag, latency, and cost dashboards.
+  - [ ] Capture a successful Cloud Run smoke test, job execution, and test-alert proof.
+  - [ ] Link every alert to a trace/run and runbook.
+
+Acceptance Criteria:
+- A reviewer can follow one official AMC document from source URL and R2 object through normalized data, indexed evidence, API response, evaluation result, and operational trace.
+- Every retrieval or model output exposes its version and abstains when evidence or coverage is insufficient.
+- The repository distinguishes implemented, experimental, and planned components without overstating production capability.
+
 ## Recommended Release Order
 
 ### Phase 1: Trust and Clarity

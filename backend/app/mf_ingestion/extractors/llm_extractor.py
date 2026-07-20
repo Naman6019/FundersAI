@@ -87,7 +87,7 @@ class StrictJSONLLMExtractor:
         )
         response.raise_for_status()
         payload = response.json()
-        
+
         usage = payload.get("usage")
         if isinstance(usage, dict):
             langfuse.update_current_generation(
@@ -102,6 +102,12 @@ class StrictJSONLLMExtractor:
         extracted = json.loads(content)
         extracted.setdefault("source_document_id", str(document.get("id") or ""))
         extracted["extractor_type"] = "llm"
+
+        try:
+            langfuse.flush()
+        except Exception:
+            pass
+
         return parse_normalized_extraction(extracted)
 
 

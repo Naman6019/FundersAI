@@ -11,6 +11,8 @@ from app.repositories.mutual_fund_repository import MutualFundRepository
 from app.services import cache_policy
 from app.services.asset_resolver import AssetResolution, AssetResolver, HIGH_CONFIDENCE
 from app.services.comparison_reasoning import build_mf_why_better
+from app.services.mf_metrics_service import compute_nav_metrics
+from app.services.mfapi_service import get_cached_nav_history, get_nav_cache_summary
 
 logger = logging.getLogger(__name__)
 
@@ -247,9 +249,14 @@ class CompareDataService:
 
     async def _comparison_item(self, row: dict[str, Any], resolution: AssetResolution, benchmark_hist: pd.DataFrame) -> dict[str, Any]:
         scheme_code = row.get("scheme_code") or resolution.id
-        history_summary = self._nav_history_summary(scheme_code)
         holdings_rows, sector_rows, holdings_as_of = await asyncio.to_thread(self._load_holdings_and_sectors, scheme_code)
         hist = await self._mf_history_df(scheme_code)
+        history_summary = self._nav_history_summary(scheme_code)
+        history_rows = [
+            {"nav_date": index.strftime("%Y-%m-%d"), "nav": float(value)}
+            for index, value in hist["Close"].items()
+        ] if not hist.empty else []
+        refreshed_metrics = compute_nav_metrics(history_rows) if history_rows else {}
         risk_metrics = _calculate_alpha_beta(hist, benchmark_hist) if not hist.empty and not benchmark_hist.empty else {}
         benchmark = row.get("benchmark") or "NIFTY"
         benchmark_source = "fund_benchmark" if row.get("benchmark") else "nifty_fallback"
@@ -286,11 +293,11 @@ class CompareDataService:
             "fund_house": row.get("amc_name") or row.get("fund_house"),
             "expense_ratio": row.get("expense_ratio"),
             "aum": row.get("aum"),
-            "return_1y": row.get("return_1y"),
-            "return_3y": row.get("return_3y"),
-            "return_5y": row.get("return_5y"),
-            "volatility_1y": row.get("volatility_1y"),
-            "max_drawdown_1y": row.get("max_drawdown_1y"),
+            "return_1y": refreshed_metrics.get("return_1y") if refreshed_metrics.get("return_1y") is not None else row.get("return_1y"),
+            "return_3y": refreshed_metrics.get("return_3y") if refreshed_metrics.get("return_3y") is not None else row.get("return_3y"),
+            "return_5y": refreshed_metrics.get("return_5y") if refreshed_metrics.get("return_5y") is not None else row.get("return_5y"),
+            "volatility_1y": refreshed_metrics.get("volatility_1y") if refreshed_metrics.get("volatility_1y") is not None else row.get("volatility_1y"),
+            "max_drawdown_1y": refreshed_metrics.get("max_drawdown_1y") if refreshed_metrics.get("max_drawdown_1y") is not None else row.get("max_drawdown_1y"),
             "sharpe_ratio": row.get("sharpe_ratio"),
             "alpha": row.get("alpha"),
             "beta": row.get("beta"),
@@ -302,6 +309,11 @@ class CompareDataService:
                 "holdings_as_of_date": holdings_as_of,
                 "benchmark_source": benchmark_source,
                 "benchmark_note": "Fund benchmark unavailable; Nifty is used as fallback context." if benchmark_source == "nifty_fallback" else None,
+                "nav_history": {
+                    "status": history_summary.get("cache_status"),
+                    "stale": history_summary.get("stale"),
+                    "fetched_at": history_summary.get("fetched_at"),
+                },
             },
             "data_quality": {
                 "missing_fields": missing_fields,
@@ -330,21 +342,11 @@ class CompareDataService:
         }
 
     def _nav_history_summary(self, scheme_code: Any) -> dict[str, Any]:
-        default = {"count": 0, "first_nav_date": None, "last_nav_date": None, "supports": {"1Y": False, "3Y": False, "5Y": False}}
-        if not self.repository or scheme_code in (None, ""):
-            return default
-        try:
-            rows = self.repository.get_nav_history_rows(scheme_code, fields="nav_date", limit=5000, desc=False)
-            if not rows:
-                return default
-            return {
-                "count": len(rows),
-                "first_nav_date": rows[0].get("nav_date"),
-                "last_nav_date": rows[-1].get("nav_date"),
-                "supports": self._supports_from_history(rows[0].get("nav_date"), rows[-1].get("nav_date")),
-            }
-        except Exception:
-            return default
+        summary = get_nav_cache_summary(str(scheme_code or ""))
+        return {
+            **summary,
+            "supports": self._supports_from_history(summary.get("first_nav_date"), summary.get("last_nav_date")),
+        }
 
     def _supports_from_history(self, first_nav: Any, last_nav: Any) -> dict[str, bool]:
         try:
@@ -355,12 +357,14 @@ class CompareDataService:
         except Exception:
             return {"1Y": False, "3Y": False, "5Y": False}
 
-    async def _mf_history_df(self, scheme_code: Any, days: int = 1100) -> pd.DataFrame:
-        if not self.repository or scheme_code in (None, ""):
+    async def _mf_history_df(self, scheme_code: Any, days: int = 2200) -> pd.DataFrame:
+        if scheme_code in (None, ""):
             return pd.DataFrame()
 
         def _fetch_rows() -> list[dict[str, Any]]:
-            return self.repository.get_nav_history_rows(scheme_code, fields="nav,nav_date", limit=days, desc=True)
+            result = get_cached_nav_history(str(scheme_code))
+            rows = result.get("data") if result.get("ok") else []
+            return rows[-max(int(days), 1):]
 
         try:
             rows = await asyncio.to_thread(_fetch_rows)

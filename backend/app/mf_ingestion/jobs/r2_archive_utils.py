@@ -46,10 +46,11 @@ def write_manifest(
     row_count: int,
     content_type: str,
     payload: dict[str, Any] | None = None,
+    checksum: str | None = None,
 ) -> None:
     if not supabase:
         return
-    checksum = sha256_bytes(json.dumps(payload or {}, default=str, sort_keys=True).encode("utf-8"))
+    manifest_checksum = checksum or sha256_bytes(json.dumps(payload or {}, default=str, sort_keys=True).encode("utf-8"))
     manifest = {
         "archive_kind": archive_kind,
         "entity_key": entity_key,
@@ -58,7 +59,7 @@ def write_manifest(
         "storage_key": key,
         "row_count": row_count,
         "content_type": content_type,
-        "checksum": checksum,
+        "checksum": manifest_checksum,
         "metadata": payload or {},
         "created_at": datetime.now(timezone.utc).isoformat(),
     }

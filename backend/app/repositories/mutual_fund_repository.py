@@ -130,19 +130,6 @@ class MutualFundRepository:
         rows = query.order("scheme_code").limit(max(1, min(limit, 5000))).execute().data or []
         return [_with_normalized_variant_fields(row) for row in rows]
 
-    def get_nav_history_rows(self, scheme_code: Any, *, fields: str, limit: int = 5000, desc: bool = False) -> list[dict[str, Any]]:
-        code = int(str(scheme_code)) if str(scheme_code).isdigit() else scheme_code
-        return (
-            self.table("mutual_fund_nav_history")
-            .select(fields)
-            .eq("scheme_code", code)
-            .order("nav_date", desc=desc)
-            .limit(limit)
-            .execute()
-            .data
-            or []
-        )
-
     def get_nifty_price_rows(self, *, limit: int = 1100) -> list[dict[str, Any]]:
         return (
             self.table("stock_prices_daily")
@@ -239,6 +226,27 @@ class MutualFundRepository:
         for key, value in filters.items():
             query = query.contains("metadata", {key: value})
         return query.limit(max(1, min(limit, 100))).execute().data or []
+
+    def match_document_chunks(
+        self,
+        *,
+        query_embedding: list[float],
+        filters: dict[str, Any],
+        threshold: float,
+        limit: int = 30,
+    ) -> list[dict[str, Any]]:
+        if self.client is None:
+            raise RuntimeError("supabase_unavailable")
+        response = self.client.rpc(
+            "match_document_chunks",
+            {
+                "query_embedding": query_embedding,
+                "match_threshold": threshold,
+                "match_count": max(1, min(limit, 100)),
+                "filter_metadata": filters,
+            },
+        ).execute()
+        return response.data or []
 
     def upsert_document_chunks(self, rows: list[dict[str, Any]]) -> None:
         if rows:

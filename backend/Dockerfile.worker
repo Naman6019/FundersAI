@@ -1,0 +1,14 @@
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PREFECT_HOME=/tmp/prefect
+
+WORKDIR /app
+COPY requirements.txt orchestration/requirements.in ./
+RUN pip install --no-cache-dir -r requirements.txt -r requirements.in
+COPY app ./app
+COPY orchestration ./orchestration
+COPY evals ./evals
+
+ENTRYPOINT ["python", "-m", "orchestration.research_evidence_flow"]

@@ -24,14 +24,6 @@ ALTER TABLE public.mutual_funds ADD COLUMN IF NOT EXISTS aum DECIMAL;
 ALTER TABLE public.mutual_funds ADD COLUMN IF NOT EXISTS exit_load TEXT;
 ALTER TABLE public.mutual_funds ADD COLUMN IF NOT EXISTS benchmark TEXT;
 
-CREATE TABLE IF NOT EXISTS public.mutual_fund_nav_history (
-    scheme_code TEXT NOT NULL,
-    nav DECIMAL NOT NULL,
-    nav_date DATE NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    PRIMARY KEY (scheme_code, nav_date)
-);
-
 CREATE TABLE IF NOT EXISTS public.mutual_fund_holdings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     scheme_code INTEGER NOT NULL,
@@ -44,9 +36,6 @@ CREATE TABLE IF NOT EXISTS public.mutual_fund_holdings (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE (scheme_code, as_of_date, security_name, isin)
 );
-
-CREATE INDEX IF NOT EXISTS idx_mutual_fund_nav_history_scheme_date
-    ON public.mutual_fund_nav_history (scheme_code, nav_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_mutual_fund_holdings_scheme_date
     ON public.mutual_fund_holdings (scheme_code, as_of_date DESC);

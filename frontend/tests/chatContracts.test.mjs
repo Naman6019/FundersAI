@@ -12,16 +12,18 @@ test('chat input exposes asset, explanation, and comparison controls', () => {
   assert.match(source, /setResearchDepth\(nextMode === 'advanced' \? 'deep' : 'standard'\)/);
 });
 
-test('chat renders collapsed Thinking metadata', () => {
+test('chat renders a collapsed reasoning summary without raw model thinking', () => {
   const source = readFileSync(new URL('../components/chat/ChatWindow.tsx', import.meta.url), 'utf8');
 
-  assert.match(source, /function ThinkingSummary/);
+  assert.match(source, /function ReasoningSummary/);
   assert.match(source, /metadata\?\.reasoning_summary/);
-  assert.match(source, /<summary[^>]*>\s*Thinking\s*<\/summary>/);
+  assert.match(source, /<summary[^>]*>\s*Reasoning summary\s*<\/summary>/);
   assert.match(source, /reasoning_summary: data\.reasoning_summary \|\| null/);
+  assert.doesNotMatch(source, /Model Thinking/);
+  assert.doesNotMatch(source, /thinkMatch/);
 });
 
-test('chat proxy persists Thinking metadata', () => {
+test('chat proxy persists reasoning-summary metadata', () => {
   const source = readFileSync(new URL('../app/api/chat/route.ts', import.meta.url), 'utf8');
 
   assert.match(source, /reasoning_summary: data\.reasoning_summary \|\| null/);

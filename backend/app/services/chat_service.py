@@ -13,6 +13,7 @@ from contextvars import ContextVar
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Literal
+from urllib.parse import urlparse
 
 import feedparser
 import httpx
@@ -35,7 +36,20 @@ from app.services.auto_heal import trigger_mf_auto_heal
 from app.services.compare_data_service import CompareDataService
 from app.services.fund_service import FundService
 from app.services.indianapi_quota_guard import evaluate as evaluate_indianapi_quota
-from app.services.mfapi_service import get_latest_nav as mfapi_get_latest_nav, get_nav_history as mfapi_get_nav_history, search_schemes as mfapi_search_schemes
+from app.services.market_current_events_service import (
+    build_market_fallback,
+    build_market_messages,
+    market_context_status,
+    market_source_metadata,
+    merge_market_sources,
+    normalize_market_evidence,
+)
+from app.services.mfapi_service import (
+    get_latest_nav as mfapi_get_latest_nav,
+    get_nav_cache_summary,
+    get_nav_history as mfapi_get_nav_history,
+    search_schemes as mfapi_search_schemes,
+)
 from app.services.quant_service import build_stock_compare, build_stock_profile, get_stock_financials, get_stock_price_history
 from app.services.supported_amcs import SUPPORTED_AMC_PIPELINE_COPY, SUPPORTED_MF_AMC_MARKERS
 from app.stock_universe import resolve_stock_symbol
@@ -111,6 +125,16 @@ OPENROUTER_SITE_URL = os.getenv("OPENROUTER_SITE_URL", "http://localhost:3000")
 OPENROUTER_APP_NAME = os.getenv("OPENROUTER_APP_NAME", "FundersAI")
 CHAT_INTERNAL_PROXY_KEY = os.getenv("CHAT_INTERNAL_PROXY_KEY", "").strip()
 CONTROLLED_WEB_CONTEXT_ENABLED = os.getenv("CONTROLLED_WEB_CONTEXT_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+MARKET_CURRENT_EVENTS_WEB_SEARCH_ENABLED = os.getenv("MARKET_CURRENT_EVENTS_WEB_SEARCH_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+OPENROUTER_WEB_SEARCH_ENGINE = os.getenv("OPENROUTER_WEB_SEARCH_ENGINE", "exa").strip() or "exa"
+OPENROUTER_WEB_SEARCH_DOMAINS = tuple(
+    domain.strip()
+    for domain in os.getenv(
+        "OPENROUTER_WEB_SEARCH_DOMAINS",
+        "reuters.com,ft.com,nseindia.com,bseindia.com,nsdl.co.in,rbi.org.in,sebi.gov.in,iea.org",
+    ).split(",")
+    if domain.strip()
+)
 APPROVED_WEB_SOURCE_NAMES = (
     "amfi",
     "sebi",
@@ -124,6 +148,27 @@ APPROVED_WEB_SOURCE_NAMES = (
     "personalfn",
     "upstox",
     "et mutual funds",
+    "reuters",
+    "financial times",
+    "nse india",
+    "national stock exchange",
+    "bse india",
+    "bombay stock exchange",
+    "nsdl",
+    "national securities depository",
+    "reserve bank of india",
+    "international energy agency",
+)
+APPROVED_WEB_SOURCE_EXACT_NAMES = {"nse", "bse", "rbi", "iea"}
+APPROVED_WEB_SOURCE_DOMAINS = (
+    "bseindia.com",
+    "ft.com",
+    "iea.org",
+    "nseindia.com",
+    "nsdl.co.in",
+    "rbi.org.in",
+    "reuters.com",
+    "sebi.gov.in",
 )
 IST = pytz.timezone('Asia/Kolkata')
 QUANT_CACHE: Dict[str, Any] = {}
@@ -171,6 +216,46 @@ def _summarize_openrouter_usage(usage_collector: list[dict[str, Any]] | None) ->
     }
 
 
+def _append_openrouter_citations(
+    citation_collector: list[dict[str, Any]] | None,
+    data: dict[str, Any],
+) -> None:
+    if citation_collector is None:
+        return
+    choices = data.get("choices") if isinstance(data, dict) else None
+    if not isinstance(choices, list) or not choices:
+        return
+    message = choices[0].get("message") if isinstance(choices[0], dict) else None
+    annotations = message.get("annotations") if isinstance(message, dict) else None
+    if not isinstance(annotations, list):
+        return
+
+    seen = {str(item.get("url") or "").lower() for item in citation_collector if isinstance(item, dict)}
+    for annotation in annotations:
+        if not isinstance(annotation, dict) or annotation.get("type") != "url_citation":
+            continue
+        citation = annotation.get("url_citation")
+        if not isinstance(citation, dict):
+            continue
+        url = str(citation.get("url") or "").strip()
+        if not url.startswith(("http://", "https://")) or url.lower() in seen:
+            continue
+        seen.add(url.lower())
+        domain = urlparse(url).netloc.lower().removeprefix("www.")
+        source = "Reuters" if domain.endswith("reuters.com") else domain or "Web source"
+        citation_collector.append(
+            {
+                "title": citation.get("title") or source,
+                "source": source,
+                "published": None,
+                "url": url,
+                "context_type": "openrouter_web_search",
+                "source_tier": "official" if domain.endswith(("nseindia.com", "bseindia.com", "nsdl.co.in", "rbi.org.in", "sebi.gov.in", "iea.org")) else "high_trust_news",
+                "freshness": "current_web_search",
+            }
+        )
+
+
 @observe(as_type="generation", name="llm_generation")
 async def function_ollama_chat(
     messages,
@@ -178,6 +263,8 @@ async def function_ollama_chat(
     max_retries=2,
     usage_collector: list[dict[str, Any]] | None = None,
     timeout_seconds: float = 60.0,
+    enable_web_search: bool = False,
+    citation_collector: list[dict[str, Any]] | None = None,
 ):
     openrouter_key = os.environ.get("OPENROUTER_API_KEY") or OPENROUTER_API_KEY
     groq_key = os.environ.get("GROQ_API_KEY")
@@ -204,6 +291,21 @@ async def function_ollama_chat(
             req_messages[0]["content"] += "\nReturn output strictly in JSON format."
 
     payload["messages"] = req_messages
+    if enable_web_search and not is_groq:
+        parameters: dict[str, Any] = {
+            "engine": OPENROUTER_WEB_SEARCH_ENGINE,
+            "max_results": 5,
+            "max_total_results": 12,
+            "search_context_size": "medium",
+        }
+        if OPENROUTER_WEB_SEARCH_DOMAINS:
+            parameters["allowed_domains"] = list(OPENROUTER_WEB_SEARCH_DOMAINS)
+        payload["tools"] = [
+            {
+                "type": "openrouter:web_search",
+                "parameters": parameters,
+            }
+        ]
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -229,6 +331,7 @@ async def function_ollama_chat(
                     }
                 )
             _append_openrouter_usage(usage_collector, data)
+            _append_openrouter_citations(citation_collector, data)
             return data["choices"][0]["message"]["content"]
         except Exception as e:
             logger.error(f"LLM API Error: {e}")
@@ -724,9 +827,11 @@ Return exactly in this JSON format:
     return news_items
 
 def _is_approved_web_source(source: Any, url: Any = None) -> bool:
-    source_text = str(source or "").lower()
-    url_text = str(url or "").lower()
-    return any(name in source_text or name in url_text for name in APPROVED_WEB_SOURCE_NAMES)
+    source_text = str(source or "").strip().lower()
+    domain = urlparse(str(url or "")).netloc.lower().removeprefix("www.")
+    source_allowed = source_text in APPROVED_WEB_SOURCE_EXACT_NAMES or any(name in source_text for name in APPROVED_WEB_SOURCE_NAMES)
+    domain_allowed = any(domain == candidate or domain.endswith(f".{candidate}") for candidate in APPROVED_WEB_SOURCE_DOMAINS)
+    return source_allowed or domain_allowed
 
 def fetch_news(query: str, ticker: str, sentiment_flag: bool = False) -> list:
     """Controlled web context: approved source headlines only."""
@@ -2876,8 +2981,8 @@ def _build_reasoning_summary(
         })
         steps.append({
             "label": "Sources",
-            "detail": "Fetched approved recent news headlines." if sources else "No approved recent news headlines were available.",
-            "status": "ok" if sources else "limited",
+            "detail": "Searched approved web and official market sources." if sources else "No approved current sources were available.",
+            "status": "ok" if sources and news_context_status in {"fresh", "current_web_search"} else "limited",
         })
         steps.append({
             "label": "Market link",
@@ -2933,7 +3038,8 @@ def _build_reasoning_summary(
 
     if sources:
         source_names = [str(item.get("source")) for item in sources[:3] if item.get("source")]
-        data_used.append("Approved news headlines" + (f": {', '.join(source_names)}" if source_names else ""))
+        source_label = "Current web and market sources" if mode == "market_current_events" else "Approved news headlines"
+        data_used.append(source_label + (f": {', '.join(source_names)}" if source_names else ""))
 
     confidence = response_json.get("confidence")
     if isinstance(confidence, dict) and confidence.get("label"):
@@ -2942,7 +3048,9 @@ def _build_reasoning_summary(
     missing_count = _count_missing_fields(response_json.get("data_quality"))
     if missing_count:
         limits.append(f"{missing_count} missing fields reduced confidence.")
-    if news_context_status in {"limited", "unavailable"}:
+    if news_context_status == "current_web_search":
+        limits.append("Web search was current, but some source publication dates were unavailable.")
+    elif news_context_status in {"limited", "stale", "unavailable"}:
         limits.append(f"News source coverage was {news_context_status}.")
     if coverage_status and coverage_status not in {"not_applicable", "complete"}:
         limits.append(f"Structured coverage was {coverage_status}.")
@@ -2952,18 +3060,18 @@ def _build_reasoning_summary(
         limits.append(f"Status flag: {status_flag}.")
 
     return {
-        "title": "Thinking",
+        "title": "Reasoning summary",
         "steps": steps[:4],
         "data_used": data_used[:5],
         "limits": limits[:4],
     }
 
 def _sanitize_research_text(text: str) -> str:
-    sanitized = text or ""
+    sanitized = re.sub(r"<think\b[^>]*>[\s\S]*?(?:</think>|$)", "", text or "", flags=re.IGNORECASE)
     for bad, replacement in ADVICE_REPLACEMENTS.items():
         pattern = rf"\b{re.escape(bad)}\b"
         sanitized = re.sub(pattern, replacement, sanitized, flags=re.IGNORECASE)
-    return sanitized
+    return sanitized.strip()
 
 def _summary_subject(query: str, intent_info: dict, quant_data: Any) -> str:
     if isinstance(quant_data, dict) and "comparison" in quant_data:
@@ -3376,24 +3484,41 @@ async def synthesis_response(
         answer_mode = "market_current_events"
     if response_meta is not None:
         response_meta["answer_mode"] = answer_mode or ("general_education" if intent == "general" else intent)
-        if intent == "news" or answer_mode == "market_current_events":
+        if intent == "news" and answer_mode != "market_current_events":
             response_meta["news_context_status"] = _news_context_status(news_data)
             response_meta["sources"] = _source_metadata(news_data)
 
     is_pure_news = intent == "news" and not intent_info.get("ticker")
+    if answer_mode == "market_current_events":
+        evidence = normalize_market_evidence(news_data)
+        initial_sources = market_source_metadata(evidence)
+        context_status = market_context_status(evidence)
+        if response_meta is not None:
+            response_meta["news_context_status"] = context_status
+            response_meta["sources"] = initial_sources
+
+        citations: list[dict[str, Any]] = []
+        answer = None
+        if evidence or MARKET_CURRENT_EVENTS_WEB_SEARCH_ENABLED:
+            answer = await function_ollama_chat(
+                build_market_messages(query, evidence),
+                format="text",
+                usage_collector=usage_collector,
+                enable_web_search=MARKET_CURRENT_EVENTS_WEB_SEARCH_ENABLED,
+                citation_collector=citations,
+            )
+
+        if response_meta is not None:
+            response_meta["sources"] = merge_market_sources(citations, initial_sources)
+            if citations:
+                response_meta["news_context_status"] = "fresh" if context_status == "fresh" else "current_web_search"
+            response_meta["model_status"] = "completed" if answer else "timeout_or_error"
+            response_meta["status_flag"] = None if answer else "deterministic_fallback"
+        if answer:
+            return _sanitize_research_text(answer.strip())
+        return build_market_fallback(query, evidence)
+
     if intent == "general" or is_pure_news:
-        if answer_mode == "market_current_events" and not news_data:
-            if response_meta is not None:
-                response_meta["model_status"] = "skipped"
-                response_meta["status_flag"] = "source_limited"
-            return """### Current Market Context
-I could not find recent approved-source headlines for this current-events question, so the live status is limited in FundersAI right now.
-
-### How to Read the Indian Market Link
-- For Iran-US or Middle East headlines, the first Indian-market channel is usually crude oil because India imports a large share of its energy needs.
-- Oil shocks can affect inflation, INR/USD, bond yields, airline costs, paint and chemical input costs, and broad market risk sentiment.
-- Treat this as a source-coverage limitation, not a market verdict."""
-
         system_prompt_gen = """You are FundersAI, an expert AI stock market research assistant and financial educator.
 If the user asks basic educational questions (e.g., 'What is PE ratio?', 'Explain the metrics used here'), provide a clear, comprehensive, and beginner-friendly explanation.
 Break down metrics like P/E Ratio (valuation), RSI (momentum/overbought/oversold), and moving averages carefully. Use bullet points and analogies if helpful.
@@ -3413,17 +3538,6 @@ Answer as a deep research explainer with this structure:
 4) Red Flags and Common Mistakes
 5) Research Checklist
 Use clear language, practical examples, and no buy/sell advice."""
-        if answer_mode == "market_current_events":
-            system_prompt_gen = """You are FundersAI, a research-only Indian market analyst.
-Use only the provided recent news context. Do not invent live facts, prices, dates, or outcomes.
-Answer in these concise sections:
-### Current Status
-### Indian Market Impact
-### Sectors to Watch
-### What Could Change the View
-Mention source limitations when context is thin.
-Do not give buy/sell/invest advice."""
-
         context_str = query
         if is_pure_news and news_data:
             news_markdown = _news_markdown(news_data)
@@ -3440,15 +3554,6 @@ Do not give buy/sell/invest advice."""
                 response_meta["status_flag"] = "deterministic_fallback"
         if answer:
             return _sanitize_research_text(answer.strip())
-        if answer_mode == "market_current_events" and news_data:
-            return f"""### Current Status
-Recent approved-source headlines were found, but FundersAI could not complete the synthesis step.
-
-### Source Context
-{_news_markdown(news_data)}
-
-### Indian Market Link
-Read the impact mainly through crude oil, INR/USD, inflation expectations, rates, and energy-sensitive sectors until fresher synthesis is available."""
         return f"FundersAI could not complete the explanation right now."
 
     table_markdown, data_notes = _data_table_markdown(intent, quant_data, screening_results)
@@ -3655,65 +3760,13 @@ def _normalize_fund_text(text: str) -> str:
         .split()
     )
 
-def _coerce_scheme_code_filter(scheme_code_value: Any):
-    if scheme_code_value in (None, ""):
-        return None
-    scheme_code_str = str(scheme_code_value).strip()
-    if not scheme_code_str:
-        return None
-    return int(scheme_code_str) if scheme_code_str.isdigit() else scheme_code_str
-
 def _nav_history_summary_for_scheme(scheme_code_value: Any, cache: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     key = str(scheme_code_value or "").strip()
-    default_summary = {
-        "count": 0,
-        "first_nav_date": None,
-        "last_nav_date": None,
-    }
     if not key:
-        return default_summary
+        return get_nav_cache_summary("")
     if cache is not None and key in cache:
         return cache[key]
-
-    code_filter = _coerce_scheme_code_filter(scheme_code_value)
-    if code_filter is None or not get_mf_repository():
-        if cache is not None:
-            cache[key] = default_summary
-        return default_summary
-
-    summary = dict(default_summary)
-    try:
-        count_res = (
-            get_mf_repository().table("mutual_fund_nav_history")
-            .select("nav_date", count="exact")
-            .eq("scheme_code", code_filter)
-            .execute()
-        )
-        summary["count"] = int(count_res.count or 0)
-
-        first_res = (
-            get_mf_repository().table("mutual_fund_nav_history")
-            .select("nav_date")
-            .eq("scheme_code", code_filter)
-            .order("nav_date", desc=False)
-            .limit(1)
-            .execute()
-        )
-        last_res = (
-            get_mf_repository().table("mutual_fund_nav_history")
-            .select("nav_date")
-            .eq("scheme_code", code_filter)
-            .order("nav_date", desc=True)
-            .limit(1)
-            .execute()
-        )
-        first_row = (first_res.data or [None])[0]
-        last_row = (last_res.data or [None])[0]
-        summary["first_nav_date"] = first_row.get("nav_date") if isinstance(first_row, dict) else None
-        summary["last_nav_date"] = last_row.get("nav_date") if isinstance(last_row, dict) else None
-    except Exception as exc:
-        if DEBUG_MF_RESOLUTION:
-            logger.warning("MF nav history summary lookup failed for %s: %s", key, exc)
+    summary = get_nav_cache_summary(key)
 
     if cache is not None:
         cache[key] = summary
@@ -3835,14 +3888,17 @@ def _score_fund_candidates(
 
         history = _nav_history_summary_for_scheme(row.get("scheme_code"), nav_history_cache)
         history_points = int(history.get("count") or 0)
-        if history_points == 0:
+        history_known = bool(history.get("available"))
+        if not history_known:
+            notes.append("nav_history_unknown:no_penalty")
+        elif history_points == 0:
             value -= 30
             notes.append("no_nav_history_penalty:-30")
         else:
             history_bonus = min(history_points // 200, 30)
             value += history_bonus
             notes.append(f"history_bonus:+{history_bonus}")
-        if min_history_points > 0 and history_points < min_history_points:
+        if history_known and min_history_points > 0 and history_points < min_history_points:
             value -= 120
             notes.append(f"min_history_penalty:-120(required={min_history_points})")
 
@@ -3996,6 +4052,7 @@ async def get_mutual_fund_details(scheme_code: int, background_tasks: Background
             risk_metrics["risk_period"] = f"{alpha_beta.get('period_years', 3)}Y"
 
         history_coverage = _history_coverage_from_df(hist_df)
+        nav_freshness = get_nav_cache_summary(str(scheme_code))
         details_dump = profile.details.model_dump()
         stale = profile.data_quality.is_stale
 
@@ -4010,13 +4067,20 @@ async def get_mutual_fund_details(scheme_code: int, background_tasks: Background
             "returns": profile.returns.model_dump(by_alias=True),
             "riskMetrics": risk_metrics,
             "chartData": [pt.model_dump() for pt in profile.nav_history],
-            "fullData": [pt.model_dump() for pt in profile.nav_history],
+            "fullData": [pt.model_dump() for pt in profile.full_nav_history],
             "historyCoverage": history_coverage,
             "data_quality": profile.data_quality.model_dump(),
             "freshness": {
                 "stale": stale,
                 "warning": profile.data_quality.warning,
                 "nav_date": profile.data_quality.last_nav_date,
+                "nav_history": {
+                    "status": nav_freshness.get("cache_status"),
+                    "stale": nav_freshness.get("stale"),
+                    "fetched_at": nav_freshness.get("fetched_at"),
+                    "expires_at": nav_freshness.get("expires_at"),
+                    "source": nav_freshness.get("source"),
+                },
             },
         }
     except AppServiceError:
@@ -4465,6 +4529,10 @@ class ChatService:
             return await chat_endpoint(req, x_user_id, x_user_tier, x_internal_proxy_key)
         finally:
             _current_mf_repository.reset(token)
+            try:
+                langfuse.flush()
+            except Exception as e:
+                logger.error(f'Langfuse flush error: {e}')
 
 
 class FundCategoryService:
@@ -4480,6 +4548,10 @@ class FundCategoryService:
             return _category_list_payload(category_key)
         finally:
             _current_mf_repository.reset(token)
+            try:
+                langfuse.flush()
+            except Exception as e:
+                logger.error(f'Langfuse flush error: {e}')
 
     def compare_category(self, req: CategoryCompareRequest) -> dict[str, Any]:
         token = _current_mf_repository.set(self.repository)
@@ -4487,6 +4559,10 @@ class FundCategoryService:
             return _build_category_compare_payload(req.category, req.scheme_codes)
         finally:
             _current_mf_repository.reset(token)
+            try:
+                langfuse.flush()
+            except Exception as e:
+                logger.error(f'Langfuse flush error: {e}')
 
 
 class MutualFundDetailService:
@@ -4499,3 +4575,7 @@ class MutualFundDetailService:
             return await get_mutual_fund_details(scheme_code, background_tasks)
         finally:
             _current_mf_repository.reset(token)
+            try:
+                langfuse.flush()
+            except Exception as e:
+                logger.error(f'Langfuse flush error: {e}')

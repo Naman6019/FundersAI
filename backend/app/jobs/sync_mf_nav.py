@@ -16,7 +16,7 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 from app.models.stock_models import DataQualityIssue, ProviderRun
 from app.repositories.stock_repository import StockRepository
 from app.services.mf_metrics_service import compute_nav_metrics
-from app.services.mfapi_service import get_latest_nav, get_nav_history, list_schemes
+from app.services.mfapi_service import get_cached_nav_history, get_latest_nav, list_schemes
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -53,18 +53,6 @@ def _existing_scheme_codes(repo: StockRepository) -> list[str]:
         codes.extend([row["scheme_code"] for row in rows if row.get("scheme_code")])
         offset += 1000
     return sorted(set(codes))
-
-
-def _latest_nav_date(repo: StockRepository, scheme_code: str) -> str | None:
-    history = repo.get_mutual_fund_nav_history(scheme_code, limit=1)
-    if not history:
-        return None
-    return history[0].get("nav_date")
-
-
-def _nav_history_count(repo: StockRepository, scheme_code: str, sample_limit: int) -> int:
-    sample = repo.get_mutual_fund_nav_history(scheme_code, limit=max(sample_limit, 1))
-    return len(sample)
 
 
 def _merge_sources(*values: object) -> str:
@@ -162,18 +150,8 @@ def main() -> None:
 
             existing = repo.get_mutual_fund_core_snapshot(scheme_code) or {}
 
-            history_count = _nav_history_count(repo, scheme_code, min_history_rows + 1)
-            start_date = _latest_nav_date(repo, scheme_code)
-            if history_count < min_history_rows:
-                # Force a full history pull when local history is too thin,
-                # otherwise metrics stay null even though latest NAV exists.
-                start_date = None
-            history_result = get_nav_history(scheme_code, start_date=start_date)
-            history_rows = history_result.get("data") if history_result.get("ok") else []
-            if history_rows:
-                repo.upsert_mutual_fund_nav_history_rows(history_rows)
-
-            full_history = repo.get_mutual_fund_nav_history(scheme_code, limit=4000)
+            history_result = get_cached_nav_history(scheme_code, force_refresh=True)
+            full_history = history_result.get("data") if history_result.get("ok") else []
             metrics = compute_nav_metrics(full_history)
             selected_nav, selected_nav_date = _select_nav(existing, latest)
 

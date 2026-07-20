@@ -7,6 +7,7 @@ from app.services.fund_category_service import CategoryCompareRequest, FundCateg
 from app.services.compare_data_service import CompareDataService
 from app.services.fund_similarity_service import FundSimilarityService
 from app.services.document_retrieval_service import DocumentRetrievalService
+from app.workflows.fund_research_graph import run_fund_research_workflow
 from pydantic import BaseModel
 
 router = APIRouter(tags=["funds"])
@@ -87,7 +88,17 @@ def research_document_search(
     repository: MutualFundRepository = Depends(get_mutual_fund_repository),
 ):
     filters = {"amc_code": request.amc_code, "document_type": request.document_type, "report_month": request.report_month}
-    return DocumentRetrievalService(repository).search(request.query, filters=filters, limit=request.limit)
+    return DocumentRetrievalService.configured(repository).search(request.query, filters=filters, limit=request.limit)
+
+
+@router.post("/api/funds/research/answer")
+def research_document_answer(
+    request: DocumentResearchRequest,
+    repository: MutualFundRepository = Depends(get_mutual_fund_repository),
+):
+    filters = {"amc_code": request.amc_code, "document_type": request.document_type, "report_month": request.report_month}
+    service = DocumentRetrievalService.configured(repository)
+    return run_fund_research_workflow(service, query=request.query, filters=filters, limit=request.limit)
 
 
 @router.get("/api/mf/{scheme_code}")

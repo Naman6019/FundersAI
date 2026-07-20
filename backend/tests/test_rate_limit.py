@@ -76,4 +76,6 @@ def test_backend_health_route_is_not_rate_limited():
     assert app_main._rate_limit_group_for_request("/api/mf/122639", "GET") == "mf-detail"
     assert app_main._rate_limit_group_for_request("/api/funds/category", "GET") == "category-funds"
     assert app_main._rate_limit_group_for_request("/api/funds/category/compare", "POST") == "category-funds"
+    assert app_main._rate_limit_group_for_request("/api/funds/research/search", "POST") == "fund-research"
+    assert app_main._rate_limit_group_for_request("/api/funds/research/answer", "POST") == "fund-research"
     assert app_main._rate_limit_group_for_request("/api/trigger-fetch", "GET") == "cron-sync-mf"

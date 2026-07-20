@@ -1,0 +1,13 @@
+dataset_version = "fund_research_golden_v1"
+status = "development_seed"
+domain = "official AMC document retrieval"
+retrieval_baseline = "lexical token overlap"
+owner = "FundersAI"
+
+[review]
+fixture_content = true
+human_verified_production_documents = false
+minimum_cases_before_production_gate = 50
+
+[limitations]
+summary = "This seed proves dataset, metric, and regression plumbing. Replace fixture claims with reviewer-verified official-document cases before using it as a production quality gate."

@@ -74,6 +74,8 @@ def _rate_limit_group_for_request(path: str, method: str) -> str | None:
         return "mf-detail"
     if path.startswith("/api/funds/") and path.endswith("/similar"):
         return "mf-detail"
+    if path.startswith("/api/funds/research"):
+        return "fund-research"
     if path.startswith("/api/funds/category"):
         return "category-funds"
     if path == "/api/data-health":

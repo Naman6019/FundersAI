@@ -1,0 +1,2 @@
+# Install after backend/requirements.txt so the API runtime can remain lean.
+prefect==3.7.8

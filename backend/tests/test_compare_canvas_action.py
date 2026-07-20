@@ -127,6 +127,6 @@ def test_compare_canvas_action_opens_for_hdfc_mid_cpa_typo(monkeypatch):
         "Axis Large Cap Fund - Direct Plan - Growth",
         "HDFC Mid-Cap Opportunities Fund - Direct Plan - Growth",
     ]
-    assert response["reasoning_summary"]["title"] == "Thinking"
+    assert response["reasoning_summary"]["title"] == "Reasoning summary"
     assert [step["label"] for step in response["reasoning_summary"]["steps"]] == ["Resolved", "Compared", "View"]
     assert response["reasoning_summary"]["steps"][2]["detail"] == "Opened canvas for the full comparison table."

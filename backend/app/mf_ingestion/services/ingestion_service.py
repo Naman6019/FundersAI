@@ -36,17 +36,36 @@ class IngestionService:
             signed_url_ttl_seconds=self.config.r2_signed_url_ttl_seconds,
         )
 
-    def ingest_latest_amc_document(self, amc: str, document_type: str, max_documents: int = 1) -> dict[str, Any]:
-        result = self.ingest_documents(amc=amc, document_type=document_type, max_documents=max_documents)
+    def ingest_latest_amc_document(
+        self,
+        amc: str,
+        document_type: str,
+        max_documents: int = 1,
+        *,
+        allow_disabled_source: bool = False,
+    ) -> dict[str, Any]:
+        result = self.ingest_documents(
+            amc=amc,
+            document_type=document_type,
+            max_documents=max_documents,
+            allow_disabled_source=allow_disabled_source,
+        )
         if result.get("ingested_documents"):
             return result["ingested_documents"][0]
         if result.get("skipped_documents"):
             return result["skipped_documents"][0]
         return {"status": "skipped", "reason": result.get("reason", "no_documents_processed")}
 
-    def ingest_documents(self, amc: str, document_type: str, max_documents: int = 1) -> dict[str, Any]:
+    def ingest_documents(
+        self,
+        amc: str,
+        document_type: str,
+        max_documents: int = 1,
+        *,
+        allow_disabled_source: bool = False,
+    ) -> dict[str, Any]:
         source = get_source(amc)
-        if not source.enabled:
+        if not source.enabled and not allow_disabled_source:
             return {"status": "skipped", "reason": f"{amc}_source_not_enabled"}
         if not supabase:
             return {"status": "error", "reason": "supabase_not_configured"}

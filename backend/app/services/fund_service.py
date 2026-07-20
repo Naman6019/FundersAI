@@ -3,13 +3,13 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
 from typing import Any, List, Dict, Optional, Tuple
-import functools
 
 from app.database import supabase
 from app.models.fund_models import (
     FundDetails, FundReturns, RiskMetrics, NavHistoryPoint,
     FundDataQuality, FundProfileResponse, FundHolding, SectorAllocation
 )
+from app.services.mfapi_service import get_cached_nav_history, get_nav_cache_summary
 
 logger = logging.getLogger(__name__)
 
@@ -40,46 +40,11 @@ def _normalize_fund_text(text: str) -> str:
         .split()
     )
 
-def _coerce_scheme_code_filter(scheme_code_value: Any):
-    if scheme_code_value in (None, ""):
-        return None
-    scheme_code_str = str(scheme_code_value).strip()
-    if not scheme_code_str:
-        return None
-    return int(scheme_code_str) if scheme_code_str.isdigit() else scheme_code_str
-
 class FundService:
     @staticmethod
-    @functools.lru_cache(maxsize=512)
     def get_nav_history_summary(scheme_code_value: Any) -> Dict[str, Any]:
         key = str(scheme_code_value or "").strip()
-        default_summary = {"count": 0, "first_nav_date": None, "last_nav_date": None}
-        
-        if not key:
-            return default_summary
-
-        code_filter = _coerce_scheme_code_filter(scheme_code_value)
-        if code_filter is None or not supabase:
-            return default_summary
-
-        summary = dict(default_summary)
-        try:
-            count_res = supabase.table("mutual_fund_nav_history").select("nav_date", count="exact").eq("scheme_code", code_filter).execute()
-            summary["count"] = int(count_res.count or 0)
-
-            first_res = supabase.table("mutual_fund_nav_history").select("nav_date").eq("scheme_code", code_filter).order("nav_date", desc=False).limit(1).execute()
-            last_res = supabase.table("mutual_fund_nav_history").select("nav_date").eq("scheme_code", code_filter).order("nav_date", desc=True).limit(1).execute()
-            
-            first_row = (first_res.data or [None])[0]
-            last_row = (last_res.data or [None])[0]
-            
-            summary["first_nav_date"] = first_row.get("nav_date") if isinstance(first_row, dict) else None
-            summary["last_nav_date"] = last_row.get("nav_date") if isinstance(last_row, dict) else None
-        except Exception as exc:
-            if DEBUG_MF_RESOLUTION:
-                logger.warning("MF nav history summary lookup failed for %s: %s", key, exc)
-
-        return summary
+        return get_nav_cache_summary(key)
 
     @staticmethod
     def score_fund_candidates(entity: str, rows: List[Dict], min_history_points: int = 0) -> List[Dict[str, Any]]:
@@ -156,14 +121,17 @@ class FundService:
 
             history = FundService.get_nav_history_summary(row.get("scheme_code"))
             history_points = int(history.get("count") or 0)
-            if history_points == 0:
+            history_known = bool(history.get("available"))
+            if not history_known:
+                notes.append("nav_history_unknown:no_penalty")
+            elif history_points == 0:
                 value -= 30
                 notes.append("no_nav_history_penalty:-30")
             else:
                 history_bonus = min(history_points // 200, 30)
                 value += history_bonus
                 notes.append(f"history_bonus:+{history_bonus}")
-            if min_history_points > 0 and history_points < min_history_points:
+            if history_known and min_history_points > 0 and history_points < min_history_points:
                 value -= 120
                 notes.append(f"min_history_penalty:-120(required={min_history_points})")
 
@@ -185,47 +153,11 @@ class FundService:
 
     @staticmethod
     def get_mf_history_df(scheme_code: Any, days: int = 1100) -> pd.DataFrame:
-        if not supabase:
-            return pd.DataFrame()
-
-        def _fetch_rows_for_filter(code_filter: Any, max_rows: int) -> List[Dict[str, Any]]:
-            batch_size = 1000
-            offset = 0
-            collected: List[Dict[str, Any]] = []
-            while offset < max_rows:
-                chunk = (
-                    supabase.table('mutual_fund_nav_history')
-                    .select('nav, nav_date')
-                    .eq('scheme_code', code_filter)
-                    .order('nav_date', desc=True)
-                    .range(offset, offset + batch_size - 1)
-                    .execute()
-                    .data or []
-                )
-                if not chunk:
-                    break
-                collected.extend(chunk)
-                if len(chunk) < batch_size:
-                    break
-                offset += batch_size
-            return collected[:max_rows]
-
         try:
-            # We only need one query since Supabase casts string to int safely for eq checks
-            best_rows = _fetch_rows_for_filter(scheme_code, days)
-
-            # Fallback to MFAPI if database has extremely stale/limited history
-            if len(best_rows) < min(days, 50):
-                from app.services.mfapi_service import get_nav_history as mfapi_get_nav_history
-                mfapi_res = mfapi_get_nav_history(str(scheme_code))
-                if mfapi_res.get("ok") and mfapi_res.get("data"):
-                    # mfapi returns oldest first typically or newest? We will sort it in DataFrame
-                    mfapi_data = mfapi_res["data"]
-                    # Limit to requested days
-                    best_rows = mfapi_data[:days]
-
-            if best_rows:
-                df = pd.DataFrame(best_rows)
+            result = get_cached_nav_history(str(scheme_code))
+            rows = result.get("data") if result.get("ok") else []
+            if rows:
+                df = pd.DataFrame(rows[-max(int(days), 1):])
                 df['date'] = pd.to_datetime(df['nav_date'])
                 df = df.sort_values('date')
                 df.rename(columns={'nav': 'Close'}, inplace=True)
@@ -288,7 +220,6 @@ class FundService:
         return holdings, latest_as_of
 
     @staticmethod
-    @functools.lru_cache(maxsize=128)
     def get_mutual_fund_profile(scheme_code: int) -> Optional[FundProfileResponse]:
         if not supabase:
             return None
@@ -383,9 +314,9 @@ class FundService:
             }
 
         returns = FundReturns(
-            return_1y=raw_details.get("return_1y") if raw_details.get("return_1y") is not None else _compute_cagr(close_series, 1),
-            return_3y=raw_details.get("return_3y") if raw_details.get("return_3y") is not None else _compute_cagr(close_series, 3),
-            return_5y=raw_details.get("return_5y") if raw_details.get("return_5y") is not None else _compute_cagr(close_series, 5)
+            return_1y=_compute_cagr(close_series, 1) if not close_series.empty else raw_details.get("return_1y"),
+            return_3y=_compute_cagr(close_series, 3) if not close_series.empty else raw_details.get("return_3y"),
+            return_5y=_compute_cagr(close_series, 5) if not close_series.empty else raw_details.get("return_5y")
         )
 
         calc_risk = _compute_risk(close_series)

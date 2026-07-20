@@ -1,6 +1,6 @@
 # Current State
 
-**Last Updated**: 2026-07-11
+**Last Updated**: 2026-07-20
 
 ## Project Summary
 FundersAI is a research-first Indian stocks + mutual funds app with deterministic comparison outputs, Supabase-first runtime reads, and workflow-driven data ingestion.
@@ -65,18 +65,38 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 - Exposed mutual fund `risk_level` and `fund_manager` on the UI dashboard based on successful AMC factsheet parsing.
 - Backfilled 10 years of NIFTY 50 EOD history via a manual yfinance pipeline, fixing the alpha/beta metric calculations for older mutual funds.
 - Explainable ML foundations:
-  - numeric mutual-fund similarity and deterministic clustering, scoped to a fund category and backed by stored snapshot data;
+  - `mf_similarity_numeric_holdings_v2`: numeric mutual-fund similarity and deterministic clustering, scoped to a fund category and backed by stored snapshot data, with holdings overlap exposed as separate supporting evidence;
   - admin-only, non-mutating parser-review prioritization with explicit score reasons;
   - feature/priority version markers and focused automated tests.
+- Official-document research foundation:
+  - pgvector-backed `amc_document_chunks` schema with parser, embedding, source, and report metadata;
+  - explicit background indexing for parsed/partially parsed official AMC documents;
+  - OpenRouter embeddings using the existing `OPENROUTER_API_KEY` boundary;
+  - `POST /api/funds/research/search` returning citable excerpts and explicit abstention;
+  - provider-free retrieval evaluation helper.
+- Evidence-pipeline implementation foundation:
+  - versioned `fund_research_golden_v1` development-seed dataset, runner, per-case results, and recorded lexical baseline;
+  - Prefect 3.7.8 flow wrappers for existing ingestion, parsing, indexing, and evaluation jobs, with dry-run as the CLI default;
+  - guarded `mf_review_logistic_v1` offline trainer with chronological validation and rule-baseline comparison;
+  - MLflow 3.14 integration that logs only trained models and blocks registry aliases for unverified exports;
+  - `amc_lexical_rerank_v2`, whose relevance gate improves the fixture seed from 12/14 to 14/14 passing cases while preserving seeded retrieval recall;
+  - opt-in query-vector RPC integration with explicit lexical fallback and cost visibility;
+  - bounded `fund_research_graph_v1` cited-excerpt/abstention endpoint;
+  - separate API/Prefect-worker containers, GCP deployment and alert-setup scripts, workflow telemetry, and offline review-feature drift checks.
 
 ## In Progress
+- Replace the development-seed retrieval fixtures with at least 50 reviewer-verified official-document cases before enabling a production regression gate.
+- Validate a Prefect deployment with equivalent parameters, retries, logs, and operator evidence before replacing any GitHub Actions scheduling.
 - Increase mutual-fund field coverage depth beyond AUM/TER/holdings for PPFAS, ICICI, HDFC, SBI (benchmark/risk/ratios completeness).
 - Reduce historical `needs_review` backlog in `mf_raw_documents` and `mf_parse_review_queue`.
 - Improve admin Data Coverage status interpretation for historical parser failures vs latest-run health.
 - Monitor scheduled parser retry outcomes for rows that remain in review after cooldown retries.
 
 ## Known Gaps
-- `backend/render.yaml` references `uvicorn api.index:app`; repo runtime entry is `uvicorn app.main:app`.
+- The first golden dataset is a development seed rather than a production gate. V2 passes it completely, but that does not establish quality on real official-document questions.
+- Vector retrieval is implemented but disabled by default until reviewer-verified quality, latency, and embedding-cost evidence exists.
+- No persisted production evaluation-run history, Prefect deployment, Cloud Run proof, or production-trained review-priority model/registry alias is active yet.
+- Docker/GCP files are reproducible proof scaffolding only; the current production topology is still Vercel + Render + Supabase + R2 + GitHub Actions.
 - Scheduled fundamentals keep shareholding sparse when `ENABLE_SHAREHOLDING_SYNC=false`.
 - Some admin metrics rely on fallback sources when canonical tables are incomplete.
 - Data Coverage “fully covered” is strict and currently under-reports AMCs that only have partial field depth.

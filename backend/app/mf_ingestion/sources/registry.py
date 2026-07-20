@@ -43,8 +43,14 @@ SOURCES: dict[str, AMCDocumentSource] = {
         amc_name="Mirae Asset Mutual Fund",
         amc_code="MIRAE",
         adapter_key="mirae",
-        factsheet_page_url=None,
-        portfolio_disclosure_page_url=None,
+        factsheet_page_url=_env_url(
+            "MF_MIRAE_FACTSHEET_PAGE_URL",
+            "https://www.miraeassetmf.co.in/downloads/factsheet",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_MIRAE_PORTFOLIO_PAGE_URL",
+            "https://www.miraeassetmf.co.in/downloads/portfolio",
+        ),
         requires_confirmation=False,
         confirmation_type=None,
         confirmation_notes=None,
@@ -121,6 +127,74 @@ SOURCES: dict[str, AMCDocumentSource] = {
         confirmation_type=None,
         confirmation_notes=None,
         enabled=True,
+    ),
+    "kotak": AMCDocumentSource(
+        amc_name="Kotak Mahindra Mutual Fund",
+        amc_code="KOTAK",
+        adapter_key="kotak",
+        factsheet_page_url=_env_url(
+            "MF_KOTAK_FACTSHEET_PAGE_URL",
+            "https://www.kotakmf.com/Information/forms-and-downloads",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_KOTAK_PORTFOLIO_PAGE_URL",
+            "https://www.kotakmf.com/Information/forms-and-downloads",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=False,
+    ),
+    "aditya_birla": AMCDocumentSource(
+        amc_name="Aditya Birla Sun Life Mutual Fund",
+        amc_code="ABSL",
+        adapter_key="aditya_birla",
+        factsheet_page_url=_env_url(
+            "MF_ABSL_FACTSHEET_PAGE_URL",
+            "https://mutualfund.adityabirlacapital.com/forms-and-downloads/factsheets",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_ABSL_PORTFOLIO_PAGE_URL",
+            "https://mutualfund.adityabirlacapital.com/forms-and-downloads/portfolio",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=False,
+    ),
+    "uti": AMCDocumentSource(
+        amc_name="UTI Mutual Fund",
+        amc_code="UTI",
+        adapter_key="uti",
+        factsheet_page_url=_env_url(
+            "MF_UTI_FACTSHEET_PAGE_URL",
+            "https://www.utimf.com/downloads/fact-sheet",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_UTI_PORTFOLIO_PAGE_URL",
+            "https://www.utimf.com/downloads",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=False,
+    ),
+    "dsp": AMCDocumentSource(
+        amc_name="DSP Mutual Fund",
+        amc_code="DSP",
+        adapter_key="dsp",
+        factsheet_page_url=_env_url(
+            "MF_DSP_FACTSHEET_PAGE_URL",
+            "https://www.dspim.com/downloads?category=Information%20Documents&sub_category=Factsheets",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_DSP_PORTFOLIO_PAGE_URL",
+            "https://www.dspim.com/downloads",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=False,
     ),
 }
 

@@ -78,6 +78,32 @@ def get_usage_rows(provider: str, start: datetime, end: datetime, limit: int = 1
         return []
 
 
+def get_first_usage_row(
+    provider: str,
+    start: datetime,
+    end: datetime,
+    *,
+    endpoint_prefix: str | None = None,
+) -> dict[str, Any] | None:
+    if not supabase:
+        return None
+    try:
+        query = (
+            supabase.table("provider_usage_logs")
+            .select("endpoint,created_at")
+            .eq("provider", provider)
+            .gte("created_at", start.isoformat())
+            .lt("created_at", end.isoformat())
+        )
+        if endpoint_prefix:
+            query = query.like("endpoint", f"{endpoint_prefix}%")
+        rows = query.order("created_at", desc=False).limit(1).execute().data or []
+        return rows[0] if rows else None
+    except Exception as exc:
+        logger.warning("Provider first usage query failed for %s: %s", provider, exc)
+        return None
+
+
 def get_monthly_request_cost(provider: str, now: datetime | None = None) -> int:
     start, end = _month_bounds(now)
     rows = get_usage_rows(provider, start, end)

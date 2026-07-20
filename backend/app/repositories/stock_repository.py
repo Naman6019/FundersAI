@@ -240,11 +240,6 @@ class StockRepository:
         stamped = [{**row, "last_updated": datetime.now(timezone.utc).isoformat()} for row in rows]
         self._upsert("mutual_fund_core_snapshot", stamped, "scheme_code")
 
-    def upsert_mutual_fund_nav_history_rows(self, rows: list[dict[str, Any]]) -> None:
-        if not rows:
-            return
-        self._upsert("mutual_fund_nav_history", rows, "scheme_code,nav_date")
-
     def upsert_mutual_fund_holdings_rows(self, rows: list[dict[str, Any]]) -> None:
         if not rows:
             return
@@ -272,35 +267,6 @@ class StockRepository:
         except Exception as exc:
             logger.warning("MF core snapshot lookup failed for %s: %s", scheme_code, exc)
             return None
-
-    def get_mutual_fund_nav_history(self, scheme_code: str, limit: int = 2500) -> list[dict[str, Any]]:
-        if not self._has_client():
-            return []
-        try:
-            rows: list[dict[str, Any]] = []
-            page_size = min(max(limit, 1), 1000)
-            offset = 0
-            while offset < limit:
-                end = min(offset + page_size - 1, limit - 1)
-                response = (
-                    self.supabase.table("mutual_fund_nav_history")
-                    .select("*")
-                    .eq("scheme_code", str(scheme_code))
-                    .order("nav_date", desc=True)
-                    .range(offset, end)
-                    .execute()
-                )
-                batch = response.data or []
-                if not batch:
-                    break
-                rows.extend(batch)
-                if len(batch) < page_size:
-                    break
-                offset += page_size
-            return rows
-        except Exception as exc:
-            logger.warning("MF nav history lookup failed for %s: %s", scheme_code, exc)
-            return []
 
     def _upsert(self, table: str, rows: list[dict[str, Any]], on_conflict: str) -> None:
         if not rows or not self._has_client():

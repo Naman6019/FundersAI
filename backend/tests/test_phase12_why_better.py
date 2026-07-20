@@ -1,6 +1,16 @@
 import asyncio
 
 
+def test_sanitize_research_text_removes_provider_reasoning():
+    from app.services.chat_service import _sanitize_research_text
+
+    answer = _sanitize_research_text("<think>private model trace</think>\n### Answer\nVerified summary")
+    incomplete = _sanitize_research_text("<think>unfinished private model trace")
+
+    assert answer == "### Answer\nVerified summary"
+    assert incomplete == ""
+
+
 def test_stock_why_better_shape():
     from app.services.comparison_reasoning import build_stock_why_better
 
@@ -515,18 +525,30 @@ def test_current_events_chat_fetches_news_and_returns_metadata(monkeypatch):
 
     assert calls
     assert response["answer_mode"] == "market_current_events"
-    assert response["news_context_status"] == "limited"
+    assert response["news_context_status"] == "stale"
     assert response["sources"][0]["source"] == "The Economic Times"
-    assert response["reasoning_summary"]["title"] == "Thinking"
+    assert response["reasoning_summary"]["title"] == "Reasoning summary"
     assert response["reasoning_summary"]["steps"][0]["label"] == "Routed"
     assert "Indian Market Impact" in response["answer"]
 
 
-def test_current_events_no_source_returns_limited_context_without_model(monkeypatch):
+def test_current_events_no_prefetched_source_uses_web_search(monkeypatch):
     from app.services import chat_service as main
 
-    async def fake_function_ollama_chat(*_args, **_kwargs):
-        raise AssertionError("model should not be called without current-event sources")
+    captured = {}
+
+    async def fake_function_ollama_chat(*_args, **kwargs):
+        captured.update(kwargs)
+        kwargs["citation_collector"].append(
+            {
+                "title": "Current Reuters report",
+                "source": "Reuters",
+                "url": "https://www.reuters.com/current-report",
+                "published": None,
+                "context_type": "openrouter_web_search",
+            }
+        )
+        return "### Current View\nThe latest verified evidence remains mixed."
 
     monkeypatch.setattr(main, "function_ollama_chat", fake_function_ollama_chat)
 
@@ -541,17 +563,19 @@ def test_current_events_no_source_returns_limited_context_without_model(monkeypa
         )
     )
 
-    assert "source-coverage limitation" in response
+    assert "latest verified evidence" in response
+    assert captured["enable_web_search"] is True
     assert meta["answer_mode"] == "market_current_events"
-    assert meta["news_context_status"] == "unavailable"
-    assert meta["status_flag"] == "source_limited"
+    assert meta["news_context_status"] == "current_web_search"
+    assert meta["model_status"] == "completed"
+    assert meta["sources"][0]["source"] == "Reuters"
 
 
 def test_current_events_no_source_response_has_limited_thinking(monkeypatch):
     from app.services import chat_service as main
 
     async def fake_function_ollama_chat(*_args, **_kwargs):
-        raise AssertionError("model should not be called without current-event sources")
+        return None
 
     monkeypatch.setattr(main, "fetch_news", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(main, "function_ollama_chat", fake_function_ollama_chat)
@@ -562,6 +586,8 @@ def test_current_events_no_source_response_has_limited_thinking(monkeypatch):
     )
     response = asyncio.run(main.ChatService(None).handle_chat(req))
 
-    assert response["reasoning_summary"]["title"] == "Thinking"
+    assert response["reasoning_summary"]["title"] == "Reasoning summary"
     assert response["reasoning_summary"]["steps"][1]["status"] == "limited"
     assert "News source coverage was unavailable." in response["reasoning_summary"]["limits"]
+    assert response["status_flag"] == "deterministic_fallback"
+    assert "synthesis step" not in response["answer"]

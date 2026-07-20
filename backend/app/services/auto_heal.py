@@ -2,7 +2,6 @@ import logging
 import asyncio
 from typing import Any
 from app.database import supabase
-from app.services.fund_service import FundService
 from app.services import mf_engine_service
 from app.services import mfapi_service
 from app.mf_ingestion.services.parsing_service import ParsingService
@@ -55,18 +54,11 @@ async def trigger_mf_auto_heal(scheme_code: Any):
                 scheme_name = existing_res.data[0].get("scheme_name")
                 amc_name = existing_res.data[0].get("amc_name")
 
-        # 2. Fetch and upsert full NAV history using AMFI API (mfapi_service)
-        nav_res = mfapi_service.get_nav_history(scheme_code_str)
+        # 2. Force-refresh the server-only NAV cache and active snapshot metrics.
+        nav_res = mfapi_service.get_cached_nav_history(scheme_code_str, force_refresh=True)
         if nav_res.get("ok") and nav_res.get("data"):
             nav_data = nav_res["data"]
-            logger.info(f"[AutoHeal] Fetched {len(nav_data)} NAV points for {scheme_code_str}")
-            
-            # Batch upsert 1000 rows at a time
-            batch_size = 1000
-            for i in range(0, len(nav_data), batch_size):
-                batch = nav_data[i:i+batch_size]
-                supabase.table("mutual_fund_nav_history").upsert(batch, on_conflict="scheme_code,nav_date").execute()
-            logger.info(f"[AutoHeal] Upserted NAV history for {scheme_code_str}")
+            logger.info(f"[AutoHeal] Refreshed {len(nav_data)} cached NAV points for {scheme_code_str}")
             
         # 3. Check if Holdings/AUM are still missing and run targeted PDF parser if AMC is known
         if scheme_name and amc_name:
@@ -87,9 +79,6 @@ async def trigger_mf_auto_heal(scheme_code: Any):
                     parser.parse_latest_document_for_scheme(amc_code, scheme_name)
                     logger.info(f"[AutoHeal] Parser execution finished for {scheme_code_str}")
 
-        # Invalidate caches
-        FundService.get_mutual_fund_profile.cache_clear()
-        FundService.get_nav_history_summary.cache_clear()
         logger.info(f"[AutoHeal] Completed successfully for {scheme_code_str}")
         
     except Exception as exc:

@@ -5,18 +5,10 @@ on:
     - cron: '45 3 * * 0'
   workflow_dispatch:
     inputs:
-      nav_scheme_limit:
-        description: 'Max schemes for NAV compaction'
-        required: false
-        default: '400'
       holdings_group_limit:
         description: 'Max holdings groups for compaction'
         required: false
         default: '1500'
-      nav_scheme_source:
-        description: 'Scheme source for NAV compaction (core_snapshot or old_nav_rows)'
-        required: false
-        default: 'core_snapshot'
       dry_run:
         description: 'Dry run only (true/false)'
         required: false
@@ -25,6 +17,9 @@ on:
 concurrency:
   group: compact-mf-storage-${{ github.ref }}
   cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   compact:
@@ -42,7 +37,25 @@ jobs:
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
 
-      - name: Run NAV + holdings compaction
+      - name: Run NAV cache retention
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          MF_NAV_CACHE_RETENTION_DAYS: "30"
+          DISPATCH_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "Error: Missing SUPABASE_URL or SUPABASE_KEY"
+            exit 1
+          fi
+          DRY_RUN="${DISPATCH_DRY_RUN:-false}"
+          cache_args=()
+          if [ "$DRY_RUN" = "true" ]; then
+            cache_args+=(--dry-run)
+          fi
+          python -m backend.app.jobs.cleanup_nav_api_cache "${cache_args[@]}"
+
+      - name: Run holdings compaction
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -51,9 +64,7 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_RAW_BUCKET: ${{ secrets.R2_RAW_BUCKET }}
           R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
-          DISPATCH_NAV_SCHEME_LIMIT: ${{ inputs.nav_scheme_limit }}
           DISPATCH_HOLDINGS_GROUP_LIMIT: ${{ inputs.holdings_group_limit }}
-          DISPATCH_NAV_SCHEME_SOURCE: ${{ inputs.nav_scheme_source }}
           DISPATCH_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
@@ -64,18 +75,12 @@ jobs:
             echo "Error: Missing R2 secrets"
             exit 1
           fi
-
-          NAV_LIMIT="${DISPATCH_NAV_SCHEME_LIMIT:-400}"
           HOLDINGS_LIMIT="${DISPATCH_HOLDINGS_GROUP_LIMIT:-1500}"
-          NAV_SOURCE="${DISPATCH_NAV_SCHEME_SOURCE:-core_snapshot}"
           DRY_RUN="${DISPATCH_DRY_RUN:-false}"
 
-          nav_args=(--limit-schemes "$NAV_LIMIT" --scheme-source "$NAV_SOURCE")
           holdings_args=(--limit-groups "$HOLDINGS_LIMIT")
           if [ "$DRY_RUN" = "true" ]; then
-            nav_args+=(--dry-run)
             holdings_args+=(--dry-run)
           fi
 
-          python -m backend.app.mf_ingestion.jobs.compact_mf_nav_5y "${nav_args[@]}"
           python -m backend.app.mf_ingestion.jobs.compact_mf_holdings_latest_only "${holdings_args[@]}"

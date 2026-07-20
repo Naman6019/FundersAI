@@ -19,6 +19,7 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 from app.models.stock_models import DataQualityIssue, ProviderRun
 from app.repositories.stock_repository import StockRepository
 from app.services import mf_engine_service
+from app.services.mf_metrics_service import compute_nav_metrics
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -87,6 +88,11 @@ def main() -> int:
             if not scheme_code:
                 raise RuntimeError("scheme_code_not_resolved")
 
+            nav_rows = normalized.get("nav_history") or []
+            for key, value in compute_nav_metrics(nav_rows).items() if nav_rows else []:
+                if value is not None:
+                    normalized[key] = value
+
             core_row = _merge_core_snapshot(repo.get_mutual_fund_core_snapshot(str(scheme_code)) or {}, normalized)
             repo.upsert_mutual_fund_core_snapshot_rows([core_row])
             _upsert_legacy_mutual_funds_row(repo, core_row)
@@ -96,10 +102,6 @@ def main() -> int:
                 repo.upsert_mutual_fund_holdings_rows(holdings)
                 sectors = _build_sector_rows(str(scheme_code), holdings)
                 repo.upsert_mutual_fund_sector_rows(sectors)
-
-            nav_rows = normalized.get("nav_history") or []
-            if nav_rows:
-                repo.upsert_mutual_fund_nav_history_rows(nav_rows)
 
             run.symbols_succeeded += 1
         except Exception as exc:

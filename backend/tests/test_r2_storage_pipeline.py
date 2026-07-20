@@ -87,8 +87,8 @@ class _FakeDownloader:
     def list_documents(self, document_type: str):
         return [
             DiscoveredDocument(
-                amc_name="Parag Parikh Mutual Fund",
-                amc_code="PPFAS",
+                amc_name=self.source.amc_name,
+                amc_code=self.source.amc_code,
                 document_type=document_type,
                 title="Monthly Factsheet Apr 2026",
                 url="https://amc.ppfas.com/downloads/factsheet-apr-2026.xlsx",
@@ -167,6 +167,30 @@ def test_ingestion_writes_r2_storage_columns(monkeypatch):
     assert raw_insert["storage_bucket"]
     assert raw_insert["storage_key"].startswith("raw/ppfas/2026-04/factsheet/")
     assert raw_insert["storage_metadata"]["checksum"] == "fixed-checksum"
+
+
+def test_disabled_source_requires_explicit_acquisition_opt_in(monkeypatch):
+    from app.mf_ingestion.services import ingestion_service
+
+    fake_supabase = _FakeSupabase()
+    monkeypatch.setattr(ingestion_service, "supabase", fake_supabase)
+    monkeypatch.setattr(ingestion_service, "AMCDownloader", _FakeDownloader)
+    monkeypatch.setattr(ingestion_service, "sha256_bytes", lambda _bytes: "fixed-checksum")
+    monkeypatch.setattr(ingestion_service, "R2Store", _FakeR2Enabled)
+
+    service = IngestionService()
+    skipped = service.ingest_documents(amc="mirae", document_type="factsheet")
+    acquired = service.ingest_documents(
+        amc="mirae",
+        document_type="factsheet",
+        allow_disabled_source=True,
+    )
+
+    assert skipped == {"status": "skipped", "reason": "mirae_source_not_enabled"}
+    assert acquired["status"] == "ok"
+    source_upsert = [payload for table, payload, _ in fake_supabase.upserts if table == "mf_amc_sources"][0]
+    assert source_upsert["amc_code"] == "MIRAE"
+    assert source_upsert["is_enabled"] is False
 
 
 def test_ingestion_uses_manifest_before_discovered_links(monkeypatch, tmp_path):

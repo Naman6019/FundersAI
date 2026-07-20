@@ -73,3 +73,19 @@ class AdminOpsRepository(MutualFundRepository):
             .data
             or []
         )
+
+    def list_reviewed_review_items(self, *, limit: int = 10000) -> list[dict[str, Any]]:
+        return (
+            self.table("mf_parse_review_queue")
+            .select(
+                "source_document_id,amc_code,report_month,validation_issues,confidence_score,"
+                "parser_version,status,source_url,created_at,updated_at,reviewer_decision,"
+                "issue_category,reparse_succeeded,reviewed_at,review_duration_seconds"
+            )
+            .in_("status", ["approved", "skipped", "reparse_requested"])
+            .order("updated_at")
+            .limit(max(1, min(limit, 50000)))
+            .execute()
+            .data
+            or []
+        )

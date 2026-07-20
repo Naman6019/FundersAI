@@ -7,6 +7,28 @@
 - Object Storage: Cloudflare R2 (raw docs + cold archives)
 - Scheduler: GitHub Actions workflows in `.github/workflows/`
 
+This remains the production topology. Prefect and GCP artifacts are implemented as deployment proof, but they are not current production claims.
+
+## Reproducible Deployment Proof
+
+The repository now contains:
+
+- `backend/Dockerfile` for the FastAPI service;
+- `backend/Dockerfile.worker` for the Prefect evidence job;
+- `deploy/gcp/deploy.ps1` for Artifact Registry images, a private Cloud Run service, and a Cloud Run Job;
+- `deploy/gcp/configure-monitoring.ps1` for log-based failure/fallback counters and alert policies.
+
+These files are reproducible configuration, not evidence of a successful deployment. A production claim requires image digests, the Cloud Run revision/job execution, health output, an evaluation result, and a triggered test alert.
+
+Prerequisites are Docker with a running daemon, Google Cloud CLI, billing, the referenced Secret Manager secrets, and a Monitoring notification channel. From the repository root:
+
+```powershell
+.\deploy\gcp\deploy.ps1 -ProjectId <project-id> -Tag <git-sha>
+.\deploy\gcp\configure-monitoring.ps1 -ProjectId <project-id> -NotificationChannel <channel-resource-name>
+```
+
+Do not migrate business data to Cloud SQL or raw documents to GCS solely to match a cloud diagram. Revisit storage only when cost, latency, compliance, or operational evidence justifies the migration.
+
 ## Frontend (Vercel)
 - Runtime: Next.js App Router
 - Browser-safe backend boundary: `frontend/app/api/*`
@@ -61,7 +83,12 @@
   - `GET /api/admin/ops-overview`
   - `GET /api/admin/mf-resolver-debug`
   - Require `X-Admin-Key` = `MF_INTERNAL_ADMIN_KEY`
-- Note: `backend/render.yaml` currently references `uvicorn api.index:app`, but repo code uses `app.main:app`. Align before relying on `render.yaml`.
+- `backend/render.yaml` starts `uvicorn app.main:app`.
+
+### NAV Cache Cutover
+- Apply `backend/migrations/20260717_nav_api_cache.sql` before deploying the NAV-cache runtime.
+- The legacy-table drop is intentionally outside `backend/migrations/` at `backend/manual_migrations/drop_mutual_fund_nav_history_after_readiness.sql`.
+- Run the manual drop only after the archive workflow and `check_nav_cache_drop_readiness.py` report `drop_ready=true`; the SQL also requires an explicit session acknowledgement.
 
 ## Workflow Secrets (GitHub Actions)
 - Base:

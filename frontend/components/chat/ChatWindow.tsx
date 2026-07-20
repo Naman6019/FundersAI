@@ -226,7 +226,7 @@ function stringList(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [];
 }
 
-function ThinkingSummary({ metadata }: { metadata?: Record<string, unknown> | null }) {
+function ReasoningSummary({ metadata }: { metadata?: Record<string, unknown> | null }) {
   const summary = asRecord(metadata?.reasoning_summary);
   if (!summary) return null;
 
@@ -241,7 +241,7 @@ function ThinkingSummary({ metadata }: { metadata?: Record<string, unknown> | nu
   return (
     <details className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-200">
       <summary className="cursor-pointer select-none text-[11px] font-semibold uppercase tracking-[0.14em] text-[#cce0ff]">
-        Thinking
+        Reasoning summary
       </summary>
       <div className="mt-2 space-y-2">
         {steps.length ? (
@@ -272,7 +272,7 @@ function ThinkingSummary({ metadata }: { metadata?: Record<string, unknown> | nu
 
 export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: boolean }) {
   const searchParams = useSearchParams();
-  const { setView, setIds, openCanvas, closeCanvas } = useCanvasStore();
+  const { setView, setIds, openCanvas } = useCanvasStore();
   const messages = useChatStore((state) => state.messages);
   const input = useChatStore((state) => state.input);
   const isProcessing = useChatStore((state) => state.isProcessing);
@@ -476,7 +476,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
     } finally {
       setIsProcessing(false);
     }
-  }, [addMessage, assetType, closeCanvas, comparisonViewMode, conversationContext, currentSessionId, createNewSession, explanationMode, getAccessToken, messages, openCanvas, researchDepth, setConversationContext, setIds, setInput, setIsProcessing, setView]);
+  }, [addMessage, assetType, comparisonViewMode, conversationContext, currentSessionId, createNewSession, explanationMode, getAccessToken, messages, openCanvas, researchDepth, setConversationContext, setIds, setInput, setIsProcessing, setView]);
 
   useEffect(() => {
     if (!isHistoryReady) return;
@@ -622,7 +622,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
                       <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                         {msg.content}
                       </ReactMarkdown>
-                      {msg.id !== '1' && <ThinkingSummary metadata={msg.metadata} />}
+                      {msg.id !== '1' && <ReasoningSummary metadata={msg.metadata} />}
                       {msg.metadata?.system_action_type === 'COMPARE' && comparisonViewMode === 'chat' && Array.isArray(msg.metadata?.system_action_ids) && (
                         <div className="mt-4 -mx-2 sm:-mx-4 h-[600px] border border-white/10 rounded-2xl overflow-hidden bg-[#050505]/50">
                           <ComparisonView

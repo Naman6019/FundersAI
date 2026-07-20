@@ -47,6 +47,11 @@ def main() -> int:
     parser.add_argument("--document-type", choices=DOC_TYPES)
     parser.add_argument("--all-document-types", action="store_true")
     parser.add_argument("--max-documents", type=int, default=1)
+    parser.add_argument(
+        "--allow-disabled-source",
+        action="store_true",
+        help="Explicitly test acquisition for a production-disabled source without enabling it in the registry.",
+    )
     parser.add_argument("--strict", action="store_true", help="Exit non-zero when discovery/download has issues.")
     args = parser.parse_args()
 
@@ -63,6 +68,7 @@ def main() -> int:
             amc=args.amc,
             document_type=document_type,
             max_documents=args.max_documents,
+            allow_disabled_source=args.allow_disabled_source,
         )
         results[document_type] = result
         if not args.strict:

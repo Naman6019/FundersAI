@@ -450,6 +450,7 @@ class AxisAdapter(BaseAMCAdapter):
         page_url = source.factsheet_page_url if document_type == "factsheet" else source.portfolio_disclosure_page_url
         if not page_url:
             return []
+        render_url = _axis_render_url(page_url, document_type)
 
         try:
             with sync_playwright() as p:
@@ -457,17 +458,17 @@ class AxisAdapter(BaseAMCAdapter):
                 context = browser.new_context(user_agent=self.user_agent)
                 page = context.new_page()
                 
-                page.goto(page_url, wait_until="domcontentloaded", timeout=20000)
+                page.goto(render_url, wait_until="domcontentloaded", timeout=20000)
                 try:
-                    page.wait_for_load_state("load", timeout=10000)
+                    page.locator(".download-document-card").first.wait_for(timeout=15000)
                 except Exception:
-                    logger.info("Axis Playwright load wait timed out; parsing current DOM.")
-                page.wait_for_timeout(3000)
+                    logger.info("Axis Playwright download-card wait timed out; parsing current DOM.")
                 
+                links = _axis_download_links_from_cards(page) if document_type == "factsheet" else []
                 html = page.content()
                 browser.close()
                 
-            links = _axis_download_links_from_html(html, page_url)
+            links.extend(_axis_download_links_from_html(html, render_url))
                     
             docs = classify_documents(source, document_type, links, page_url)
             docs.sort(key=lambda d: d.priority_score, reverse=True)
@@ -476,6 +477,51 @@ class AxisAdapter(BaseAMCAdapter):
         except Exception as e:
             logger.warning(f"Error fetching via Playwright fallback: {e}")
             return []
+
+
+def _axis_render_url(page_url: str, document_type: str) -> str:
+    if document_type != "factsheet":
+        return page_url
+    return urljoin(page_url, "/downloads/products")
+
+
+def _axis_download_links_from_cards(page) -> list[dict[str, str]]:
+    cards = page.locator(".download-document-card")
+    if not cards.count():
+        return []
+
+    page.evaluate(
+        "window.__fundersAxisOpened = []; "
+        "window.open = (url) => { window.__fundersAxisOpened.push(url); return null; };"
+    )
+    links: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for index in range(min(cards.count(), 50)):
+        card = cards.nth(index)
+        title = card.inner_text().strip()
+        if "factsheet" not in title.lower():
+            continue
+        action = card.locator(".action-wrapper img")
+        if not action.count():
+            continue
+        before = int(page.evaluate("window.__fundersAxisOpened.length"))
+        action.first.click()
+        opened = page.evaluate(f"window.__fundersAxisOpened.slice({before})") or []
+        for value in reversed(opened):
+            url = str(value or "").strip()
+            if not _axis_is_download_url(url) or url in seen:
+                continue
+            seen.add(url)
+            links.append(
+                {
+                    "title": title,
+                    "url": url,
+                    "context_text": title,
+                    "file_ext": detect_file_ext(url),
+                }
+            )
+            break
+    return links
 
 
 def _axis_download_links_from_html(html: str, page_url: str) -> list[dict[str, str]]:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -31,6 +32,16 @@ ICICI_SUBCATEGORY_BY_DOCUMENT_TYPE = {
     "portfolio_disclosure": "monthly-portfolio-disclosures",
     "factsheet": "complete-factsheet",
 }
+MIRAE_DOWNLOADS_ENDPOINT = "https://www.miraeassetmf.co.in/AjaxService/GetDownloadsData"
+MIRAE_MODULE_BY_DOCUMENT_TYPE = {
+    "factsheet": "Factsheet",
+    "portfolio_disclosure": "portfolio_tab1",
+}
+DSP_DOWNLOADS_ENDPOINT = "https://www.dspim.com/downloads.json"
+UTI_ENDPOINT_BY_DOCUMENT_TYPE = {
+    "factsheet": "https://www.utimf.com/api/get-fact-sheet",
+    "portfolio_disclosure": "https://www.utimf.com/api/get-consolidate-portfolio-disclosure",
+}
 MONTH_PATTERN = re.compile(
     r"(?P<month>jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:[\s\-_]+(?P<day>\d{1,2}))?[\s\-_\,]+(?P<year>20\d{2})",
     re.IGNORECASE,
@@ -56,6 +67,26 @@ GENERIC_REQUIRED_KEYWORDS: dict[str, dict[str, tuple[str, ...]]] = {
     "nippon": {
         "factsheet": ("factsheet", "fundamental", "fundamentals", "fund facts", "fund", "nippon"),
         "portfolio_disclosure": ("portfolio", "monthly portfolio", "disclosure", "nippon"),
+    },
+    "mirae": {
+        "factsheet": ("factsheet", "fact sheet", "active factsheet", "passive factsheet"),
+        "portfolio_disclosure": ("portfolio", "monthly portfolio", "disclosure"),
+    },
+    "kotak": {
+        "factsheet": ("factsheet", "fact sheet"),
+        "portfolio_disclosure": ("portfolio", "monthly portfolio", "disclosure"),
+    },
+    "aditya_birla": {
+        "factsheet": ("factsheet", "monthly factsheet", "empower"),
+        "portfolio_disclosure": ("portfolio", "monthly portfolio", "disclosure"),
+    },
+    "uti": {
+        "factsheet": ("factsheet", "fact sheet"),
+        "portfolio_disclosure": ("portfolio", "monthly portfolio", "disclosure"),
+    },
+    "dsp": {
+        "factsheet": ("factsheet", "fact sheet"),
+        "portfolio_disclosure": ("portfolio", "monthly portfolio", "disclosure"),
     },
 }
 GENERIC_EXCLUDE_KEYWORDS = (
@@ -121,7 +152,58 @@ class AMCDownloader(BaseDownloader):
                 len(docs),
             )
             return docs
-        if adapter_key in {"hdfc", "sbi", "motilal", "nippon"}:
+        if adapter_key == "mirae":
+            docs = _discover_mirae_documents(
+                self.source,
+                document_type=document_type,
+                timeout_seconds=self.timeout_seconds,
+                user_agent=self.user_agent,
+            )
+            logger.info(
+                "event=amc_discovery_complete amc_code=%s adapter=%s document_type=%s count=%s",
+                self.source.amc_code,
+                adapter_key,
+                document_type,
+                len(docs),
+            )
+            return docs
+        if adapter_key == "uti":
+            docs = _discover_uti_documents(
+                self.source,
+                document_type=document_type,
+                timeout_seconds=self.timeout_seconds,
+                user_agent=self.user_agent,
+            )
+            logger.info(
+                "event=amc_discovery_complete amc_code=%s adapter=%s document_type=%s count=%s",
+                self.source.amc_code,
+                adapter_key,
+                document_type,
+                len(docs),
+            )
+            return docs
+        if adapter_key == "dsp" and (document_type or "").strip().lower() == "factsheet":
+            docs = _discover_dsp_factsheet_documents(
+                self.source,
+                timeout_seconds=self.timeout_seconds,
+                user_agent=self.user_agent,
+            )
+            logger.info(
+                "event=amc_discovery_complete amc_code=%s adapter=%s document_type=%s count=%s",
+                self.source.amc_code,
+                adapter_key,
+                document_type,
+                len(docs),
+            )
+            return docs
+        if adapter_key in {
+            "aditya_birla",
+            "hdfc",
+            "kotak",
+            "motilal",
+            "nippon",
+            "sbi",
+        }:
             if adapter_key == "sbi" and (document_type or "").strip().lower() == "factsheet":
                 docs = _discover_sbi_factsheet_documents(
                     self.source,
@@ -193,7 +275,18 @@ class AMCDownloader(BaseDownloader):
                 file_bytes=response.content,
             )
 
-        if adapter_key in {"hdfc", "sbi", "axis", "motilal", "nippon"}:
+        if adapter_key in {
+            "aditya_birla",
+            "axis",
+            "dsp",
+            "hdfc",
+            "kotak",
+            "mirae",
+            "motilal",
+            "nippon",
+            "sbi",
+            "uti",
+        }:
             referer = discovered.discovery_page_url or _base_site_url(discovered.url)
             response = _request_with_retry(
                 "GET",
@@ -226,12 +319,13 @@ class AMCDownloader(BaseDownloader):
 
         adapter = PPFASAdapter(user_agent=self.user_agent, timeout_seconds=int(self.timeout_seconds))
         response = adapter.download_document(discovered.url)
-        file_name = _derive_file_name(discovered.url, discovered.title)
+        source_url = getattr(response, "url", None) or discovered.url
+        file_name = _derive_file_name(source_url, discovered.title)
         return DownloadedDocument(
             amc_name=discovered.amc_name,
             amc_code=discovered.amc_code,
             document_type=discovered.document_type,
-            source_url=discovered.url,
+            source_url=source_url,
             discovery_page_url=discovered.discovery_page_url,
             file_name=file_name,
             file_ext=discovered.file_ext,
@@ -509,6 +603,8 @@ def _discover_sbi_factsheet_documents(
         seen_urls.add(url)
         report_month = _detect_report_month_from_text(combined)
         recency_score = (report_month.year * 12 + report_month.month) * 10 if report_month else 0
+        all_schemes_boost = 120 if "all sbimf schemes" in combined or "all schemes" in combined else 0
+        passive_penalty = -30 if "passive" in combined or "index etf fof" in combined else 0
         docs.append(
             DiscoveredDocument(
                 amc_name=source.amc_name,
@@ -519,11 +615,257 @@ def _discover_sbi_factsheet_documents(
                 discovery_page_url=listing_url,
                 file_ext=ext,
                 report_month=report_month,
+                priority_score=(
+                    _generic_base_score(ext=ext, document_type="factsheet")
+                    + recency_score
+                    + all_schemes_boost
+                    + passive_penalty
+                ),
+            )
+        )
+    docs.sort(key=lambda item: item.priority_score, reverse=True)
+    return docs
+
+
+def _discover_mirae_documents(
+    source: AMCDocumentSource,
+    document_type: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    doc_type = (document_type or "").strip().lower()
+    module_name = MIRAE_MODULE_BY_DOCUMENT_TYPE.get(doc_type)
+    if not module_name:
+        return []
+
+    listing_url = (
+        source.factsheet_page_url
+        if doc_type == "factsheet"
+        else source.portfolio_disclosure_page_url
+    ) or "https://www.miraeassetmf.co.in/downloads"
+    try:
+        response = _request_with_retry(
+            "POST",
+            MIRAE_DOWNLOADS_ENDPOINT,
+            timeout_seconds=timeout_seconds,
+            headers={
+                "User-Agent": user_agent,
+                "Referer": listing_url,
+                "Content-Type": "application/json;charset=utf-8",
+            },
+            json_payload={
+                "request": {
+                    "modulename": module_name,
+                    "pgno": 1,
+                    "pgsize": 100 if doc_type == "portfolio_disclosure" else 20,
+                }
+            },
+        )
+        payload = response.json()
+    except Exception as exc:
+        logger.exception("event=mirae_discovery_failed document_type=%s reason=%s", doc_type, exc)
+        return []
+
+    if str(payload.get("ReturnCode", "")) != "0":
+        logger.warning("event=mirae_discovery_rejected return_code=%s", payload.get("ReturnCode"))
+        return []
+
+    items = payload.get("Data") or []
+    if isinstance(items, str):
+        try:
+            items = json.loads(items)
+        except json.JSONDecodeError:
+            return []
+    if isinstance(items, dict):
+        items = items.get("Items") or items.get("data") or []
+    if not isinstance(items, list):
+        return []
+
+    docs: list[DiscoveredDocument] = []
+    seen_urls: set[str] = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("Title") or "").strip()
+        raw_url = str(item.get("URL") or "").strip()
+        combined = f"{title} {raw_url}".lower()
+        if not raw_url or "how_to" in combined or "how to read" in combined:
+            continue
+        url = urljoin("https://www.miraeassetmf.co.in", raw_url)
+        if url in seen_urls:
+            continue
+        ext = Path(urlsplit(url).path).suffix.lower()
+        if doc_type == "factsheet" and ext != ".pdf":
+            continue
+        if doc_type == "portfolio_disclosure" and ext not in {".xls", ".xlsx", ".xlsm", ".csv", ".zip"}:
+            continue
+        report_month = _detect_report_month_from_text(combined)
+        recency_score = (report_month.year * 12 + report_month.month) * 10 if report_month else 0
+        active_boost = 10 if doc_type == "factsheet" and "active" in combined else 0
+        seen_urls.add(url)
+        docs.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type=doc_type,
+                title=title or _human_title_from_url(url),
+                url=url,
+                discovery_page_url=listing_url,
+                file_ext=ext,
+                report_month=report_month,
+                priority_score=_generic_base_score(ext=ext, document_type=doc_type) + recency_score + active_boost,
+            )
+        )
+
+    docs.sort(key=lambda item: item.priority_score, reverse=True)
+    return docs
+
+
+def _discover_dsp_factsheet_documents(
+    source: AMCDocumentSource,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    listing_url = source.factsheet_page_url or "https://www.dspim.com/downloads"
+    try:
+        response = _request_with_retry(
+            "GET",
+            DSP_DOWNLOADS_ENDPOINT,
+            timeout_seconds=timeout_seconds,
+            headers={"User-Agent": user_agent, "Referer": listing_url},
+            params={
+                "page": 1,
+                "per_page": 20,
+                "category": "Information Documents",
+                "sub_category": "Factsheets",
+            },
+        )
+        rows = response.json().get("data", [])
+    except Exception as exc:
+        logger.exception("event=dsp_factsheet_discovery_failed reason=%s", exc)
+        return []
+
+    docs: list[DiscoveredDocument] = []
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict) or row.get("is_file") is False:
+            continue
+        title = str(row.get("title") or "").strip()
+        raw_url = str(row.get("pdf_url") or "").strip()
+        combined = f"{title} {raw_url}".lower()
+        if not raw_url or "factsheet" not in combined:
+            continue
+        url = urljoin("https://www.dspim.com", raw_url)
+        ext = Path(urlsplit(url).path).suffix.lower()
+        if ext != ".pdf":
+            continue
+        report_month = _detect_report_month_from_text(combined)
+        recency_score = (report_month.year * 12 + report_month.month) * 10 if report_month else 0
+        docs.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type="factsheet",
+                title=title or _human_title_from_url(url),
+                url=url,
+                discovery_page_url=listing_url,
+                file_ext=ext,
+                report_month=report_month,
                 priority_score=_generic_base_score(ext=ext, document_type="factsheet") + recency_score,
             )
         )
     docs.sort(key=lambda item: item.priority_score, reverse=True)
     return docs
+
+
+def _discover_uti_documents(
+    source: AMCDocumentSource,
+    document_type: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    doc_type = (document_type or "").strip().lower()
+    endpoint = UTI_ENDPOINT_BY_DOCUMENT_TYPE.get(doc_type)
+    if not endpoint:
+        return []
+    listing_url = (
+        source.factsheet_page_url
+        if doc_type == "factsheet"
+        else source.portfolio_disclosure_page_url
+    ) or "https://www.utimf.com/downloads"
+
+    rows: list[dict] = []
+    for target_month in _recent_month_starts(datetime.now(UTC).date(), count=6):
+        try:
+            response = _request_with_retry(
+                "GET",
+                endpoint,
+                timeout_seconds=timeout_seconds,
+                headers={"User-Agent": user_agent, "Referer": listing_url},
+                params={"year": target_month.year, "month": target_month.strftime("%B")},
+            )
+            payload_rows = response.json().get("rows", [])
+        except Exception as exc:
+            logger.warning(
+                "event=uti_discovery_month_failed document_type=%s month=%s reason=%s",
+                doc_type,
+                target_month.isoformat(),
+                exc,
+            )
+            continue
+        if isinstance(payload_rows, list) and payload_rows:
+            rows = payload_rows
+            break
+
+    docs: list[DiscoveredDocument] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        title = str(row.get("name") or "").strip()
+        raw_url = str(row.get("doc") or row.get("url") or "").strip()
+        if not raw_url:
+            continue
+        ext = Path(urlsplit(raw_url).path).suffix.lower()
+        if doc_type == "factsheet" and ext != ".pdf":
+            continue
+        if doc_type == "portfolio_disclosure" and ext not in {".xls", ".xlsx", ".xlsm", ".csv", ".zip"}:
+            continue
+        report_month = _detect_report_month_from_text(
+            f"{title} {row.get('month', '')} {row.get('year', '')} {raw_url}"
+        )
+        recency_score = (report_month.year * 12 + report_month.month) * 10 if report_month else 0
+        low = f"{title} {raw_url}".lower()
+        language_penalty = -30 if "hindi" in low else 0
+        active_boost = 10 if "active" in low else 0
+        docs.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type=doc_type,
+                title=title or _human_title_from_url(raw_url),
+                url=raw_url,
+                discovery_page_url=listing_url,
+                file_ext=ext,
+                report_month=report_month,
+                priority_score=(
+                    _generic_base_score(ext=ext, document_type=doc_type)
+                    + recency_score
+                    + active_boost
+                    + language_penalty
+                ),
+            )
+        )
+    docs.sort(key=lambda item: item.priority_score, reverse=True)
+    return docs
+
+
+def _recent_month_starts(start: date, *, count: int) -> list[date]:
+    current = start.replace(day=1)
+    months: list[date] = []
+    for _ in range(max(count, 1)):
+        months.append(current)
+        previous_day = current.fromordinal(current.toordinal() - 1)
+        current = previous_day.replace(day=1)
+    return months
 
 
 def _sbi_guessed_portfolio_probe_is_valid(response: requests.Response, final_url: str) -> bool:
@@ -923,6 +1265,10 @@ def _icici_title(item: dict) -> str:
 
 
 def _icici_report_month(item: dict) -> date | None:
+    title_month = _detect_report_month_from_text(_icici_title(item))
+    if title_month:
+        return title_month
+
     for key in ("applicableMonth", "fileDate"):
         raw = item.get(key)
         if raw in (None, ""):
@@ -933,7 +1279,7 @@ def _icici_report_month(item: dict) -> date | None:
         except (TypeError, ValueError, OSError):
             continue
 
-    return _detect_report_month_from_text(_icici_title(item))
+    return None
 
 
 def _icici_base_score(ext: str, document_type: str) -> int:

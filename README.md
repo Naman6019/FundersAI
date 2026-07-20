@@ -27,6 +27,7 @@ Designed with a **Supabase-first runtime**, **deterministic AI comparisons**, an
 - 💼 **Auth & Subscriptions**: Secure workspace powered by Supabase Auth (Email & Google OAuth) with a Razorpay-backed subscription foundation for tiered access (Free, Pro, Ultra).
 - 🛠️ **Comprehensive Admin Controls**: Built-in Admin Dashboard for tracking AI usage, data coverage triage, parser diagnostics, and user management.
 - 🧠 **Explainable ML Foundations**: Numeric mutual-fund similarity/clustering and human-in-the-loop parser-review prioritization, both grounded in stored data rather than investment recommendations.
+- 📚 **Official-Document Research Foundation**: Background indexing of parsed AMC documents, versioned chunks and embeddings, citable research search, and explicit abstention when evidence is unavailable.
 
 ## 🛠️ Tech Stack
 
@@ -63,10 +64,11 @@ FundersAI/
 
 FundersAI is built to handle complex, high-volume financial data efficiently without breaking the bank on provider quotas:
 
-1. **Supabase-First Reads**: Runtime query-critical data (`stock_core_snapshot`, `mutual_fund_core_snapshot`, `mutual_fund_nav_history`) lives in normalized tables for instant access during chat and comparisons.
+1. **Supabase-First Reads**: Runtime query-critical data lives in `stock_core_snapshot`, `mutual_fund_core_snapshot`, and the server-only `nav_api_cache` used for complete MFAPI histories.
 2. **Cold Storage Strategy**: To protect database limits, raw Mutual Fund documents (AMC holdings, portfolios) and archival payloads are routed to Cloudflare R2.
 3. **Resilient Ingestion Parsers**: Custom parsing pipelines ingest AMC disclosures (PPFAS, ICICI, HDFC, SBI) with explicit tracking states (`pending`, `parsed`, `needs_review`, `failed`). 
 4. **Self-Healing Data**: Automated cooldown retries and scheduled cron jobs continuously attempt to resolve missed parses and sync pricing history.
+5. **Evaluation-First Research Retrieval**: The recorded lexical baseline and deterministic v2 reranker use the same fixed dataset. Query-vector retrieval stays opt-in, and the bounded LangGraph path returns cited official-document excerpts or abstains.
 
 ---
 
@@ -102,7 +104,7 @@ For agents and contributors, read the `AGENTS.md` file and the `docs/` folder. T
 - Supabase normalized tables are the primary read path for app/chat/comparison:
   - `stock_core_snapshot`
   - `mutual_fund_core_snapshot`
-  - `mutual_fund_nav_history`
+  - `nav_api_cache` (server-only, on-demand mutual-fund NAV history cache)
 - IndianAPI is restricted to stock enrichment/fundamentals and protected by monthly/daily quota guard.
 - Mutual fund NAV/history uses MFapi/AMFI paths, not IndianAPI.
 - Provider attempts (cache hit, live success/failure, quota skip) are logged in `provider_usage_logs`.

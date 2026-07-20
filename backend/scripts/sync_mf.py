@@ -148,16 +148,7 @@ def main():
             # 1. Update main table
             supabase.table('mutual_funds').upsert(batch, on_conflict='scheme_code').execute()
 
-            # 2. Keep normalized nav history in sync.
-            nav_history_batch = [{
-                "scheme_code": str(u["scheme_code"]),
-                "nav": u["nav"],
-                "nav_date": u["nav_date"],
-                "data_source": "amfi_navall",
-            } for u in batch]
-            supabase.table('mutual_fund_nav_history').upsert(nav_history_batch, on_conflict='scheme_code,nav_date').execute()
-
-            # 3. Keep core snapshot aligned.
+            # 2. Keep latest NAV and core snapshot aligned. Full history is cached on demand.
             core_snapshot_batch = [
                 _build_core_snapshot_row(u, existing_core.get(str(u["scheme_code"])))
                 for u in batch

@@ -30,6 +30,8 @@ pytest-cache-files-*/
 .DS_Store
 .vscode/
 logs/
+/mlruns/
+/.pytest_temp/
 # AMC Data folder
 /AMC Data/
 
@@ -70,6 +72,8 @@ stitch_downloads/
 # Graphifyy Ignore Docs
 *.md
 *.MD
+!docs/13_DISCOVERY_AGENTS.md
+!docs/11_ML_SYSTEMS.md
 *.txt
 *.csv
 *.pdf
@@ -86,6 +90,7 @@ stitch_downloads/
 *.yml
 !backend/config/mf_document_sources.json
 !.github/workflows/reacquire-mf-raw-to-r2.yml
+!.github/workflows/archive-mf-nav-history.yml
 *.log
 *.markdown
 *.rst

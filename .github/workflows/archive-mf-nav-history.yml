@@ -1,0 +1,67 @@
+name: Archive Legacy MF NAV History
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: archive-legacy-mf-nav-history
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r backend/requirements.txt
+      - name: Validate archive configuration
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "Error: Missing SUPABASE_URL or SUPABASE_KEY"
+            exit 1
+          fi
+          if [ -z "$R2_ENDPOINT" ] || [ -z "$R2_ACCESS_KEY_ID" ] || [ -z "$R2_SECRET_ACCESS_KEY" ] || [ -z "$R2_COLD_BUCKET" ]; then
+            echo "Error: Missing R2 archive secrets"
+            exit 1
+          fi
+      - name: Export and verify every legacy NAV row
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_RAW_BUCKET: ${{ secrets.R2_RAW_BUCKET }}
+          R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
+        run: python -m backend.app.mf_ingestion.jobs.archive_mf_nav_history --verify --report-output nav-history-archive-report.json
+      - name: Check seven-day production drop readiness
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          MF_NAV_CACHE_OBSERVATION_DAYS: "7"
+          MF_NAV_CACHE_MIN_OBSERVED_REQUESTS: "10"
+          MF_NAV_CACHE_MAX_FAILURE_RATE: "0.10"
+          MF_NAV_CACHE_MAX_STALE_RATE: "0.25"
+        run: python backend/scripts/check_nav_cache_drop_readiness.py --archive-report nav-history-archive-report.json --output nav-history-drop-readiness.json
+      - name: Upload archive verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nav-history-archive-report
+          path: |
+            nav-history-archive-report.json
+            nav-history-drop-readiness.json
+          if-no-files-found: warn
