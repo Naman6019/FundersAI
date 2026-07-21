@@ -29,6 +29,15 @@ test('chat proxy persists reasoning-summary metadata', () => {
   assert.match(source, /reasoning_summary: data\.reasoning_summary \|\| null/);
 });
 
+test('chat proxy returns the persisted assistant message id for response feedback', () => {
+  const proxy = readFileSync(new URL('../app/api/chat/route.ts', import.meta.url), 'utf8');
+  const stream = readFileSync(new URL('../lib/chatStream.ts', import.meta.url), 'utf8');
+
+  assert.match(proxy, /\.insert\(rowsWithSession\)\s*\.select\('id,role'\)/);
+  assert.match(proxy, /response_message_id = responseMessageId/);
+  assert.match(stream, /response_message_id\?: string/);
+});
+
 test('chat schema migration defines owned sessions and messages', () => {
   const migration = readFileSync(
     new URL('../../backend/migrations/20260721_add_ai_chat_sessions_and_messages.sql', import.meta.url),

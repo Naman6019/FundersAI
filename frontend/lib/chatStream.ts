@@ -21,6 +21,7 @@ export interface ChatApiResponse extends CanvasPayload {
   news_context_status?: unknown;
   sources?: unknown;
   reasoning_summary?: unknown;
+  response_message_id?: string;
 }
 
 type ChatStreamEvent = {

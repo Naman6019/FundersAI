@@ -25,6 +25,15 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - `ai_chat_sessions` and `ai_chat_messages` are user-owned and protected by RLS;
   - `/api/chat/sessions` creates/lists sessions and `/api/chat/sessions/[sessionId]` restores owned messages;
   - the chat proxy validates session ownership before service-role writes.
+- User feedback flow (implemented locally; production requires `20260721_add_user_feedback.sql` before frontend deployment):
+  - authenticated users receive a dismissible bottom-page app-rating prompt and can reopen it from the profile menu;
+  - successful assistant messages expose helpful/unhelpful ratings with an optional comment linked to the owned message/session and trace;
+  - sign-out clears the Supabase session and redirects to the public `/feedback?source=logout` page;
+  - feedback storage is service-role-only, ownership-checked, input-bounded, and rate-limited.
+- Research Evidence answer readability hardening (implemented locally; not yet deployed):
+  - the HDFC expense-ratio website note produces one concise cited answer instead of a raw OCR dump;
+  - unstructured extractive fallbacks are labeled as matching evidence rather than presented as synthesized answers;
+  - official OCR excerpts are collapsed by default and remain available for inspection.
 - Chat status streaming and lifecycle hardening:
   - FastAPI streams intent, data-loading, and synthesis status events followed by one final or safe error event;
   - full chat and inline copilot share one incremental SSE parser;

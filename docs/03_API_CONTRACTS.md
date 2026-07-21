@@ -7,6 +7,7 @@ The supported browser boundary is the Next.js `/api/*` surface. Browser code mus
 ## Authentication and Security
 
 - `POST /api/chat` and all `/api/chat/sessions*` routes require a Supabase user session.
+- `POST /api/feedback` requires a Supabase user session for general and response feedback. Logout feedback is accepted after sign-out with tighter validation and rate limiting.
 - When chat receives a `session_id`, the Next.js proxy verifies that the session belongs to the authenticated user before service-role writes.
 - Frontend `/api/admin/*` routes require an authenticated user whose `user_profiles.role` is `admin`.
 - Internal FastAPI admin and document-ingestion mutations require `X-Admin-Key`; ingestion webhooks may use the configured webhook token where supported.
@@ -34,6 +35,15 @@ The supported browser boundary is the Next.js `/api/*` surface. Browser code mus
 - `GET /api/keepalive`: proxies backend `GET /health`.
 - `GET /api/data-health`: proxies the backend data-health summary.
 
+### Feedback
+
+- `POST /api/feedback`
+  - Accepts `feedback_type` (`general`, `response`, or `logout`), a required integer `rating` from 1 to 5, and an optional comment up to 2,000 characters.
+  - General feedback is linked to the authenticated user.
+  - Response feedback can include an owned assistant `message_id`, owned `session_id`, trace ID, page path, and a bounded response excerpt. Supplied message/session IDs are checked against the authenticated user before storage.
+  - Logout feedback is intentionally public because Supabase sign-out happens first; chat identifiers and response excerpts are discarded for this type.
+  - Writes are rate-limited and performed server-side with the service role.
+
 ### Quant Proxy Family
 
 - `GET /api/quant/stocks/compare?symbols=RELIANCE,TCS`
@@ -53,6 +63,7 @@ These routes proxy to their matching `/api/quant/*` FastAPI endpoints.
 - `POST /api/funds/category/compare`: deterministic within-category comparison.
 - `POST /api/funds/compare/verdict`: structured comparison summary with coverage and limitations.
 - `POST /api/funds/research/answer`: bounded official-document research answer with citations or abstention.
+  - Returns `answer_format=field_summary` for concise verified claims, `source_excerpts` when only matching raw evidence is available, or `abstention` when the evidence gate fails.
 - `GET /api/funds/research/evaluation`: versioned development evaluation artifact used by the evidence UI.
 
 ### Billing and Payments

@@ -14,6 +14,7 @@ export type RateLimitGroup =
   | 'category-funds'
   | 'search'
   | 'data-health'
+  | 'feedback'
   | 'cron-sync-mf'
   | 'admin-mutation';
 
@@ -50,6 +51,10 @@ export const RATE_LIMIT_GROUPS: Record<RateLimitGroup, RateLimitWindow[]> = {
     { name: 'minute', limit: 30, seconds: 60 },
     { name: 'day', limit: 500, seconds: 86400 },
   ],
+  feedback: [
+    { name: 'minute', limit: 10, seconds: 60 },
+    { name: 'day', limit: 100, seconds: 86400 },
+  ],
   'cron-sync-mf': [
     { name: 'hour', limit: 2, seconds: 3600 },
   ],
@@ -83,6 +88,10 @@ export const RATE_LIMIT_TIERS: Record<UserTier, Partial<Record<RateLimitGroup, R
       { name: 'minute', limit: 15, seconds: 60 },
       { name: 'day', limit: 100, seconds: 86400 },
     ],
+    feedback: [
+      { name: 'minute', limit: 5, seconds: 60 },
+      { name: 'day', limit: 30, seconds: 86400 },
+    ],
   },
   pro: RATE_LIMIT_GROUPS,
   ultra: {
@@ -108,6 +117,10 @@ export const RATE_LIMIT_TIERS: Record<UserTier, Partial<Record<RateLimitGroup, R
     'data-health': [
       { name: 'minute', limit: 90, seconds: 60 },
       { name: 'day', limit: 1500, seconds: 86400 },
+    ],
+    feedback: [
+      { name: 'minute', limit: 20, seconds: 60 },
+      { name: 'day', limit: 300, seconds: 86400 },
     ],
     'cron-sync-mf': RATE_LIMIT_GROUPS['cron-sync-mf'],
     'admin-mutation': RATE_LIMIT_GROUPS['admin-mutation'],

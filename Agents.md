@@ -45,6 +45,7 @@ Use this guide for repository conventions and quick orientation. For the authori
 
 - **Chat:** `/api/chat`, `/api/chat/history`, `/api/chat/sessions`, `/api/chat/sessions/[sessionId]`
 - **Health:** `/api/keepalive`, `/api/data-health`
+- **Feedback:** `/api/feedback` (authenticated app/response ratings; post-sign-out logout ratings)
 - **Quant:** `/api/quant/stocks/*`, `/api/quant/providers/status`
 - **Funds:** `/api/mf/[schemeCode]`, `/api/search`, `/api/funds/category`, `/api/funds/category/compare`, `/api/funds/compare/verdict`, `/api/funds/research/answer`, `/api/funds/research/evaluation`
 - **Billing:** `/api/create-order`, `/api/verify-payment`, `/api/billing/subscriptions`, `/api/billing/webhook`
@@ -72,14 +73,15 @@ See `docs/03_API_CONTRACTS.md` for the complete route inventory and security beh
 3. **Rate limits:** public read-only groups (`quant`, `mf-detail`, `category-funds`, `data-health`) fail open only when the rate-limit backend is unavailable. Chat, fund research, cron, and admin mutations fail closed.
 4. **Deterministic comparisons:** response fields are additive and return explicit coverage/limitation metadata when data is partial.
 5. **Owned chat persistence:** `ai_chat_sessions` and `ai_chat_messages` are user-owned, RLS-protected tables; frontend service-role writes require an authenticated ownership check.
-6. **MF ingestion states:** `pending`, `downloaded`, `needs_reparse`, `parsed`, `parsed_partial`, `needs_review`, `failed`, and `skipped_not_supported`.
-7. **Official-document research:** deterministic lexical rerank v2 remains the fallback with abstention. Direct OpenAI vector retrieval is configured separately from optional v3 cross-encoder/LLM grading and must use the same 1,536-dimension embedding model for documents and queries.
-8. **R2-first storage:** raw AMC documents stay in R2; Supabase stores query-critical structured rows and metadata.
+6. **Feedback:** `user_feedback` is service-role-only; general/response feedback requires authentication, response targets are ownership-checked, and post-sign-out feedback is anonymous and metadata-limited.
+7. **MF ingestion states:** `pending`, `downloaded`, `needs_reparse`, `parsed`, `parsed_partial`, `needs_review`, `failed`, and `skipped_not_supported`.
+8. **Official-document research:** deterministic lexical rerank v2 remains the fallback with abstention. Direct OpenAI vector retrieval is configured separately from optional v3 cross-encoder/LLM grading and must use the same 1,536-dimension embedding model for documents and queries.
+9. **R2-first storage:** raw AMC documents stay in R2; Supabase stores query-critical structured rows and metadata.
 
 ## Testing Conventions
 
 - Backend tests live under `backend/tests/` (`60` tracked `test_*.py` modules at this update).
-- Frontend contract tests live under `frontend/tests/` (`9` tracked `*.test.mjs` files at this update).
+- Frontend contract tests live under `frontend/tests/` (`10` tracked `*.test.mjs` files at this update).
 - Run focused tests for touched behavior first, followed by the relevant full suite.
 - Typical full checks from the repository root:
 

@@ -84,6 +84,14 @@ Raw document bytes belong in Cloudflare R2. Supabase stores the object location 
 
 The Next.js proxy uses the service role only after authenticating the user and checking session ownership.
 
+## Feedback
+
+- `user_feedback`
+  - Stores 1-5 ratings and optional comments for general app, individual response, and post-logout feedback.
+  - Authenticated app/response rows store `user_id`; response rows may reference an owned `ai_chat_messages` row, chat session, and trace ID.
+  - Logout rows may be anonymous because feedback is collected after the Supabase session is cleared.
+  - RLS is enabled. `anon` and `authenticated` have no table privileges; only server-side `service_role` calls can read or write rows.
+
 ### Legacy history model
 
 - `chat_messages`
@@ -115,5 +123,6 @@ The Next.js proxy uses the service role only after authenticating the user and c
 3. `20260721_harden_provider_response_cache_rls.sql`
 4. `20260721_add_mf_discovery_runs.sql`
 5. `20260721_harden_amc_document_chunks.sql`
+6. `20260721_add_user_feedback.sql`
 
 Equivalent production SQL is not a substitute for keeping the migration in version control.

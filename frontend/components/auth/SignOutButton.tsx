@@ -13,14 +13,17 @@ export default function SignOutButton({ className, showText = true }: { classNam
 
     setIsSigningOut(true);
     setErrorMessage('');
+    window.sessionStorage.setItem('fundersai-logout-feedback-pending', '1');
+    window.sessionStorage.removeItem('fundersai-feedback-prompt-seen');
     const { error } = await supabaseBrowser.auth.signOut();
     if (error) {
+      window.sessionStorage.removeItem('fundersai-logout-feedback-pending');
       setErrorMessage(error.message);
       setIsSigningOut(false);
       return;
     }
 
-    window.location.replace('/auth');
+    window.location.replace('/feedback?source=logout');
   };
 
   return (

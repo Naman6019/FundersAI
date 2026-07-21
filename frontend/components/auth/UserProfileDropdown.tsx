@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { LogOut, User, Zap, ChevronUp, ChevronDown } from 'lucide-react';
+import { MessageSquareText, Zap, ChevronUp, ChevronDown } from 'lucide-react';
 import SignOutButton from './SignOutButton';
 import type { UserTier } from '@/lib/billing/tiers';
 
@@ -65,6 +65,15 @@ export default function UserProfileDropdown({ currentTier }: UserProfileDropdown
             <span className="rounded bg-[#66a3ff]/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#66a3ff]">
               {currentTier}
             </span>
+          </Link>
+
+          <Link
+            href="/feedback"
+            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+            onClick={() => setIsOpen(false)}
+          >
+            <MessageSquareText className="h-4 w-4 text-[#00FF9D]" />
+            <span>Send Feedback</span>
           </Link>
 
           <div className="my-1 border-t border-white/5"></div>

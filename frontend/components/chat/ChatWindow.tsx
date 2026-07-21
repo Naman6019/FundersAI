@@ -12,6 +12,7 @@ import { readChatStream } from '@/lib/chatStream';
 import Magnetic from '@/components/ui/Magnetic';
 import { motion } from 'framer-motion';
 import ComparisonView from '@/components/canvas/ComparisonView';
+import ResponseFeedback from '@/components/feedback/ResponseFeedback';
 
 const markdownComponents = {
   h1: (props: React.ComponentProps<'h1'>) => <h1 className="mb-3 mt-1 text-lg font-bold text-white" {...props} />,
@@ -448,7 +449,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
       }
 
       addMessage({
-        id: Date.now().toString(),
+        id: data.response_message_id || Date.now().toString(),
         role: 'system',
         content: data.answer,
         metadata: {
@@ -645,6 +646,14 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
                   ) : (
                     msg.content
                   )}
+                  {msg.role === 'system' && msg.id !== '1' ? (
+                    <ResponseFeedback
+                      messageId={msg.id}
+                      sessionId={currentSessionId}
+                      traceId={typeof msg.metadata?.trace_id === 'string' ? msg.metadata.trace_id : null}
+                      responseExcerpt={msg.content}
+                    />
+                  ) : null}
                   {msg.id === '1' && (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {suggestionTemplates.map((template) => (

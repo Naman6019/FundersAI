@@ -10,6 +10,7 @@ type Source = { document_id?: string; source_url?: string; excerpt?: string; sco
 type ModelUsage = { stage?: string; provider?: string; model?: string; purpose?: string; status?: string };
 type ResearchResponse = {
   answer?: string;
+  answer_format?: 'field_summary' | 'source_excerpts' | 'abstention';
   grounded?: boolean;
   abstain?: boolean;
   trace_id?: string;
@@ -147,6 +148,14 @@ function ResearchEvidencePage() {
   const answerLines = (response?.answer || '')
     .split('\n')
     .filter((line) => line.trim() && !line.trim().endsWith(':'));
+  const isAbstention = Boolean(response?.abstain || !response?.grounded);
+  const isLegacyExcerptDump = Boolean(
+    response?.grounded
+    && !response?.answer_format
+    && answerLines.length
+    && answerLines.every((line) => /^[-•]?\s*\[\d+]\s+/.test(line.trim())),
+  );
+  const isExtractiveFallback = response?.answer_format === 'source_excerpts' || isLegacyExcerptDump;
 
   return (
     <main className="min-h-screen bg-[#060908] px-5 py-8 text-white sm:px-8">
@@ -188,34 +197,52 @@ function ResearchEvidencePage() {
             <div className="space-y-5">
               <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
                 <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] ${response.grounded ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100' : 'border-amber-300/20 bg-amber-300/10 text-amber-100'}`}>{response.grounded ? 'Evidence found' : 'Not enough evidence'}</span>
-                <h2 className="mt-4 text-lg font-semibold">Answer from official documents</h2>
-                <p className="mt-1 text-xs text-slate-400">Every numbered item below links to the matching official source.</p>
-                {answerLines.length ? (
+                <h2 className="mt-4 text-lg font-semibold">{isExtractiveFallback ? 'Matching official evidence' : 'Answer from official documents'}</h2>
+                <p className="mt-1 text-xs text-slate-400">{isExtractiveFallback ? 'Relevant text was found, but a concise field-level answer could not be extracted reliably.' : 'Each statement includes a link to the supporting official document.'}</p>
+                {isAbstention ? (
+                  <p className="mt-4 text-sm leading-7 text-slate-200">{response.answer}</p>
+                ) : isExtractiveFallback ? (
+                  <p className="mt-4 rounded-xl border border-amber-300/15 bg-amber-300/[0.05] p-4 text-sm leading-6 text-amber-100">Review the matching passages under Official evidence excerpts. FundersAI has not converted them into an answer because the wording could not be verified safely.</p>
+                ) : answerLines.length ? (
                   <ol className="mt-4 space-y-3">
                     {answerLines.map((line, index) => {
                       const citationMatch = line.match(/\[(\d+)]\s*$/);
                       const sourceNumber = citationMatch?.[1] || String(index + 1);
+                      const source = response.sources?.[Number(sourceNumber) - 1];
                       const clean = line.replace(/^[-•]\s*/, '').replace(/\s*\[\d+]\s*$/, '');
-                      return <li key={`${index}-${clean.slice(0, 20)}`} className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm leading-6 text-slate-200"><span className="mr-2 font-semibold text-[#00FF9D]">Source {sourceNumber}</span>{clean}</li>;
+                      return (
+                        <li key={`${index}-${clean.slice(0, 20)}`} className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm leading-6 text-slate-200">
+                          <span>{clean}</span>{' '}
+                          {source?.source_url ? <a href={source.source_url} target="_blank" rel="noreferrer" className="whitespace-nowrap font-semibold text-[#00FF9D] hover:underline">View evidence {sourceNumber}</a> : <span className="font-semibold text-[#00FF9D]">[{sourceNumber}]</span>}
+                        </li>
+                      );
                     })}
                   </ol>
                 ) : <p className="mt-4 text-sm leading-7 text-slate-200">{response.answer}</p>}
-                <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4">
-                  <div className="flex items-center justify-between gap-3 text-sm"><span>Evidence coverage</span><span className="font-semibold text-[#00FF9D]">{pct(response.claim_validation?.support_rate)}</span></div>
-                  <p className="mt-1 text-xs text-slate-500">Share of displayed statements matched to the official excerpts below.</p>
-                </div>
+                {!isAbstention && !isExtractiveFallback ? (
+                  <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4">
+                    <div className="flex items-center justify-between gap-3 text-sm"><span>Evidence coverage</span><span className="font-semibold text-[#00FF9D]">{pct(response.claim_validation?.support_rate)}</span></div>
+                    <p className="mt-1 text-xs text-slate-500">Share of displayed statements matched to the official excerpts below.</p>
+                  </div>
+                ) : null}
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-                <h2 className="flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4 text-[#00FF9D]" /> Official documents used</h2>
-                <p className="mt-1 text-xs text-slate-500">Open any card to inspect the original AMC document.</p>
+                <h2 className="flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4 text-[#00FF9D]" /> Official evidence excerpts</h2>
+                <p className="mt-1 text-xs text-slate-500">Each item is a matching passage from an indexed official AMC document.</p>
                 <div className="mt-3 space-y-3">
                   {(response.sources || []).map((source, index) => (
-                    <a key={`${source.document_id}-${index}`} href={source.source_url} target="_blank" rel="noreferrer" className="block rounded-xl border border-white/10 bg-black/20 p-4 transition hover:border-[#00FF9D]/30">
-                      <div className="flex items-center justify-between gap-2 text-xs"><span className="font-semibold text-[#00FF9D]">Official source {index + 1}</span><span className="inline-flex items-center gap-1 text-slate-400">Open document <ExternalLink className="h-3.5 w-3.5" /></span></div>
-                      <p className="mt-2 text-sm leading-6 text-slate-300">{source.excerpt}</p>
+                    <article key={`${source.document_id}-${index}`} className="rounded-xl border border-white/10 bg-black/20 p-4">
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="font-semibold text-[#00FF9D]">Evidence excerpt {index + 1}</span>
+                        <a href={source.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-slate-400 hover:text-white">Open document <ExternalLink className="h-3.5 w-3.5" /></a>
+                      </div>
                       <p className="mt-2 text-[11px] text-slate-500">{[source.amc_code?.toUpperCase(), source.document_type ? source.document_type.charAt(0).toUpperCase() + source.document_type.slice(1) : '', readableDate(source.report_month)].filter(Boolean).join(' · ')}</p>
-                    </a>
+                      <details className="mt-3 border-t border-white/10 pt-3">
+                        <summary className="cursor-pointer text-xs font-medium text-slate-300">View matching excerpt</summary>
+                        <p className="mt-3 text-sm leading-6 text-slate-400">{source.excerpt}</p>
+                      </details>
+                    </article>
                   ))}
                   {!response.sources?.length ? <p className="text-sm text-slate-400">{response.retrieval?.corpus_status === 'empty' ? 'No official documents have been indexed for this fund house yet.' : 'The indexed official documents did not contain enough relevant evidence.'}</p> : null}
                 </div>

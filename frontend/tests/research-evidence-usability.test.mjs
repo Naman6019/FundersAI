@@ -17,4 +17,12 @@ test('research evidence defaults to reader-friendly labels and hides diagnostics
   assert.match(page, /Expected sources found/);
   assert.match(page, /Correct refusals/);
   assert.match(page, /citationMatch/);
+  assert.match(page, /answer_format/);
+  assert.match(page, /isLegacyExcerptDump/);
+  assert.match(page, /Matching official evidence/);
+  assert.match(page, /View matching excerpt/);
+  assert.match(page, /View evidence \{sourceNumber\}/);
+  assert.match(page, /Official evidence excerpts/);
+  assert.match(page, /!isAbstention && !isExtractiveFallback/);
+  assert.match(page, /has not converted them into an answer because the wording could not be verified safely/);
 });

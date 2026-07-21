@@ -118,6 +118,7 @@ def test_workflow_answers_expense_ratio_section_question_without_raw_excerpt_dum
         'Answer from official documents:\n- The total expense ratio is listed under the '
         '"Base Expense Ratio (As on last business day of the month)" section. [1]'
     )
+    assert result["answer_format"] == "field_summary"
     assert result["claim_validation"]["support_rate"] == 1.0
     assert "FACT SHEET - APRIL" not in result["answer"]
     assert result["model_usage"][0] == {
@@ -127,6 +128,71 @@ def test_workflow_answers_expense_ratio_section_question_without_raw_excerpt_dum
         "purpose": "Converts the question into an embedding used to find semantically similar official-document chunks.",
         "status": "active",
     }
+
+
+def test_workflow_answers_live_hdfc_expense_ratio_wording_without_ocr_dump() -> None:
+    class _HdfcRetrievalService:
+        def search(self, query, *, filters, limit):
+            return {
+                "retrieval_version": "amc_lexical_rerank_v2",
+                "retrieval_mode": "hybrid",
+                "vector_status": "active",
+                "cross_encoder_status": "disabled",
+                "query_coverage": 1.0,
+                "grounded": True,
+                "abstain": False,
+                "sources": [
+                    {
+                        "document_id": "doc-1",
+                        "source_url": "https://official.example/hdfc-factsheet.pdf",
+                        "excerpt": "Total expense ratio (TER) means the ratio of total expenses charged to investors.",
+                    },
+                    {
+                        "document_id": "doc-1",
+                        "source_url": "https://official.example/hdfc-factsheet.pdf",
+                        "excerpt": (
+                            "For Total Expense Ratio including brokerage, transaction cost and statutory levies "
+                            "please refer our website. Industry Allocation of Equity Holding of Net Assets."
+                        ),
+                    },
+                ],
+            }
+
+    result = run_fund_research_workflow(
+        _HdfcRetrievalService(),
+        query="Which official factsheet section lists the total expense ratio?",
+    )
+
+    assert result["answer"] == (
+        "Answer from official documents:\n- The factsheet directs readers to the fund website for the "
+        "Total Expense Ratio, including brokerage, transaction cost and statutory levies. [2]"
+    )
+    assert result["answer_format"] == "field_summary"
+    assert result["claim_validation"]["support_rate"] == 1.0
+    assert "Industry Allocation" not in result["answer"]
+
+
+def test_workflow_marks_unstructured_fallback_as_source_excerpts() -> None:
+    class _UnstructuredRetrievalService:
+        def search(self, query, *, filters, limit):
+            return {
+                "retrieval_version": "test_retrieval_v1",
+                "retrieval_mode": "lexical",
+                "vector_status": "disabled",
+                "query_coverage": 1.0,
+                "grounded": True,
+                "abstain": False,
+                "sources": [{
+                    "document_id": "doc-1",
+                    "source_url": "https://official.example/factsheet.pdf",
+                    "excerpt": "A matching official passage that has no supported field extractor.",
+                }],
+            }
+
+    result = run_fund_research_workflow(_UnstructuredRetrievalService(), query="Explain this passage")
+
+    assert result["answer_format"] == "source_excerpts"
+    assert result["grounded"] is True
 
 
 def test_workflow_abstains_when_retrieval_has_no_evidence() -> None:

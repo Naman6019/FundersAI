@@ -34,10 +34,23 @@ def _extract_readable_claims(query: str, sources: list[dict[str, Any]]) -> list[
             r"\b(Base\s+Expense\s+Ratio\s*\(As\s+on\s+last\s+business\s+day\s+of\s+the\s+month\s*\))",
             re.IGNORECASE,
         )
+        website_note_pattern = re.compile(
+            r"\bFor\s+Total\s+Expense\s+Ratio(?:\s+including\s+brokerage,?\s+transaction\s+costs?\s+and\s+statutory\s+levies)?\s+please\s+refer(?:\s+to)?\s+(?:our|the\s+fund)\s+website",
+            re.IGNORECASE,
+        )
         for source_index, source in enumerate(sources, start=1):
-            match = heading_pattern.search(_clean_evidence_text(source.get("excerpt")))
+            text = _clean_evidence_text(source.get("excerpt"))
+            match = heading_pattern.search(text)
             if not match:
-                continue
+                website_note = website_note_pattern.search(text)
+                if not website_note:
+                    continue
+                claims.append(
+                    "- The factsheet directs readers to the fund website for the Total Expense Ratio, "
+                    f"including brokerage, transaction cost and statutory levies. [{source_index}]"
+                )
+                found.add("expense ratio")
+                break
             heading = re.sub(r"\s+\)", ")", _clean_evidence_text(match.group(1)))
             claims.append(f'- The total expense ratio is listed under the "{heading}" section. [{source_index}]')
             found.add("expense ratio")
@@ -157,6 +170,7 @@ class FundResearchState(TypedDict, total=False):
     limit: int
     retrieval: dict[str, Any]
     answer: str
+    answer_format: str
     sources: list[dict[str, Any]]
     grounded: bool
     abstain: bool
@@ -255,6 +269,7 @@ def build_fund_research_graph(retrieval_service: Any, relevance_grader: Any | No
         lines.extend(claims or (f"- [{index}] {_clean_evidence_text(source.get('excerpt'))}" for index, source in enumerate(sources, start=1)))
         return {
             "answer": "\n".join(lines),
+            "answer_format": "field_summary" if claims else "source_excerpts",
             "sources": sources,
             "grounded": True,
             "abstain": False,
@@ -279,6 +294,7 @@ def build_fund_research_graph(retrieval_service: Any, relevance_grader: Any | No
         if not valid:
             return {
                 "answer": ABSTENTION_MESSAGE,
+                "answer_format": "abstention",
                 "sources": [],
                 "grounded": False,
                 "abstain": True,
@@ -311,6 +327,7 @@ def build_fund_research_graph(retrieval_service: Any, relevance_grader: Any | No
     def abstain(state: FundResearchState) -> FundResearchState:
         return {
             "answer": ABSTENTION_MESSAGE,
+            "answer_format": "abstention",
             "sources": [],
             "grounded": False,
             "abstain": True,
@@ -387,6 +404,7 @@ def run_fund_research_workflow(
         "trace_id": run_id,
         "retrieval_version": retrieval.get("retrieval_version"),
         "answer": result.get("answer", ABSTENTION_MESSAGE),
+        "answer_format": result.get("answer_format", "abstention"),
         "grounded": bool(result.get("grounded")),
         "abstain": bool(result.get("abstain", True)),
         "sources": result.get("sources") or [],

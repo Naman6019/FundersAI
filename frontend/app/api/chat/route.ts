@@ -36,8 +36,8 @@ async function persistChatResult(
   sessionId: string | null,
   requestBody: Record<string, unknown>,
   data: ChatPayload,
-): Promise<void> {
-  if (!sessionId) return;
+): Promise<string | null> {
+  if (!sessionId) return null;
 
   const nowMs = Date.now();
   const rows = [
@@ -80,11 +80,12 @@ async function persistChatResult(
     },
   ].filter((row) => row.content.trim().length > 0);
 
-  if (rows.length === 0) return;
+  if (rows.length === 0) return null;
   const rowsWithSession = rows.map((row) => ({ ...row, session_id: sessionId }));
-  const { error: insertError } = await userContext.supabaseAdmin
+  const { data: insertedRows, error: insertError } = await userContext.supabaseAdmin
     .from('ai_chat_messages')
-    .insert(rowsWithSession);
+    .insert(rowsWithSession)
+    .select('id,role');
   if (insertError) throw new Error(`chat_history_write_failed:${insertError.message}`);
 
   const { error: updateError } = await userContext.supabaseAdmin
@@ -93,6 +94,7 @@ async function persistChatResult(
     .eq('id', sessionId)
     .eq('user_id', userContext.user.id);
   if (updateError) throw new Error(`chat_session_update_failed:${updateError.message}`);
+  return insertedRows?.find((row) => row.role === 'system')?.id || null;
 }
 
 export async function POST(req: Request) {
@@ -271,7 +273,8 @@ export async function POST(req: Request) {
               const data = { ...(event.payload as ChatPayload) };
               const usage = (data._usage || null) as TokenUsage | null;
               delete data._usage;
-              await persistChatResult(context, sessionId, body, data);
+              const responseMessageId = await persistChatResult(context, sessionId, body, data);
+              data.response_message_id = responseMessageId;
               await finalizeUsage(true, usage);
               emit({ type: 'final', payload: data });
             }

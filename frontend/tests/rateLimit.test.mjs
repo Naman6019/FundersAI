@@ -117,6 +117,20 @@ test('category fund browsing does not consume chat buckets', async () => {
   assert.equal(chat.remaining, 4);
 });
 
+test('feedback uses its own bounded bucket', async () => {
+  process.env.NODE_ENV = 'test';
+  const limiter = loadRateLimitModule();
+  limiter.resetRateLimitMemoryForTests();
+
+  const result = await limiter.checkRateLimit(requestFor('203.0.113.17'), 'feedback', {
+    nowMs: 1000,
+    tier: 'free',
+  });
+  assert.equal(result.allowed, true);
+  assert.equal(result.limit, 5);
+  assert.equal(result.remaining, 4);
+});
+
 test('production without Upstash config fails closed', async () => {
   process.env.NODE_ENV = 'production';
   delete process.env.UPSTASH_REDIS_REST_URL;

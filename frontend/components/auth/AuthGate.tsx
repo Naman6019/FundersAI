@@ -4,6 +4,7 @@ import { ReactNode, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
 import { hasSupabaseBrowserEnv, supabaseBrowser } from '@/lib/supabaseBrowser';
+import FeedbackPrompt from '@/components/feedback/FeedbackPrompt';
 
 type AuthGateProps = {
   children: ReactNode;
@@ -30,20 +31,24 @@ export default function AuthGate({ children }: AuthGateProps) {
     }
 
     let isActive = true;
+    const redirectSignedOut = () => {
+      const feedbackPending = window.sessionStorage.getItem('fundersai-logout-feedback-pending') === '1';
+      router.replace(feedbackPending ? '/feedback?source=logout' : `/auth?next=${encodeURIComponent(pathname)}`);
+    };
 
     supabaseBrowser.auth.getUser().then(({ data }) => {
       if (!isActive) return;
       setUser(data.user);
       setIsLoading(false);
       if (!data.user) {
-        router.replace(`/auth?next=${encodeURIComponent(pathname)}`);
+        redirectSignedOut();
       }
     });
 
     const { data: listener } = supabaseBrowser.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (!session?.user) {
-        router.replace(`/auth?next=${encodeURIComponent(pathname)}`);
+        redirectSignedOut();
       }
     });
 
@@ -61,5 +66,5 @@ export default function AuthGate({ children }: AuthGateProps) {
     );
   }
 
-  return children;
+  return <>{children}{!bypassAuth && user ? <FeedbackPrompt /> : null}</>;
 }
