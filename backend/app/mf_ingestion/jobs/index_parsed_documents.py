@@ -10,7 +10,7 @@ from app.mf_ingestion.parsers.pdf_text_parser import PDFTextParser
 from app.mf_ingestion.services.parsing_service import ParsingService
 from app.mf_ingestion.sources.registry import get_source
 from app.repositories.mutual_fund_repository import MutualFundRepository
-from app.services.document_indexing_service import DocumentIndexingService
+from app.services.document_indexing_service import DocumentIndexingService, INDEXABLE_DOCUMENT_STATUSES
 
 DEFAULT_AMCS = "axis,hdfc,sbi,icici,ppfas,nippon"
 
@@ -40,7 +40,7 @@ def main() -> int:
     documents = (
         supabase.table("mf_raw_documents")
         .select("*")
-        .in_("parse_status", ["parsed", "parsed_partial"])
+        .in_("parse_status", sorted(INDEXABLE_DOCUMENT_STATUSES))
         .in_("amc_code", amc_codes)
         .eq("file_ext", ".pdf")
         .order("parsed_at", desc=True)

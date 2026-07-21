@@ -17,9 +17,13 @@ from app.services.document_retrieval_service import (
 
 logger = logging.getLogger(__name__)
 
+INDEXABLE_DOCUMENT_STATUSES = frozenset(
+    {"parsed", "parsed_partial", "official_source_covered", "skipped_duplicate"}
+)
+
 
 class DocumentIndexingService:
-    """Indexes only parsed official documents from an explicit background job."""
+    """Indexes validated official PDFs from an explicit background job."""
 
     def __init__(
         self,
@@ -41,7 +45,7 @@ class DocumentIndexingService:
         self.last_index_mode = "not_run"
 
     def index(self, document: dict[str, Any], text: str) -> int:
-        if str(document.get("parse_status") or "").lower() not in {"parsed", "parsed_partial"}:
+        if str(document.get("parse_status") or "").lower() not in INDEXABLE_DOCUMENT_STATUSES:
             return 0
         source_url = str(document.get("source_url") or "")
         if not source_url.startswith("https://"):

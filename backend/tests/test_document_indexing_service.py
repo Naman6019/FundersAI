@@ -78,6 +78,39 @@ def test_indexes_lexical_chunks_when_embeddings_are_unavailable(monkeypatch):
     assert repository.rows[0]["metadata"]["index_mode"] == "lexical"
 
 
+def test_indexes_validated_official_documents_not_reparsed_for_structured_data():
+    for status in ("official_source_covered", "skipped_duplicate"):
+        repository = _Repository()
+
+        indexed = DocumentIndexingService(repository, embeddings_enabled=False).index(
+            {
+                "id": f"document-{status}",
+                "parse_status": status,
+                "source_url": "https://amc.example/factsheet.pdf",
+            },
+            "Official factsheet content.",
+        )
+
+        assert indexed == 1
+        assert len(repository.rows) == 1
+
+
+def test_rejects_documents_without_an_indexable_validation_status():
+    repository = _Repository()
+
+    indexed = DocumentIndexingService(repository, embeddings_enabled=False).index(
+        {
+            "id": "document-review",
+            "parse_status": "needs_review",
+            "source_url": "https://amc.example/factsheet.pdf",
+        },
+        "Unvalidated content.",
+    )
+
+    assert indexed == 0
+    assert repository.rows == []
+
+
 def test_required_embeddings_keep_provider_failure_strict(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_KEY", raising=False)
