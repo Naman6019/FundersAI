@@ -85,25 +85,25 @@ const steps: readonly Step[] = [
     id: "1",
     name: "01",
     title: "Data Gathering",
-    description: "Real-time sync with AMFI, BSE, and NSE for daily NAVs, AUMs, and expense ratios. No stale data.",
+    description: "Scheduled workflows keep query-critical snapshots and official source metadata available without hiding freshness limits.",
   },
   {
     id: "2",
     name: "02",
-    title: "Multi-Agent Processing",
-    description: "Specialized AI agents structure unstructured AMC factsheets into a normalized comparison matrix.",
+    title: "Document Processing",
+    description: "AMC holdings and factsheets are parsed, validated, and tracked through explicit parsed, partial, and needs-review states.",
   },
   {
     id: "3",
     name: "03",
-    title: "Confidence Scoring",
-    description: "Every metric is verified against secondary sources. Low-confidence flags trigger manual review queues.",
+    title: "Evidence Checks",
+    description: "Structured metrics, source freshness, missing fields, and resolver confidence stay visible around each comparison.",
   },
   {
     id: "4",
     name: "04",
-    title: "Synthesis",
-    description: "The engine generates readable, impartial verdicts based purely on quantitative thresholds.",
+    title: "Cited Answer or Abstention",
+    description: "Official-document evidence becomes a concise cited answer, or the system abstains when support is missing.",
   },
 ]
 
@@ -224,11 +224,11 @@ function FeatureCard({ children, step }: { children: React.ReactNode; step: numb
       style={{ "--x": useMotionTemplate`${mouseX}px`, "--y": useMotionTemplate`${mouseY}px` } as WrapperStyle}
     >
       <div className="relative w-full overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] backdrop-blur-md transition-colors duration-300">
-        <div className="m-8 sm:m-12 min-h-[400px] w-full">
+        <div className="relative min-h-[520px] p-8 sm:min-h-[460px] sm:p-12">
           <AnimatePresence mode="wait">
             <motion.div
               key={step}
-              className="flex w-full flex-col gap-4 md:w-2/5 relative z-20"
+              className="relative z-20 flex w-full flex-col gap-4 pb-[300px] md:w-2/5 md:pb-0"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
@@ -364,7 +364,7 @@ export function FeatureCarousel({
     <div className="flex flex-col gap-10 w-full max-w-[1200px] mx-auto p-4 z-10 relative">
         <FeatureCard {...props} step={step}>
             <AnimatePresence mode="wait">
-                <motion.div key={step} {...ANIMATION_PRESETS.fadeInScale} className="absolute right-0 bottom-0 w-full h-[300px] sm:h-[400px] sm:top-1/2 sm:-translate-y-1/2 sm:w-[55%] sm:right-8 z-10 overflow-hidden sm:overflow-visible">
+                <motion.div key={step} {...ANIMATION_PRESETS.fadeInScale} className="absolute bottom-0 right-0 z-10 h-[280px] w-full overflow-hidden sm:right-8 sm:top-1/2 sm:h-[400px] sm:w-[55%] sm:-translate-y-1/2 sm:overflow-visible">
                     {renderStepContent()}
                 </motion.div>
             </AnimatePresence>

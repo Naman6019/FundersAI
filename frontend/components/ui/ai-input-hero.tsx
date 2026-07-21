@@ -850,12 +850,15 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
             className="mt-10 sm:mt-12 flex items-center justify-center"
             onSubmit={(e) => {
               e.preventDefault();
-              onPromptSubmit?.(prompt);
+              const value = prompt.trim();
+              if (value) onPromptSubmit?.(value);
             }}
           >
             <div className="relative w-full sm:w-[900px] shadow-[0_0_40px_rgba(0,255,157,0.08)] transition-all hover:shadow-[0_0_60px_rgba(0,255,157,0.12)] rounded-2xl">
               <div className="relative rounded-2xl p-[1px] bg-gradient-to-br from-white/20 via-white/10 to-transparent">
+                <label htmlFor="landing-research-prompt" className="sr-only">Ask a research question</label>
                 <textarea
+                  id="landing-research-prompt"
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder={animatedPlaceholder}
@@ -863,7 +866,8 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
-                      onPromptSubmit?.(prompt);
+                      const value = prompt.trim();
+                      if (value) onPromptSubmit?.(value);
                     }
                   }}
                   className="w-full h-32 sm:h-36 resize-none rounded-2xl bg-black/40 border border-white/10 text-white placeholder:text-white/40 outline-none focus:ring-2 focus:ring-[#00FF9D]/20 focus:border-white/20 backdrop-blur-xl px-5 py-4 pr-16"
@@ -872,7 +876,8 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
               <button
                 type="submit"
                 aria-label={buttonText}
-                className="absolute right-3 bottom-3 inline-flex items-center justify-center w-11 h-11 rounded-xl bg-white text-black hover:bg-white/80 transition-colors"
+                disabled={!prompt.trim()}
+                className="absolute right-3 bottom-3 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-white text-black transition-colors hover:bg-white/80 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
                   <path d="M22 2L11 13"/>

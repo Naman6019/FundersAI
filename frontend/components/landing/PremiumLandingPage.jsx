@@ -47,22 +47,17 @@ function HeroGrid() {
 const ease = [0.22, 1, 0.36, 1];
 
 const dataTrailItems = [
-  "HDFC Flexi Cap",
-  "NAV INR 1,247.3",
-  "Updated 3h ago",
-  "Axis Bluechip",
-  "NAV INR 892.1",
-  "Updated 1h ago",
-  "SBI Small Cap",
-  "NAV INR 234.6",
-  "Updated 2h ago",
-  "PPFAS Flexi Cap",
-  "Sharp 1.8",
-  "Tracking Err 0.4%",
+  "Official AMC documents",
+  "Supabase snapshots",
+  "Freshness visible",
+  "Missing fields shown",
+  "Cited research",
+  "Explicit abstention",
+  "Research-only guardrails",
 ];
 
 const carouselImages = {
-  alt: "FundersAI Research Flow",
+  alt: "FundersAI research workflow",
   // Data Gathering: Server racks and glowing data flows
   step1img1: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?q=80&w=2000&auto=format&fit=crop",
   step1img2: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop",
@@ -86,39 +81,39 @@ const researchSteps = [
 const intelligenceTiles = [
   {
     label: "Freshness",
-    value: "3h",
+    value: "VISIBLE",
     title: "Field-level timestamps",
-    body: "NAV, holdings, risk metrics, and source rows carry freshness status instead of hiding stale data.",
+    body: "NAV, holdings, risk metrics, and source rows expose freshness status instead of hiding stale data.",
     className: "lg:col-span-12",
   },
   {
     label: "Missing fields",
-    value: "16",
+    value: "SHOWN",
     title: "Limits are visible",
-    body: "When expense ratio, holdings, or benchmark data is absent, FundersAI flags it before the explanation.",
+    body: "When expense ratio, holdings, benchmark, or other fields are absent, FundersAI flags the gap before the explanation.",
     className: "lg:col-span-7",
   },
   {
-    label: "Coverage",
-    value: "5",
-    title: "Supported AMC families",
-    body: "PPFAS, ICICI, HDFC, SBI, and Axis are treated as active supported coverage in the research flow.",
+    label: "AMC registry",
+    value: "7",
+    title: "Ingestion families",
+    body: "The current registry covers PPFAS, HDFC, ICICI, SBI, Axis, Motilal Oswal, and Nippon, with field depth disclosed separately.",
     className: "lg:col-span-5",
   },
   {
-    label: "Confidence",
-    value: "0.91",
-    title: "Resolver-aware badges",
-    body: "The interface distinguishes a matched fund from an ambiguous or partial comparison.",
+    label: "Research boundary",
+    value: "BOUNDED",
+    title: "Resolution and evidence are qualified",
+    body: "Resolver confidence, source support, partial coverage, and abstention remain visible around the answer.",
     className: "lg:col-span-8 lg:col-start-3",
   },
 ];
 
 const proofStats = [
-  ["INR 81.58L Cr", "Indian MF industry AUM", "As of May 31, 2026", ""],
-  ["27.66 Cr", "mutual fund folios", "Large participation, uneven clarity", ""],
-  ["INR 30,954 Cr", "monthly SIP contribution", "May 2026", ""],
-  ["0", "advisory outputs", "Research only, no buy/sell calls", ""],
+  ["6", "verified vector corpora", "Production OpenAI embedding backfill completed for six AMC corpora.", ""],
+  ["14/14", "development retrieval cases", "The deterministic reranker passes the seed benchmark; this is not production validation.", ""],
+  ["7", "AMC ingestion families", "PPFAS, HDFC, ICICI, SBI, Axis, Motilal Oswal, and Nippon.", ""],
+  ["0", "advisory outputs", "Research-only by design: no buy, sell, or hold calls.", ""],
 ];
 
 function MetadataLabel({ children, className = "" }) {
@@ -244,10 +239,10 @@ export default function FundersAILandingPage() {
             <Image 
               src="/FUNDERSAI-nobackground.png" 
               alt="FundersAI Logo" 
-              width={160} 
-              height={40} 
+              width={132}
+              height={34}
               unoptimized 
-              className="h-10 w-auto object-contain"
+              className="h-8 w-auto object-contain sm:h-10"
               style={{ width: 'auto' }}
             />
           </Link>
@@ -258,7 +253,7 @@ export default function FundersAILandingPage() {
             <a href="#proof" className="transition hover:text-[var(--text-primary)]">Proof</a>
           </nav>
           <div className="flex items-center gap-4">
-            <Link href="/login" className="text-sm font-semibold text-[var(--text-muted)] transition hover:text-[var(--text-primary)]">
+            <Link href="/login" className="hidden text-sm font-semibold text-[var(--text-muted)] transition hover:text-[var(--text-primary)] sm:inline">
               Login
             </Link>
             <EditorialButton href="/dashboard">Workspace</EditorialButton>
@@ -266,8 +261,8 @@ export default function FundersAILandingPage() {
         </div>
       </header>
       <HeroWave 
-        title={<>Research funds <br /><span className="bg-gradient-to-r from-white via-white/80 to-[#00FF9D] bg-clip-text text-transparent opacity-90 mix-blend-lighten">at lightspeed</span></>}
-        subtitle="We analyze millions of data points to help you pick the best mutual funds in India."
+        title={<>Research funds <br /><span className="bg-gradient-to-r from-white via-white/80 to-[#00FF9D] bg-clip-text text-transparent opacity-90 mix-blend-lighten">with evidence</span></>}
+        subtitle="Compare Indian stocks and mutual funds with deterministic metrics, official-source evidence, and visible data limits."
         onPromptSubmit={(query) => {
           router.push(`/dashboard?query=${encodeURIComponent(query)}`);
         }}
@@ -278,7 +273,7 @@ export default function FundersAILandingPage() {
       <section id="flow" className="relative mx-auto w-full max-w-[1500px] gap-12 px-5 py-24 sm:px-8 lg:py-32">
         <div className="relative mb-16 text-center z-10">
           <AmbientGlow className="left-1/2 top-0 h-[300px] w-[300px] -translate-x-1/2" color="rgba(102, 163, 255, 0.1)" />
-          <MetadataLabel className="text-[var(--accent-glow)] mx-auto relative z-10">Live research flow</MetadataLabel>
+          <MetadataLabel className="text-[var(--accent-glow)] mx-auto relative z-10">Evidence research flow</MetadataLabel>
           <h2 className="mt-8 font-sans text-4xl sm:text-6xl lg:text-7xl font-bold leading-[1.05] tracking-tight text-white relative z-10">
             Research Flow
           </h2>
@@ -341,7 +336,7 @@ export default function FundersAILandingPage() {
       <section id="proof" className="relative mx-auto w-full max-w-[1500px] border-t border-white/10 px-5 py-24 sm:px-8 lg:py-32">
         <AmbientGlow className="left-1/4 top-1/2 h-[300px] w-[500px] -translate-x-1/2 -translate-y-1/2" color="rgba(102, 163, 255, 0.06)" />
         <Reveal className="relative z-10 max-w-4xl">
-          <MetadataLabel className="text-[var(--accent-glow)]">Market proof</MetadataLabel>
+          <MetadataLabel className="text-[var(--accent-glow)]">Implementation proof</MetadataLabel>
           <h2 className="mt-8 font-sans text-[10.5vw] font-bold leading-[1.05] tracking-tight text-white sm:text-[8vw] lg:text-[5.4vw]">
             More capital needs better research.
           </h2>
@@ -370,7 +365,7 @@ export default function FundersAILandingPage() {
               Start building <br className="hidden sm:block" />your research.
             </h2>
             <p className="text-xl sm:text-2xl text-white/60 mb-12 max-w-2xl mx-auto leading-relaxed">
-              Join thousands of quantitative researchers and institutional investors using FundersAI.
+              Start with a research question, then inspect the metrics, sources, and limits yourself.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/login" className="inline-flex items-center justify-center rounded-full bg-[#00FF9D] px-8 py-4 text-base font-bold text-black transition-all hover:scale-105 hover:bg-[#00FF9D]/90 hover:shadow-[0_0_40px_rgba(0,255,157,0.4)]">

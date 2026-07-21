@@ -11,7 +11,7 @@ export default function SchemaMarkup() {
         'url': 'https://www.fundersai.co.in',
         'applicationCategory': 'FinanceApplication',
         'operatingSystem': 'All',
-        'description': 'Institutional-grade Indian mutual fund screening and side-by-side comparison workspace with explainable AI analysis.',
+        'description': 'Research-first workspace for comparing Indian stocks and mutual funds with deterministic metrics, official-source evidence, and visible data limits.',
         'offers': {
           '@type': 'Offer',
           'price': '0',
@@ -27,7 +27,7 @@ export default function SchemaMarkup() {
             'name': 'How do I compare Indian mutual funds side-by-side?',
             'acceptedAnswer': {
               '@type': 'Answer',
-              'text': 'FundersAI provides a side-by-side research canvas where you can pick funds like Parag Parikh Flexi Cap and ICICI Prudential Multi Asset, overlay their NAV performance, and compare Sharpe ratios, expense ratios, alpha, and beta values.',
+              'text': 'FundersAI provides a side-by-side research canvas for comparing available NAV, returns, risk, cost, holdings, and freshness data. Missing fields remain visible as limitations.',
             },
           },
           {
@@ -35,7 +35,7 @@ export default function SchemaMarkup() {
             'name': 'Does FundersAI provide investment advisory or recommendations?',
             'acceptedAnswer': {
               '@type': 'Answer',
-              'text': 'No. FundersAI is designed as an objective, institutional-grade research platform. We operate under strict research-only guardrails and do not provide buy, sell, or hold recommendations.',
+              'text': 'No. FundersAI is a research-only workspace. It does not provide buy, sell, or hold recommendations, and users should verify information independently.',
             },
           },
         ],

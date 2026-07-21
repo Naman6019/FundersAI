@@ -8,16 +8,16 @@ const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.fundersai.co.in'),
-  title: 'FundersAI | Mutual Fund Comparison & Screening Workspace',
-  description: 'Compare Parag Parikh Flexi Cap vs ICICI Prudential Multi Asset and other mutual funds. Analyze Sharpe ratio, expense ratios (TER), alpha, and beta with AI-powered explanations.',
+  title: 'FundersAI | Indian Market Research Workspace',
+  description: 'Compare Indian stocks and mutual funds with deterministic metrics, official-source evidence, freshness signals, and visible data limits.',
   keywords: [
     'Indian Mutual Funds',
     'Mutual Fund Comparison',
     'Screener',
-    'Parag Parikh Flexi Cap',
-    'ICICI Prudential Multi Asset',
-    'Sharpe Ratio Calculator',
-    'Expense Ratio Comparison',
+    'Indian Stock Research',
+    'Mutual Fund Comparison',
+    'Official AMC Documents',
+    'Research Evidence',
     'FundersAI',
     'Financial Research AI'
   ],
@@ -26,8 +26,8 @@ export const metadata: Metadata = {
     canonical: '/',
   },
   openGraph: {
-    title: 'FundersAI | Mutual Fund Comparison & Screening Workspace',
-    description: 'Compare Parag Parikh Flexi Cap vs ICICI Prudential Multi Asset and other mutual funds. Analyze Sharpe ratio, expense ratios (TER), alpha, and beta with AI-powered explanations.',
+    title: 'FundersAI | Indian Market Research Workspace',
+    description: 'Compare Indian stocks and mutual funds with deterministic metrics, official-source evidence, freshness signals, and visible data limits.',
     url: 'https://www.fundersai.co.in',
     siteName: 'FundersAI',
     locale: 'en_IN',
@@ -35,8 +35,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'FundersAI | Mutual Fund Comparison Workspace',
-    description: 'Compare Parag Parikh Flexi Cap vs ICICI Prudential Multi Asset and other mutual funds. Analyze Sharpe ratio, expense ratios (TER), alpha, and beta with AI-powered explanations.',
+    title: 'FundersAI | Indian Market Research Workspace',
+    description: 'Compare Indian stocks and mutual funds with deterministic metrics, official-source evidence, freshness signals, and visible data limits.',
   },
 };
 

@@ -245,6 +245,7 @@
   --text-muted: #888888;
   --accent-crimson: #ffffff; /* Re-used for primary glowing accents */
   --accent-glow: #00FF9D; /* Neon Cyan for ambient effects */
+  --accent-cyan: #66a3ff;
   --line: rgba(255, 255, 255, 0.08);
   font-family: "Inter", sans-serif;
 }

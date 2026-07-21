@@ -47,6 +47,7 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - empty and wildcard-only fund searches no longer create match-all `ILIKE` queries;
   - admin data-health and operations reads are ordered and capped at 5,000 rows per query.
 - Research-oriented landing page at `/`.
+- Landing page copy and metadata now match the research-first product boundary: deterministic metrics, official-source evidence, visible freshness/limits, and the seven-family AMC ingestion registry; fabricated market snapshots were removed and the landing prompt/carousel were made responsive.
 - Deterministic compare responses with `why_better`, structured winner context, and data limitation/freshness metadata.
 - Comparison canvas delivery hardening:
   - mutual-fund resolver candidates must carry a real `scheme_code`, and snapshot rows missing identifiers fall through to the canonical mutual-fund table;
