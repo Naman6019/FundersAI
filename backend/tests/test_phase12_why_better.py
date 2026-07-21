@@ -11,6 +11,34 @@ def test_sanitize_research_text_removes_provider_reasoning():
     assert incomplete == ""
 
 
+def test_sanitize_research_text_preserves_neutral_investment_language():
+    from app.services.chat_service import _sanitize_research_text
+
+    answer = (
+        "People invest in mutual funds for long-term investment goals. "
+        "Investors can compare costs before buying or selling units."
+    )
+
+    assert _sanitize_research_text(answer) == answer
+
+
+def test_sanitize_research_text_rewrites_only_direct_advice_phrases():
+    from app.services.chat_service import _sanitize_research_text
+
+    answer = (
+        "You should buy Fund A. Investors should sell Fund B. "
+        "We recommend investing in Fund C."
+    )
+    sanitized = _sanitize_research_text(answer)
+
+    assert "should buy" not in sanitized.lower()
+    assert "should sell" not in sanitized.lower()
+    assert "recommend investing" not in sanitized.lower()
+    assert "independently research Fund A" in sanitized
+    assert "independently research Fund B" in sanitized
+    assert "independent research can consider Fund C" in sanitized
+
+
 def test_stock_why_better_shape():
     from app.services.comparison_reasoning import build_stock_why_better
 

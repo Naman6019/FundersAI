@@ -1,5 +1,8 @@
 import asyncio
 
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
 
 def _run(coro):
     return asyncio.run(coro)
@@ -79,3 +82,70 @@ def test_backend_health_route_is_not_rate_limited():
     assert app_main._rate_limit_group_for_request("/api/funds/research/search", "POST") == "fund-research"
     assert app_main._rate_limit_group_for_request("/api/funds/research/answer", "POST") == "fund-research"
     assert app_main._rate_limit_group_for_request("/api/trigger-fetch", "GET") == "cron-sync-mf"
+
+
+def _request(path: str, method: str = "GET") -> Request:
+    return Request(
+        {
+            "type": "http",
+            "method": method,
+            "path": path,
+            "headers": [],
+            "client": ("127.0.0.1", 1234),
+            "scheme": "https",
+            "server": ("testserver", 443),
+            "query_string": b"",
+        }
+    )
+
+
+def test_read_only_groups_fail_open_when_rate_limit_backend_raises(monkeypatch):
+    from app import main as app_main
+
+    async def unavailable(*_args, **_kwargs):
+        raise TimeoutError("upstash timeout")
+
+    async def downstream(_request):
+        return JSONResponse({"ok": True}, status_code=200)
+
+    monkeypatch.setattr(app_main, "check_rate_limit", unavailable)
+
+    for path in (
+        "/api/quant/stocks/NIFTY/price-history",
+        "/api/mf/118955",
+        "/api/funds/category",
+        "/api/data-health",
+    ):
+        response = _run(app_main.rate_limit_middleware(_request(path), downstream))
+        assert response.status_code == 200
+
+
+def test_sensitive_groups_fail_closed_when_rate_limit_backend_raises(monkeypatch):
+    from app import main as app_main
+
+    async def unavailable(*_args, **_kwargs):
+        raise TimeoutError("upstash timeout")
+
+    async def downstream(_request):
+        raise AssertionError("sensitive request must not reach the route")
+
+    monkeypatch.setattr(app_main, "check_rate_limit", unavailable)
+
+    for path, method in (
+        ("/api/chat", "POST"),
+        ("/api/funds/research/answer", "POST"),
+        ("/api/trigger-fetch", "GET"),
+        ("/api/admin/mf-documents/retry", "POST"),
+    ):
+        response = _run(app_main.rate_limit_middleware(_request(path, method), downstream))
+        assert response.status_code == 503
+
+
+def test_rate_limit_error_status_reads_http_status():
+    from app import main as app_main
+
+    response = type("Response", (), {"status_code": 401})()
+    error = type("ProviderError", (Exception,), {"response": response})("unauthorized")
+
+    assert app_main._rate_limit_error_status(error) == 401
+    assert app_main._rate_limit_error_status(TimeoutError()) is None

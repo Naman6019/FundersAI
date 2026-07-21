@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://www.fundersai.co.in'),
   title: 'FundersAI | Mutual Fund Comparison & Screening Workspace',
   description: 'Compare Parag Parikh Flexi Cap vs ICICI Prudential Multi Asset and other mutual funds. Analyze Sharpe ratio, expense ratios (TER), alpha, and beta with AI-powered explanations.',
   keywords: [
@@ -21,10 +22,13 @@ export const metadata: Metadata = {
     'Financial Research AI'
   ],
   authors: [{ name: 'FundersAI Team' }],
+  alternates: {
+    canonical: '/',
+  },
   openGraph: {
     title: 'FundersAI | Mutual Fund Comparison & Screening Workspace',
     description: 'Compare Parag Parikh Flexi Cap vs ICICI Prudential Multi Asset and other mutual funds. Analyze Sharpe ratio, expense ratios (TER), alpha, and beta with AI-powered explanations.',
-    url: 'https://fundersai.com',
+    url: 'https://www.fundersai.co.in',
     siteName: 'FundersAI',
     locale: 'en_IN',
     type: 'website',

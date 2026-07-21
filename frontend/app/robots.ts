@@ -7,6 +7,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: '/',
       disallow: ['/api/', '/admin/', '/dashboard/'],
     },
-    sitemap: 'https://fundersai.com/sitemap.xml',
+    sitemap: 'https://www.fundersai.co.in/sitemap.xml',
   };
 }

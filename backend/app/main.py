@@ -31,6 +31,10 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+READ_ONLY_RATE_LIMIT_FAIL_OPEN_GROUPS = frozenset(
+    {"data-health", "quant", "mf-detail", "category-funds"}
+)
+
 app = FastAPI()
 
 
@@ -52,8 +56,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://marketmind.vercel.app",
-        "https://fundersai.com",
-        "https://www.fundersai.com",
+        "https://fundersai.co.in",
+        "https://www.fundersai.co.in",
         "http://localhost:3000",
     ],
     allow_credentials=True,
@@ -87,6 +91,16 @@ def _rate_limit_group_for_request(path: str, method: str) -> str | None:
     return None
 
 
+def _rate_limit_should_fail_open(group: str) -> bool:
+    return group in READ_ONLY_RATE_LIMIT_FAIL_OPEN_GROUPS
+
+
+def _rate_limit_error_status(exc: Exception) -> int | None:
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    return status_code if isinstance(status_code, int) else None
+
+
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     group = _rate_limit_group_for_request(request.url.path, request.method)
@@ -96,8 +110,16 @@ async def rate_limit_middleware(request: Request, call_next):
         try:
             result = await check_rate_limit(group, identity)
         except Exception as exc:
-            logger.warning("event=rate_limit_check_failed path=%s reason=%s", request.url.path, exc)
-            if group == "data-health":
+            logger.warning(
+                "event=rate_limit_check_failed path=%s group=%s exception_type=%s status_code=%s reason=%r",
+                request.url.path,
+                group,
+                type(exc).__name__,
+                _rate_limit_error_status(exc),
+                exc,
+            )
+            if _rate_limit_should_fail_open(group):
+                logger.warning("event=rate_limit_failure_bypassed path=%s group=%s", request.url.path, group)
                 return await call_next(request)
             return JSONResponse(
                 {"error": "rate_limit_unavailable", "retry_after_seconds": 60},
@@ -105,8 +127,12 @@ async def rate_limit_middleware(request: Request, call_next):
                 headers={"Retry-After": "60"},
             )
         if not result.allowed:
-            if group == "data-health" and not result.configured:
-                logger.warning("event=rate_limit_unconfigured_bypassed path=%s", request.url.path)
+            if _rate_limit_should_fail_open(group) and not result.configured:
+                logger.warning(
+                    "event=rate_limit_unconfigured_bypassed path=%s group=%s",
+                    request.url.path,
+                    group,
+                )
                 return await call_next(request)
             status_code = 429 if result.configured else 503
             error = "rate_limited" if result.configured else "rate_limit_unconfigured"

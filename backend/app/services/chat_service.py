@@ -896,18 +896,20 @@ def fetch_news(query: str, ticker: str, sentiment_flag: bool = False) -> list:
 DISCLAIMER = ""
 DATA_UNAVAILABLE = "Data Unavailable"
 
-ADVICE_REPLACEMENTS = {
-    "attractive option for long-term investment": "candidate for further independent research",
-    "attractive option": "candidate for further independent research",
-    "investors should": "readers can",
-    "investor should": "readers can",
-    "buy or sell": "act on",
-    "buy": "positive technical rating",
-    "sell": "negative technical rating",
-    "long-term investment": "longer-horizon research",
-    "investment decision": "research decision",
-    "invest": "research further",
-}
+ADVICE_REPLACEMENTS = (
+    (
+        r"\b(?:you|investors?)\s+should\s+(?:buy|sell|invest\s+in)\b",
+        "readers can independently research",
+    ),
+    (
+        r"\b(?:we|i)\s+recommend\s+(?:buying|selling|investing\s+in)\b",
+        "independent research can consider",
+    ),
+    (
+        r"\battractive option for long-term investment\b",
+        "candidate for further independent research",
+    ),
+)
 
 def _is_missing(value: Any) -> bool:
     return value is None or value == "" or str(value).strip().upper() in {"N/A", "NA", "NONE", "NULL", "NAN"}
@@ -3097,8 +3099,7 @@ def _build_reasoning_summary(
 
 def _sanitize_research_text(text: str) -> str:
     sanitized = re.sub(r"<think\b[^>]*>[\s\S]*?(?:</think>|$)", "", text or "", flags=re.IGNORECASE)
-    for bad, replacement in ADVICE_REPLACEMENTS.items():
-        pattern = rf"\b{re.escape(bad)}\b"
+    for pattern, replacement in ADVICE_REPLACEMENTS:
         sanitized = re.sub(pattern, replacement, sanitized, flags=re.IGNORECASE)
     return sanitized.strip()
 

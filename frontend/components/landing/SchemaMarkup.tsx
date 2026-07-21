@@ -6,9 +6,9 @@ export default function SchemaMarkup() {
     '@graph': [
       {
         '@type': 'SoftwareApplication',
-        '@id': 'https://fundersai.com/#software',
+        '@id': 'https://www.fundersai.co.in/#software',
         'name': 'FundersAI',
-        'url': 'https://fundersai.com',
+        'url': 'https://www.fundersai.co.in',
         'applicationCategory': 'FinanceApplication',
         'operatingSystem': 'All',
         'description': 'Institutional-grade Indian mutual fund screening and side-by-side comparison workspace with explainable AI analysis.',
@@ -20,7 +20,7 @@ export default function SchemaMarkup() {
       },
       {
         '@type': 'FAQPage',
-        '@id': 'https://fundersai.com/#faq',
+        '@id': 'https://www.fundersai.co.in/#faq',
         'mainEntity': [
           {
             '@type': 'Question',
