@@ -108,8 +108,9 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - 30-day GitHub evidence artifact and a readable per-AMC workflow summary;
   - discovery remains separate from ingestion, parser readiness, and user-facing AMC promotion.
 - Hosted official-research indexing implementation:
-  - weekday/manual GitHub Actions indexing for parsed R2-backed PDFs from the six enabled AMCs;
+  - weekday/manual GitHub Actions indexing for validated R2-backed PDFs from the six enabled AMCs;
   - PDF filtering occurs before the job limit, and already indexed document IDs are skipped;
+  - `parsed`, `parsed_partial`, `official_source_covered`, and `skipped_duplicate` PDFs are eligible because the evidence index reads the validated official PDF itself rather than depending on structured-field extraction;
   - AMC/document metadata is normalized for case-stable retrieval filters;
   - missing or failed embeddings fall back to provider-free lexical chunks unless strict embeddings are requested;
   - the evidence UI distinguishes an empty production corpus from an irrelevant query.
@@ -127,7 +128,17 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - a minimal `text-embedding-3-small` API probe returned the required 1,536 dimensions;
   - the two existing PPFAS June 2026 factsheet records were re-indexed into 186 vector chunks with `index_mode=vector` and no failures;
   - the exact demo query returned `mode=hybrid`, `vector_status=active`, query coverage `1.0`, five sources, and visible investment-objective, benchmark, and riskometer evidence when the local updated backend queried production Supabase;
-  - this proves the provider, vectors, and pgvector RPC; Render still needs the updated backend and `OPENAI_API_KEY` before the hosted page can report the same result.
+  - this proves the provider, vectors, and pgvector RPC; `OPENAI_API_KEY` is now configured on Render and GitHub, while the deployed six-AMC retrieval behavior still needs a final hosted-page check.
+- The complete six-AMC OpenAI vector backfill is verified in production Supabase:
+  - Axis: 1 document and 743 vector chunks;
+  - HDFC: 2 documents and 1,178 vector chunks;
+  - SBI: 8 documents and 3,523 vector chunks;
+  - ICICI: 3 documents and 3,253 vector chunks;
+  - PPFAS: 8 documents and 775 vector chunks;
+  - Nippon: 1 document and 925 vector chunks.
+  - GitHub run `29837321294` completed the five initially eligible AMCs after batching hardening; SBI run `29838873386` completed all eight eligible SBI factsheets after the indexable-status contract was aligned.
+  - SBI ingestion run `29838129860` imported/confirmed the official June factsheet but its overall result was red only because the separately requested 80% structured-field coverage gate failed; that gate is not an evidence-vector completeness check.
+  - direct production-corpus probes for Axis, HDFC, SBI, ICICI, PPFAS, and Nippon each returned `grounded=true`, `mode=hybrid`, `vector_status=active`, query coverage `1.0`, and five official sources.
 - The Evidence Research page now defaults to a reader-facing view:
   - labeled question and fund-house controls replace the unlabeled query and AMC-code fields;
   - plain evidence status, answer, coverage explanation, readable source metadata, and trust boundaries appear first;
@@ -156,7 +167,7 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - focused streaming/proxy lint introduced no new findings, but repository-wide lint still fails on the existing UI backlog (`76` errors, `62` warnings).
 
 ## In Progress
-- Add `OPENAI_API_KEY` to GitHub Actions and Render, push `index-mf-research.yml`, deploy the retrieval/OpenAI changes, and confirm that the hosted evidence trace reports hybrid retrieval with objective, benchmark, and riskometer excerpts. The PPFAS vector backfill itself is complete.
+- Confirm the deployed Render revision exposes hybrid retrieval for each of the six enabled AMCs. GitHub and Render have `OPENAI_API_KEY`, and the complete production vector corpus is populated.
 - Hosted discovery is verified by run `github-29831363507-1`: 8 completed agents, 2 safe escalations, 8 validated documents, and persisted GitHub/R2/Supabase evidence.
 - The latest Browser production rerun passes signed-out guard, login, deterministic SIP, streamed chat, general explanation, comparison APIs/canvas, session restore, and sign-out. See `LIVE_LOGIN_CHAT_E2E_2026-07-21.md`.
 - Reduce provider-backed general-explanation latency, observed at about 50.5 seconds in the latest live run.
