@@ -15,6 +15,7 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 ## Implemented
 - Supabase-auth dashboard (`/dashboard`) with `/auth` sign-in/sign-up.
   - Current implementation is one authenticated client workspace powered by `DashboardLayout`.
+  - The profile menu reads each Supabase user's name/avatar metadata and falls back to a formatted email name and initial; it does not use a shared hardcoded identity.
   - `/dashboard` now opens the Overview tab by default.
   - `DashboardLayout` owns the Overview / Research tab state and keeps the chat + comparison canvas flow in the same shell.
   - Dashboard CTAs hand off into existing chat/canvas state instead of using `/dashboard/research` or `/dashboard/compare` routes.

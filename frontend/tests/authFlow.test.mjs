@@ -14,3 +14,16 @@ test('sign out uses a full navigation to the public feedback page after clearing
   assert.doesNotMatch(source, /router\.replace/);
   assert.match(source, /disabled=\{isSigningOut\}/);
 });
+
+test('profile dropdown renders the authenticated user instead of a shared hardcoded identity', () => {
+  const source = readFileSync(
+    new URL('../components/auth/UserProfileDropdown.tsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /supabaseBrowser\.auth\.getUser\(\)/);
+  assert.match(source, /metadata\.full_name/);
+  assert.match(source, /user\?\.email\?\.split\('@'\)/);
+  assert.match(source, /\{displayName\}/);
+  assert.doesNotMatch(source, />Reaper</);
+});
