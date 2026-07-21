@@ -120,6 +120,27 @@ def test_summary_is_metadata_only(monkeypatch):
     assert summary["cache_status"] == "fresh"
 
 
+def test_stored_history_returns_expired_cache_without_provider_refresh(monkeypatch):
+    monkeypatch.setattr(mfapi_service, "_utc_now", lambda: NOW)
+    monkeypatch.setattr(
+        mfapi_service,
+        "_read_cache_row",
+        lambda *_args, **_kwargs: _row(fetched_delta=timedelta(days=-2), expires_delta=timedelta(days=-1)),
+    )
+    monkeypatch.setattr(
+        mfapi_service,
+        "get_nav_history",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("provider called")),
+    )
+
+    result = mfapi_service.get_stored_nav_history("100")
+
+    assert result["ok"] is True
+    assert result["cache_status"] == "stale_cache"
+    assert result["stale"] is True
+    assert result["point_count"] == 1
+
+
 def test_same_scheme_refresh_is_single_flight(monkeypatch):
     monkeypatch.setattr(mfapi_service, "_utc_now", lambda: NOW)
     mfapi_service._scheme_locks.clear()

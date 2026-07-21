@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import { getUserContext } from '@/lib/auth/server';
+import { requireUserContext, type UserContext } from '@/lib/auth/server';
 import { enforceRateLimit, getClientIp } from '@/lib/rateLimit';
 import {
   estimateChatTokens,
@@ -17,18 +17,44 @@ function trimForHistory(value: unknown): string {
 
 export async function POST(req: Request) {
   let tokenReservation: TokenReservation | null = null;
-  let userContext: Awaited<ReturnType<typeof getUserContext>> = null;
+  let userContext: UserContext | null = null;
   try {
+    const auth = await requireUserContext(req);
+    if (!auth.ok) return auth.response;
+    userContext = auth.context;
+
     const body = await req.json();
-    userContext = await getUserContext(req);
-    const limited = await enforceRateLimit(req, 'chat', userContext ? {
+    const rawSessionId = body.session_id;
+    const sessionId = typeof rawSessionId === 'string' ? rawSessionId.trim() : null;
+    if (rawSessionId != null && !sessionId) {
+      return NextResponse.json({ error: 'invalid_session_id' }, { status: 400 });
+    }
+
+    if (sessionId) {
+      const { data: ownedSession, error: sessionError } = await userContext.supabaseAdmin
+        .from('ai_chat_sessions')
+        .select('id')
+        .eq('id', sessionId)
+        .eq('user_id', userContext.user.id)
+        .maybeSingle();
+
+      if (sessionError) {
+        console.error('Chat session ownership check failed:', sessionError);
+        return NextResponse.json({ error: 'session_ownership_check_failed' }, { status: 500 });
+      }
+      if (!ownedSession) {
+        return NextResponse.json({ error: 'session_not_found' }, { status: 403 });
+      }
+    }
+
+    const limited = await enforceRateLimit(req, 'chat', {
       identifier: userContext.user.id,
       tier: userContext.profile.tier,
       role: userContext.profile.role,
-    } : {});
+    });
     if (limited) return limited;
 
-    if (userContext && tokenLimitsEnabled()) {
+    if (tokenLimitsEnabled()) {
       const requestId = randomUUID();
       const estimatedTokens = estimateChatTokens(body);
       tokenReservation = await reserveAiTokens(userContext.supabaseAdmin, {
@@ -67,10 +93,8 @@ export async function POST(req: Request) {
       headers: {
         'Content-Type': 'application/json',
         'X-Forwarded-For': getClientIp(req),
-        ...(userContext ? {
-          'X-User-Id': userContext.user.id,
-          'X-User-Tier': userContext.profile.tier,
-        } : {}),
+        'X-User-Id': userContext.user.id,
+        'X-User-Tier': userContext.profile.tier,
         ...(process.env.CHAT_INTERNAL_PROXY_KEY ? {
           'X-Internal-Proxy-Key': process.env.CHAT_INTERNAL_PROXY_KEY,
         } : {}),
@@ -81,7 +105,7 @@ export async function POST(req: Request) {
     if (!proxyRes.ok) {
         const errorText = await proxyRes.text();
         console.error(`Upstream Error (${proxyRes.status}):`, errorText);
-        if (tokenReservation && userContext) {
+        if (tokenReservation) {
           await finalizeAiUsage(userContext.supabaseAdmin, {
             requestId: tokenReservation.requestId,
             success: false,
@@ -97,7 +121,7 @@ export async function POST(req: Request) {
       delete data._usage;
     }
 
-    if (tokenReservation && userContext) {
+    if (tokenReservation) {
       await finalizeAiUsage(userContext.supabaseAdmin, {
         requestId: tokenReservation.requestId,
         usage,
@@ -105,7 +129,7 @@ export async function POST(req: Request) {
       });
     }
 
-    if (userContext) {
+    if (sessionId) {
       const nowMs = Date.now();
       const rows = [
         {
@@ -147,16 +171,23 @@ export async function POST(req: Request) {
         },
       ].filter((row) => row.content.trim().length > 0);
 
-      if (rows.length > 0 && body.session_id) {
-        const rowsWithSession = rows.map(r => ({ ...r, session_id: body.session_id }));
+      if (rows.length > 0) {
+        const rowsWithSession = rows.map(r => ({ ...r, session_id: sessionId }));
         const { error } = await userContext.supabaseAdmin.from('ai_chat_messages').insert(rowsWithSession);
-        if (error) console.error('Chat history write failed:', error);
+        if (error) {
+          console.error('Chat history write failed:', error);
+          return NextResponse.json({ error: 'chat_history_write_failed' }, { status: 500 });
+        }
 
-        // Update session's updated_at
-        await userContext.supabaseAdmin
+        const { error: updateError } = await userContext.supabaseAdmin
           .from('ai_chat_sessions')
           .update({ updated_at: new Date(nowMs + 1).toISOString() })
-          .eq('id', body.session_id);
+          .eq('id', sessionId)
+          .eq('user_id', userContext.user.id);
+        if (updateError) {
+          console.error('Chat session timestamp update failed:', updateError);
+          return NextResponse.json({ error: 'chat_session_update_failed' }, { status: 500 });
+        }
       }
     }
 

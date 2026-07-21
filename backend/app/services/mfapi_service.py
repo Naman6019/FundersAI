@@ -465,6 +465,34 @@ def get_cached_nav_history(scheme_code: str, force_refresh: bool = False) -> dic
         }
 
 
+def get_stored_nav_history(scheme_code: str) -> dict[str, Any]:
+    """Read stored NAV history without refreshing from MFAPI."""
+    code = str(scheme_code or "").strip()
+    if not code:
+        return {
+            "ok": False,
+            "data": [],
+            "error": {"code": "invalid_scheme_code", "provider": PROVIDER, "retryable": False},
+            "cache_status": "miss",
+            "stale": False,
+            "point_count": 0,
+        }
+
+    row = _read_cache_row(code)
+    if not row:
+        return {
+            "ok": False,
+            "data": [],
+            "error": {"code": "nav_cache_miss", "provider": PROVIDER, "retryable": False},
+            "cache_status": "miss",
+            "stale": False,
+            "point_count": 0,
+        }
+
+    status = _cache_status(row, _utc_now())
+    return _cache_result(row, status="hit" if status == "fresh" else "stale_cache", stale=status != "fresh")
+
+
 def delete_expired_nav_cache_rows(now: datetime | None = None) -> int:
     if not supabase:
         return 0

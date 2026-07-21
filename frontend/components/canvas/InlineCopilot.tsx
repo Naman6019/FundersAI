@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Bot, Send, X, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MagicCard } from '@/components/ui/magic-card';
+import { hasSupabaseBrowserEnv, supabaseBrowser } from '@/lib/supabaseBrowser';
 
 interface InlineCopilotProps {
   assetId: string;
@@ -32,9 +33,17 @@ export default function InlineCopilot({ assetId, assetType, assetName }: InlineC
     setLoading(true);
 
     try {
+      if (!hasSupabaseBrowserEnv) throw new Error('Authentication is not configured');
+      const { data: authData } = await supabaseBrowser.auth.getSession();
+      const token = authData.session?.access_token;
+      if (!token) throw new Error('Authentication required');
+
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           query: `User is viewing ${assetType === 'MUTUAL_FUND' ? 'mutual fund' : 'stock'} "${assetName}" (ID: ${assetId}). ${userMessage}`,
           asset_type: assetType === 'MUTUAL_FUND' ? 'mutual_fund' : 'stock',

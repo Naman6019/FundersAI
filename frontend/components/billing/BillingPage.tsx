@@ -208,6 +208,8 @@ export default function BillingPage() {
       throw new Error('invalid_subscription_id');
     }
 
+    console.info('[razorpay:checkout:subscription]', { tier });
+
     const checkoutOptions: RazorpayCheckoutOptions = {
       key: checkout.key,
       subscription_id: checkout.subscription_id,
@@ -217,6 +219,7 @@ export default function BillingPage() {
       notes: checkout.notes,
       theme: { color: '#66a3ff' },
       handler: (response: RazorpaySubscriptionCheckoutResponse) => {
+        console.info('[razorpay:checkout:success]', { tier });
         setMessage('Payment authorised. Your tier updates after Razorpay confirms the subscription.');
         setBusyTier(null);
         void refreshBilling();

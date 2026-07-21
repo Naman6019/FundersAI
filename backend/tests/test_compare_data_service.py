@@ -264,3 +264,73 @@ def test_compare_service_accepts_axis_percent_nav_holdings_without_isin():
     assert axis_item["holdings"][0]["isin"] is None
     assert result["quant_data"]["asset_type"] == "mutual_fund"
     assert result["quant_data"]["why_better"]["winner"]
+
+
+def test_compare_service_builds_fund_items_concurrently():
+    import pandas as pd
+
+    class ConcurrentService(CompareDataService):
+        def __init__(self):
+            super().__init__(_FakeSupabase({}))
+            self.active = 0
+            self.max_active = 0
+
+        async def _nifty_history_df(self, days: int = 1100):
+            return pd.DataFrame()
+
+        def _core_snapshot_row(self, scheme_code):
+            return {"scheme_code": scheme_code, "scheme_name": f"Fund {scheme_code}"}
+
+        async def _comparison_item(self, row, resolution, benchmark_hist):
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+            await asyncio.sleep(0.01)
+            self.active -= 1
+            return {
+                "scheme_code": str(row["scheme_code"]),
+                "name": resolution.resolved_name,
+                "return_3y": 10.0,
+                "volatility_1y": 12.0,
+                "expense_ratio": 0.8,
+                "source_summary": {"stale": False, "metadata": "test"},
+                "data_quality": {"coverage_status": "complete", "missing_fields": []},
+                "holdings": [],
+            }
+
+    service = ConcurrentService()
+    result = asyncio.run(service.build_mutual_fund_compare(
+        ["Fund A", "Fund B"],
+        pre_resolutions=[
+            _resolution("Fund A", "101", "HDFC"),
+            _resolution("Fund B", "102", "PPFAS"),
+        ],
+    ))
+
+    assert service.max_active == 2
+    assert list(result["quant_data"]["comparison"]) == ["Fund A", "Fund B"]
+
+
+def test_compare_history_uses_stored_cache_without_provider_refresh(monkeypatch):
+    from app.services import compare_data_service as module
+
+    calls: list[str] = []
+
+    def stored_history(scheme_code: str):
+        calls.append(scheme_code)
+        return {
+            "ok": True,
+            "data": [
+                {"scheme_code": scheme_code, "nav_date": "2026-05-30", "nav": 99.0},
+                {"scheme_code": scheme_code, "nav_date": "2026-05-31", "nav": 100.0},
+            ],
+            "cache_status": "stale_cache",
+            "stale": True,
+        }
+
+    monkeypatch.setattr(module, "get_stored_nav_history", stored_history)
+    service = CompareDataService(_FakeSupabase({}))
+
+    frame = asyncio.run(service._mf_history_df("101"))
+
+    assert calls == ["101"]
+    assert list(frame["Close"]) == [99.0, 100.0]

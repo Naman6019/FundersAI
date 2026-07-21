@@ -343,6 +343,7 @@ def test_compare_synthesis_canvas_mode_hides_data_table(monkeypatch):
 
     monkeypatch.setattr(main, "function_ollama_chat", fake_function_ollama_chat)
 
+    metadata = {}
     response = asyncio.run(
         main.synthesis_response(
             query="Compare A and B",
@@ -360,6 +361,7 @@ def test_compare_synthesis_canvas_mode_hides_data_table(monkeypatch):
             },
             news_data=[],
             comparison_view_mode="canvas",
+            response_meta=metadata,
         )
     )
 
@@ -367,6 +369,8 @@ def test_compare_synthesis_canvas_mode_hides_data_table(monkeypatch):
     assert "### What the Data Says" in response
     assert "### Data Table" not in response
     assert "### How They Differ" not in response
+    assert metadata["model_status"] == "not_used"
+    assert "status_flag" not in metadata
 
 
 def test_compare_synthesis_canvas_followup_calls_model(monkeypatch):

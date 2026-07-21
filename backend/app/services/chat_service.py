@@ -121,6 +121,7 @@ CATEGORY_SEARCH_CONFIG = {
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "OPENROUTER_API_KEY_PLACEHOLDER")
 OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1/chat/completions")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 OPENROUTER_SITE_URL = os.getenv("OPENROUTER_SITE_URL", "http://localhost:3000")
 OPENROUTER_APP_NAME = os.getenv("OPENROUTER_APP_NAME", "FundersAI")
 CHAT_INTERNAL_PROXY_KEY = os.getenv("CHAT_INTERNAL_PROXY_KEY", "").strip()
@@ -268,74 +269,102 @@ async def function_ollama_chat(
 ):
     openrouter_key = os.environ.get("OPENROUTER_API_KEY") or OPENROUTER_API_KEY
     groq_key = os.environ.get("GROQ_API_KEY")
+    providers: list[dict[str, str]] = []
+    if openrouter_key and openrouter_key != "OPENROUTER_API_KEY_PLACEHOLDER":
+        providers.append({
+            "name": "openrouter",
+            "api_key": openrouter_key,
+            "base_url": OPENROUTER_BASE_URL,
+            "model": OPENROUTER_MODEL,
+        })
+    if groq_key and not enable_web_search:
+        providers.append({
+            "name": "groq",
+            "api_key": groq_key,
+            "base_url": "https://api.groq.com/openai/v1/chat/completions",
+            "model": GROQ_MODEL,
+        })
 
-    api_key = openrouter_key if openrouter_key and openrouter_key != "OPENROUTER_API_KEY_PLACEHOLDER" else groq_key
-
-    if not api_key:
+    if not providers:
         logger.error("Missing OPENROUTER_API_KEY and GROQ_API_KEY in environment.")
         return None
 
-    is_groq = api_key == groq_key
-    base_url = "https://api.groq.com/openai/v1/chat/completions" if is_groq else OPENROUTER_BASE_URL
-    model = "llama-3.3-70b-versatile" if is_groq else OPENROUTER_MODEL
-    langfuse.update_current_generation(model=model, input=messages)
-
     req_messages = [dict(m) for m in messages]
-    payload = {
-        "model": model,
-    }
-
     if format == "json":
-        payload["response_format"] = {"type": "json_object"}
         if "json" not in req_messages[0]["content"].lower():
             req_messages[0]["content"] += "\nReturn output strictly in JSON format."
-
-    payload["messages"] = req_messages
-    if enable_web_search and not is_groq:
-        parameters: dict[str, Any] = {
-            "engine": OPENROUTER_WEB_SEARCH_ENGINE,
-            "max_results": 5,
-            "max_total_results": 12,
-            "search_context_size": "medium",
-        }
-        if OPENROUTER_WEB_SEARCH_DOMAINS:
-            parameters["allowed_domains"] = list(OPENROUTER_WEB_SEARCH_DOMAINS)
-        payload["tools"] = [
-            {
-                "type": "openrouter:web_search",
-                "parameters": parameters,
-            }
-        ]
-
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-
-    if not is_groq:
-        headers["HTTP-Referer"] = OPENROUTER_SITE_URL
-        headers["X-Title"] = OPENROUTER_APP_NAME
-
+    attempt_budget = max(len(providers), max(int(max_retries), 0) + 1)
     async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-        try:
-            response = await client.post(base_url, headers=headers, json=payload)
-            response.raise_for_status()
-            data = response.json()
-            usage = data.get("usage")
-            if isinstance(usage, dict):
-                langfuse.update_current_generation(
-                    usage_details={
-                        "input": int(usage.get("prompt_tokens") or 0),
-                        "output": int(usage.get("completion_tokens") or 0),
-                        "total": int(usage.get("total_tokens") or 0),
-                    }
+        for attempt_index in range(attempt_budget):
+            provider = providers[attempt_index % len(providers)]
+            provider_name = provider["name"]
+            model = provider["model"]
+            payload: dict[str, Any] = {"model": model, "messages": req_messages}
+            if format == "json":
+                payload["response_format"] = {"type": "json_object"}
+            if enable_web_search and provider_name == "openrouter":
+                parameters: dict[str, Any] = {
+                    "engine": OPENROUTER_WEB_SEARCH_ENGINE,
+                    "max_results": 5,
+                    "max_total_results": 12,
+                    "search_context_size": "medium",
+                }
+                if OPENROUTER_WEB_SEARCH_DOMAINS:
+                    parameters["allowed_domains"] = list(OPENROUTER_WEB_SEARCH_DOMAINS)
+                payload["tools"] = [{"type": "openrouter:web_search", "parameters": parameters}]
+
+            headers = {
+                "Authorization": f"Bearer {provider['api_key']}",
+                "Content-Type": "application/json",
+            }
+            if provider_name == "openrouter":
+                headers["HTTP-Referer"] = OPENROUTER_SITE_URL
+                headers["X-Title"] = OPENROUTER_APP_NAME
+
+            langfuse.update_current_generation(model=model, input=messages)
+            try:
+                response = await client.post(provider["base_url"], headers=headers, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                choices = data.get("choices") if isinstance(data, dict) else None
+                content = (
+                    choices[0].get("message", {}).get("content")
+                    if isinstance(choices, list) and choices and isinstance(choices[0], dict)
+                    else None
                 )
-            _append_openrouter_usage(usage_collector, data)
-            _append_openrouter_citations(citation_collector, data)
-            return data["choices"][0]["message"]["content"]
-        except Exception as e:
-            logger.error(f"LLM API Error: {e}")
-            return None
+                if not isinstance(content, str) or not content.strip():
+                    raise ValueError("provider returned no message content")
+                usage = data.get("usage")
+                if isinstance(usage, dict):
+                    langfuse.update_current_generation(
+                        usage_details={
+                            "input": int(usage.get("prompt_tokens") or 0),
+                            "output": int(usage.get("completion_tokens") or 0),
+                            "total": int(usage.get("total_tokens") or 0),
+                        }
+                    )
+                _append_openrouter_usage(usage_collector, data)
+                _append_openrouter_citations(citation_collector, data)
+                if attempt_index > 0:
+                    logger.info("LLM provider fallback succeeded provider=%s attempt=%s", provider_name, attempt_index + 1)
+                return content
+            except httpx.HTTPStatusError as exc:
+                logger.error(
+                    "LLM API provider=%s status=%s attempt=%s/%s",
+                    provider_name,
+                    exc.response.status_code,
+                    attempt_index + 1,
+                    attempt_budget,
+                )
+            except Exception as exc:
+                logger.error(
+                    "LLM API provider=%s error=%s attempt=%s/%s",
+                    provider_name,
+                    type(exc).__name__,
+                    attempt_index + 1,
+                    attempt_budget,
+                )
+    return None
 
 @observe(name="intent_routing")
 async def route_query(query: str, asset_type: str = "auto", usage_collector: list[dict[str, Any]] | None = None) -> dict:
@@ -3462,6 +3491,43 @@ async def run_stock_screen(filters: dict) -> list:
         logger.error(f"Stock screening DB error: {e}")
         return []
 
+def _general_education_fallback(query: str) -> str | None:
+    low = " ".join(str(query or "").lower().split())
+    if "expense ratio" in low or re.search(r"\bter\b", low):
+        return """### Expense Ratio
+
+An expense ratio is the yearly operating cost of a mutual fund, shown as a percentage of the fund's assets. It is deducted inside the fund's NAV, so you do not pay it as a separate bill.
+
+For example, a 1% expense ratio is roughly INR 1,000 per year for every INR 100,000 held, although the actual daily deduction changes with the investment value.
+
+### Why It Matters
+
+- A higher expense ratio reduces the return that remains for the investor.
+- Compare costs only between similar fund categories and plans.
+- Cost is one factor; risk, consistency, portfolio quality, and data freshness also matter.
+
+This is educational research, not a recommendation."""
+    if "sharpe" in low:
+        return """### Sharpe Ratio
+
+The Sharpe ratio estimates how much excess return a fund produced for each unit of volatility. A higher value can indicate a better return-to-risk tradeoff, but it should be compared over the same period and within similar fund categories.
+
+This is educational research, not a recommendation."""
+    if "drawdown" in low:
+        return """### Drawdown
+
+Drawdown is the percentage fall from a previous peak to a later low. It helps show how severe a loss period was and should be read with the recovery time, volatility, and data period.
+
+This is educational research, not a recommendation."""
+    if re.search(r"\bnav\b", low):
+        return """### Net Asset Value (NAV)
+
+NAV is the per-unit value of a mutual fund after subtracting liabilities from its assets. A lower NAV does not make one fund cheaper than another; returns, risk, cost, and portfolio quality are more useful comparison inputs.
+
+This is educational research, not a recommendation."""
+    return None
+
+
 async def synthesis_response(
     query: str,
     intent_info: dict,
@@ -3548,12 +3614,15 @@ Use clear language, practical examples, and no buy/sell advice."""
             {"role": "user", "content": context_str}
         ]
         answer = await function_ollama_chat(messages, format="text", usage_collector=usage_collector)
+        fallback_answer = None if answer else _general_education_fallback(query)
         if response_meta is not None:
-            response_meta["model_status"] = "completed" if answer else "timeout_or_error"
+            response_meta["model_status"] = "completed" if answer else ("deterministic_fallback" if fallback_answer else "timeout_or_error")
             if not answer:
                 response_meta["status_flag"] = "deterministic_fallback"
         if answer:
             return _sanitize_research_text(answer.strip())
+        if fallback_answer:
+            return fallback_answer
         return f"FundersAI could not complete the explanation right now."
 
     table_markdown, data_notes = _data_table_markdown(intent, quant_data, screening_results)
@@ -3638,14 +3707,15 @@ Controlled Web Context:
     has_followup = bool(intent_info.get("followup_question"))
     is_deep_or_advanced = research_depth == "deep" or explanation_mode == "advanced"
     
-    if intent == "compare" and comparison_view_mode == "canvas" and not has_followup and not is_deep_or_advanced:
+    deterministic_canvas = intent == "compare" and comparison_view_mode == "canvas" and not has_followup and not is_deep_or_advanced
+    if deterministic_canvas:
         trend = None
     else:
         model_timeout = 20.0 if intent == "compare" and comparison_view_mode == "canvas" else 60.0
         trend = await function_ollama_chat(messages, format="text", usage_collector=usage_collector, timeout_seconds=model_timeout)
     if response_meta is not None:
-        response_meta["model_status"] = "completed" if trend else "timeout_or_error"
-        if not trend:
+        response_meta["model_status"] = "not_used" if deterministic_canvas else ("completed" if trend else "timeout_or_error")
+        if not trend and not deterministic_canvas:
             response_meta["status_flag"] = "deterministic_fallback"
     if not trend:
         if deep_research:

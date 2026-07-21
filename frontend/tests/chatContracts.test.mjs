@@ -29,10 +29,35 @@ test('chat proxy persists reasoning-summary metadata', () => {
   assert.match(source, /reasoning_summary: data\.reasoning_summary \|\| null/);
 });
 
+test('chat schema migration defines owned sessions and messages', () => {
+  const migration = readFileSync(
+    new URL('../../backend/migrations/20260721_add_ai_chat_sessions_and_messages.sql', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(migration, /create table if not exists public\.ai_chat_sessions/);
+  assert.match(migration, /create table if not exists public\.ai_chat_messages/);
+  assert.match(migration, /update public\.ai_chat_messages as message\s+set user_id = session\.user_id/s);
+  assert.match(migration, /alter column user_id set not null/);
+  assert.match(migration, /foreign key \(session_id\) references public\.ai_chat_sessions\(id\) on delete cascade/);
+  assert.match(migration, /ai_chat_messages_own_rows/);
+});
+
+test('chat proxy requires auth and validates session ownership before forwarding', () => {
+  const source = readFileSync(new URL('../app/api/chat/route.ts', import.meta.url), 'utf8');
+
+  assert.match(source, /requireUserContext\(req\)/);
+  assert.match(source, /if \(!auth\.ok\) return auth\.response/);
+  assert.match(source, /\.from\('ai_chat_sessions'\)[\s\S]*?\.eq\('id', sessionId\)[\s\S]*?\.eq\('user_id', userContext\.user\.id\)[\s\S]*?\.maybeSingle\(\)/);
+  assert.match(source, /return NextResponse\.json\(\{ error: 'session_not_found' \}, \{ status: 403 \}\)/);
+  assert.match(source, /\.update\(\{ updated_at:[\s\S]*?\.eq\('id', sessionId\)\s*\.eq\('user_id', userContext\.user\.id\)/);
+});
+
 test('inline copilot uses the real chat API request and response shape', () => {
   const source = readFileSync(new URL('../components/canvas/InlineCopilot.tsx', import.meta.url), 'utf8');
 
   assert.match(source, /fetch\('\/api\/chat'/);
+  assert.match(source, /Authorization: `Bearer \$\{token\}`/);
   assert.match(source, /query:/);
   assert.match(source, /asset_type:/);
   assert.match(source, /conversation_context:/);

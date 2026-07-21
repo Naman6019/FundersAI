@@ -12,7 +12,7 @@ from app.services import cache_policy
 from app.services.asset_resolver import AssetResolution, AssetResolver, HIGH_CONFIDENCE
 from app.services.comparison_reasoning import build_mf_why_better
 from app.services.mf_metrics_service import compute_nav_metrics
-from app.services.mfapi_service import get_cached_nav_history, get_nav_cache_summary
+from app.services.mfapi_service import get_nav_cache_summary, get_stored_nav_history
 
 logger = logging.getLogger(__name__)
 
@@ -187,26 +187,41 @@ class CompareDataService:
         trace_id: str | None = None,
     ) -> dict[str, Any]:
         resolutions = pre_resolutions or self.resolver.resolve_many(entities, asset_type="mutual_fund")
-        benchmark_hist = await self._nifty_history_df()
-        comparison: dict[str, Any] = {}
-        data_status: dict[str, str] = {}
+        async def _load_core_row(resolution: AssetResolution) -> dict[str, Any] | None:
+            if not resolution.is_high_confidence or not resolution.id:
+                return None
+            return await asyncio.to_thread(self._core_snapshot_row, resolution.id)
 
-        for entity, resolution in zip(entities, resolutions):
+        benchmark_hist, core_rows = await asyncio.gather(
+            self._nifty_history_df(),
+            asyncio.gather(*[_load_core_row(resolution) for resolution in resolutions]),
+        )
+
+        async def _build_entry(
+            entity: str,
+            resolution: AssetResolution,
+            row: dict[str, Any] | None,
+        ) -> tuple[str, dict[str, Any], str]:
             key = resolution.resolved_name or entity
             if not resolution.is_high_confidence or not resolution.id:
-                comparison[key] = self._unavailable_item(resolution)
-                data_status[key] = resolution.coverage_status
-                continue
-
-            row = self._core_snapshot_row(resolution.id)
+                return key, self._unavailable_item(resolution), resolution.coverage_status
             if not row:
-                comparison[key] = self._unavailable_item(resolution, reason="Resolved fund is missing from local snapshot data.")
-                data_status[key] = "partial"
-                continue
-
+                return key, self._unavailable_item(
+                    resolution,
+                    reason="Resolved fund is missing from local snapshot data.",
+                ), "partial"
             item = await self._comparison_item(row, resolution, benchmark_hist)
+            return key, item, item.get("data_quality", {}).get("coverage_status", "complete")
+
+        entries = await asyncio.gather(*[
+            _build_entry(entity, resolution, row)
+            for entity, resolution, row in zip(entities, resolutions, core_rows)
+        ])
+        comparison: dict[str, Any] = {}
+        data_status: dict[str, str] = {}
+        for key, item, status in entries:
             comparison[key] = item
-            data_status[key] = item.get("data_quality", {}).get("coverage_status", "complete")
+            data_status[key] = status
 
         why_better = build_mf_why_better(comparison, downside_focus=downside_focus)
         quant_data = {
@@ -249,9 +264,12 @@ class CompareDataService:
 
     async def _comparison_item(self, row: dict[str, Any], resolution: AssetResolution, benchmark_hist: pd.DataFrame) -> dict[str, Any]:
         scheme_code = row.get("scheme_code") or resolution.id
-        holdings_rows, sector_rows, holdings_as_of = await asyncio.to_thread(self._load_holdings_and_sectors, scheme_code)
-        hist = await self._mf_history_df(scheme_code)
-        history_summary = self._nav_history_summary(scheme_code)
+        holdings_result, hist, history_summary = await asyncio.gather(
+            asyncio.to_thread(self._load_holdings_and_sectors, scheme_code),
+            self._mf_history_df(scheme_code),
+            asyncio.to_thread(self._nav_history_summary, scheme_code),
+        )
+        holdings_rows, sector_rows, holdings_as_of = holdings_result
         history_rows = [
             {"nav_date": index.strftime("%Y-%m-%d"), "nav": float(value)}
             for index, value in hist["Close"].items()
@@ -362,7 +380,7 @@ class CompareDataService:
             return pd.DataFrame()
 
         def _fetch_rows() -> list[dict[str, Any]]:
-            result = get_cached_nav_history(str(scheme_code))
+            result = get_stored_nav_history(str(scheme_code))
             rows = result.get("data") if result.get("ok") else []
             return rows[-max(int(days), 1):]
 
