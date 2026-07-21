@@ -60,6 +60,22 @@ From the repository root:
 
 The default roster is all ten AMCs. Use `--amcs sbi,mirae,ppfas` to run a subset. Keep download probes enabled for reliability checks; `--skip-download-probes` is only a discovery dry run.
 
+## GitHub Actions deployment
+
+`discover-mf-documents.yml` is the first hosted deployment target. It runs at `03:15 UTC` on weekdays and supports manual overrides for the AMC roster, document scope, expected month, action budget, candidate count, probes, and minimum completion gate.
+
+The workflow:
+
+- defaults to the ten-agent factsheet roster;
+- uses the previous UTC month as the minimum report month when none is supplied;
+- persists the complete report and manifest to the R2 cold bucket;
+- upserts a server-only summary into `mf_discovery_runs`;
+- retains the local JSON files as a GitHub artifact for 30 days;
+- fails when fewer than the configured minimum agents complete;
+- never invokes ingestion or promotes a disabled AMC.
+
+Apply `20260721_add_mf_discovery_runs.sql` and configure the documented Supabase/R2 secrets before enabling the schedule. A successful discovery run proves official-link discovery and file validation only; it does not prove parser or app coverage.
+
 To test acquisition for a discovery-ready source that remains disabled in production, run `ingest_latest_amc_docs.py` with `--allow-disabled-source`. The source remains disabled in `mf_amc_sources`; only the explicitly requested raw document is acquired and inserted.
 
 For a hosted setup, start with one scheduled worker. Route HDFC acquisition through the existing Edge/R2 path when the host blocks the worker IP. Kotak should consume a reviewed direct URL through `MF_KOTAK_FACTSHEET_DOCUMENT_URLS` until a hosted network can pass its challenge page.

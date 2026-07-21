@@ -7,6 +7,7 @@ import os
 import sys
 from datetime import date, datetime
 from pathlib import Path
+from uuid import uuid4
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 if BASE_DIR not in sys.path:
@@ -16,8 +17,12 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
+from app.database import supabase
 from app.mf_ingestion.agents.discovery_agent import TOP_10_AMC_AGENT_KEYS
+from app.mf_ingestion.agents.persistence import persist_discovery_run
 from app.mf_ingestion.agents.supervisor import AMCDiscoverySupervisor
+from app.mf_ingestion.config import get_config
+from app.mf_ingestion.storage.r2_store import R2Store
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,6 +45,10 @@ def main() -> int:
     parser.add_argument("--skip-download-probes", action="store_true")
     parser.add_argument("--output", help="Optional path for the complete JSON report.")
     parser.add_argument("--manifest-output", help="Optional path for the validated source manifest.")
+    parser.add_argument("--persist-run", action="store_true", help="Persist the report to R2 and its summary to Supabase.")
+    parser.add_argument("--run-id", help="Stable run identifier; defaults to a generated UUID.")
+    parser.add_argument("--trigger-source", default="local_cli", help="Run source recorded in the persisted summary.")
+    parser.add_argument("--minimum-completed", type=int, default=0, help="Exit non-zero when fewer agents complete.")
     parser.add_argument("--strict", action="store_true", help="Exit non-zero unless every agent completes.")
     args = parser.parse_args()
 
@@ -47,6 +56,8 @@ def main() -> int:
         parser.error("Provide either --document-type or --all-document-types")
 
     amcs = [item.strip().lower() for item in args.amcs.split(",") if item.strip()]
+    if args.minimum_completed < 0 or args.minimum_completed > len(amcs):
+        parser.error("--minimum-completed must be between zero and the requested AMC count")
     document_types = DOCUMENT_TYPES if args.all_document_types else (args.document_type,)
     expected_month = _parse_expected_month(args.expected_month)
     supervisor = AMCDiscoverySupervisor.build(amcs, max_actions_per_agent=args.max_actions)
@@ -57,6 +68,15 @@ def main() -> int:
         probe_downloads=not args.skip_download_probes,
     )
     payload = result.to_dict()
+    run_id = str(args.run_id or uuid4()).strip()
+    payload["run"] = {
+        "run_id": run_id,
+        "trigger_source": args.trigger_source,
+        "expected_month": expected_month.isoformat() if expected_month else None,
+        "requested_amcs": amcs,
+        "document_types": list(document_types),
+    }
+    payload["manifest"]["run_id"] = run_id
     rendered = json.dumps(payload, indent=2, default=str)
     logger.info(rendered)
 
@@ -64,6 +84,38 @@ def main() -> int:
         _write_json(args.output, payload)
     if args.manifest_output:
         _write_json(args.manifest_output, payload["manifest"])
+
+    if args.persist_run:
+        config = get_config()
+        r2_store = R2Store(
+            endpoint=config.r2_endpoint,
+            access_key_id=config.r2_access_key_id,
+            secret_access_key=config.r2_secret_access_key,
+            raw_bucket=config.r2_raw_bucket,
+            cold_bucket=config.r2_cold_bucket,
+            signed_url_ttl_seconds=config.r2_signed_url_ttl_seconds,
+        )
+        summary = persist_discovery_run(
+            payload,
+            run_id=run_id,
+            trigger_source=args.trigger_source,
+            expected_month=expected_month.isoformat() if expected_month else None,
+            requested_amcs=amcs,
+            document_types=document_types,
+            r2_store=r2_store,
+            r2_bucket=config.r2_cold_bucket,
+            supabase_client=supabase,
+        )
+        logger.info("Persisted discovery run: %s", json.dumps(summary, default=str))
+
+    completed_count = sum(agent.status == "completed" for agent in result.agents)
+    if completed_count < args.minimum_completed:
+        logger.error(
+            "Discovery completion gate failed: completed=%s minimum=%s",
+            completed_count,
+            args.minimum_completed,
+        )
+        return 1
 
     return 1 if args.strict and result.status != "completed" else 0
 

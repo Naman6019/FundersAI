@@ -102,6 +102,14 @@ Do not migrate business data to Cloud SQL or raw documents to GCS solely to matc
 - Apply `backend/migrations/20260721_harden_provider_response_cache_rls.sql` to enable RLS, revoke `public`/`anon`/`authenticated`, and retain service-role CRUD.
 - Verify `ai_chat_sessions`, `ai_chat_messages`, `nav_api_cache`, and `provider_response_cache` with authenticated session create/read and MF detail/cache probes.
 
+### Hosted AMC Discovery Migration
+
+- Apply `backend/migrations/20260721_add_mf_discovery_runs.sql` before enabling `discover-mf-documents.yml`.
+- Use a service-role `SUPABASE_KEY`; the table is server-only and denies `anon` and `authenticated` access.
+- Run the workflow manually before relying on its weekday schedule.
+- Verify the GitHub artifact, R2 report/manifest objects, and matching `mf_discovery_runs` row.
+- The workflow is discovery-only and must not be treated as approval to ingest or expose a disabled AMC.
+
 ## Workflow Secrets (GitHub Actions)
 - Base:
   - `SUPABASE_URL`
@@ -137,6 +145,7 @@ Add/update a row in `user_profiles`:
 - Verify rate limits on `/api/chat`; production protected routes require Upstash Redis env vars.
 - Verify a failed Upstash call bypasses only `quant`, `mf-detail`, `category-funds`, and `data-health`; chat, research, cron, and admin mutations must return `503`.
 - Verify latest workflow run status and row-write counts.
+- Verify the latest AMC discovery run meets its completion gate and that its R2 keys resolve.
 - Verify R2 credentials before MF disclosure sync/compaction jobs.
 - Verify `/admin`:
   - unauthenticated -> redirect to `/auth`

@@ -19,7 +19,7 @@ Read these in order for current implementation work:
 11. `10_TASKS.md` — active work, completed work, and known issues
 12. `11_ML_SYSTEMS.md` — implemented/experimental ML and retrieval boundaries
 
-`jobs.md`, `providers.md`, `12_INTERVIEW_GUIDE.md`, and `13_DISCOVERY_AGENTS.md` are maintained supporting references.
+`jobs.md`, `providers.md`, `12_INTERVIEW_GUIDE.md`, `13_DISCOVERY_AGENTS.md`, and `14_BUILD_WEEK_DEMO_VIDEO.md` are maintained supporting references.
 
 ## Evidence Snapshots
 

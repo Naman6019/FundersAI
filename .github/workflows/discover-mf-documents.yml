@@ -1,0 +1,146 @@
+name: Discover Official AMC Documents
+
+on:
+  schedule:
+    - cron: '15 3 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      amcs:
+        description: 'Discovery agents to run'
+        required: false
+        default: 'sbi,mirae,ppfas,icici,hdfc,nippon,kotak,aditya_birla,uti,dsp'
+      document_scope:
+        description: 'Document scope'
+        required: false
+        type: choice
+        options:
+          - factsheet
+          - all
+        default: factsheet
+      expected_month:
+        description: 'Minimum report month in YYYY-MM; blank uses the previous UTC month'
+        required: false
+        default: ''
+      minimum_completed:
+        description: 'Minimum agents that must complete'
+        required: false
+        default: '8'
+      max_actions:
+        description: 'Maximum bounded actions per agent'
+        required: false
+        default: '12'
+      max_candidates:
+        description: 'Maximum validated candidates per document type'
+        required: false
+        default: '1'
+      probe_downloads:
+        description: 'Download and validate candidate file bodies'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: discover-official-amc-documents
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_RAW_BUCKET: ${{ secrets.R2_RAW_BUCKET }}
+      R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
+      MF_INGESTION_USER_AGENT: ${{ vars.MF_INGESTION_USER_AGENT || 'FundersAIResearchBot/1.0' }}
+      MF_SOURCE_MANIFEST_PATH: backend/config/mf_document_sources.json
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Validate persistence secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in SUPABASE_URL SUPABASE_KEY R2_ENDPOINT R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_RAW_BUCKET R2_COLD_BUCKET; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Run bounded discovery supervisor
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p discovery-output
+
+          amcs="${{ inputs.amcs }}"
+          document_scope="${{ inputs.document_scope }}"
+          expected_month="${{ inputs.expected_month }}"
+          minimum_completed="${{ inputs.minimum_completed }}"
+          max_actions="${{ inputs.max_actions }}"
+          max_candidates="${{ inputs.max_candidates }}"
+          probe_downloads="${{ inputs.probe_downloads }}"
+
+          amcs="${amcs:-sbi,mirae,ppfas,icici,hdfc,nippon,kotak,aditya_birla,uti,dsp}"
+          document_scope="${document_scope:-factsheet}"
+          expected_month="${expected_month:-$(date -u -d '1 month ago' +%Y-%m)}"
+          minimum_completed="${minimum_completed:-8}"
+          max_actions="${max_actions:-12}"
+          max_candidates="${max_candidates:-1}"
+          probe_downloads="${probe_downloads:-true}"
+
+          args=(
+            --amcs "$amcs"
+            --expected-month "$expected_month"
+            --max-actions "$max_actions"
+            --max-candidates "$max_candidates"
+            --minimum-completed "$minimum_completed"
+            --output discovery-output/report.json
+            --manifest-output discovery-output/manifest.json
+            --persist-run
+            --run-id "github-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            --trigger-source "github_actions:${GITHUB_EVENT_NAME}"
+          )
+
+          if [ "$document_scope" = "all" ]; then
+            args+=(--all-document-types)
+          else
+            args+=(--document-type factsheet)
+          fi
+          if [ "$probe_downloads" != "true" ]; then
+            args+=(--skip-download-probes)
+          fi
+
+          timeout 25m python -m backend.app.mf_ingestion.jobs.run_discovery_agents "${args[@]}"
+
+      - name: Publish run summary
+        if: always() && hashFiles('discovery-output/report.json') != ''
+        run: python backend/scripts/render_discovery_run_summary.py discovery-output/report.json
+
+      - name: Upload discovery evidence
+        if: always() && hashFiles('discovery-output/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: amc-discovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: discovery-output/
+          if-no-files-found: error
+          retention-days: 30

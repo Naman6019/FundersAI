@@ -101,6 +101,12 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - opt-in `amc_hybrid_cross_encoder_v3` using reciprocal-rank fusion plus a Cohere cross-encoder adapter with deterministic RRF fallback;
   - provider-free v2/v3 comparison artifact, optional live-embedding/cross-encoder benchmark flags, Langfuse experiment runner, and judge-facing `/dashboard/research-evidence` trace/evaluation view;
   - separate API/Prefect-worker containers, GCP deployment and alert-setup scripts, workflow telemetry, and offline review-feature drift checks.
+- Hosted top-10 AMC discovery implementation:
+  - weekday/manual GitHub Actions supervisor with bounded per-agent execution and a configurable completion gate;
+  - immutable report and validated manifest persistence in the R2 cold bucket;
+  - server-only `mf_discovery_runs` summary migration with RLS and service-role-only access;
+  - 30-day GitHub evidence artifact and a readable per-AMC workflow summary;
+  - discovery remains separate from ingestion, parser readiness, and user-facing AMC promotion.
 - July 21 chat/cache/domain hardening is committed at `25e8d193`:
   - neutral uses of `invest`, `investment`, `buying`, and `selling` survive the research-language sanitizer while direct recommendation phrases are rewritten;
   - public read-only rate-limit groups fail open when Upstash is unavailable, while chat, fund research, cron, and admin mutations remain fail-closed;
@@ -114,14 +120,17 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - TypeScript and Next.js production build passed;
   - focused ESLint had no errors and two pre-existing custom-font warnings.
 - Local verification for the current SSE/extractor/admin/search hardening worktree:
-  - backend: `388 passed, 6 skipped` (`backend/tests/tmp` excluded because the local directory is access-denied during collection);
+  - backend: `393 passed, 6 skipped` (`backend/tests/tmp` excluded because the local directory is access-denied during collection);
   - frontend contracts: `32 passed` across 8 test files;
   - TypeScript and the Next.js production build passed;
   - focused streaming/proxy lint introduced no new findings, but repository-wide lint still fails on the existing UI backlog (`76` errors, `62` warnings).
 
 ## In Progress
-- Deploy and Browser-verify commit `25e8d193`; the latest recorded production E2E run in `LIVE_LOGIN_CHAT_E2E_2026-07-21.md` exercised older commit `ea5d98fb`.
-- Re-run login, general explanation, sanitizer probe, comparison, history restore, sign-out, and production-log checks after that deployment.
+- Apply `20260721_add_mf_discovery_runs.sql`, configure the existing Supabase/R2 GitHub secrets, push `discover-mf-documents.yml`, and capture its first hosted run before calling the ten agents deployed.
+- The latest Browser production rerun passes signed-out guard, login, deterministic SIP, streamed chat, general explanation, comparison APIs/canvas, session restore, and sign-out. See `LIVE_LOGIN_CHAT_E2E_2026-07-21.md`.
+- Reduce provider-backed general-explanation latency, observed at about 50.5 seconds in the latest live run.
+- Remove the remaining Recharts negative-dimension warning when the comparison canvas first opens.
+- Capture Render application logs after an explicit Render workspace is selected; the latest rerun contains browser console, network, SSE, and persisted-session evidence only.
 - Replace the development-seed retrieval fixtures with at least 50 reviewer-verified official-document cases before enabling a production regression gate.
 - Validate a Prefect deployment with equivalent parameters, retries, logs, and operator evidence before replacing any GitHub Actions scheduling.
 - Increase mutual-fund field coverage depth beyond AUM/TER/holdings for PPFAS, ICICI, HDFC, SBI (benchmark/risk/ratios completeness).
@@ -131,7 +140,8 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 
 ## Known Gaps
 - The supported frontend `/api/chat` route requires authentication, but FastAPI `POST /api/chat` does not independently validate a Supabase bearer token. The backend must remain behind the trusted frontend boundary unless explicit backend authentication is added.
-- Provider-backed explanation latency was about 35 seconds in the latest recorded production run and still needs a faster deterministic completion boundary or measured improvement.
+- Provider-backed explanation latency was about 50.5 seconds in the latest recorded production run and still needs a faster deterministic completion boundary or measured improvement.
+- Comparison data and charts load successfully, but each tested canvas opening emitted one Recharts `width(-1)/height(-1)` warning before layout settled.
 - The first golden dataset is a development seed rather than a production gate. V2 passes it completely, but that does not establish quality on real official-document questions.
 - V3 vector retrieval, the cross-encoder, and the LLM relevance grader are implemented behind independent flags and remain disabled by default until reviewer-verified quality, latency, and provider-cost evidence exists.
 - The committed v2/v3 judge report is provider-free and shows benchmark plumbing, not live cross-encoder quality; run the explicit live flags only with configured provider credentials.

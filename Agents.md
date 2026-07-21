@@ -28,7 +28,7 @@ Use this guide for repository conventions and quick orientation. For the authori
 
 - Supabase PostgreSQL for structured data and authentication
 - Cloudflare R2 for raw AMC documents and cold archives
-- 15 GitHub Actions workflows for sync, ingestion, retry, archive, migration, and compaction jobs
+- 16 GitHub Actions workflows for discovery, sync, ingestion, retry, archive, migration, and compaction jobs
 - Razorpay for subscription and payment flows
 
 ## Runtime Boundaries
