@@ -10,6 +10,9 @@ test('research evidence defaults to reader-friendly labels and hides diagnostics
   assert.match(page, /Answer from official documents/);
   assert.match(page, /Why you can trust this result/);
   assert.match(page, /<details[^>]*>[\s\S]*Technical audit trail/);
+  assert.match(page, /Models and components used/);
+  assert.match(page, /model_usage/);
+  assert.match(page, /Only components used for this answer are listed/);
   assert.match(page, /Developer evaluation \(not part of the answer\)/);
   assert.match(page, /Expected sources found/);
   assert.match(page, /Correct refusals/);

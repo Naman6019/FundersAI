@@ -38,6 +38,8 @@ def test_workflow_returns_only_cited_evidence() -> None:
     ]
     assert result["claim_validation"]["support_rate"] == 1.0
     assert result["trace_id"]
+    assert result["model_usage"][-1]["stage"] == "Cited answer construction"
+    assert "no generative answer model" in result["model_usage"][-1]["purpose"]
 
 
 def test_workflow_turns_common_factsheet_fields_into_readable_cited_claims() -> None:
@@ -82,6 +84,49 @@ def test_workflow_turns_common_factsheet_fields_into_readable_cited_claims() -> 
     assert "Riskometer: The risk of the scheme is very high risk" in result["answer"]
     assert result["claim_validation"]["support_rate"] == 1.0
     assert result["grounded"] is True
+
+
+def test_workflow_answers_expense_ratio_section_question_without_raw_excerpt_dump() -> None:
+    class _ExpenseRatioRetrievalService:
+        def search(self, query, *, filters, limit):
+            return {
+                "retrieval_version": "test_retrieval_v1",
+                "retrieval_mode": "hybrid",
+                "vector_status": "active",
+                "cross_encoder_status": "disabled",
+                "query_coverage": 1.0,
+                "grounded": True,
+                "abstain": False,
+                "sources": [
+                    {
+                        "document_id": "doc-1",
+                        "source_url": "https://official.example/factsheet.pdf",
+                        "excerpt": (
+                            "FACT SHEET - APRIL 2026 Base Expense Ratio "
+                            "(As on last business day of the month) For TER, investors may refer to our website."
+                        ),
+                    }
+                ],
+            }
+
+    result = run_fund_research_workflow(
+        _ExpenseRatioRetrievalService(),
+        query="Which official factsheet section lists the total expense ratio?",
+    )
+
+    assert result["answer"] == (
+        'Answer from official documents:\n- The total expense ratio is listed under the '
+        '"Base Expense Ratio (As on last business day of the month)" section. [1]'
+    )
+    assert result["claim_validation"]["support_rate"] == 1.0
+    assert "FACT SHEET - APRIL" not in result["answer"]
+    assert result["model_usage"][0] == {
+        "stage": "Semantic document search",
+        "provider": "OpenAI",
+        "model": "text-embedding-3-small",
+        "purpose": "Converts the question into an embedding used to find semantically similar official-document chunks.",
+        "status": "active",
+    }
 
 
 def test_workflow_abstains_when_retrieval_has_no_evidence() -> None:

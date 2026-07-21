@@ -9,6 +9,7 @@ from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
+from app.services.document_retrieval_service import EMBEDDING_MODEL
 from app.services.research_quality_service import OfficialEvidenceRelevanceGrader, validate_claim_citations
 
 WORKFLOW_VERSION = "fund_research_graph_v3"
@@ -24,6 +25,23 @@ def _extract_readable_claims(query: str, sources: list[dict[str, Any]]) -> list[
     requested = query.casefold()
     claims: list[str] = []
     found: set[str] = set()
+
+    asks_for_expense_ratio_location = "expense ratio" in requested and any(
+        marker in requested for marker in ("section", "where", "lists", "listed", "location")
+    )
+    if asks_for_expense_ratio_location:
+        heading_pattern = re.compile(
+            r"\b(Base\s+Expense\s+Ratio\s*\(As\s+on\s+last\s+business\s+day\s+of\s+the\s+month\s*\))",
+            re.IGNORECASE,
+        )
+        for source_index, source in enumerate(sources, start=1):
+            match = heading_pattern.search(_clean_evidence_text(source.get("excerpt")))
+            if not match:
+                continue
+            heading = re.sub(r"\s+\)", ")", _clean_evidence_text(match.group(1)))
+            claims.append(f'- The total expense ratio is listed under the "{heading}" section. [{source_index}]')
+            found.add("expense ratio")
+            break
 
     patterns: list[tuple[str, str, re.Pattern[str]]] = [
         (
@@ -68,6 +86,67 @@ def _extract_readable_claims(query: str, sources: list[dict[str, Any]]) -> list[
             claims.append(f"- {label}: {value} [{source_index}]")
             found.add(field)
     return claims
+
+
+def _model_usage(result: dict[str, Any], retrieval: dict[str, Any]) -> list[dict[str, str]]:
+    usage: list[dict[str, str]] = []
+    vector_status = str(retrieval.get("vector_status") or "disabled")
+    if vector_status == "active":
+        usage.append(
+            {
+                "stage": "Semantic document search",
+                "provider": "OpenAI",
+                "model": EMBEDDING_MODEL,
+                "purpose": "Converts the question into an embedding used to find semantically similar official-document chunks.",
+                "status": "active",
+            }
+        )
+
+    relevance_grade = result.get("relevance_grade") or {}
+    grader_status = str(relevance_grade.get("model_status") or "deterministic")
+    if grader_status == "active":
+        usage.append(
+            {
+                "stage": "Evidence relevance check",
+                "provider": "OpenRouter",
+                "model": (os.getenv("MF_RESEARCH_GRADER_MODEL") or os.getenv("OPENROUTER_MODEL") or "configured model").strip(),
+                "purpose": "Checks whether the retrieved official excerpts can answer the question.",
+                "status": "active",
+            }
+        )
+    else:
+        usage.append(
+            {
+                "stage": "Evidence relevance check",
+                "provider": "FundersAI",
+                "model": str(relevance_grade.get("grader_version") or "deterministic coverage gate"),
+                "purpose": "Checks query-term coverage without a generative model.",
+                "status": grader_status,
+            }
+        )
+
+    cross_encoder_status = str(retrieval.get("cross_encoder_status") or "disabled")
+    if cross_encoder_status == "active":
+        usage.append(
+            {
+                "stage": "Result reranking",
+                "provider": "Cohere",
+                "model": os.getenv("MF_RESEARCH_CROSS_ENCODER_MODEL", "rerank-v4.0-fast").strip(),
+                "purpose": "Reranks retrieved official-document chunks by relevance.",
+                "status": "active",
+            }
+        )
+
+    usage.append(
+        {
+            "stage": "Cited answer construction",
+            "provider": "FundersAI",
+            "model": WORKFLOW_VERSION,
+            "purpose": "Builds readable cited statements with deterministic rules; no generative answer model is used.",
+            "status": "active",
+        }
+    )
+    return usage
 
 
 class FundResearchState(TypedDict, total=False):
@@ -318,6 +397,7 @@ def run_fund_research_workflow(
         "rewrite_count": int(result.get("rewrite_count") or 0),
         "relevance_grade": result.get("relevance_grade") or {},
         "claim_validation": result.get("claim_validation") or {},
+        "model_usage": _model_usage(result, retrieval),
         "retrieval": {
             "mode": retrieval.get("retrieval_mode"),
             "vector_status": retrieval.get("vector_status"),

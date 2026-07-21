@@ -117,6 +117,8 @@ Missing authentication returns `401`; an authenticated non-admin returns `403`.
 
 Similarity and research responses expose version/coverage metadata and remain research signals, not forecasts or recommendations.
 
+`POST /api/funds/research/answer` also returns additive `model_usage` entries. Each entry identifies the processing stage, provider, model or deterministic component, purpose, and runtime status. The list contains only components used for that response and explicitly distinguishes OpenAI query embeddings from deterministic cited-answer construction.
+
 ### Internal MF Ingestion (`/api/internal/mf/*`)
 
 - `GET /api/internal/mf/schemes/{scheme_name}/holdings`

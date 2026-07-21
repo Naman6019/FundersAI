@@ -146,6 +146,8 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - v2/v3 metrics are contained in a closed `Developer evaluation` disclosure with plain-language metric labels and an explicit demo-benchmark warning.
   - `fund_research_graph_v3` converts common factsheet fields such as investment objective, benchmark, riskometer, and expense ratio into concise cited statements instead of presenting a raw PDF-excerpt dump as the answer.
   - the exact PPFAS production-data query now renders three readable claims—objective, `NIFTY 500 (TRI)` benchmark, and `very high risk` riskometer—with `grounded=true`, claim support `1.0`, hybrid mode, and active OpenAI vector retrieval.
+  - expense-ratio location questions now answer with the readable `Base Expense Ratio (As on last business day of the month)` section name instead of returning raw PDF chunks.
+  - the Technical audit trail lists the provider/model/component used at each active stage and its purpose, including `text-embedding-3-small` for semantic search and deterministic cited-answer construction with no generative answer model.
 - The first six-AMC OpenAI indexing run `29836844061` exposed document-scale hardening needs. The indexing path now removes database-unsafe control characters, deduplicates identical chunks within a document, sends OpenAI inputs in bounded batches, and writes Supabase vector rows in bounded batches to avoid statement timeouts.
 - July 21 chat/cache/domain hardening is committed at `25e8d193`:
   - neutral uses of `invest`, `investment`, `buying`, and `selling` survive the research-language sanitizer while direct recommendation phrases are rewritten;

@@ -7,6 +7,7 @@ import AuthGate from '@/components/auth/AuthGate';
 
 type TraceStep = { node?: string; status?: string; [key: string]: unknown };
 type Source = { document_id?: string; source_url?: string; excerpt?: string; score?: number; amc_code?: string; document_type?: string; report_month?: string };
+type ModelUsage = { stage?: string; provider?: string; model?: string; purpose?: string; status?: string };
 type ResearchResponse = {
   answer?: string;
   grounded?: boolean;
@@ -18,6 +19,7 @@ type ResearchResponse = {
   trace_details?: TraceStep[];
   claim_validation?: { support_rate?: number; supported_claims?: number; claim_count?: number };
   retrieval?: { mode?: string; vector_status?: string; cross_encoder_status?: string; corpus_status?: string; reranker_version?: string };
+  model_usage?: ModelUsage[];
 };
 
 type EvaluationVariant = {
@@ -239,6 +241,20 @@ function ResearchEvidencePage() {
                   <div><dt className="text-slate-500">Additional reranking</dt><dd className="mt-1 text-slate-200">{crossEncoderStatus(response.retrieval?.cross_encoder_status)}</dd></div>
                   <div><dt className="text-slate-500">Internal versions</dt><dd className="mt-1 break-words text-slate-200">{response.retrieval_version || '—'} · {response.workflow_version || '—'}</dd></div>
                 </dl>
+                <div className="mt-5 border-t border-white/10 pt-4">
+                  <div className="text-xs font-semibold">Models and components used</div>
+                  <p className="mt-1 text-[11px] text-slate-500">Only components used for this answer are listed.</p>
+                  <div className="mt-3 space-y-3">
+                    {(response.model_usage || []).map((usage, index) => (
+                      <div key={`${usage.stage}-${usage.model}-${index}`} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                        <div className="text-xs font-semibold text-slate-100">{usage.stage || 'Processing component'}</div>
+                        <div className="mt-1 break-words text-[11px] text-[#00FF9D]">{[usage.provider, usage.model].filter(Boolean).join(' · ')}</div>
+                        <p className="mt-1 text-[11px] leading-5 text-slate-500">{usage.purpose || 'Purpose not reported.'}</p>
+                      </div>
+                    ))}
+                    {!response.model_usage?.length ? <p className="text-[11px] text-slate-500">Model usage was not reported by this backend revision.</p> : null}
+                  </div>
+                </div>
                 <div className="mt-5 border-t border-white/10 pt-4">
                   <div className="text-xs font-semibold">Processing steps</div>
                   <div className="mt-3 space-y-3">
