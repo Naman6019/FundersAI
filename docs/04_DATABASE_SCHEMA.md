@@ -57,6 +57,7 @@ Raw document bytes belong in Cloudflare R2. Supabase stores the object location 
 - `amc_document_chunks`
   - Versioned document chunks with source URL, parser metadata, report month, content hash, embedding metadata, and pgvector embedding.
   - Used by deterministic lexical retrieval and the opt-in vector RPC.
+  - `20260721_harden_amc_document_chunks.sql` repairs the additive indexing columns, enforces document/chunk uniqueness, and makes the table service-role-only.
 - `match_document_chunks(...)`
   - pgvector similarity function used only when vector retrieval is enabled.
 
@@ -113,5 +114,6 @@ The Next.js proxy uses the service role only after authenticating the user and c
 2. `20260721_add_ai_chat_sessions_and_messages.sql`
 3. `20260721_harden_provider_response_cache_rls.sql`
 4. `20260721_add_mf_discovery_runs.sql`
+5. `20260721_harden_amc_document_chunks.sql`
 
 Equivalent production SQL is not a substitute for keeping the migration in version control.

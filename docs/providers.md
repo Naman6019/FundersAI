@@ -32,6 +32,8 @@ INDIANAPI_REQUEST_SLEEP_SECONDS=1.05
 STOCK_YFINANCE_FALLBACK_LIMIT=150
 OPENROUTER_API_KEY=
 OPENROUTER_MODEL=
+OPENROUTER_SITE_URL=https://www.fundersai.co.in
+OPENROUTER_APP_NAME=FundersAI
 GROQ_API_KEY=
 CHAT_INTERNAL_PROXY_KEY=
 MF_RESEARCH_VECTOR_SEARCH_ENABLED=false
@@ -50,7 +52,8 @@ MF_RESEARCH_LANGFUSE_TRACING_ENABLED=false
 - `mfapi`: primary mutual fund NAV/history provider (`https://api.mfapi.in`).
 - `amfi`: official mutual fund NAV, TER, AUM, and scheme-wise disclosure source.
 - `amc_disclosure`: AMC factsheets and portfolio disclosures stored raw in R2, parsed for holdings and missing metadata fields.
-- `openrouter`: model and embedding provider for configured chat, extraction, and research-indexing paths.
+- `openai`: direct `text-embedding-3-small` provider for official-document indexing and matching query embeddings (`OPENAI_API_KEY`; local `OPENAI_KEY` remains a compatibility alias).
+- `openrouter`: model provider for configured chat and extraction paths.
 - `groq`: fallback model provider for supported chat/extraction stages.
 - `langfuse`: optional tracing/experiment export only when its flag plus public/secret keys are configured.
 

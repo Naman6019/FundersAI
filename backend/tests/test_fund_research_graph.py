@@ -40,6 +40,50 @@ def test_workflow_returns_only_cited_evidence() -> None:
     assert result["trace_id"]
 
 
+def test_workflow_turns_common_factsheet_fields_into_readable_cited_claims() -> None:
+    class _FactsheetRetrievalService:
+        def search(self, query, *, filters, limit):
+            return {
+                "retrieval_version": "test_retrieval_v1",
+                "retrieval_mode": "hybrid",
+                "vector_status": "active",
+                "query_coverage": 1.0,
+                "grounded": True,
+                "abstain": False,
+                "sources": [
+                    {
+                        "document_id": "doc-1",
+                        "source_url": "https://official.example/factsheet.pdf",
+                        "excerpt": (
+                            "Investment Objective AMFI Tier I Benchmark Index NIFTY 500 (TRI) "
+                            "To seek to generate long-term capital growth from an actively managed equity portfolio."
+                        ),
+                    },
+                    {
+                        "document_id": "doc-1",
+                        "source_url": "https://official.example/factsheet.pdf",
+                        "excerpt": "The risk of the scheme is very high risk RISKOMETER.",
+                    },
+                    {
+                        "document_id": "doc-2",
+                        "source_url": "https://official.example/unused.pdf",
+                        "excerpt": "An unrelated but retrieved official excerpt.",
+                    },
+                ],
+            }
+
+    result = run_fund_research_workflow(
+        _FactsheetRetrievalService(),
+        query="Find the investment objective, benchmark, and riskometer in the factsheet.",
+    )
+
+    assert "Investment objective: To seek to generate long-term capital growth" in result["answer"]
+    assert "Benchmark: NIFTY 500 (TRI)" in result["answer"]
+    assert "Riskometer: The risk of the scheme is very high risk" in result["answer"]
+    assert result["claim_validation"]["support_rate"] == 1.0
+    assert result["grounded"] is True
+
+
 def test_workflow_abstains_when_retrieval_has_no_evidence() -> None:
     result = run_fund_research_workflow(_RetrievalService(grounded=False), query="unanswerable")
 

@@ -21,21 +21,21 @@ Use this guide for repository conventions and quick orientation. For the authori
 - Supabase-first runtime reads
 - NSE/FinEdge scheduled stock data with YFinance fallback paths
 - AMFI, MFapi, and official AMC documents for mutual-fund data
-- OpenRouter and Groq model-provider paths; Langfuse tracing is optional and feature-flagged
+- OpenRouter and Groq chat/extraction paths; direct OpenAI `text-embedding-3-small` document/query embeddings; Langfuse tracing is optional and feature-flagged
 - Render production hosting
 
 **Database, storage, and automation**
 
 - Supabase PostgreSQL for structured data and authentication
 - Cloudflare R2 for raw AMC documents and cold archives
-- 16 GitHub Actions workflows for discovery, sync, ingestion, retry, archive, migration, and compaction jobs
+- 17 GitHub Actions workflows for discovery, indexing, sync, ingestion, retry, archive, migration, and compaction jobs
 - Razorpay for subscription and payment flows
 
 ## Runtime Boundaries
 
 - The browser calls Next.js `/api/*` routes, not FastAPI directly.
 - Query-critical data comes from normalized Supabase tables and server-only caches.
-- Provider keys, the Supabase service-role key, Razorpay secrets, and internal proxy keys stay server-side.
+- OpenAI/OpenRouter/Groq provider keys, the Supabase service-role key, Razorpay secrets, and internal proxy keys stay server-side.
 - The supported production domain is `https://www.fundersai.co.in`; `https://fundersai.co.in` redirects to it.
 - FundersAI is research-only. Deterministic metrics and official-source evidence must not be presented as personalized investment advice.
 
@@ -73,13 +73,13 @@ See `docs/03_API_CONTRACTS.md` for the complete route inventory and security beh
 4. **Deterministic comparisons:** response fields are additive and return explicit coverage/limitation metadata when data is partial.
 5. **Owned chat persistence:** `ai_chat_sessions` and `ai_chat_messages` are user-owned, RLS-protected tables; frontend service-role writes require an authenticated ownership check.
 6. **MF ingestion states:** `pending`, `downloaded`, `needs_reparse`, `parsed`, `parsed_partial`, `needs_review`, `failed`, and `skipped_not_supported`.
-7. **Official-document research:** the default retrieval path is deterministic lexical rerank v2 with abstention. Vector retrieval and v3 grading remain opt-in until reviewer-verified quality, latency, and cost evidence exists.
+7. **Official-document research:** deterministic lexical rerank v2 remains the fallback with abstention. Direct OpenAI vector retrieval is configured separately from optional v3 cross-encoder/LLM grading and must use the same 1,536-dimension embedding model for documents and queries.
 8. **R2-first storage:** raw AMC documents stay in R2; Supabase stores query-critical structured rows and metadata.
 
 ## Testing Conventions
 
 - Backend tests live under `backend/tests/` (`60` tracked `test_*.py` modules at this update).
-- Frontend contract tests live under `frontend/tests/` (`8` tracked `*.test.mjs` files at this update).
+- Frontend contract tests live under `frontend/tests/` (`9` tracked `*.test.mjs` files at this update).
 - Run focused tests for touched behavior first, followed by the relevant full suite.
 - Typical full checks from the repository root:
 

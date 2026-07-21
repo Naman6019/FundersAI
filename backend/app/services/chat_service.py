@@ -122,8 +122,12 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "OPENROUTER_API_KEY_PL
 OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1/chat/completions")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-OPENROUTER_SITE_URL = os.getenv("OPENROUTER_SITE_URL", "http://localhost:3000")
-OPENROUTER_APP_NAME = os.getenv("OPENROUTER_APP_NAME", "FundersAI")
+OPENROUTER_SITE_URL = (
+    os.getenv("OPENROUTER_SITE_URL")
+    or os.getenv("OPENROUTER_HTTP_REFERER")
+    or "https://www.fundersai.co.in"
+).strip()
+OPENROUTER_APP_NAME = (os.getenv("OPENROUTER_APP_NAME") or os.getenv("OPENROUTER_APP_TITLE") or "FundersAI").strip()
 CHAT_INTERNAL_PROXY_KEY = os.getenv("CHAT_INTERNAL_PROXY_KEY", "").strip()
 CONTROLLED_WEB_CONTEXT_ENABLED = os.getenv("CONTROLLED_WEB_CONTEXT_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
 MARKET_CURRENT_EVENTS_WEB_SEARCH_ENABLED = os.getenv("MARKET_CURRENT_EVENTS_WEB_SEARCH_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
@@ -267,8 +271,8 @@ async def function_ollama_chat(
     enable_web_search: bool = False,
     citation_collector: list[dict[str, Any]] | None = None,
 ):
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY") or OPENROUTER_API_KEY
-    groq_key = os.environ.get("GROQ_API_KEY")
+    openrouter_key = str(os.environ.get("OPENROUTER_API_KEY") or OPENROUTER_API_KEY or "").strip()
+    groq_key = str(os.environ.get("GROQ_API_KEY") or "").strip()
     providers: list[dict[str, str]] = []
     if openrouter_key and openrouter_key != "OPENROUTER_API_KEY_PLACEHOLDER":
         providers.append({

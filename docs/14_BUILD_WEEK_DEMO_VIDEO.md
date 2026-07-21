@@ -41,11 +41,12 @@ The demo must distinguish ten hosted discovery agents from the six-AMC productio
    - R2 contains the matching report and manifest;
    - Supabase contains the `mf_discovery_runs` summary row.
 5. Warm the Render backend and open the production app before recording.
-6. Start from an authenticated test session. Never record login credentials, `.env` files, secret dashboards, or browser password prompts.
-7. Create a clean chat session containing only the demo prompts.
-8. Close notifications, bookmarks, unrelated tabs, developer tools, and personal account menus.
-9. Record at 1920×1080. Keep browser zoom between 90% and 100% so the canvas and source metadata remain visible.
-10. Record the screen first and add the final voiceover afterward. Remove loading pauses rather than pretending that they did not occur.
+6. Confirm `/dashboard/research-evidence` returns cited PPFAS excerpts covering the investment objective, benchmark, and riskometer for the exact demo query. The July 21 OpenAI backfill populated 186 vector chunks and the production-data probe passed in hybrid mode; deploy the updated backend and configure its OpenAI key before recording.
+7. Start from an authenticated test session. Never record login credentials, `.env` files, secret dashboards, or browser password prompts.
+8. Create a clean chat session containing only the demo prompts.
+9. Close notifications, bookmarks, unrelated tabs, developer tools, and personal account menus.
+10. Record at 1920×1080. Keep browser zoom between 90% and 100% so the canvas and source metadata remain visible.
+11. Record the screen first and add the final voiceover afterward. Remove loading pauses rather than pretending that they did not occur.
 
 ## Shot-by-Shot Timeline and Voiceover
 
@@ -118,7 +119,7 @@ Find the investment objective, benchmark, and riskometer in the PPFAS factsheet.
 
 **Speak**
 
-> Here the research flow retrieves the official PPFAS factsheet, shows the supporting excerpt and source metadata, and keeps the evidence attached to the answer. The default retrieval path is deterministic and can run without an OpenAI API call.
+> Here OpenAI embeddings retrieve semantically relevant passages from the official PPFAS factsheet. FundersAI then shows the supporting excerpt and source metadata, validates citation support, and retains a deterministic lexical fallback instead of inventing evidence.
 
 ### 1:32–1:46 — Abstention
 
@@ -195,7 +196,7 @@ Compare HDFC Flexi Cap Fund and Parag Parikh Flexi Cap Fund for returns, risk, c
 
 **Speak**
 
-> During Build Week, I used GPT-5.6 through Codex to inspect the repository, implement the bounded agent workflow, harden authentication and streaming, generate focused tests, and verify the deployed experience. The runtime does not require the OpenAI API. FundersAI makes mutual-fund research more inspectable, reproducible, and honest about what the data can prove.
+> During Build Week, I used GPT-5.6 through Codex to inspect the repository, implement the bounded agent workflow, harden authentication and streaming, generate focused tests, and verify the deployed experience. The production research pipeline uses OpenAI embeddings for semantic retrieval, with deterministic lexical fallback and official-source citations. FundersAI makes mutual-fund research more inspectable, reproducible, and honest about what the data can prove.
 
 Use the GPT-5.6 sentence only if it accurately describes the development account and model used. Development use is different from claiming GPT-5.6 or the OpenAI API as a production runtime provider.
 

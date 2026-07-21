@@ -225,7 +225,7 @@ class MutualFundRepository:
         query = self.table("amc_document_chunks").select("id,document_id,chunk_text,metadata")
         for key, value in filters.items():
             query = query.contains("metadata", {key: value})
-        return query.limit(max(1, min(limit, 100))).execute().data or []
+        return query.limit(max(1, min(limit, 500))).execute().data or []
 
     def match_document_chunks(
         self,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 import uuid
 from typing import Any, TypedDict
@@ -10,9 +11,63 @@ from langgraph.graph import END, START, StateGraph
 
 from app.services.research_quality_service import OfficialEvidenceRelevanceGrader, validate_claim_citations
 
-WORKFLOW_VERSION = "fund_research_graph_v2"
+WORKFLOW_VERSION = "fund_research_graph_v3"
 ABSTENTION_MESSAGE = "I could not find enough matching official-document evidence to answer this question."
 logger = logging.getLogger(__name__)
+
+
+def _clean_evidence_text(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip(" …")
+
+
+def _extract_readable_claims(query: str, sources: list[dict[str, Any]]) -> list[str]:
+    requested = query.casefold()
+    claims: list[str] = []
+    found: set[str] = set()
+
+    patterns: list[tuple[str, str, re.Pattern[str]]] = [
+        (
+            "investment objective",
+            "Investment objective",
+            re.compile(r"\b(To\s+(?:seek|generate|provide|invest|achieve)[^.]{20,320}\.)", re.IGNORECASE),
+        ),
+        (
+            "benchmark",
+            "Benchmark",
+            re.compile(
+                r"\bAMFI\s+Tier\s+I\s+Benchmark(?:\s+Index)?\s+(.{2,120}?)(?=\s+To\s|\s+Investment\s+Objective|\s+Type\s+of|\s+Date\s+of|[.;]|$)",
+                re.IGNORECASE,
+            ),
+        ),
+        (
+            "riskometer",
+            "Riskometer",
+            re.compile(r"\bThe\s+risk\s+of\s+the\s+scheme\s+is\s+(.{3,80}?)(?=\s+RISKOMETER|[.;]|$)", re.IGNORECASE),
+        ),
+        (
+            "expense ratio",
+            "Expense ratio",
+            re.compile(
+                r"\b(?:Total\s+Expense\s+Ratio|Expense\s+Ratio|TER)\s*(?:is|:|-)?\s*([0-9]+(?:\.[0-9]+)?\s*(?:%|percent))",
+                re.IGNORECASE,
+            ),
+        ),
+    ]
+
+    for source_index, source in enumerate(sources, start=1):
+        text = _clean_evidence_text(source.get("excerpt"))
+        for field, label, pattern in patterns:
+            if field in found or field not in requested:
+                continue
+            match = pattern.search(text)
+            if not match:
+                continue
+            value = _clean_evidence_text(match.group(1))
+            if field == "riskometer":
+                value = f"The risk of the scheme is {value.lower()}"
+            claims.append(f"- {label}: {value} [{source_index}]")
+            found.add(field)
+    return claims
 
 
 class FundResearchState(TypedDict, total=False):
@@ -116,8 +171,9 @@ def build_fund_research_graph(retrieval_service: Any, relevance_grader: Any | No
 
     def synthesize_from_evidence(state: FundResearchState) -> FundResearchState:
         sources = state["retrieval"].get("sources") or []
-        lines = ["Official-document evidence:"]
-        lines.extend(f"- [{index}] {source.get('excerpt', '')}" for index, source in enumerate(sources, start=1))
+        claims = _extract_readable_claims(state["query"], sources)
+        lines = ["Answer from official documents:"]
+        lines.extend(claims or (f"- [{index}] {_clean_evidence_text(source.get('excerpt'))}" for index, source in enumerate(sources, start=1)))
         return {
             "answer": "\n".join(lines),
             "sources": sources,
@@ -133,9 +189,11 @@ def build_fund_research_graph(retrieval_service: Any, relevance_grader: Any | No
     def validate_citations(state: FundResearchState) -> FundResearchState:
         sources = state.get("sources") or []
         answer = state.get("answer") or ""
-        url_valid = bool(sources) and all(
-            str(source.get("source_url") or "").startswith("https://") and f"[{index}]" in answer
-            for index, source in enumerate(sources, start=1)
+        cited_indexes = {int(value) for value in re.findall(r"\[(\d+)]", answer)}
+        url_valid = bool(cited_indexes) and all(
+            1 <= index <= len(sources)
+            and str(sources[index - 1].get("source_url") or "").startswith("https://")
+            for index in cited_indexes
         )
         validation = validate_claim_citations(answer, sources)
         valid = url_valid and bool(validation.get("valid"))
@@ -264,6 +322,7 @@ def run_fund_research_workflow(
             "mode": retrieval.get("retrieval_mode"),
             "vector_status": retrieval.get("vector_status"),
             "cross_encoder_status": retrieval.get("cross_encoder_status"),
+            "corpus_status": retrieval.get("corpus_status"),
             "reranker_version": retrieval.get("reranker_version"),
             "query_coverage": retrieval.get("query_coverage"),
         },

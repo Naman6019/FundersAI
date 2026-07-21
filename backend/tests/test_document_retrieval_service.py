@@ -23,12 +23,80 @@ class _VectorRepository(_Repository):
         }]
 
 
+class _FilterRepository(_Repository):
+    def __init__(self):
+        self.filters = None
+        self.limit = None
+
+    def list_document_chunks(self, *, filters, limit):
+        self.filters = filters
+        self.limit = limit
+        return super().list_document_chunks(filters=filters, limit=limit)
+
+
 def test_retrieval_returns_citable_official_sources_and_abstains_without_matches():
     service = DocumentRetrievalService(_Repository())
     result = service.search("official factsheet expense ratio", filters={"document_type": "factsheet"})
     assert result["grounded"] is True
     assert result["sources"][0]["source_url"].startswith("https://official.example")
     assert DocumentRetrievalService(_Repository()).search("", filters={})["abstain"] is True
+
+
+def test_retrieval_normalizes_amc_and_document_type_filters():
+    repository = _FilterRepository()
+
+    result = DocumentRetrievalService(repository).search(
+        "official factsheet expense ratio",
+        filters={"amc_code": "PPFAS", "document_type": "FACTSHEET"},
+    )
+
+    assert result["grounded"] is True
+    assert repository.filters == {"amc_code": "ppfas", "document_type": "factsheet"}
+    assert repository.limit == 200
+
+
+def test_retrieval_covers_distinct_query_fields_and_focuses_excerpts():
+    duplicate = {
+        "id": "cover-duplicate",
+        "document_id": "doc-duplicate",
+        "chunk_text": "PPFAS index " + ("filler " * 80) + "Investment Objective and Benchmark details.",
+        "metadata": {"source_url": "https://official.example/factsheet.pdf"},
+    }
+
+    class _CoverageRepository:
+        def list_document_chunks(self, *, filters, limit):
+            assert limit == 200
+            return [
+                {**duplicate, "id": "cover-1", "document_id": "doc-1"},
+                duplicate,
+                {
+                    "id": "risk-1",
+                    "document_id": "doc-1",
+                    "chunk_text": "The scheme riskometer is very high risk and the benchmark riskometer is very high risk.",
+                    "metadata": {"source_url": "https://official.example/factsheet.pdf"},
+                },
+            ]
+
+    result = DocumentRetrievalService(_CoverageRepository()).search(
+        "Find the investment objective, benchmark, and riskometer in the PPFAS factsheet.",
+        filters={"amc_code": "ppfas"},
+        limit=3,
+    )
+
+    assert len(result["sources"]) == 2
+    assert any("riskometer" in source["excerpt"].lower() for source in result["sources"])
+    assert any("investment objective" in source["excerpt"].lower() for source in result["sources"])
+
+
+def test_empty_corpus_is_distinguished_from_irrelevant_evidence():
+    class _EmptyRepository:
+        def list_document_chunks(self, *, filters, limit):
+            return []
+
+    result = DocumentRetrievalService(_EmptyRepository()).search("official factsheet expense ratio", filters={})
+
+    assert result["abstain"] is True
+    assert result["corpus_status"] == "empty"
 
 
 def test_chunking_and_evaluation_are_deterministic():

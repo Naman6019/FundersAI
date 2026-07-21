@@ -54,6 +54,49 @@ def test_llm_generation_falls_back_from_openrouter_to_groq(monkeypatch):
     ]
 
 
+def test_openrouter_key_is_trimmed_before_authorization(monkeypatch):
+    from app.services import chat_service as service
+
+    authorization_headers: list[str] = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "model": service.OPENROUTER_MODEL,
+                "choices": [{"message": {"content": "OpenRouter answer"}}],
+                "usage": {"prompt_tokens": 2, "completion_tokens": 2, "total_tokens": 4},
+            }
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, _url, **kwargs):
+            authorization_headers.append(kwargs["headers"]["Authorization"])
+            return FakeResponse()
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "  openrouter-test-key\n")
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.setattr(service.httpx, "AsyncClient", lambda **_kwargs: FakeClient())
+
+    answer = asyncio.run(
+        service.function_ollama_chat(
+            [{"role": "user", "content": "Explain clearly."}],
+            format="text",
+            max_retries=0,
+        )
+    )
+
+    assert answer == "OpenRouter answer"
+    assert authorization_headers == ["Bearer openrouter-test-key"]
+
+
 def test_general_expense_ratio_uses_useful_deterministic_fallback(monkeypatch):
     from app.services import chat_service as service
 

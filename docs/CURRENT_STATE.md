@@ -87,7 +87,7 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 - Official-document research foundation:
   - pgvector-backed `amc_document_chunks` schema with parser, embedding, source, and report metadata;
   - explicit background indexing for parsed/partially parsed official AMC documents;
-  - OpenRouter embeddings using the existing `OPENROUTER_API_KEY` boundary;
+  - provider-free lexical fallback plus direct OpenAI `text-embedding-3-small` document/query embeddings using the existing 1,536-dimension vector contract;
   - `POST /api/funds/research/search` returning citable excerpts and explicit abstention;
   - provider-free retrieval evaluation helper.
 - Evidence-pipeline implementation foundation:
@@ -107,6 +107,34 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - server-only `mf_discovery_runs` summary migration with RLS and service-role-only access;
   - 30-day GitHub evidence artifact and a readable per-AMC workflow summary;
   - discovery remains separate from ingestion, parser readiness, and user-facing AMC promotion.
+- Hosted official-research indexing implementation:
+  - weekday/manual GitHub Actions indexing for parsed R2-backed PDFs from the six enabled AMCs;
+  - PDF filtering occurs before the job limit, and already indexed document IDs are skipped;
+  - AMC/document metadata is normalized for case-stable retrieval filters;
+  - missing or failed embeddings fall back to provider-free lexical chunks unless strict embeddings are requested;
+  - the evidence UI distinguishes an empty production corpus from an irrelevant query.
+- Production official-research corpus verification on July 21:
+  - `20260721_harden_amc_document_chunks.sql` is applied;
+  - the PPFAS backfill indexed 2 official June 2026 factsheet rows into 186 lexical chunks with no failures and no embedding-provider call;
+  - the exact evidence-page query now returns a grounded result with five official PPFAS citations, 100% claim support, and no browser-console errors;
+  - a local ranking patch searches up to 200 candidates, removes duplicate chunks, covers distinct query terms, and focuses excerpts around matches; its exact production-data probe includes objective, benchmark, and riskometer evidence and requires a backend deployment before demo recording.
+- Direct OpenAI embedding migration is implemented locally:
+  - indexing and query embeddings use `https://api.openai.com/v1/embeddings`, model `text-embedding-3-small`, and version `amc_document_embedding_openai_v2`;
+  - `OPENAI_API_KEY` is the deployment-standard secret, with the existing local `OPENAI_KEY` name accepted as a compatibility alias;
+  - strict embedding runs treat lexical-only documents as needing re-indexing;
+  - GitHub Actions requires OpenAI embeddings by default, while the backend retains lexical fallback when vector generation or matching fails.
+- Direct OpenAI production-data verification on July 21:
+  - a minimal `text-embedding-3-small` API probe returned the required 1,536 dimensions;
+  - the two existing PPFAS June 2026 factsheet records were re-indexed into 186 vector chunks with `index_mode=vector` and no failures;
+  - the exact demo query returned `mode=hybrid`, `vector_status=active`, query coverage `1.0`, five sources, and visible investment-objective, benchmark, and riskometer evidence when the local updated backend queried production Supabase;
+  - this proves the provider, vectors, and pgvector RPC; Render still needs the updated backend and `OPENAI_API_KEY` before the hosted page can report the same result.
+- The Evidence Research page now defaults to a reader-facing view:
+  - labeled question and fund-house controls replace the unlabeled query and AMC-code fields;
+  - plain evidence status, answer, coverage explanation, readable source metadata, and trust boundaries appear first;
+  - retrieval versions, provider statuses, raw processing steps, and trace IDs are contained in a closed `Technical audit trail` disclosure;
+  - v2/v3 metrics are contained in a closed `Developer evaluation` disclosure with plain-language metric labels and an explicit demo-benchmark warning.
+  - `fund_research_graph_v3` converts common factsheet fields such as investment objective, benchmark, riskometer, and expense ratio into concise cited statements instead of presenting a raw PDF-excerpt dump as the answer.
+  - the exact PPFAS production-data query now renders three readable claims—objective, `NIFTY 500 (TRI)` benchmark, and `very high risk` riskometer—with `grounded=true`, claim support `1.0`, hybrid mode, and active OpenAI vector retrieval.
 - July 21 chat/cache/domain hardening is committed at `25e8d193`:
   - neutral uses of `invest`, `investment`, `buying`, and `selling` survive the research-language sanitizer while direct recommendation phrases are rewritten;
   - public read-only rate-limit groups fail open when Upstash is unavailable, while chat, fund research, cron, and admin mutations remain fail-closed;
@@ -120,13 +148,15 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - TypeScript and Next.js production build passed;
   - focused ESLint had no errors and two pre-existing custom-font warnings.
 - Local verification for the current SSE/extractor/admin/search hardening worktree:
-  - backend: `393 passed, 6 skipped` (`backend/tests/tmp` excluded because the local directory is access-denied during collection);
-  - frontend contracts: `32 passed` across 8 test files;
+  - backend: `403 passed, 6 skipped` (`backend/tests/tmp` excluded because the local directory is access-denied during collection);
+  - frontend contracts: `33 passed` across 9 test files;
   - TypeScript and the Next.js production build passed;
+  - `index-mf-research.yml` parses successfully and `git diff --check` passes;
   - focused streaming/proxy lint introduced no new findings, but repository-wide lint still fails on the existing UI backlog (`76` errors, `62` warnings).
 
 ## In Progress
-- Apply `20260721_add_mf_discovery_runs.sql`, configure the existing Supabase/R2 GitHub secrets, push `discover-mf-documents.yml`, and capture its first hosted run before calling the ten agents deployed.
+- Add `OPENAI_API_KEY` to GitHub Actions and Render, push `index-mf-research.yml`, deploy the retrieval/OpenAI changes, and confirm that the hosted evidence trace reports hybrid retrieval with objective, benchmark, and riskometer excerpts. The PPFAS vector backfill itself is complete.
+- Hosted discovery is verified by run `github-29831363507-1`: 8 completed agents, 2 safe escalations, 8 validated documents, and persisted GitHub/R2/Supabase evidence.
 - The latest Browser production rerun passes signed-out guard, login, deterministic SIP, streamed chat, general explanation, comparison APIs/canvas, session restore, and sign-out. See `LIVE_LOGIN_CHAT_E2E_2026-07-21.md`.
 - Reduce provider-backed general-explanation latency, observed at about 50.5 seconds in the latest live run.
 - Remove the remaining Recharts negative-dimension warning when the comparison canvas first opens.
@@ -139,6 +169,7 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 - Monitor scheduled parser retry outcomes for rows that remain in review after cooldown retries.
 
 ## Known Gaps
+- `/dashboard/research-evidence` is grounded in production after the PPFAS backfill, but the currently deployed 30-candidate ranking omitted riskometer evidence from the exact demo query's top five sources. The locally verified ranking patch fixes this and still needs deployment.
 - The supported frontend `/api/chat` route requires authentication, but FastAPI `POST /api/chat` does not independently validate a Supabase bearer token. The backend must remain behind the trusted frontend boundary unless explicit backend authentication is added.
 - Provider-backed explanation latency was about 50.5 seconds in the latest recorded production run and still needs a faster deterministic completion boundary or measured improvement.
 - Comparison data and charts load successfully, but each tested canvas opening emitted one Recharts `width(-1)/height(-1)` warning before layout settled.

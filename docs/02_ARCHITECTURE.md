@@ -60,7 +60,7 @@ Public read-only backend groups (`quant`, `mf-detail`, `category-funds`, `data-h
 ### Fund Research Evidence Path
 1. Only parsed or partially parsed official AMC documents are eligible for indexing.
 2. `index_parsed_documents` resolves the R2-backed document and creates deterministic text chunks in a background job.
-3. `DocumentIndexingService` creates versioned OpenRouter embeddings and stores source, parser, embedding, and report-month metadata with every chunk.
+3. `DocumentIndexingService` stores source, parser, and report-month metadata with every chunk. Lexical indexing remains the provider-free fallback; versioned `text-embedding-3-small` vectors come directly from the OpenAI embeddings API.
 4. `POST /api/funds/research/search` returns citable official-document excerpts and an explicit abstention state.
 5. The default `amc_lexical_rerank_v2` path applies a deterministic reranker and evidence-coverage gate; optional query embeddings call the pgvector RPC only when `MF_RESEARCH_VECTOR_SEARCH_ENABLED=true`.
 6. `POST /api/funds/research/answer` runs a bounded LangGraph workflow that produces cited excerpts or abstains.

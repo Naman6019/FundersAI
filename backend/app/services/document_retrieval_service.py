@@ -12,8 +12,8 @@ from rapidfuzz import fuzz
 BASELINE_RETRIEVAL_VERSION = "amc_hybrid_retrieval_v1"
 RETRIEVAL_VERSION = "amc_lexical_rerank_v2"
 V3_RETRIEVAL_VERSION = "amc_hybrid_cross_encoder_v3"
-EMBEDDING_VERSION = "amc_document_embedding_v1"
-EMBEDDING_MODEL = "openai/text-embedding-3-small"
+EMBEDDING_VERSION = "amc_document_embedding_openai_v2"
+EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSIONS = 1_536
 CHUNK_SIZE = 1_200
 CHUNK_OVERLAP = 160
@@ -58,8 +58,38 @@ def _meaningful_query_tokens(query: str) -> set[str]:
     return _tokens(query) - _QUERY_STOPWORDS
 
 
+def _focused_excerpt(text: str, query_tokens: set[str], *, limit: int = 400) -> str:
+    clean = str(text or "").strip()
+    if len(clean) <= limit:
+        return clean
+
+    lowered = clean.lower()
+    starts = {0}
+    for token in query_tokens:
+        starts.update(max(0, match.start() - 80) for match in re.finditer(rf"\b{re.escape(token)}\b", lowered))
+
+    def window_score(start: int) -> tuple[int, int]:
+        window_tokens = _tokens(clean[start : start + limit])
+        return len(query_tokens & window_tokens), -start
+
+    start = max(starts, key=window_score)
+    if start:
+        boundary = clean.rfind(" ", max(0, start - 40), start + 1)
+        start = boundary + 1 if boundary >= 0 else start
+    excerpt = clean[start : start + limit].strip()
+    return f"{'…' if start else ''}{excerpt}{'…' if start + limit < len(clean) else ''}"
+
+
 def _enabled(name: str, default: str = "false") -> bool:
     return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _normalize_filters(filters: dict[str, Any]) -> dict[str, Any]:
+    normalized = {key: value for key, value in filters.items() if value not in (None, "")}
+    for key in ("amc_code", "document_type"):
+        if key in normalized:
+            normalized[key] = str(normalized[key]).strip().lower()
+    return normalized
 
 
 class CohereCrossEncoderReranker:
@@ -163,12 +193,12 @@ class DocumentRetrievalService:
         )
 
     def search(self, query: str, *, filters: dict[str, Any] | None = None, limit: int = 5) -> dict[str, Any]:
-        filters = {key: value for key, value in (filters or {}).items() if value not in (None, "")}
+        filters = _normalize_filters(filters or {})
         query = str(query or "").strip()
         if not query:
-            return self._empty_result(query_coverage=0.0, vector_status="not_requested")
+            return self._empty_result(query_coverage=0.0, vector_status="not_requested", corpus_status="not_checked")
 
-        lexical_rows = self.repository.list_document_chunks(filters=filters, limit=max(limit * 6, 30))
+        lexical_rows = self.repository.list_document_chunks(filters=filters, limit=max(limit * 40, 200))
         rows = lexical_rows
         vector_status = "disabled"
         if self.vector_search_enabled and self.query_embedder:
@@ -191,10 +221,15 @@ class DocumentRetrievalService:
         corpus_tokens = set().union(*(_tokens(str(row.get("chunk_text") or "")) for row in lexical_rows)) if lexical_rows else set()
         query_coverage = len(meaningful_tokens & corpus_tokens) / max(1, len(meaningful_tokens))
         if self.relevance_gate_enabled and meaningful_tokens and query_coverage < self.minimum_query_coverage:
-            return self._empty_result(query_coverage=query_coverage, vector_status=vector_status)
+            return self._empty_result(
+                query_coverage=query_coverage,
+                vector_status=vector_status,
+                corpus_status="available" if lexical_rows else "empty",
+            )
 
         scored, reranker_version, cross_encoder_status = self._score_rows(query, rows, query_tokens)
         scored.sort(key=lambda item: (-item[0], str(item[1].get("id") or "")))
+        selected = self._select_diverse_rows(scored, meaningful_tokens, limit=max(1, min(limit, 10)))
         sources = [
             {
                 "document_id": str(row.get("document_id") or ""),
@@ -205,9 +240,9 @@ class DocumentRetrievalService:
                 "report_month": metadata.get("report_month"),
                 "page": metadata.get("page"),
                 "score": score,
-                "excerpt": str(row.get("chunk_text") or "")[:400],
+                "excerpt": _focused_excerpt(str(row.get("chunk_text") or ""), meaningful_tokens),
             }
-            for score, row, metadata in scored[: max(1, min(limit, 10))]
+            for score, row, metadata in selected
         ]
         return {
             "retrieval_version": self.retrieval_version,
@@ -215,6 +250,7 @@ class DocumentRetrievalService:
             "retrieval_mode": "hybrid" if vector_status == "active" else ("sparse" if self.rank_fusion_enabled else "lexical"),
             "vector_status": vector_status,
             "cross_encoder_status": cross_encoder_status,
+            "corpus_status": "available",
             "query_coverage": round(query_coverage, 4),
             "grounded": bool(sources),
             "abstain": not bool(sources),
@@ -222,13 +258,14 @@ class DocumentRetrievalService:
             "context": "\n\n".join(f"[Source {index + 1}] {item['excerpt']}" for index, item in enumerate(sources)),
         }
 
-    def _empty_result(self, *, query_coverage: float, vector_status: str) -> dict[str, Any]:
+    def _empty_result(self, *, query_coverage: float, vector_status: str, corpus_status: str) -> dict[str, Any]:
         return {
             "retrieval_version": self.retrieval_version,
             "reranker_version": "rrf_fusion_v1" if self.rank_fusion_enabled else ("rapidfuzz_token_set_v1" if self.reranker_enabled else None),
             "retrieval_mode": "hybrid" if vector_status == "active" else ("sparse" if self.rank_fusion_enabled else "lexical"),
             "vector_status": vector_status,
             "cross_encoder_status": "not_run" if self.cross_encoder_reranker else "disabled",
+            "corpus_status": corpus_status,
             "query_coverage": round(query_coverage, 4),
             "grounded": False,
             "abstain": True,
@@ -311,6 +348,53 @@ class DocumentRetrievalService:
             metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
             scored.append((round(score, 5), row, metadata))
         return scored, reranker_version, cross_encoder_status
+
+    @staticmethod
+    def _select_diverse_rows(
+        scored: list[tuple[float, dict[str, Any], dict[str, Any]]],
+        query_tokens: set[str],
+        *,
+        limit: int,
+    ) -> list[tuple[float, dict[str, Any], dict[str, Any]]]:
+        unique: list[tuple[float, dict[str, Any], dict[str, Any]]] = []
+        seen_chunks: set[str] = set()
+        for item in scored:
+            text = str(item[1].get("chunk_text") or "")
+            fingerprint = chunk_hash(text)
+            if fingerprint in seen_chunks:
+                continue
+            seen_chunks.add(fingerprint)
+            unique.append(item)
+
+        selected: list[tuple[float, dict[str, Any], dict[str, Any]]] = []
+        remaining = list(unique)
+        uncovered = set(query_tokens)
+        while remaining and uncovered and len(selected) < limit:
+            best_index = max(
+                range(len(remaining)),
+                key=lambda index: (
+                    len(uncovered & _tokens(str(remaining[index][1].get("chunk_text") or ""))),
+                    remaining[index][0],
+                    -index,
+                ),
+            )
+            best = remaining[best_index]
+            covered = uncovered & _tokens(str(best[1].get("chunk_text") or ""))
+            if not covered:
+                break
+            selected.append(remaining.pop(best_index))
+            uncovered -= covered
+
+        selected_fingerprints = {chunk_hash(str(item[1].get("chunk_text") or "")) for item in selected}
+        for item in unique:
+            fingerprint = chunk_hash(str(item[1].get("chunk_text") or ""))
+            if fingerprint in selected_fingerprints:
+                continue
+            selected.append(item)
+            selected_fingerprints.add(fingerprint)
+            if len(selected) >= limit:
+                break
+        return selected[:limit]
 
     @staticmethod
     def _merge_rows(primary: list[dict[str, Any]], secondary: list[dict[str, Any]]) -> list[dict[str, Any]]:

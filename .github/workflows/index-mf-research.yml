@@ -1,0 +1,117 @@
+name: Index Official MF Research Evidence
+
+on:
+  schedule:
+    - cron: '15 10 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      amcs:
+        description: 'Enabled AMCs to index'
+        required: false
+        default: 'axis,hdfc,sbi,icici,ppfas,nippon'
+      limit:
+        description: 'Maximum new parsed PDFs to index'
+        required: false
+        default: '25'
+      force:
+        description: 'Reindex documents that already have chunks'
+        required: false
+        type: boolean
+        default: false
+      require_embeddings:
+        description: 'Require direct OpenAI embeddings instead of lexical-only chunks'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: index-official-mf-research-evidence
+  cancel-in-progress: false
+
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_RAW_BUCKET: ${{ secrets.R2_RAW_BUCKET }}
+      R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in SUPABASE_URL SUPABASE_KEY R2_ENDPOINT R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_RAW_BUCKET; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Index parsed official PDFs
+        shell: bash
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          mkdir -p ../research-index-output
+
+          amcs="${{ inputs.amcs }}"
+          limit="${{ inputs.limit }}"
+          force="${{ inputs.force }}"
+          require_embeddings="${{ inputs.require_embeddings }}"
+          amcs="${amcs:-axis,hdfc,sbi,icici,ppfas,nippon}"
+          limit="${limit:-25}"
+          force="${force:-false}"
+          require_embeddings="${require_embeddings:-true}"
+
+          if [ "$require_embeddings" = "true" ] && [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo "Missing required secret: OPENAI_API_KEY (required when require_embeddings=true)"
+            exit 1
+          fi
+
+          args=(
+            --amcs "$amcs"
+            --limit "$limit"
+            --minimum-available 1
+            --strict
+            --output ../research-index-output/summary.json
+          )
+          if [ "$force" = "true" ]; then
+            args+=(--force)
+          fi
+          if [ "$require_embeddings" = "true" ]; then
+            args+=(--require-embeddings)
+          fi
+
+          timeout 40m python -m app.mf_ingestion.jobs.index_parsed_documents "${args[@]}"
+
+      - name: Upload indexing evidence
+        if: always() && hashFiles('research-index-output/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: mf-research-index-${{ github.run_id }}-${{ github.run_attempt }}
+          path: research-index-output/
+          if-no-files-found: error
+          retention-days: 30

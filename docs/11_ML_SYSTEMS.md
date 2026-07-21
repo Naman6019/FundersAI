@@ -165,18 +165,19 @@ Implementations:
 - `backend/app/services/document_indexing_service.py`
 - `backend/app/services/document_retrieval_service.py`
 - `backend/migrations/20260715_add_pgvector_and_amc_document_chunks.sql`
+- `backend/migrations/20260721_harden_amc_document_chunks.sql`
 
-The indexing path is explicitly offline. It accepts only `parsed` or `parsed_partial` official documents with HTTPS source URLs, creates deterministic paragraph-aware chunks, obtains embeddings through the configured OpenRouter key, and stores source, parser, embedding, and report-month metadata with every chunk.
+The indexing path is explicitly offline. It filters to `parsed` or `parsed_partial` official PDFs before applying its document limit, creates deterministic paragraph-aware chunks, and stores normalized source, parser, and report-month metadata. Direct OpenAI `text-embedding-3-small` vectors use the existing 1,536-dimension schema and version `amc_document_embedding_openai_v2`. `--require-embeddings` re-indexes lexical-only documents and fails on provider errors; non-strict execution retains lexical fallback.
 
 `POST /api/funds/research/search` returns citations-ready sources with `document_id`, `chunk_id`, official source URL, AMC, document type, report month, score, and excerpt. No matching source produces `abstain: true`; the service does not invent evidence.
 
-The default retrieval version is `amc_lexical_rerank_v2`. It combines lexical overlap with RapidFuzz token-set reranking and rejects questions whose meaningful terms have insufficient coverage in the filtered corpus. It exposes retrieval mode, vector status, reranker version, and query coverage. When `MF_RESEARCH_VECTOR_SEARCH_ENABLED=true`, the service creates a query embedding, calls `match_document_chunks`, and falls back to lexical retrieval if the provider or RPC fails. Vector mode is disabled by default because it adds request-time cost and still needs reviewer-verified evaluation.
+The default retrieval version is `amc_lexical_rerank_v2`. It evaluates up to 200 filtered lexical candidates, combines lexical overlap with RapidFuzz token-set reranking, removes duplicate chunk text, selects sources that cover distinct meaningful query terms, focuses each excerpt around the strongest matched window, and rejects questions whose meaningful terms have insufficient corpus coverage. It exposes corpus status, retrieval mode, vector status, reranker version, and query coverage. When `MF_RESEARCH_VECTOR_SEARCH_ENABLED=true`, the service creates a direct OpenAI query embedding, calls `match_document_chunks`, and falls back to lexical retrieval if OpenAI or the RPC fails. Render enables this flag after the matching document-vector backfill.
 
 `evaluate_retrieval` is provider-free and measures recall at k, hit rate, all-relevant rate, mean reciprocal rank, grounded-answer rate, and abstention accuracy. `backend/evals/fund_research_v1` contains the first versioned dataset, corpus, manifest, and recorded lexical baseline. The dataset is deliberately marked `development_seed`: it proves the evaluation contract, but fixture claims must be replaced with reviewer-verified official-document cases before it can gate production.
 
 The recorded v1 seed baseline retrieves all expected documents but has only `0.3333` abstention accuracy. V2 fixes both known false-grounding cases on the same seed: retrieval recall remains `1.0`, abstention accuracy becomes `1.0`, and 14/14 cases pass. This is a development-fixture result and cannot gate production until the dataset is replaced with reviewer-verified official-document cases.
 
-`POST /api/funds/research/answer` uses `fund_research_graph_v1` to normalize the request, retrieve evidence, branch to synthesis or abstention, and validate HTTPS sources plus numbered citations. Its first synthesis node is deterministic excerpt rendering, not free-form LLM generation. Fund details and comparisons remain outside the graph.
+`POST /api/funds/research/answer` uses `fund_research_graph_v3` to normalize the request, retrieve evidence, branch to synthesis or abstention, and validate HTTPS sources plus numbered citations. Its deterministic synthesis extracts readable objective, benchmark, riskometer, and expense-ratio claims when present; unsupported questions retain cited-excerpt fallback or abstention. It does not use free-form LLM generation. Fund details and comparisons remain outside the graph.
 
 The offline review-priority path also includes a feature-drift report. Numeric features use standardized mean shift; categorical features use total-variation distance. Drift alerts signal distribution change only—they do not prove model performance degradation, which still requires fresh reviewer outcomes.
 
@@ -213,5 +214,5 @@ The offline review-priority path also includes a feature-drift report. Numeric f
 
 - `backend/tests/test_fund_similarity_service.py` verifies explainable peer ranking and sparse-data handling.
 - `backend/tests/test_review_priority_service.py` verifies deterministic ranking, non-mutating output, and the admin-service authentication path.
-- `backend/tests/test_document_indexing_service.py` verifies the official-document and OpenRouter indexing boundary.
+- `backend/tests/test_document_indexing_service.py` verifies the direct OpenAI embedding boundary, local key alias, strict failure, and lexical-only re-index selection.
 - `backend/tests/test_document_retrieval_service.py` verifies deterministic chunking, citable sources, abstention, and retrieval evaluation.

@@ -23,6 +23,7 @@ GitHub Actions runs stock and mutual-fund sync jobs from `.github/workflows/`.
 | `sync-mf-enrichment.yml` | Manual only | `python -m backend.app.jobs.sync_mf_enrichment_unified` (AMFI + AMC disclosures) |
 | `discover-mf-documents.yml` | `15 3 * * 1-5`, plus manual | runs the bounded top-10 discovery supervisor, persists the report/manifest to R2 and `mf_discovery_runs`, and enforces a configurable completion gate; it does not ingest documents |
 | `sync-mf-disclosures.yml` | `30 4 * * 1-5`, plus manual | preflight/Edge-R2 acquisition where required, then ingest + parse for `axis,hdfc,sbi,icici,ppfas,nippon` |
+| `index-mf-research.yml` | `15 10 * * 1-5`, plus manual | indexes parsed official PDFs for the six enabled AMCs; embeddings are optional and lexical-only chunks remain usable by the default retrieval path |
 | `retry-mf-parser-actions.yml` | `15 */6 * * *`, plus manual | retries cooled-down `needs_review`, `failed`, and `parsed_partial` rows for the same six-AMC matrix |
 | `archive-mf-nav-history.yml` | Manual | archives and verifies legacy NAV history, then emits the drop-readiness report |
 | `migrate-mf-raw-to-r2.yml` | Manual | `migrate_mf_raw_to_r2` |
@@ -36,6 +37,7 @@ GitHub Actions runs stock and mutual-fund sync jobs from `.github/workflows/`.
 - Stock universe and fundamentals jobs are FinEdge-first and write source-neutral `stocks`, `financial_statements`, `ratios_snapshot`, and optional `shareholding_pattern`.
 - MF disclosures workflow is strict by design (`--strict --fail-on-needs-review`), so `needs_review` rows can fail the run.
 - AMC discovery is manifest-only. Its default minimum is eight completed factsheet agents, and discovery-only AMCs require a separate parser review and production promotion.
+- Official research indexing filters to parsed PDF rows before applying its document limit. Direct OpenAI strict runs revisit lexical-only documents; non-strict runs skip already indexed documents and retain lexical fallback.
 - MF parser retry is cooldown-based (`--min-age-hours`, default 6) and non-blocking by default for rows that still need review; true parser/classification issues still need code fixes or admin skip.
 - MF enrichment is AMFI + AMC disclosures only. It must not call unofficial fallback APIs for mutual-fund enrichment.
 - MF disclosure ingestion is configured for R2-first storage (`MF_REQUIRE_R2_FOR_RAW_STORAGE=true`), while Supabase stores structured/query-critical rows and manifests.

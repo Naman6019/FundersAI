@@ -12,3 +12,17 @@ services:
         sync: false
       - key: SUPABASE_KEY
         sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: nvidia/nemotron-3-ultra-550b-a55b:free
+      - key: OPENROUTER_SITE_URL
+        value: https://www.fundersai.co.in
+      - key: OPENROUTER_APP_NAME
+        value: FundersAI
+      - key: MF_RESEARCH_VECTOR_SEARCH_ENABLED
+        value: true

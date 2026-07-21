@@ -110,6 +110,15 @@ Do not migrate business data to Cloud SQL or raw documents to GCS solely to matc
 - Verify the GitHub artifact, R2 report/manifest objects, and matching `mf_discovery_runs` row.
 - The workflow is discovery-only and must not be treated as approval to ingest or expose a disabled AMC.
 
+### Official Research Index Migration
+
+- Apply `backend/migrations/20260721_harden_amc_document_chunks.sql` before running `index-mf-research.yml`.
+- The indexing workflow reads parsed R2-backed PDFs and writes server-only citation chunks.
+- Lexical indexing remains the provider-free fallback.
+- The workflow requires direct OpenAI embeddings by default. Add `OPENAI_API_KEY` as a GitHub Actions secret; strict runs fail early when it is absent and re-index documents that only have lexical chunks.
+- The workflow probes the repaired chunk schema before downloading PDFs and fails when any selected indexing attempt fails.
+- Verify the exact evidence-page query returns at least one official source before recording the demo.
+
 ## Workflow Secrets (GitHub Actions)
 - Base:
   - `SUPABASE_URL`
@@ -123,6 +132,8 @@ Do not migrate business data to Cloud SQL or raw documents to GCS solely to matc
 - Providers:
   - `FINEDGE_API_KEY`
   - `INDIAN_API_KEY` (only for explicitly enabled fallback/research paths)
+  - `OPENROUTER_API_KEY` (chat/extraction)
+  - `OPENAI_API_KEY` (official-document and query embeddings)
 - Optional MF source URL overrides:
   - `MF_HDFC_FACTSHEET_PAGE_URL`
   - `MF_HDFC_PORTFOLIO_PAGE_URL`
