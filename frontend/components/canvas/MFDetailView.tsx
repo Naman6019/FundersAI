@@ -250,7 +250,7 @@ export default function MFDetailView({ schemeCode }: { schemeCode: string }) {
             
             <div className="h-72 w-full">
               {data.chartData && data.chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                   <AreaChart data={data.chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">

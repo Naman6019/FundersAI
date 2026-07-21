@@ -3,6 +3,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from app.services.asset_resolver import AssetResolver, ResolverCache
+from app.services.asset_resolver import _fund_search_pattern as resolver_search_pattern
+from app.services.chat_service import _fund_search_pattern as chat_search_pattern
 
 
 class _FakeQuery:
@@ -60,6 +62,12 @@ class _FakeSupabase:
 def _resolver(rows: list[dict]) -> tuple[AssetResolver, _FakeSupabase]:
     fake = _FakeSupabase({"mutual_fund_core_snapshot": rows, "mutual_funds": []})
     return AssetResolver(fake, cache=ResolverCache(ttl_seconds=60, max_size=10)), fake
+
+
+def test_empty_and_wildcard_only_fund_searches_do_not_create_match_all_patterns():
+    for value in ("", "   ", "%", "___", "fund growth"):
+        assert resolver_search_pattern(value) is None
+        assert chat_search_pattern(value) is None
 
 
 def test_resolver_maps_ppfas_typo_to_high_confidence_fund_and_caches():

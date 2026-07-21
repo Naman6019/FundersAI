@@ -1,6 +1,8 @@
 # AMC Link Discovery Agents
 
-FundersAI has ten bounded specialists for official AMC document discovery:
+**Last updated:** 2026-07-21
+
+FundersAI has a default top-10 supervisor roster for official AMC document discovery:
 
 - SBI
 - Mirae Asset
@@ -14,6 +16,8 @@ FundersAI has ten bounded specialists for official AMC document discovery:
 - DSP
 
 One supervisor runs the specialists concurrently and isolates failures by AMC.
+
+Axis has an additional bounded specialist used by the active ingestion workflow but is not part of the historical top-10 roster. Motilal Oswal is enabled in the source registry but does not currently have a class in `AGENT_CLASSES`; do not claim supervisor-agent coverage for it.
 
 ## Safety contract
 

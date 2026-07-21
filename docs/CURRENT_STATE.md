@@ -1,6 +1,6 @@
 # Current State
 
-**Last Updated**: 2026-07-20
+**Last Updated**: 2026-07-21
 
 ## Project Summary
 FundersAI is a research-first Indian stocks + mutual funds app with deterministic comparison outputs, Supabase-first runtime reads, and workflow-driven data ingestion.
@@ -21,11 +21,25 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 - Supabase Google OAuth callback flow:
   - Google and email verification redirects use `/auth/callback`.
   - The callback exchanges the Supabase OAuth code and returns users to stored `next` path or `/dashboard`.
+- Authenticated chat persistence:
+  - `ai_chat_sessions` and `ai_chat_messages` are user-owned and protected by RLS;
+  - `/api/chat/sessions` creates/lists sessions and `/api/chat/sessions/[sessionId]` restores owned messages;
+  - the chat proxy validates session ownership before service-role writes.
+- Chat status streaming and lifecycle hardening:
+  - FastAPI streams intent, data-loading, and synthesis status events followed by one final or safe error event;
+  - full chat and inline copilot share one incremental SSE parser;
+  - the Next.js proxy removes `_usage`, persists owned history before final delivery, and continues accounting/persistence work after browser cancellation;
+  - backend stream workers are cancelled and awaited when their downstream stream closes.
+- MF extraction/query hardening:
+  - strict JSON schema is limited to explicitly supported OpenAI-model prefixes or an environment override, while Nemotron uses `json_object`;
+  - strict `fund_manager` and holdings fields match the normalized extraction contract;
+  - empty and wildcard-only fund searches no longer create match-all `ILIKE` queries;
+  - admin data-health and operations reads are ordered and capped at 5,000 rows per query.
 - Research-oriented landing page at `/`.
 - Deterministic compare responses with `why_better`, structured winner context, and data limitation/freshness metadata.
 - Source-neutral stock data model and scheduled stock workflows.
 - Mutual-fund NAV sync and metadata pipelines.
-- AMC disclosure ingestion pipeline for `ppfas`, `icici`, `hdfc`, `sbi`:
+- AMC disclosure ingestion registry enabled for `ppfas`, `hdfc`, `icici`, `sbi`, `axis`, `motilal`, and `nippon`:
   - raw document ingestion
   - parsing
   - validation / review queue
@@ -37,7 +51,9 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
     - ICICI: parsed clean
   - AMC holdings parsers keep stored holdings ISIN-only while using cash/TREPS/reverse-repo allocation rows for total exposure validation where needed.
 - MF storage controls:
+  - `archive-mf-nav-history.yml`
   - `migrate-mf-raw-to-r2.yml`
+  - `reacquire-mf-raw-to-r2.yml`
   - `compact-mf-storage.yml`
 - Admin dashboard Phase 1 at `/admin`:
   - Overview
@@ -85,8 +101,27 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - opt-in `amc_hybrid_cross_encoder_v3` using reciprocal-rank fusion plus a Cohere cross-encoder adapter with deterministic RRF fallback;
   - provider-free v2/v3 comparison artifact, optional live-embedding/cross-encoder benchmark flags, Langfuse experiment runner, and judge-facing `/dashboard/research-evidence` trace/evaluation view;
   - separate API/Prefect-worker containers, GCP deployment and alert-setup scripts, workflow telemetry, and offline review-feature drift checks.
+- July 21 chat/cache/domain hardening is committed at `25e8d193`:
+  - neutral uses of `invest`, `investment`, `buying`, and `selling` survive the research-language sanitizer while direct recommendation phrases are rewritten;
+  - public read-only rate-limit groups fail open when Upstash is unavailable, while chat, fund research, cron, and admin mutations remain fail-closed;
+  - rate-limit failure logs include group, exception type, provider status where available, and exception representation;
+  - `provider_response_cache` RLS/revoke migration is tracked in the repository;
+  - canonical metadata, sitemap, robots, structured data, and backend CORS use the supported `.co.in` hosts;
+  - sign-out clears the session and performs a hard redirect to `/auth`.
+- Local verification captured for the `25e8d193` change set:
+  - backend: `382 passed, 6 skipped`;
+  - frontend contract tests: `30 passed` across 7 test files;
+  - TypeScript and Next.js production build passed;
+  - focused ESLint had no errors and two pre-existing custom-font warnings.
+- Local verification for the current SSE/extractor/admin/search hardening worktree:
+  - backend: `388 passed, 6 skipped` (`backend/tests/tmp` excluded because the local directory is access-denied during collection);
+  - frontend contracts: `32 passed` across 8 test files;
+  - TypeScript and the Next.js production build passed;
+  - focused streaming/proxy lint introduced no new findings, but repository-wide lint still fails on the existing UI backlog (`76` errors, `62` warnings).
 
 ## In Progress
+- Deploy and Browser-verify commit `25e8d193`; the latest recorded production E2E run in `LIVE_LOGIN_CHAT_E2E_2026-07-21.md` exercised older commit `ea5d98fb`.
+- Re-run login, general explanation, sanitizer probe, comparison, history restore, sign-out, and production-log checks after that deployment.
 - Replace the development-seed retrieval fixtures with at least 50 reviewer-verified official-document cases before enabling a production regression gate.
 - Validate a Prefect deployment with equivalent parameters, retries, logs, and operator evidence before replacing any GitHub Actions scheduling.
 - Increase mutual-fund field coverage depth beyond AUM/TER/holdings for PPFAS, ICICI, HDFC, SBI (benchmark/risk/ratios completeness).
@@ -95,6 +130,8 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 - Monitor scheduled parser retry outcomes for rows that remain in review after cooldown retries.
 
 ## Known Gaps
+- The supported frontend `/api/chat` route requires authentication, but FastAPI `POST /api/chat` does not independently validate a Supabase bearer token. The backend must remain behind the trusted frontend boundary unless explicit backend authentication is added.
+- Provider-backed explanation latency was about 35 seconds in the latest recorded production run and still needs a faster deterministic completion boundary or measured improvement.
 - The first golden dataset is a development seed rather than a production gate. V2 passes it completely, but that does not establish quality on real official-document questions.
 - V3 vector retrieval, the cross-encoder, and the LLM relevance grader are implemented behind independent flags and remain disabled by default until reviewer-verified quality, latency, and provider-cost evidence exists.
 - The committed v2/v3 judge report is provider-free and shows benchmark plumbing, not live cross-encoder quality; run the explicit live flags only with configured provider credentials.
@@ -107,8 +144,9 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 ## Data Architecture Notes
 - Runtime query-critical data remains in Supabase.
 - Raw MF documents and archival payloads are stored in R2.
-- Legacy heavy tables were dropped/compacted to protect Supabase free-tier storage limits.
-- MF parse pipeline uses explicit states (`pending`, `downloaded`, `needs_reparse`, `parsed`, `needs_review`, `failed`, `skipped_not_supported`) to support reliability triage.
+- Legacy `mutual_fund_history`, `stock_history`, and `stock_fundamentals` were dropped/compacted. `mutual_fund_nav_history` remains until its separate archive/readiness gate passes.
+- `nav_api_cache` and `provider_response_cache` are server-only cache tables protected from `anon` and `authenticated` access.
+- MF parse pipeline uses explicit states (`pending`, `downloaded`, `needs_reparse`, `parsed`, `parsed_partial`, `needs_review`, `failed`, `skipped_not_supported`) to support reliability triage.
 - `retry-mf-parser-actions.yml` retries cooled-down `needs_review` / `failed` parser rows every 6 hours; it does not replace parser fixes or admin skips for invalid source documents.
 - Current parser reliability baseline uses local golden fixtures from the `AMC Data` set plus live April 2026 reparses for HDFC, SBI, and ICICI; PPFAS April 2026 was already clean in live ingestion.
 - Cleanup and parser triage classification now recognizes known irrelevant documents, including ICICI quant files and legacy PPFAS pre-2026 `.xls` portfolio rows.
@@ -124,6 +162,8 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 - `sync-mf-enrichment.yml` (optional fallback/manual)
 - `sync-mf-disclosures.yml`
 - `retry-mf-parser-actions.yml`
+- `archive-mf-nav-history.yml`
 - `migrate-mf-raw-to-r2.yml`
+- `reacquire-mf-raw-to-r2.yml`
 - `compact-mf-storage.yml`
 - `keepalive.yml`

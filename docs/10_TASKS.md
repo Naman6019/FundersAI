@@ -1,5 +1,7 @@
 # Tasks
 
+**Last updated:** 2026-07-21
+
 ## Todo
 - [x] Add a dedicated `/api/quant` backend endpoint to separate stock lookup from chat synthesis.
 - [x] Add rate limiting for frontend proxy routes (`/api/chat`, `/api/cron/sync-mf`).
@@ -233,6 +235,8 @@ Acceptance Criteria:
 - Do not make database-destructive changes.
 
 ## In Progress
+- [ ] Deploy and Browser-verify commit `25e8d193` against the supported `.co.in` production domain.
+- [ ] Reduce provider-backed general-explanation latency or add a faster deterministic completion boundary.
 - [ ] Expanding stock coverage beyond the current Nifty-focused list.
 - [ ] Testing `NIFTY500` vs `NIFTYTOTALMARKET`.
 - [ ] Tuning `STOCK_INFO_ENRICH_LIMIT` and `STOCK_YFINANCE_FALLBACK_LIMIT`.
@@ -240,6 +244,17 @@ Acceptance Criteria:
 - [ ] Reduce historical `mf_raw_documents` + `mf_parse_review_queue` backlog (`needs_review` and failed rows).
 
 ## Done
+- [x] Added owned `ai_chat_sessions`/`ai_chat_messages` persistence with RLS and session ownership validation before service-role writes.
+- [x] Required authentication on the supported frontend `/api/chat` route.
+- [x] Added server-only `nav_api_cache` and hardened `provider_response_cache` with RLS/revokes.
+- [x] Made public read-only rate-limit groups fail open on limiter-storage failure while keeping chat/research/cron/admin mutations fail-closed.
+- [x] Replaced global buy/sell/invest substitutions with contextual recommendation-language sanitization.
+- [x] Updated canonical URLs, sitemap, robots, JSON-LD, and backend CORS for `fundersai.co.in`.
+- [x] Fixed sign-out to hard-redirect to `/auth` after clearing the Supabase session.
+- [x] Added end-to-end chat SSE status/final/error handling for full chat and inline copilot, with safe errors, `_usage` removal, owned-session persistence before final delivery, and disconnect-safe proxy finalization.
+- [x] Capability-gated MF extractor strict JSON schema, aligned `fund_manager` and holdings shapes with the normalized contract, and retained Nemotron `json_object` fallback.
+- [x] Capped and ordered large admin overview/data-health reads at 5,000 rows per query.
+- [x] Removed match-all fund searches from all empty and wildcard-only resolver/chat paths.
 - [x] Admin dashboard Phase 1 at `/admin` with server-side role enforcement (`user_profiles.role=admin`).
 - [x] Added admin APIs: session, overview, users, AI usage, data coverage, NAV sync, resolver debug.
 - [x] Added `/dashboard/admin` compatibility redirect to `/admin`.
@@ -284,7 +299,8 @@ Acceptance Criteria:
 
 ## Known Issues
 - YFinance rate limits often on Render deployments.
+- The direct FastAPI `/api/chat` route does not independently validate a Supabase bearer token; the supported authenticated boundary is the Next.js proxy.
 - [ ] Portfolio overlap is partial for schemes/months not yet covered by AMC disclosure parser outputs.
 - News uses Google News RSS and can be slow.
 
-##Fund manager Past positions and performance
+## Fund Manager Past Positions and Performance

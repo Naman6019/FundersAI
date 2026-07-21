@@ -1,25 +1,33 @@
 # Agent Workflow
 
-This document outlines the workflow for using Codex, Antigravity, and Gemini CLI cooperatively on this repository.
+**Last updated:** 2026-07-21
 
-## Rule: Single Active Editor
-**Only ONE agent may edit files at a time.**
-Do not ask multiple agents to generate or refactor code simultaneously to avoid conflicts.
+## Start of Work
 
-## Which Tool to Use
-- **Codex**: Use for architecture planning, backend Python implementation, refactors, unit tests, and core feature logic.
-- **Antigravity**: Use for UI implementation, styling (Tailwind), layout changes, browser testing, and UX workflows.
-- **Gemini CLI**: Use for repo-wide debugging, resolving build/test failures, reviewing PRs, and context compression/summarization.
+1. Read `Agents.md`, `docs/CURRENT_STATE.md`, and the focused document for the subsystem being changed.
+2. Inspect `git status` and preserve unrelated user changes.
+3. For codebase questions, use the targeted Graphify query required by `Agents.md` when the tool is operational; otherwise report the failure and inspect source directly.
+4. Separate current code, local verification, deployed behavior, and planned work.
 
-## Start-of-Session Prompt
-When starting a session with any agent, the user should provide or the agent should internally execute:
-> "Please read `AGENTS.md` and the required files in `docs/` (specifically `CURRENT_STATE.md` and `10_TASKS.md`). Summarize your understanding of the current state, what we are working on, and ask for confirmation before proceeding."
+## Editing and Coordination
 
-## End-of-Session Prompt
-When a task is completed, the user should prompt:
-> "We are done with this task. Please update `CURRENT_STATE.md`, `10_TASKS.md`, and any other relevant docs to reflect our changes. Summarize what changed and what the next steps are."
+- Use one active editing agent for overlapping files. Parallel agents are safe only for bounded, independent work.
+- Do not make database-destructive changes without the documented readiness gate and explicit authorization.
+- Do not expose provider, Supabase service-role, Razorpay, R2, or internal proxy secrets.
+- Keep browser traffic behind Next.js `/api/*`; internal FastAPI/admin boundaries stay server-side.
+- Preserve research-only language and official-AMC-source constraints.
 
-## Review Workflow
-1. Codex or Antigravity completes feature work.
-2. The agent updates documentation.
-3. (Optional) Gemini CLI is invoked to review the diffs, check for regressions, and ensure no secrets were exposed before committing.
+## Verification
+
+1. Run focused tests for the changed behavior.
+2. Run the relevant backend/frontend suites in proportion to risk.
+3. Run type-check, lint, build, and `git diff --check` when frontend or release contracts change.
+4. Live/deployment claims require matching Browser, platform, migration, or runtime-log evidence.
+
+## Documentation Closeout
+
+- Update `CURRENT_STATE.md` for implementation or deployment changes.
+- Update `03_API_CONTRACTS.md` when a route, auth rule, rate limit, or error contract changes.
+- Update `04_DATABASE_SCHEMA.md` and `08_DEPLOYMENT.md` when migrations or environment requirements change.
+- Update `10_TASKS.md` by moving completed work and recording remaining gates.
+- Do not turn a local test result into a production claim.

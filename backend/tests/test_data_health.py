@@ -31,6 +31,14 @@ class _FakeQuery:
         return self
 
     def execute(self):
+        self.root.executions.append(
+            {
+                "table": self.table_name,
+                "limit": self.limit_value,
+                "order_field": self.order_field,
+                "count_requested": self.count_requested,
+            }
+        )
         rows = list(self.root.tables.get(self.table_name, []))
         for key, value in self.eq_filters.items():
             rows = [row for row in rows if str(row.get(key)) == str(value)]
@@ -45,6 +53,7 @@ class _FakeQuery:
 class _FakeSupabase:
     def __init__(self, tables: dict[str, list[dict]]):
         self.tables = tables
+        self.executions: list[dict] = []
 
     def table(self, name: str):
         return _FakeQuery(self, name)
@@ -144,3 +153,25 @@ def test_data_health_counts_aum_and_ter_outside_newest_nav_sample(monkeypatch):
     assert axis_quality["parse_review_count"] == 1
     assert "% of NAV" in axis_quality["holdings_source_note"]
     assert any(item["amc"] == "NIPPON" for item in payload["amc_parser_quality"])
+
+
+def test_admin_overview_caps_large_row_fetches_at_5000(monkeypatch):
+    from app.services import admin_service as app_main
+
+    fake = _FakeSupabase({})
+    app_main._current_admin_repository.set(fake)
+    monkeypatch.setenv("MF_INTERNAL_ADMIN_KEY", "test-admin-key")
+
+    payload = app_main.admin_ops_overview("test-admin-key")
+
+    bounded_reads = [
+        call for call in fake.executions
+        if call["limit"] is not None and call["table"] in {
+            "mf_raw_documents",
+            "mf_parse_review_queue",
+            "mutual_fund_core_snapshot",
+        }
+    ]
+    assert payload["status"] == "ok"
+    assert bounded_reads
+    assert max(call["limit"] for call in bounded_reads) <= 5000

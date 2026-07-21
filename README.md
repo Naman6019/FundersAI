@@ -41,13 +41,15 @@ Designed with a **Supabase-first runtime**, **deterministic AI comparisons**, an
 **Backend**
 - Python, FastAPI
 - Service & Repository layer architecture
-- YFinance, Groq API, Feedparser
+- NSE and FinEdge scheduled stock providers with YFinance fallback paths
+- AMFI, MFapi, and official AMC documents for mutual-fund data
+- OpenRouter and Groq model providers, with optional Langfuse tracing
 - *Deployed on Render*
 
 **Database, Storage & Infra**
 - **Supabase (PostgreSQL)**: Primary datastore and authentication
 - **Cloudflare R2**: Object storage for raw AMC documents and cold archives
-- **GitHub Actions**: 12+ active automated workflows for data syncs, backups, and parser retries
+- **GitHub Actions**: 15 active workflows for sync, ingestion, retry, archive, migration, and compaction jobs
 
 ## 📁 Project Structure
 
@@ -56,7 +58,7 @@ FundersAI/
 ├── .github/workflows/      # Automated CRON jobs for data sync and storage compaction
 ├── backend/                # Python/FastAPI app, fetching scripts, & parsers
 ├── frontend/               # Next.js web application & dashboard UI
-├── docs/                   # Shared agent memory, architecture decisions, current state
+├── docs/                   # Project documentation, architecture decisions, current state
 └── prompts/                # AI Agent instructions and routing logic
 ```
 
@@ -66,7 +68,7 @@ FundersAI is built to handle complex, high-volume financial data efficiently wit
 
 1. **Supabase-First Reads**: Runtime query-critical data lives in `stock_core_snapshot`, `mutual_fund_core_snapshot`, and the server-only `nav_api_cache` used for complete MFAPI histories.
 2. **Cold Storage Strategy**: To protect database limits, raw Mutual Fund documents (AMC holdings, portfolios) and archival payloads are routed to Cloudflare R2.
-3. **Resilient Ingestion Parsers**: Custom parsing pipelines ingest AMC disclosures (PPFAS, ICICI, HDFC, SBI) with explicit tracking states (`pending`, `parsed`, `needs_review`, `failed`). 
+3. **Resilient Ingestion Parsers**: Enabled AMC sources cover PPFAS, HDFC, ICICI, SBI, Axis, Motilal Oswal, and Nippon, with explicit tracking states (`pending`, `downloaded`, `needs_reparse`, `parsed`, `parsed_partial`, `needs_review`, `failed`, `skipped_not_supported`).
 4. **Self-Healing Data**: Automated cooldown retries and scheduled cron jobs continuously attempt to resolve missed parses and sync pricing history.
 5. **Evaluation-First Research Retrieval**: The recorded lexical baseline and deterministic v2 reranker use the same fixed dataset. Query-vector retrieval stays opt-in, and the bounded LangGraph path returns cited official-document excerpts or abstains.
 
@@ -98,7 +100,7 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 ## 📖 Documentation
-For agents and contributors, read the `AGENTS.md` file and the `docs/` folder. The primary source of truth is `docs/CURRENT_STATE.md`; see [the ML guide](docs/11_ML_SYSTEMS.md) and [the interviewer guide](docs/12_INTERVIEW_GUIDE.md) for project explanations.
+For agents and contributors, read [`Agents.md`](Agents.md) and the [documentation index](docs/README.md). The primary source of truth is [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md); see [the API contracts](docs/03_API_CONTRACTS.md), [database schema](docs/04_DATABASE_SCHEMA.md), [ML guide](docs/11_ML_SYSTEMS.md), and [interviewer guide](docs/12_INTERVIEW_GUIDE.md) for focused explanations.
 
 ## 🛡️ Provider Architecture (Quota-Safe)
 - Supabase normalized tables are the primary read path for app/chat/comparison:
@@ -124,7 +126,6 @@ python -m backend.app.jobs.sync_fundamentals --scope watchlist
 python -m backend.app.jobs.calculate_ratios
 python -m backend.app.jobs.sync_mf_nav
 python backend/scripts/sync_mf.py
-python backend/scripts/sync_mf_history.py
 python backend/scripts/sync_mf_metadata.py
 ```
 

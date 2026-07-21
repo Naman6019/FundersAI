@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -8,6 +8,7 @@ import { Send, Sparkles, Trash2 } from 'lucide-react';
 import { useCanvasStore } from '@/store/useCanvasStore';
 import { AssetType, ComparisonViewMode, ConversationContext, ExplanationMode, Message, ResearchDepth, useChatStore } from '@/store/useChatStore';
 import { hasSupabaseBrowserEnv, supabaseBrowser } from '@/lib/supabaseBrowser';
+import { readChatStream } from '@/lib/chatStream';
 import Magnetic from '@/components/ui/Magnetic';
 import { motion } from 'framer-motion';
 import ComparisonView from '@/components/canvas/ComparisonView';
@@ -271,6 +272,7 @@ function ReasoningSummary({ metadata }: { metadata?: Record<string, unknown> | n
 }
 
 export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: boolean }) {
+  const [streamStatus, setStreamStatus] = useState<string>("Thinking...");
   const searchParams = useSearchParams();
   const { setView, setIds, openCanvas } = useCanvasStore();
   const messages = useChatStore((state) => state.messages);
@@ -365,6 +367,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
       textareaRef.current.style.height = 'auto';
     }
 
+    setStreamStatus('Analyzing your question...');
     setIsProcessing(true);
 
     try {
@@ -418,15 +421,15 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
         }
         throw new Error(errorMessage);
       }
-      const data = await res.json();
+      const data = await readChatStream(res, setStreamStatus);
 
       if (data.system_action?.type === 'COMPARE') {
         if (selectedComparisonViewMode === 'canvas') {
-          setIds(data.system_action.ids);
+          setIds(data.system_action.ids || []);
           setView('COMPARISON', data);
           openCanvas(data);
         } else {
-          setIds(data.system_action.ids);
+          setIds(data.system_action.ids || []);
           setView('COMPARISON_GRAPH_ONLY', data);
           openCanvas(data);
         }
@@ -437,7 +440,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
         openCanvas(data);
       }
 
-      const nextConversationContext = data.conversation_context
+      const nextConversationContext: ConversationContext = data.conversation_context
         ? { ...conversationContext, ...data.conversation_context }
         : conversationContext;
       if (data.conversation_context) {
@@ -670,7 +673,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
                             <Sparkles className="h-3 w-3 text-white" />
                         </div>
                         <div className="flex items-center gap-2 text-sm text-white/70">
-                            <span>Thinking</span>
+                            <span>{streamStatus}</span>
                             <TypingDots />
                         </div>
                     </div>

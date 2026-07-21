@@ -1,5 +1,7 @@
 # Deployment
 
+**Last updated:** 2026-07-21
+
 ## Current Topology
 - Frontend: Vercel project rooted at `frontend/`
 - Backend: Render web service rooted at `backend/`
@@ -39,6 +41,7 @@ Do not migrate business data to Cloud SQL or raw documents to GCS solely to matc
   - `CRON_SECRET` (protects `/api/cron/sync-mf`)
   - `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_KEY` (server routes needing admin Supabase access)
   - `MF_INTERNAL_ADMIN_KEY` (server-to-backend admin resolver debug proxy)
+  - `CHAT_INTERNAL_PROXY_KEY` (must match the backend for trusted chat proxy metadata)
   - `RATE_LIMIT_ENABLED=true`
   - `UPSTASH_REDIS_REST_URL`
   - `UPSTASH_REDIS_REST_TOKEN`
@@ -79,6 +82,9 @@ Do not migrate business data to Cloud SQL or raw documents to GCS solely to matc
   - `RATE_LIMIT_ENABLED=true`
   - `UPSTASH_REDIS_REST_URL`
   - `UPSTASH_REDIS_REST_TOKEN`
+- Chat proxy:
+  - `CHAT_INTERNAL_PROXY_KEY` must match the Vercel value.
+  - The supported frontend route authenticates users; direct FastAPI chat does not validate a Supabase bearer token.
 - Internal admin endpoints:
   - `GET /api/admin/ops-overview`
   - `GET /api/admin/mf-resolver-debug`
@@ -89,6 +95,12 @@ Do not migrate business data to Cloud SQL or raw documents to GCS solely to matc
 - Apply `backend/migrations/20260717_nav_api_cache.sql` before deploying the NAV-cache runtime.
 - The legacy-table drop is intentionally outside `backend/migrations/` at `backend/manual_migrations/drop_mutual_fund_nav_history_after_readiness.sql`.
 - Run the manual drop only after the archive workflow and `check_nav_cache_drop_readiness.py` report `drop_ready=true`; the SQL also requires an explicit session acknowledgement.
+
+### July 2026 Chat and Cache Migrations
+
+- Apply `backend/migrations/20260721_add_ai_chat_sessions_and_messages.sql` before deploying owned chat sessions.
+- Apply `backend/migrations/20260721_harden_provider_response_cache_rls.sql` to enable RLS, revoke `public`/`anon`/`authenticated`, and retain service-role CRUD.
+- Verify `ai_chat_sessions`, `ai_chat_messages`, `nav_api_cache`, and `provider_response_cache` with authenticated session create/read and MF detail/cache probes.
 
 ## Workflow Secrets (GitHub Actions)
 - Base:
@@ -123,6 +135,7 @@ Add/update a row in `user_profiles`:
 - Verify frontend proxy routes can reach backend URL.
 - Verify backend `/health` and `/api/chat`.
 - Verify rate limits on `/api/chat`; production protected routes require Upstash Redis env vars.
+- Verify a failed Upstash call bypasses only `quant`, `mf-detail`, `category-funds`, and `data-health`; chat, research, cron, and admin mutations must return `503`.
 - Verify latest workflow run status and row-write counts.
 - Verify R2 credentials before MF disclosure sync/compaction jobs.
 - Verify `/admin`:
@@ -130,5 +143,7 @@ Add/update a row in `user_profiles`:
   - non-admin -> access denied
   - admin -> dashboard loads
 - Verify `/auth/callback` works for Google sign-in and email verification.
+- Verify sign-out reaches `/auth` without leaving the workspace on `Loading workspace…`.
+- Verify canonical metadata, sitemap, robots, JSON-LD, and CORS use `fundersai.co.in`/`www.fundersai.co.in`, not `.com`.
 - Verify `/api/create-order` returns a Razorpay order when Razorpay env vars are set.
 - Verify `/api/verify-payment` rejects bad signatures.

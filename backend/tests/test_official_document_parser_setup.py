@@ -410,6 +410,30 @@ def test_llm_extractor_uses_openrouter_when_key_is_configured(monkeypatch, tmp_p
     assert extraction.records[0].benchmark == "Nifty 500 TRI"
 
 
+def test_llm_response_format_uses_json_object_for_nemotron(monkeypatch):
+    from app.mf_ingestion.extractors.llm_extractor import _response_format
+
+    monkeypatch.delenv("MF_LLM_RESPONSE_FORMAT", raising=False)
+    response_format = _response_format("nvidia/nemotron-3-ultra-550b-a55b")
+
+    assert response_format == {"type": "json_object"}
+
+
+def test_llm_strict_schema_matches_normalized_contract(monkeypatch):
+    from app.mf_ingestion.extractors.llm_extractor import _response_format
+
+    monkeypatch.delenv("MF_LLM_RESPONSE_FORMAT", raising=False)
+    response_format = _response_format("openai/gpt-4.1-mini")
+    schema = response_format["json_schema"]["schema"]
+    record_schema = schema["properties"]["records"]["items"]
+    holding_schema = record_schema["properties"]["holdings"]["items"]
+
+    assert response_format["type"] == "json_schema"
+    assert record_schema["properties"]["fund_manager"] == {"type": ["string", "null"]}
+    assert holding_schema["additionalProperties"] is False
+    assert set(holding_schema["required"]) == set(holding_schema["properties"])
+
+
 def test_llm_primary_dry_run_enqueues_review_and_uses_deterministic_fallback(monkeypatch, tmp_path: Path):
     from app.mf_ingestion.parsers.factsheet_parser import FactsheetRecord
     from app.mf_ingestion.services import parsing_service, review_service

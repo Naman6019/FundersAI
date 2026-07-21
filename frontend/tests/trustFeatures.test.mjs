@@ -5,7 +5,7 @@ import test from 'node:test';
 
 test('chat route forwards and stores trust metadata', () => {
   const route = readFileSync(resolve('app/api/chat/route.ts'), 'utf8');
-  assert.match(route, /explanation_mode: body\.explanation_mode/);
+  assert.match(route, /explanation_mode: requestBody\.explanation_mode/);
   assert.match(route, /source_freshness: data\.source_freshness/);
   assert.match(route, /risk_analysis: data\.risk_analysis/);
   assert.match(route, /confidence: data\.confidence/);

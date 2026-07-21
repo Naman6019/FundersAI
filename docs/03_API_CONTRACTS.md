@@ -1,67 +1,101 @@
 # API Contracts
 
-## Frontend Proxy Routes (`frontend/app/api/`)
+**Last updated:** 2026-07-21
+
+The supported browser boundary is the Next.js `/api/*` surface. Browser code must not call FastAPI directly. Unless noted otherwise, routes return JSON; chat uses Server-Sent Events (SSE).
+
+## Authentication and Security
+
+- `POST /api/chat` and all `/api/chat/sessions*` routes require a Supabase user session.
+- When chat receives a `session_id`, the Next.js proxy verifies that the session belongs to the authenticated user before service-role writes.
+- Frontend `/api/admin/*` routes require an authenticated user whose `user_profiles.role` is `admin`.
+- Internal FastAPI admin and document-ingestion mutations require `X-Admin-Key`; ingestion webhooks may use the configured webhook token where supported.
+- `/api/cron/sync-mf` requires `CRON_SECRET`.
+- Billing webhooks verify the raw-body Razorpay signature and store event identifiers for idempotency.
+- The FastAPI chat route is intended to sit behind the authenticated Next.js proxy. It accepts proxy identity headers and an optional internal proxy key, but it does not independently validate a Supabase bearer token.
+
+## Frontend Server Routes (`frontend/app/api/`)
 
 ### Chat and Health
-- `POST /api/chat` -> backend `POST /api/chat`.
-- `GET /api/chat/history` -> authenticated user's saved chat messages.
-- `DELETE /api/chat/history` -> clear authenticated user's saved chat messages.
-- `GET /api/keepalive` -> backend `GET /health`.
+
+- `POST /api/chat`
+  - Requires authentication.
+  - Proxies to backend `POST /api/chat`.
+  - Validates optional session ownership, applies user/tier rate and token-budget checks, forwards trusted identity headers, and persists owned messages.
+  - Returns `text/event-stream` events: `{type:"status",message}`, `{type:"final",payload}`, or `{type:"error",message}`.
+  - Persists the owned session and finalizes token accounting before emitting the final event. Browser cancellation does not cancel the proxy's upstream accounting/persistence pump.
+  - Removes the server-only `_usage` field before the final payload reaches browser clients.
+  - The final payload contains synthesized markdown plus structured `quant_data`, trace/coverage/model metadata, and optional `system_action`.
+- `GET /api/chat/history`: returns the authenticated user's legacy saved chat messages.
+- `DELETE /api/chat/history`: clears the authenticated user's legacy saved chat messages.
+- `GET /api/chat/sessions`: lists owned chat sessions, newest first.
+- `POST /api/chat/sessions`: creates an owned chat session; defaults the title to `New Chat`.
+- `GET /api/chat/sessions/[sessionId]`: returns messages only after ownership validation.
+- `GET /api/keepalive`: proxies backend `GET /health`.
+- `GET /api/data-health`: proxies the backend data-health summary.
 
 ### Quant Proxy Family
-- `GET /api/quant/stocks/compare?symbols=RELIANCE,TCS` -> `/api/quant/stocks/compare`.
-- `GET /api/quant/stocks/[symbol]/profile` -> `/api/quant/stocks/{symbol}/profile`.
-- `GET /api/quant/stocks/[symbol]/financials` -> `/api/quant/stocks/{symbol}/financials`.
-- `GET /api/quant/stocks/[symbol]/price-history` -> `/api/quant/stocks/{symbol}/price-history`.
-- `GET /api/quant/stocks/nifty50/ticker` -> `/api/quant/stocks/nifty50/ticker`.
-- `GET /api/quant/providers/status` -> `/api/quant/providers/status`.
 
-### Frontend Server Routes With Direct Supabase Reads
-- `GET /api/mf/[schemeCode]`: MF snapshot + history.
-- `GET /api/search`: search across stock/fund entities.
-- `GET /api/cron/sync-mf`: protected trigger route.
+- `GET /api/quant/stocks/compare?symbols=RELIANCE,TCS`
+- `GET /api/quant/stocks/[symbol]/profile`
+- `GET /api/quant/stocks/[symbol]/financials`
+- `GET /api/quant/stocks/[symbol]/price-history`
+- `GET /api/quant/stocks/nifty50/ticker`
+- `GET /api/quant/providers/status`
 
-### Billing And Payments
-- `POST /api/create-order`: Razorpay Standard Checkout order creation.
+These routes proxy to their matching `/api/quant/*` FastAPI endpoints.
+
+### Funds, Search, and Research
+
+- `GET /api/mf/[schemeCode]`: MF snapshot plus NAV history from the server-only Supabase/MFapi cache path.
+- `GET /api/search`: searches stock and fund entities.
+- `GET /api/funds/category`: category fund list.
+- `POST /api/funds/category/compare`: deterministic within-category comparison.
+- `POST /api/funds/compare/verdict`: structured comparison summary with coverage and limitations.
+- `POST /api/funds/research/answer`: bounded official-document research answer with citations or abstention.
+- `GET /api/funds/research/evaluation`: versioned development evaluation artifact used by the evidence UI.
+
+### Billing and Payments
+
+- `POST /api/create-order`: creates a Razorpay Standard Checkout order.
   - Request: `{ "amount": number, "currency"?: string, "receipt"?: string }`
-  - Amount is paise and must be at least `100`.
+  - Amount is in paise and must be at least `100`.
   - Returns `{ "order_id": string, "amount": number, "currency": string }`.
-- `POST /api/verify-payment`: Razorpay Standard Checkout HMAC verification.
-  - Requires `razorpay_payment_id`, `razorpay_order_id`, and `razorpay_signature`.
-  - Returns success only when `HMAC_SHA256(order_id + "|" + payment_id, RAZORPAY_KEY_SECRET)` matches.
-- `GET /api/billing/subscriptions`: authenticated user's current billing state.
-- `POST /api/billing/subscriptions`: create Razorpay subscription checkout payload for `pro` or `ultra`.
-- `POST /api/billing/webhook`: Razorpay subscription webhook receiver.
-  - Verifies raw-body webhook signature.
-  - Stores event ids for idempotency.
-  - Updates `billing_subscriptions` and paid tier state only from verified events.
+- `POST /api/verify-payment`: verifies `HMAC_SHA256(order_id + "|" + payment_id, RAZORPAY_KEY_SECRET)`.
+- `GET /api/billing/subscriptions`: returns the authenticated user's billing state.
+- `POST /api/billing/subscriptions`: creates a subscription checkout payload for `pro` or `ultra`.
+- `POST /api/billing/webhook`: verifies and processes Razorpay subscription events idempotently.
 
-### Admin Routes (`/api/admin/*`, admin-role enforced server-side)
-- `GET /api/admin/session`
-- `GET /api/admin/overview`
-- `GET /api/admin/users`
-- `GET /api/admin/ai-usage`
-- `GET /api/admin/data-coverage`
-- `GET /api/admin/nav-sync`
-- `GET /api/admin/resolver-debug`
-- `GET /api/admin/ops-overview` (proxy to backend admin ops endpoint)
-- `POST /api/admin/data-coverage/documents/[documentId]/reparse`
-- `POST /api/admin/data-coverage/documents/[documentId]/resolve`
-- `POST /api/admin/data-coverage/documents/[documentId]/skip`
+### Admin Routes (`/api/admin/*`)
 
-Auth behavior:
-- Missing bearer token -> `401`
-- Authenticated but non-admin -> `403`
-- Admin check uses `user_profiles.role='admin'`
+- Read routes: session, overview, users, AI usage, data coverage, NAV sync, resolver debug, and operations overview.
+- Parser actions:
+  - `POST /api/admin/data-coverage/documents/[documentId]/reparse`
+  - `POST /api/admin/data-coverage/documents/[documentId]/resolve`
+  - `POST /api/admin/data-coverage/documents/[documentId]/skip`
+
+Missing authentication returns `401`; an authenticated non-admin returns `403`.
+
+### Cron
+
+- `GET /api/cron/sync-mf`: protected mutual-fund sync trigger.
 
 ## Backend FastAPI Routes
 
-### Core
-- `GET /`: status message.
+### Core and Providers
+
+- `GET /`: service status.
 - `GET /health`: health probe.
-- `GET /api/v1/providers/usage`: provider usage logs (feature-flag gated).
+- `GET /api/data-health`: runtime data-health summary.
+- `GET /api/v1/providers/usage`: feature-flagged provider usage logs.
+- `GET /api/trigger-fetch`: rate-limited background fetch trigger.
+
+### Chat
+
+- `POST /api/chat`: SSE stream with intermediate orchestration status and a deterministic or provider-backed final research payload. Worker failures are logged server-side and returned as a generic safe error event.
 
 ### Quant
+
 - `GET /api/quant/stocks/compare`
 - `GET /api/quant/stocks/{symbol}/profile`
 - `GET /api/quant/stocks/{symbol}/financials`
@@ -69,28 +103,52 @@ Auth behavior:
 - `GET /api/quant/stocks/nifty50/ticker`
 - `GET /api/quant/providers/status`
 
-### Chat
-- `POST /api/chat`: synthesized markdown plus structured `quant_data` / optional `system_action`.
+### Funds
 
-### Mutual-Fund ML Research
-- `GET /api/funds/{scheme_code}/similar?limit=5`: category-scoped, numeric peer discovery.
-  - Returns `feature_version`, method, target cluster, peers with `similarity_score` and matching factors, plus explicit limitations.
-  - Returns `not_found` or `insufficient_data` with no peers when the target/pool cannot support the calculation.
-  - This is a research similarity signal, not a forecast or recommendation; it uses the existing `mf-detail` rate-limit group.
+- `GET /api/funds/search`
+- `GET /api/funds/category`
+- `POST /api/funds/category/compare`
+- `GET /api/funds/{scheme_code}/similar`
+- `POST /api/funds/research/search`
+- `POST /api/funds/research/answer`
+- `GET /api/funds/research/evaluation`
+- `GET /api/mf/{scheme_code}`
+- `POST /api/funds/compare/verdict`
 
-### Admin Internal Backend Endpoints (X-Admin-Key required)
+Similarity and research responses expose version/coverage metadata and remain research signals, not forecasts or recommendations.
+
+### Internal MF Ingestion (`/api/internal/mf/*`)
+
+- `GET /api/internal/mf/schemes/{scheme_name}/holdings`
+- `POST /api/internal/mf/acquire-documents`
+- `POST /api/internal/mf/upload-document`
+- `GET /api/internal/mf/documents/{source_document_id}/signed-url`
+
+Mutation and signed-object routes require the configured internal admin key or supported ingestion token.
+
+### Internal Admin (`/api/admin/*`)
+
 - `GET /api/admin/ops-overview`
+- `GET /api/admin/mf-review-priorities?limit=1..500`
 - `GET /api/admin/mf-resolver-debug?query=...&horizon=1Y|3Y|5Y`
-- `GET /api/admin/mf-review-priorities?limit=1..500`: ranks `pending_review` parser items with explicit rule-based reasons. It is read-only and never performs a review action.
+- `POST /api/admin/mf-documents/{document_id}/request-reparse`
+- `POST /api/admin/mf-documents/{document_id}/resolve`
+- `POST /api/admin/mf-documents/{document_id}/skip`
 
-### Optional IndianAPI Helper Endpoints
+All require `X-Admin-Key`.
+
+### Optional IndianAPI Helpers
+
 Prefix: `/api/provider/indianapi`
-- Stock search/profile/fundamentals/corporate-actions/recent-announcements/historical-data
-- Analyst target/forecast endpoints
-- Mutual fund search/list/details endpoints
 
-## Contract Notes
-- Compare responses keep additive fields (`metrics`, `fundamentals`, `ratios`, `data_quality`, `source_summary`, `why_better`, `verdict_context`, `comparison`).
-- If local data is missing, endpoints return partial payloads with explicit limitations where possible.
-- Admin resolver debug frontend route calls backend admin endpoint using `MF_INTERNAL_ADMIN_KEY` so internal secrets are not exposed to the browser.
-- Public/high-cost routes are rate-limited. Over-limit responses return `429` with `{ "error": "rate_limited", "retry_after_seconds": number }` and standard rate-limit headers. In production, protected routes return `503 rate_limit_unconfigured` if Upstash Redis env vars are missing.
+- Stock search, profile, fundamentals, corporate actions, recent announcements, and historical data
+- Analyst target and forecast endpoints
+- Mutual-fund search, list, and detail endpoints
+
+## Rate Limits and Errors
+
+- Configured over-limit responses return `429` with `error=rate_limited`, `retry_after_seconds`, `Retry-After`, and rate-limit headers.
+- Public read-only backend groups `quant`, `mf-detail`, `category-funds`, and `data-health` continue when the Upstash rate-limit backend is unavailable.
+- `chat`, `fund-research`, `cron-sync-mf`, and `admin-mutation` remain fail-closed and return `503 rate_limit_unavailable` or `503 rate_limit_unconfigured` when protection cannot be established.
+- Non-stream service failures use FastAPI `detail` responses; streamed chat failures use `{type:"error",message}` and frontend proxies normalize their wording.
+- Compare responses remain additive and include explicit coverage, freshness, source, and limitation metadata when data is partial.

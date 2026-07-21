@@ -1,5 +1,7 @@
 # ML Systems
 
+**Last updated:** 2026-07-21
+
 ## Purpose
 
 FundersAI is a research-first financial application. Its ML features must expose the evidence and limitations behind an output; they must not make return forecasts, portfolio allocations, or buy/sell recommendations.

@@ -750,7 +750,7 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
       <section className="mb-6">
         <h3 className="mb-3 text-[13px] font-bold uppercase tracking-wider text-[#d7e4fb] pl-1">{title}</h3>
         <div className="h-56">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minHeight={200}>
             <BarChart data={rows}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
               <XAxis dataKey="metric" stroke="#9ca3af" fontSize={12} />
@@ -928,7 +928,7 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
             <section className="rounded-2xl bg-white/[0.02] backdrop-blur-md border border-white/5 p-4 shadow-lg">
               <h3 className="mb-3 text-sm font-semibold text-white">Price History</h3>
               <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                   <LineChart data={priceRows}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
                     <XAxis dataKey="date" stroke="#9ca3af" fontSize={12} />

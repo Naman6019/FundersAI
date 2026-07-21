@@ -422,7 +422,8 @@ def data_health():
         enrichment_rows = (
             get_admin_repository().table("mutual_fund_core_snapshot")
             .select("scheme_code,scheme_name,amc_name,last_updated,aum,expense_ratio,benchmark,risk_level")
-            .limit(10000)
+            .order("last_updated", desc=True)
+            .limit(5000)
             .execute()
             .data
             or []
@@ -512,7 +513,8 @@ def data_health():
             raw_document_rows = (
                 get_admin_repository().table("mf_raw_documents")
                 .select("amc_code,source_document_type,parse_status,report_month,downloaded_at,parsed_at")
-                .limit(30000)
+                .order("downloaded_at", desc=True)
+                .limit(5000)
                 .execute()
                 .data
                 or []
@@ -525,7 +527,8 @@ def data_health():
             review_rows = (
                 get_admin_repository().table("mf_parse_review_queue")
                 .select("amc_code,status,report_month")
-                .limit(30000)
+                .order("report_month", desc=True)
+                .limit(5000)
                 .execute()
                 .data
                 or []
@@ -709,7 +712,7 @@ def admin_ops_overview(x_admin_key: str | None = Header(default=None, alias="X-A
             get_admin_repository().table("mf_raw_documents")
             .select("amc_code,source_document_type,parse_status,downloaded_at,parsed_at,updated_at")
             .order("downloaded_at", desc=True)
-            .limit(12000)
+            .limit(5000)
             .execute()
             .data
             or []
@@ -834,7 +837,8 @@ def admin_ops_overview(x_admin_key: str | None = Header(default=None, alias="X-A
         quality_core_rows = (
             get_admin_repository().table("mutual_fund_core_snapshot")
             .select("scheme_code,scheme_name,amc_name,expense_ratio,benchmark,risk_level")
-            .limit(10000)
+            .order("last_updated", desc=True)
+            .limit(5000)
             .execute()
             .data
             or []
@@ -846,7 +850,8 @@ def admin_ops_overview(x_admin_key: str | None = Header(default=None, alias="X-A
         quality_review_rows = (
             get_admin_repository().table("mf_parse_review_queue")
             .select("amc_code,status,report_month")
-            .limit(30000)
+            .order("report_month", desc=True)
+            .limit(5000)
             .execute()
             .data
             or []
@@ -939,6 +944,18 @@ def admin_mf_resolver_debug(
         }
 
     words = [word for word in normalized_query.split() if word]
+    if not words:
+        return {
+            "input_query": query_text,
+            "normalized_query": normalized_query,
+            "selected_candidate": None,
+            "top_candidates": [],
+            "scoring_breakdown": {
+                "horizon": horizon,
+                "min_history_points": _resolver_horizon_to_min_points(horizon),
+                "error": "empty_search_pattern_after_normalization",
+            },
+        }
     search_pattern = f"%{'%'.join(words)}%"
 
     rows = (

@@ -1642,7 +1642,7 @@ Use this as a starting point for research only. It is not a suitability assessme
         "quant_data": {"risk_quiz": {"score": score, "profile": profile, "answers": answers}},
     }
 
-def _fund_search_pattern(search_term: str) -> str:
+def _fund_search_pattern(search_term: str) -> str | None:
     cleaned = (
         search_term.lower()
         .replace("felxi", "flexi")
@@ -1651,10 +1651,12 @@ def _fund_search_pattern(search_term: str) -> str:
         .replace(" growth", "")
         .replace(".", " ")
         .replace(",", " ")
+        .replace("%", " ")
+        .replace("_", " ")
         .strip()
     )
-    words = [word for word in cleaned.split() if word]
-    return f"%{'%'.join(words)}%" if words else "%"
+    words = [word for word in cleaned.split() if word not in {"fund", "growth"}]
+    return f"%{'%'.join(words)}%" if words else None
 
 def _normalize_portfolio_fund_name(name: str) -> str:
     text = " ".join(str(name or "").replace("-", " ").split())
@@ -1829,22 +1831,28 @@ def _resolve_portfolio_fund(name: str) -> dict[str, Any] | None:
     if not get_mf_repository():
         return None
     search_name = _normalize_portfolio_fund_name(name)
+    search_pattern = _fund_search_pattern(search_name)
+    if not search_pattern:
+        return None
     try:
         fields = "scheme_code,scheme_name,amc_name,category,return_3y,aum,expense_ratio,nav_date"
         rows = (
             get_mf_repository().table("mutual_fund_core_snapshot")
             .select(fields)
-            .ilike("scheme_name", _fund_search_pattern(search_name))
+            .ilike("scheme_name", search_pattern)
             .limit(25)
             .execute()
             .data
             or []
         )
         if not rows and search_name != name:
+            fallback_pattern = _fund_search_pattern(name)
+            if not fallback_pattern:
+                return None
             rows = (
                 get_mf_repository().table("mutual_fund_core_snapshot")
                 .select(fields)
-                .ilike("scheme_name", _fund_search_pattern(name))
+                .ilike("scheme_name", fallback_pattern)
                 .limit(25)
                 .execute()
                 .data
@@ -4165,6 +4173,7 @@ async def chat_endpoint(
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
     x_user_tier: str | None = Header(default=None, alias="X-User-Tier"),
     x_internal_proxy_key: str | None = Header(default=None, alias="X-Internal-Proxy-Key"),
+    status_callback: Any = None,
 ):
     trusted_proxy = _trusted_chat_proxy(x_internal_proxy_key)
     usage_collector: list[dict[str, Any]] | None = [] if trusted_proxy else None
@@ -4177,6 +4186,12 @@ async def chat_endpoint(
     model_status = "not_used"
     status_flag = None
     resolver = AssetResolver(get_mf_repository())
+
+    async def _emit_status(message: str) -> None:
+        if status_callback:
+            await status_callback({"type": "status", "message": message})
+
+    await _emit_status("Analyzing your question...")
     compare_resolutions = None
 
     def _attach_runtime_meta(response: dict[str, Any]) -> dict[str, Any]:
@@ -4201,6 +4216,7 @@ async def chat_endpoint(
 
     deferred_response = _build_deferred_dashboard_response(req.query, req.history, req.conversation_context)
     if deferred_response:
+        await _emit_status("Preparing deterministic research results...")
         _attach_runtime_meta(deferred_response)
         if trusted_proxy:
             deferred_response["_usage"] = _summarize_openrouter_usage(usage_collector)
@@ -4220,6 +4236,7 @@ async def chat_endpoint(
 
     if dashboard_intent and not followup_compare and not deterministic_compare:
         if dashboard_intent["intent"] == "sip_calculator":
+            await _emit_status("Calculating the SIP projection...")
             sip_response = _build_sip_calculator_response(req.query)
             if sip_response:
                 _attach_runtime_meta(sip_response)
@@ -4227,6 +4244,7 @@ async def chat_endpoint(
                     sip_response["_usage"] = _summarize_openrouter_usage(usage_collector)
                 return sip_response
         if dashboard_intent["intent"] == "category_search":
+            await _emit_status("Loading the requested fund category...")
             category_response = _build_category_search_response(dashboard_intent)
             _attach_runtime_meta(category_response)
             if trusted_proxy:
@@ -4235,6 +4253,7 @@ async def chat_endpoint(
 
     intent_info = deterministic_compare or followup_compare or await route_query(req.query, asset_type, usage_collector=usage_collector)
     intent = intent_info.get("intent", "general")
+    await _emit_status(f"Research path selected: {intent}")
     ticker = intent_info.get("ticker")
     period = intent_info.get("historical_period", "1mo")
     sentiment = intent_info.get("sentiment_flag", False)
@@ -4301,25 +4320,13 @@ To experience FundersAI's advanced research capabilities, please try:
     quant_data = {}
     news_data = []
     screening_results = None
+    await _emit_status("Resolving assets and loading available data...")
 
     def _entity_search_term(entity: str) -> str:
         # Keep entity matching independent in compare mode.
         # Do not inject category words from the full query into each entity,
         # otherwise queries like "A large cap vs B flexi cap" cross-contaminate.
         return str(entity).strip()
-
-    def _fund_search_pattern(search_term: str) -> str:
-        cleaned = (
-            search_term.lower()
-            .replace('felxi', 'flexi')
-            .replace(' fund', '')
-            .replace(' growth', '')
-            .replace('.', ' ')
-            .replace(',', ' ')
-            .strip()
-        )
-        words = [word for word in cleaned.split() if word]
-        return f"%{'%'.join(words)}%" if words else "%"
 
     def _fund_from_mfapi(search_term: str) -> dict | None:
         return None
@@ -4377,10 +4384,12 @@ To experience FundersAI's advanced research capabilities, please try:
             try:
                 search_term = ticker or req.query
                 search_pattern = _fund_search_pattern(search_term)
-                res = get_mf_repository().table('mutual_fund_core_snapshot').select('*').ilike('scheme_name', search_pattern).limit(25).execute()
-                if not res.data:
-                    res = get_mf_repository().table('mutual_funds').select('*').ilike('scheme_name', search_pattern).limit(25).execute()
-                if res.data:
+                res = None
+                if search_pattern:
+                    res = get_mf_repository().table('mutual_fund_core_snapshot').select('*').ilike('scheme_name', search_pattern).limit(25).execute()
+                    if not res.data:
+                        res = get_mf_repository().table('mutual_funds').select('*').ilike('scheme_name', search_pattern).limit(25).execute()
+                if res and res.data:
                     fund = _pick_best_fund_match(
                         search_term,
                         res.data,
@@ -4428,6 +4437,7 @@ To experience FundersAI's advanced research capabilities, please try:
         news_data = news_items
 
     synthesis_meta: dict[str, Any] = {}
+    await _emit_status("Generating the research explanation...")
     final_answer = await synthesis_response(
         req.query,
         intent_info,
@@ -4547,10 +4557,12 @@ To experience FundersAI's advanced research capabilities, please try:
                     try:
                         search_term = _entity_search_term(entity)
                         search_pattern = _fund_search_pattern(search_term)
-                        res = get_mf_repository().table('mutual_fund_core_snapshot').select('scheme_code,scheme_name').ilike('scheme_name', search_pattern).limit(25).execute()
-                        if not res.data:
-                            res = get_mf_repository().table('mutual_funds').select('scheme_code,scheme_name').ilike('scheme_name', search_pattern).limit(25).execute()
-                        if res.data and len(res.data) > 0:
+                        res = None
+                        if search_pattern:
+                            res = get_mf_repository().table('mutual_fund_core_snapshot').select('scheme_code,scheme_name').ilike('scheme_name', search_pattern).limit(25).execute()
+                            if not res.data:
+                                res = get_mf_repository().table('mutual_funds').select('scheme_code,scheme_name').ilike('scheme_name', search_pattern).limit(25).execute()
+                        if res and res.data and len(res.data) > 0:
                             best_match = _pick_best_fund_match(
                                 search_term,
                                 res.data,
@@ -4594,10 +4606,11 @@ class ChatService:
         x_user_id: str | None = None,
         x_user_tier: str | None = None,
         x_internal_proxy_key: str | None = None,
+        status_callback: Any = None,
     ) -> dict[str, Any]:
         token = _current_mf_repository.set(self.repository)
         try:
-            return await chat_endpoint(req, x_user_id, x_user_tier, x_internal_proxy_key)
+            return await chat_endpoint(req, x_user_id, x_user_tier, x_internal_proxy_key, status_callback=status_callback)
         finally:
             _current_mf_repository.reset(token)
             try:

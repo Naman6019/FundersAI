@@ -5,6 +5,8 @@
 **Backend:** `https://marketmind-hz03.onrender.com`  
 **Production commit:** `ea5d98fbecbb3c87801db60929ad540ede972f77`
 
+**Document status:** The live evidence below was captured against production commit `ea5d98fb`. The follow-up fixes are committed in repository commit `25e8d193`, but this report does not claim they are deployed or live-verified.
+
 ## Rerun after applied fixes
 
 The production flow was rerun with the bundled Browser against the supported `.co.in` deployment. `https://fundersai.co.in` redirects to `https://www.fundersai.co.in`; `.com` is not part of the supported deployment and is no longer treated as a release blocker.
@@ -40,20 +42,20 @@ Render is live on deployment `dep-d9fiesb7uimc73eoq3bg`, still using commit `ea5
 
 ### Repository/deployment gap at rerun time
 
-The production redeploy still references the same commit, and the requested code hardening is not present in the repository:
+The production redeploy still referenced the same commit and did not include the requested hardening. At rerun time, the deployed revision still had these behaviors:
 
 - the sanitizer still globally replaces `buy`, `sell`, and `invest`;
 - read-only `quant`, `mf-detail`, and `category-funds` requests still fail closed when the rate-limit backend throws;
 - rate-limit exception logging still records only the often-empty `str(exc)`;
-- the follow-up `provider_response_cache` RLS/revoke migration is absent;
+- the follow-up `provider_response_cache` RLS/revoke migration was not part of the deployed revision;
 - sign-out still uses competing client-router redirects;
 - SEO metadata, sitemap, robots, structured data, and backend CORS still reference `.com` instead of the supported `.co.in` host.
 
 Remote RLS state could not be proved through the UI test. The schema/cache migrations are now visible to the live application, but the security migration must be tracked in the repository even if equivalent SQL was run manually.
 
-## Local fixes implemented after the rerun
+## Repository fixes implemented after the rerun
 
-The following changes are now implemented locally and require migration application plus new Vercel/Render deployments before another live Browser verification:
+The following changes are committed at `25e8d193` and require matching migration/deployment confirmation plus another live Browser verification:
 
 - public read-only rate-limit groups (`quant`, `mf-detail`, `category-funds`, and `data-health`) continue to their route when Upstash throws or is unavailable;
 - chat, fund research, cron, and admin mutation groups remain fail-closed;
@@ -247,11 +249,11 @@ The run created one additional chat session and repeated the expense-ratio quest
 
 ## Current release assessment
 
-**Status: locally fixed, not yet production-verified.**
+**Status: fixed and committed at `25e8d193`; not production-verified by this report.**
 
 Fix in this order:
 
-1. Apply `20260721_harden_provider_response_cache_rls.sql` to the production Supabase project.
-2. Commit and deploy the backend and frontend changes.
+1. Confirm `20260721_harden_provider_response_cache_rls.sql` is applied to the production Supabase project.
+2. Confirm Vercel and Render are running commit `25e8d193` or a descendant containing the same fixes.
 3. Reduce provider-backed explanation latency or add a deterministic completion boundary.
 4. Rerun login, explanation, sanitizer probe, comparison canvas, history restore, sign-out, and production-log checks against the new deployments.

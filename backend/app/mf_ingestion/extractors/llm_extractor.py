@@ -19,6 +19,97 @@ class LLMExtractionUnavailable(RuntimeError):
     pass
 
 
+_STRICT_SCHEMA_MODEL_PREFIXES = (
+    "gpt-4o",
+    "gpt-4.1",
+    "gpt-5",
+    "openai/gpt-4o",
+    "openai/gpt-4.1",
+    "openai/gpt-5",
+)
+
+
+def _supports_strict_json_schema(model: str) -> bool:
+    configured = os.getenv("MF_LLM_RESPONSE_FORMAT", "auto").strip().lower()
+    if configured == "json_schema":
+        return True
+    if configured == "json_object":
+        return False
+    normalized = model.strip().lower()
+    return normalized.startswith(_STRICT_SCHEMA_MODEL_PREFIXES)
+
+
+def _response_format(model: str) -> dict[str, Any]:
+    if not _supports_strict_json_schema(model):
+        return {"type": "json_object"}
+
+    holding_properties = {
+        "instrument_name": {"type": ["string", "null"]},
+        "security_name": {"type": ["string", "null"]},
+        "isin": {"type": ["string", "null"]},
+        "percent_aum": {"type": ["number", "null"]},
+        "weight": {"type": ["number", "null"]},
+    }
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "mf_extraction",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "source_document_id": {"type": ["string", "null"]},
+                    "extractor_type": {"type": ["string", "null"]},
+                    "records": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "scheme_name": {"type": "string"},
+                                "report_month": {"type": ["string", "null"]},
+                                "holdings": {
+                                    "type": ["array", "null"],
+                                    "items": {
+                                        "type": "object",
+                                        "properties": holding_properties,
+                                        "required": list(holding_properties),
+                                        "additionalProperties": False,
+                                    },
+                                },
+                                "aum": {"type": ["number", "null"]},
+                                "expense_ratio": {"type": ["number", "null"]},
+                                "benchmark": {"type": ["string", "null"]},
+                                "fund_manager": {"type": ["string", "null"]},
+                                "risk_level": {"type": ["string", "null"]},
+                                "confidence_score": {"type": "number"},
+                                "validation_issues": {
+                                    "type": ["array", "null"],
+                                    "items": {"type": "string"},
+                                },
+                            },
+                            "required": [
+                                "scheme_name",
+                                "report_month",
+                                "holdings",
+                                "aum",
+                                "expense_ratio",
+                                "benchmark",
+                                "fund_manager",
+                                "risk_level",
+                                "confidence_score",
+                                "validation_issues",
+                            ],
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+                "required": ["source_document_id", "extractor_type", "records"],
+                "additionalProperties": False,
+            },
+        },
+    }
+
+
 class StrictJSONLLMExtractor:
     def __init__(self, *, enabled: bool, mode: str, model: str) -> None:
         self.enabled = enabled
@@ -51,13 +142,15 @@ class StrictJSONLLMExtractor:
             input={"document_id": document.get("id"), "text": text[:50000]}
         )
 
+        response_format = _response_format(self.model)
+
         response = requests.post(
             f"{base_url.rstrip('/')}/chat/completions",
             headers=_build_llm_headers(api_key, provider),
             timeout=90,
             json={
                 "model": self.model,
-                "response_format": {"type": "json_object"},
+                "response_format": response_format,
                 "messages": [
                     {
                         "role": "system",

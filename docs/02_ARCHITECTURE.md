@@ -1,5 +1,7 @@
 # Architecture
 
+**Last updated:** 2026-07-21
+
 ## System Shape
 FundersAI is a split web architecture:
 - Next.js frontend for UI + server-side proxy/admin routes
@@ -17,12 +19,14 @@ The next infrastructure work extends this shape rather than replacing it. The ta
 - `/admin` is admin-gated with `AdminAccessGate` + server-side `/api/admin/*` role checks.
 - `/dashboard/admin` redirects to `/admin` for compatibility.
 - Chat submits to `POST /api/chat`.
+- Chat sessions persist through authenticated `/api/chat/sessions*` server routes.
 - Quant panels fetch through `frontend/app/api/quant/*`.
 - Admin pages fetch through `frontend/app/api/admin/*`.
 - Shared app state uses Zustand (`useCanvasStore`, `useChatStore`).
 
 ### Backend (`backend/app/`)
-- `main.py` hosts health, chat, quant compatibility endpoints, and internal admin endpoints.
+- `main.py` composes route modules, CORS, exception handling, and grouped rate-limit policy.
+- `routes/health.py`, `routes/chat.py`, `routes/funds.py`, `routes/admin.py`, and `routes/mf_ingestion.py` expose the core non-quant API families.
 - `routes/quant.py` exposes canonical `/api/quant/*`.
 - `routes/indianapi.py` exposes optional `/api/provider/indianapi/*`.
 - `repositories/stock_repository.py` centralizes Supabase stock table access.
@@ -32,10 +36,13 @@ The next infrastructure work extends this shape rather than replacing it. The ta
 ## Data Paths
 
 ### Runtime Chat/Quant Path
-1. Frontend calls `/api/chat` or `/api/quant/*`.
-2. Proxy forwards to backend.
-3. Backend reads Supabase-first tables.
-4. Response includes deterministic payloads and limitations where data is missing.
+1. Frontend authenticates `/api/chat`; optional `session_id` ownership is checked before any service-role write.
+2. Frontend calls `/api/chat` or `/api/quant/*` and applies its route/tier limits.
+3. Proxy forwards trusted identity headers to the backend.
+4. Backend reads Supabase-first tables.
+5. Response includes deterministic payloads and limitations where data is missing; owned chat messages are persisted only after a successful response.
+
+Public read-only backend groups (`quant`, `mf-detail`, `category-funds`, `data-health`) bypass only a failed/unconfigured rate-limit backend. Chat, fund research, cron, and admin mutations remain fail-closed.
 
 ### Admin Path
 1. Frontend `/admin` checks `/api/admin/session`.

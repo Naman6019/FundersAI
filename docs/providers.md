@@ -1,5 +1,7 @@
 # Providers
 
+**Last updated:** 2026-07-21
+
 Provider selection is controlled by environment variables.
 
 ```env
@@ -28,6 +30,15 @@ FUNDAMENTALS_WEEKLY_LIMIT=100
 FUNDAMENTALS_MONTHLY_LIMIT=500
 INDIANAPI_REQUEST_SLEEP_SECONDS=1.05
 STOCK_YFINANCE_FALLBACK_LIMIT=150
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=
+GROQ_API_KEY=
+CHAT_INTERNAL_PROXY_KEY=
+MF_RESEARCH_VECTOR_SEARCH_ENABLED=false
+MF_RESEARCH_RETRIEVAL_V3_ENABLED=false
+MF_RESEARCH_CROSS_ENCODER_ENABLED=false
+MF_RESEARCH_LLM_GRADER_ENABLED=false
+MF_RESEARCH_LANGFUSE_TRACING_ENABLED=false
 ```
 
 ## Active Providers
@@ -39,6 +50,9 @@ STOCK_YFINANCE_FALLBACK_LIMIT=150
 - `mfapi`: primary mutual fund NAV/history provider (`https://api.mfapi.in`).
 - `amfi`: official mutual fund NAV, TER, AUM, and scheme-wise disclosure source.
 - `amc_disclosure`: AMC factsheets and portfolio disclosures stored raw in R2, parsed for holdings and missing metadata fields.
+- `openrouter`: model and embedding provider for configured chat, extraction, and research-indexing paths.
+- `groq`: fallback model provider for supported chat/extraction stages.
+- `langfuse`: optional tracing/experiment export only when its flag plus public/secret keys are configured.
 
 IndianAPI v1 base URL defaults to `https://stock.indianapi.in` and can be overridden with `INDIANAPI_BASE_URL`.
 Fundamentals refresh uses `sync_fundamentals --scope watchlist|full|all-active` or `--symbols TCS,RELIANCE`. Weekly watchlist refresh defaults to 100 symbols; monthly full refresh defaults to `NIFTY500` and 500 symbols.
@@ -49,6 +63,9 @@ Scheduled daily/history price workflows use NSE CM-UDiFF bhavcopy and do not con
 Scheduled stock fundamentals/universe workflows use FinEdge and do not consume IndianAPI quota.
 Daily MF NAV/history uses AMFI and MFapi. MF enrichment is AMFI + AMC disclosures only: AMFI fills TER/AUM/official metadata, AMC sheets fill holdings and missing metadata fields, and existing core snapshot values are preserved when a fresh official row is blank or unmatched.
 All provider attempts are logged in `provider_usage_logs` with cache-hit and quota-skip markers.
+Provider response caching uses the server-only `provider_response_cache`; complete MFapi NAV histories use the server-only `nav_api_cache`. Both deny browser roles through RLS/revokes.
+
+The supported frontend chat route requires authentication and sends `X-Internal-Proxy-Key` when `CHAT_INTERNAL_PROXY_KEY` is configured on both Vercel and Render. Direct FastAPI chat does not independently validate a Supabase bearer token.
 
 If a selected paid provider is unavailable, backend code logs a warning and falls back to `manual`.
 

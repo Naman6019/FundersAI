@@ -5,6 +5,7 @@ import { Bot, Send, X, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MagicCard } from '@/components/ui/magic-card';
 import { hasSupabaseBrowserEnv, supabaseBrowser } from '@/lib/supabaseBrowser';
+import { readChatStream } from '@/lib/chatStream';
 
 interface InlineCopilotProps {
   assetId: string;
@@ -59,7 +60,7 @@ export default function InlineCopilot({ assetId, assetType, assetName }: InlineC
       });
 
       if (!res.ok) throw new Error('Copilot response failed');
-      const data = await res.json();
+      const data = await readChatStream(res);
 
       setMessages(prev => [...prev, { role: 'assistant', content: data.answer || "I couldn't generate a response." }]);
     } catch {

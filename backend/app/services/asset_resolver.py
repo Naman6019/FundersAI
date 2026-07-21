@@ -217,15 +217,17 @@ def has_unsupported_mf_keyword(value: str) -> bool:
     return any(re.search(rf"\b{re.escape(keyword)}\b", text) for keyword in UNSUPPORTED_MF_AMC_KEYWORDS)
 
 
-def _fund_search_pattern(search_term: str) -> str:
+def _fund_search_pattern(search_term: str) -> str | None:
     cleaned = (
         normalize_text(search_term)
         .replace(" fund", "")
         .replace(" growth", "")
+        .replace("%", "")
+        .replace("_", "")
         .strip()
     )
-    words = [word for word in cleaned.split() if word]
-    return f"%{'%'.join(words)}%" if words else "%"
+    words = [word for word in cleaned.split() if word not in {"fund", "growth"}]
+    return f"%{'%'.join(words)}%" if words else None
 
 
 def _coerce_scheme_code_filter(value: Any) -> Any:
@@ -340,6 +342,8 @@ class AssetResolver:
         if not self.repository:
             return []
         pattern = _fund_search_pattern(query)
+        if not pattern:
+            return []
         
         query_lower = query.lower()
         plan_type = "Direct"

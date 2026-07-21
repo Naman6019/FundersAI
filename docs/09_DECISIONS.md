@@ -10,15 +10,25 @@
 
 ## Confirmed Decisions
 
+**Date:** 2026-07-21
+**Decision:** Keep public read-only data available during rate-limit-storage failures, while preserving fail-closed behavior for costly or mutating routes.
+**Context:** An Upstash failure caused public MF/quant requests to return `503` even when the underlying read path was healthy.
+**Consequences:** `quant`, `mf-detail`, `category-funds`, and `data-health` may continue when the limiter backend fails. Chat, official-document research, cron triggers, and admin mutations still return `503` when rate-limit protection cannot be established. Failure logs include the group, exception type, provider status where available, and exception representation.
+
+**Date:** 2026-07-21
+**Decision:** Persist chat through user-owned sessions and validate ownership before service-role writes.
+**Context:** The frontend server uses the Supabase service role for reliable persistence, which bypasses browser RLS if ownership is not checked explicitly.
+**Consequences:** `/api/chat` requires frontend authentication, validates any `session_id`, and writes only to `ai_chat_sessions`/`ai_chat_messages` rows owned by that user. The tables also retain RLS as defense in depth.
+
 **Date:** 2026-07-20
 **Decision:** Build the Fund Research Evidence Pipeline incrementally, evaluation-first, on the existing Supabase/R2/FastAPI substrate.
 **Context:** FundersAI already has official-document ingestion, background indexing, versioned similarity, pgvector schema, retrieval metadata, and abstention. Adding every new infrastructure tool at once would make them decorative and remove the ability to measure which change improved the product.
 **Consequences:** The implementation order is golden dataset and baseline, orchestration wrappers, labelled review model and MLflow, measured vector/reranker experiments, bounded LangGraph research workflow, then container/GCP proof and monitoring. Current production infrastructure remains active until a replacement demonstrates value. Each added component must produce visible run, experiment, trace, deployment, or alert evidence.
 
 **Date:** 2026-07-20
-**Decision:** Treat the current official-document search as a lexical baseline until query-vector retrieval is wired end to end.
-**Context:** Indexed chunks can contain embeddings and the database migration defines a pgvector match function, but the active repository method does not embed the query or call that function.
-**Consequences:** Documentation does not claim production vector retrieval yet. The first golden evaluation captures the lexical baseline; vector search and reranking are compared against the same fixed cases before adoption.
+**Decision:** Keep lexical rerank v2 as the default even though query-vector retrieval is now wired end to end behind a flag.
+**Context:** The repository can embed a query and call the pgvector match function, but the current dataset is a small development seed without reviewer-verified latency, cost, or relevance evidence.
+**Consequences:** `MF_RESEARCH_VECTOR_SEARCH_ENABLED=false` remains the default. Vector retrieval, the v3 cross-encoder, and LLM grading are experimental until compared on at least 50 reviewer-verified official-document cases.
 
 ### ADR-006: Adopt lexical rerank v2 as the development default
 **Status:** Accepted for development; production gate pending reviewer data.
@@ -39,7 +49,7 @@
 **Date:** (Pre-existing)
 **Decision:** Normalized Supabase Local History over Live API.
 **Context:** YFinance frequently rate-limits and times out on Render free tiers.
-**Consequences:** Local normalized tables (`stock_prices_daily`, `mutual_fund_nav_history`) are preferred for history and baseline quant metrics over hitting Yahoo Finance directly. Legacy history tables were dropped to reduce free-tier storage usage.
+**Consequences:** `stock_prices_daily` remains the local stock-history source. Complete MF NAV requests use server-only `nav_api_cache`; `mutual_fund_nav_history` remains temporarily available until the documented archive/readiness gate permits its manual drop. Older heavy compatibility tables were removed or compacted to reduce free-tier storage usage.
 
 **Date:** (Pre-existing)
 **Decision:** Next.js API Proxy Pattern.
