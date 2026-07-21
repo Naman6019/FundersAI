@@ -2,8 +2,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from app.mf_ingestion.jobs import index_parsed_documents
+from app.services import document_indexing_service
 from app.services.document_indexing_service import DocumentIndexingService
-from app.services.document_retrieval_service import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL
+from app.services.document_retrieval_service import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, chunk_document_text
 
 
 class _Response:
@@ -117,6 +118,35 @@ def test_accepts_existing_openai_key_alias(monkeypatch):
 
     values = DocumentIndexingService(_Repository(), http_post=fake_post)._embed(["official content"])
     assert len(values[0]) == EMBEDDING_DIMENSIONS
+
+
+def test_embeddings_are_requested_in_bounded_batches(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_EMBEDDING_BATCH_SIZE", "2")
+    batch_sizes = []
+
+    def fake_post(_url, **kwargs):
+        batch_sizes.append(len(kwargs["json"]["input"]))
+        return _Response(len(kwargs["json"]["input"]))
+
+    values = DocumentIndexingService(_Repository(), http_post=fake_post)._embed(["a", "b", "c", "d", "e"])
+
+    assert batch_sizes == [2, 2, 1]
+    assert len(values) == 5
+
+
+def test_indexing_removes_database_unsafe_controls_and_duplicate_chunks(monkeypatch):
+    assert "\x00" not in chunk_document_text("Axis\x00 factsheet")[0]
+    monkeypatch.setattr(document_indexing_service, "chunk_document_text", lambda _text: ["same chunk", "same chunk"])
+    repository = _Repository()
+
+    indexed = DocumentIndexingService(repository, embeddings_enabled=False).index(
+        {"id": "document-1", "parse_status": "parsed", "source_url": "https://amc.example/factsheet.pdf"},
+        "ignored",
+    )
+
+    assert indexed == 1
+    assert len(repository.rows) == 1
 
 
 def test_existing_document_ids_require_vectors_when_embeddings_are_strict(monkeypatch):

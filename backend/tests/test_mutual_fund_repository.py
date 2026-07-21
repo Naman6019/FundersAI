@@ -110,3 +110,24 @@ def test_search_mutual_funds_normalizes_legacy_table_fallback_rows():
 
     assert rows[0]["plan_type"] == "Direct"
     assert rows[0]["option_type"] == "IDCW"
+
+
+def test_document_chunk_upserts_are_batched_to_avoid_statement_timeouts():
+    class _UpsertQuery:
+        def __init__(self):
+            self.batches = []
+
+        def upsert(self, rows, *, on_conflict):
+            assert on_conflict == "document_id,chunk_hash"
+            self.batches.append(list(rows))
+            return self
+
+        def execute(self):
+            return SimpleNamespace(data=[])
+
+    query = _UpsertQuery()
+    repo = MutualFundRepository(SimpleNamespace(table=lambda _name: query))
+
+    repo.upsert_document_chunks([{"document_id": "doc", "chunk_hash": str(index)} for index in range(45)])
+
+    assert [len(batch) for batch in query.batches] == [20, 20, 5]

@@ -249,5 +249,8 @@ class MutualFundRepository:
         return response.data or []
 
     def upsert_document_chunks(self, rows: list[dict[str, Any]]) -> None:
-        if rows:
-            self.table("amc_document_chunks").upsert(rows, on_conflict="document_id,chunk_hash").execute()
+        for start in range(0, len(rows), 20):
+            self.table("amc_document_chunks").upsert(
+                rows[start : start + 20],
+                on_conflict="document_id,chunk_hash",
+            ).execute()

@@ -46,7 +46,7 @@ class DocumentIndexingService:
         source_url = str(document.get("source_url") or "")
         if not source_url.startswith("https://"):
             return 0
-        chunks = chunk_document_text(text)
+        chunks = list(dict.fromkeys(chunk_document_text(text)))
         if not chunks:
             return 0
         embeddings = self._embed_with_lexical_fallback(chunks)
@@ -114,19 +114,32 @@ class DocumentIndexingService:
         if not key:
             raise RuntimeError("openai_api_key_missing_for_document_embeddings")
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-        response = self.http_post(
-            os.getenv("OPENAI_EMBEDDINGS_URL", "https://api.openai.com/v1/embeddings"),
-            headers=headers,
-            json={
-                "model": EMBEDDING_MODEL,
-                "input": chunks,
-                "dimensions": EMBEDDING_DIMENSIONS,
-                "encoding_format": "float",
-            },
-            timeout=60,
-        )
-        response.raise_for_status()
-        values = [item["embedding"] for item in response.json().get("data", [])]
+        batch_size = max(1, min(int(os.getenv("OPENAI_EMBEDDING_BATCH_SIZE", "64")), 256))
+        values: list[list[float]] = []
+        for start in range(0, len(chunks), batch_size):
+            batch = chunks[start : start + batch_size]
+            response = self.http_post(
+                os.getenv("OPENAI_EMBEDDINGS_URL", "https://api.openai.com/v1/embeddings"),
+                headers=headers,
+                json={
+                    "model": EMBEDDING_MODEL,
+                    "input": batch,
+                    "dimensions": EMBEDDING_DIMENSIONS,
+                    "encoding_format": "float",
+                },
+                timeout=60,
+            )
+            try:
+                response.raise_for_status()
+            except requests.HTTPError as exc:
+                detail = str(getattr(response, "text", "") or "")[:500]
+                raise RuntimeError(
+                    f"openai_embedding_request_failed status={getattr(response, 'status_code', None)} detail={detail}"
+                ) from exc
+            batch_values = [item["embedding"] for item in response.json().get("data", [])]
+            if len(batch_values) != len(batch):
+                raise RuntimeError("unexpected_embedding_response")
+            values.extend(batch_values)
         if len(values) != len(chunks) or any(len(value) != EMBEDDING_DIMENSIONS for value in values):
             raise RuntimeError("unexpected_embedding_response")
         return values

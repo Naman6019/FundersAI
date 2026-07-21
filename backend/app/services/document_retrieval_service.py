@@ -21,7 +21,8 @@ CHUNK_OVERLAP = 160
 
 def chunk_document_text(text: str) -> list[str]:
     """Deterministic, paragraph-aware chunks; only callers with parsed official docs may use it."""
-    clean = re.sub(r"\s+", " ", str(text or "")).strip()
+    raw = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", " ", str(text or ""))
+    clean = re.sub(r"\s+", " ", raw).strip()
     if not clean:
         return []
     chunks: list[str] = []
