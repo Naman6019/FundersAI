@@ -6,7 +6,7 @@
 FundersAI is a research-first Indian stocks + mutual funds app with deterministic comparison outputs, Supabase-first runtime reads, and workflow-driven data ingestion.
 
 ## Stack Snapshot
-- Frontend: Next.js `16.2.4`, React `19.2.4`, Tailwind CSS 4, Zustand, Recharts
+- Frontend: Next.js `16.2.11`, React `19.2.4`, Tailwind CSS 4, Zustand, Recharts
 - Backend: FastAPI + repository/service layers
 - Database: Supabase (PostgreSQL)
 - Storage: Cloudflare R2 (raw MF docs + cold archives)
@@ -25,11 +25,13 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - `ai_chat_sessions` and `ai_chat_messages` are user-owned and protected by RLS;
   - `/api/chat/sessions` creates/lists sessions and `/api/chat/sessions/[sessionId]` restores owned messages;
   - the chat proxy validates session ownership before service-role writes.
-- User feedback flow (implemented locally; production requires `20260721_add_user_feedback.sql` before frontend deployment):
+- User feedback flow (frontend deployed; production storage migration still required as of the 2026-07-21 live check):
   - authenticated users receive a dismissible bottom-page app-rating prompt and can reopen it from the profile menu;
   - successful assistant messages expose helpful/unhelpful ratings with an optional comment linked to the owned message/session and trace;
   - sign-out clears the Supabase session and redirects to the public `/feedback?source=logout` page;
-  - feedback storage is service-role-only, ownership-checked, input-bounded, and rate-limited.
+  - feedback storage is service-role-only, ownership-checked, input-bounded, and rate-limited;
+  - the endpoint requires JSON, blocks mismatched browser origins, and rejects request bodies over 16 KiB;
+  - production currently returns Supabase `PGRST205` because `public.user_feedback` is absent from the PostgREST schema cache; apply `20260721_ensure_user_feedback_storage.sql` before calling the flow production-ready.
 - Research Evidence answer readability hardening (implemented locally; not yet deployed):
   - the HDFC expense-ratio website note produces one concise cited answer instead of a raw OCR dump;
   - unstructured extractive fallbacks are labeled as matching evidence rather than presented as synthesized answers;
@@ -178,6 +180,11 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - TypeScript and the Next.js production build passed;
   - `index-mf-research.yml` parses successfully and `git diff --check` passes;
   - focused streaming/proxy lint introduced no new findings, but repository-wide lint still fails on the existing UI backlog (`76` errors, `62` warnings).
+- Local verification for feedback/security hardening:
+  - all `41` frontend contract tests passed;
+  - TypeScript, focused ESLint, and the Next.js `16.2.11` production build passed;
+  - `npm audit --omit=dev` reports `0` vulnerabilities after patching Next.js and affected transitive dependencies;
+  - `git diff --check` passes.
 
 ## In Progress
 - Enable `MF_RESEARCH_VECTOR_SEARCH_ENABLED=true` in the active Render service environment and confirm the hosted audit reports OpenAI `text-embedding-3-small` semantic query search. The complete production vector corpus is already populated.

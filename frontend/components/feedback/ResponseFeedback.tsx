@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ThumbsDown, ThumbsUp } from 'lucide-react';
-import { submitFeedback } from '@/lib/feedback';
+import { feedbackErrorMessage, submitFeedback } from '@/lib/feedback';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -17,6 +17,7 @@ export default function ResponseFeedback({ messageId, sessionId, traceId, respon
   const [rating, setRating] = useState<1 | 5 | null>(null);
   const [comment, setComment] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
   const persistedMessageId = UUID_PATTERN.test(messageId) ? messageId : null;
 
   if (!persistedMessageId && !traceId) return null;
@@ -25,6 +26,7 @@ export default function ResponseFeedback({ messageId, sessionId, traceId, respon
   const send = async () => {
     if (!rating || status === 'sending') return;
     setStatus('sending');
+    setErrorMessage('');
     try {
       await submitFeedback({
         feedback_type: 'response',
@@ -37,7 +39,8 @@ export default function ResponseFeedback({ messageId, sessionId, traceId, respon
         response_excerpt: responseExcerpt.slice(0, 1000),
       });
       setStatus('sent');
-    } catch {
+    } catch (error) {
+      setErrorMessage(feedbackErrorMessage(error));
       setStatus('error');
     }
   };
@@ -56,7 +59,7 @@ export default function ResponseFeedback({ messageId, sessionId, traceId, respon
       {rating ? (
         <div className="mt-2 rounded-xl border border-white/10 bg-black/20 p-3">
           <textarea value={comment} onChange={(event) => setComment(event.target.value.slice(0, 2000))} rows={2} placeholder="Optional: what worked or what should change?" className="w-full resize-none bg-transparent text-xs text-slate-200 outline-none placeholder:text-slate-600" />
-          {status === 'error' ? <p role="alert" className="mb-2 text-[11px] text-rose-300">Feedback could not be saved.</p> : null}
+          {status === 'error' ? <p role="alert" className="mb-2 text-[11px] text-rose-300">{errorMessage}</p> : null}
           <div className="flex justify-end">
             <button type="button" onClick={send} disabled={status === 'sending'} className="rounded-lg bg-white/10 px-3 py-1.5 text-[11px] font-semibold text-slate-200 hover:bg-white/15 disabled:opacity-50">
               {status === 'sending' ? 'Sending…' : 'Send response feedback'}
@@ -67,4 +70,3 @@ export default function ResponseFeedback({ messageId, sessionId, traceId, respon
     </div>
   );
 }
-

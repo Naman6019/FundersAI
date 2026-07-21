@@ -39,10 +39,12 @@ The supported browser boundary is the Next.js `/api/*` surface. Browser code mus
 
 - `POST /api/feedback`
   - Accepts `feedback_type` (`general`, `response`, or `logout`), a required integer `rating` from 1 to 5, and an optional comment up to 2,000 characters.
+  - Requires `application/json`, rejects declared request bodies over 16 KiB, and blocks requests whose supplied `Origin` differs from the API origin.
   - General feedback is linked to the authenticated user.
   - Response feedback can include an owned assistant `message_id`, owned `session_id`, trace ID, page path, and a bounded response excerpt. Supplied message/session IDs are checked against the authenticated user before storage.
   - Logout feedback is intentionally public because Supabase sign-out happens first; chat identifiers and response excerpts are discarded for this type.
   - Writes are rate-limited and performed server-side with the service role.
+  - Returns `503 feedback_storage_unavailable` when the production table/schema cache is unavailable; database details are logged server-side and are not returned to the browser.
 
 ### Quant Proxy Family
 

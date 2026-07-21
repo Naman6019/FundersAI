@@ -90,7 +90,7 @@ The Next.js proxy uses the service role only after authenticating the user and c
   - Stores 1-5 ratings and optional comments for general app, individual response, and post-logout feedback.
   - Authenticated app/response rows store `user_id`; response rows may reference an owned `ai_chat_messages` row, chat session, and trace ID.
   - Logout rows may be anonymous because feedback is collected after the Supabase session is cleared.
-  - RLS is enabled. `anon` and `authenticated` have no table privileges; only server-side `service_role` calls can read or write rows.
+  - RLS is enabled. `anon` and `authenticated` have no table privileges; `service_role` is limited to `select` and `insert` for this table.
 
 ### Legacy history model
 
@@ -124,5 +124,6 @@ The Next.js proxy uses the service role only after authenticating the user and c
 4. `20260721_add_mf_discovery_runs.sql`
 5. `20260721_harden_amc_document_chunks.sql`
 6. `20260721_add_user_feedback.sql`
+7. `20260721_ensure_user_feedback_storage.sql` (idempotently creates the table, reapplies least-privilege grants, and reloads the PostgREST schema cache)
 
 Equivalent production SQL is not a substitute for keeping the migration in version control.

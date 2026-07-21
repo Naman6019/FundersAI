@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { MessageSquareText, Star, X } from 'lucide-react';
-import { submitFeedback } from '@/lib/feedback';
+import { feedbackErrorMessage, submitFeedback } from '@/lib/feedback';
 
 const PROMPT_SEEN_KEY = 'fundersai-feedback-prompt-seen';
 
@@ -11,6 +11,7 @@ export default function FeedbackPrompt() {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     if (window.sessionStorage.getItem(PROMPT_SEEN_KEY) === '1') return;
@@ -24,6 +25,7 @@ export default function FeedbackPrompt() {
   const send = async () => {
     if (!rating || status === 'sending') return;
     setStatus('sending');
+    setErrorMessage('');
     try {
       await submitFeedback({
         feedback_type: 'general',
@@ -32,7 +34,8 @@ export default function FeedbackPrompt() {
         page_path: window.location.pathname,
       });
       setStatus('sent');
-    } catch {
+    } catch (error) {
+      setErrorMessage(feedbackErrorMessage(error));
       setStatus('error');
     }
   };
@@ -82,7 +85,7 @@ export default function FeedbackPrompt() {
             placeholder="Optional: tell us what you think about the app"
             className="mt-3 w-full resize-none rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-[#66a3ff]/60"
           />
-          {status === 'error' ? <p role="alert" className="mt-2 text-xs text-rose-300">Feedback could not be saved. Please try again.</p> : null}
+          {status === 'error' ? <p role="alert" className="mt-2 text-xs text-rose-300">{errorMessage}</p> : null}
           <div className="mt-3 flex items-center justify-end gap-2">
             <button type="button" onClick={() => setOpen(false)} className="rounded-lg px-3 py-2 text-xs text-slate-400 hover:text-white">Not now</button>
             <button type="button" onClick={send} disabled={!rating || status === 'sending'} className="rounded-lg bg-[#66a3ff] px-3 py-2 text-xs font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50">
@@ -94,4 +97,3 @@ export default function FeedbackPrompt() {
     </aside>
   );
 }
-

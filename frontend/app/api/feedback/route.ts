@@ -4,6 +4,26 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 
 const FEEDBACK_TYPES = new Set(['general', 'response', 'logout']);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MAX_FEEDBACK_BODY_BYTES = 16_384;
+
+function requestSecurityError(request: Request): NextResponse | null {
+  const contentType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+  if (contentType !== 'application/json') {
+    return NextResponse.json({ error: 'unsupported_media_type' }, { status: 415 });
+  }
+
+  const contentLength = Number(request.headers.get('content-length') || 0);
+  if (Number.isFinite(contentLength) && contentLength > MAX_FEEDBACK_BODY_BYTES) {
+    return NextResponse.json({ error: 'feedback_payload_too_large' }, { status: 413 });
+  }
+
+  const origin = request.headers.get('origin');
+  if (origin && origin !== new URL(request.url).origin) {
+    return NextResponse.json({ error: 'cross_origin_request_blocked' }, { status: 403 });
+  }
+
+  return null;
+}
 
 function optionalText(value: unknown, maxLength: number): string | null {
   if (typeof value !== 'string') return null;
@@ -18,6 +38,9 @@ function optionalUuid(value: unknown): string | null {
 
 export async function POST(request: Request) {
   try {
+    const securityError = requestSecurityError(request);
+    if (securityError) return securityError;
+
     const body = await request.json();
     if (body?.website) {
       return NextResponse.json({ error: 'invalid_feedback' }, { status: 400 });
@@ -92,8 +115,15 @@ export async function POST(request: Request) {
     });
 
     if (error) {
-      console.error('Feedback write failed:', error);
-      return NextResponse.json({ error: 'feedback_write_failed' }, { status: 500 });
+      console.error('Feedback write failed:', {
+        code: error.code,
+        message: error.message,
+      });
+      const storageUnavailable = error.code === 'PGRST205' || error.code === '42P01';
+      return NextResponse.json(
+        { error: storageUnavailable ? 'feedback_storage_unavailable' : 'feedback_write_failed' },
+        { status: storageUnavailable ? 503 : 500 },
+      );
     }
 
     return NextResponse.json({ ok: true }, { status: 201 });

@@ -8,7 +8,7 @@ Use this guide for repository conventions and quick orientation. For the authori
 
 **Frontend**
 
-- Next.js `16.2.4` App Router, React `19.2.4`, and TypeScript
+- Next.js `16.2.11` App Router, React `19.2.4`, and TypeScript
 - Tailwind CSS 4
 - Zustand (`useCanvasStore`, `useChatStore`)
 - Recharts
@@ -73,7 +73,7 @@ See `docs/03_API_CONTRACTS.md` for the complete route inventory and security beh
 3. **Rate limits:** public read-only groups (`quant`, `mf-detail`, `category-funds`, `data-health`) fail open only when the rate-limit backend is unavailable. Chat, fund research, cron, and admin mutations fail closed.
 4. **Deterministic comparisons:** response fields are additive and return explicit coverage/limitation metadata when data is partial.
 5. **Owned chat persistence:** `ai_chat_sessions` and `ai_chat_messages` are user-owned, RLS-protected tables; frontend service-role writes require an authenticated ownership check.
-6. **Feedback:** `user_feedback` is service-role-only; general/response feedback requires authentication, response targets are ownership-checked, and post-sign-out feedback is anonymous and metadata-limited.
+6. **Feedback:** `user_feedback` is service-role-only; general/response feedback requires authentication, response targets are ownership-checked, and post-sign-out feedback is anonymous and metadata-limited. The JSON endpoint enforces same-origin browser requests, bounded payloads, and a dedicated rate-limit bucket.
 7. **MF ingestion states:** `pending`, `downloaded`, `needs_reparse`, `parsed`, `parsed_partial`, `needs_review`, `failed`, and `skipped_not_supported`.
 8. **Official-document research:** deterministic lexical rerank v2 remains the fallback with abstention. Direct OpenAI vector retrieval is configured separately from optional v3 cross-encoder/LLM grading and must use the same 1,536-dimension embedding model for documents and queries.
 9. **R2-first storage:** raw AMC documents stay in R2; Supabase stores query-critical structured rows and metadata.

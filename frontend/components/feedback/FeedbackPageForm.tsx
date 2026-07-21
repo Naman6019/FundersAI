@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle2, Star } from 'lucide-react';
-import { submitFeedback } from '@/lib/feedback';
+import { feedbackErrorMessage, submitFeedback } from '@/lib/feedback';
 
 export default function FeedbackPageForm({ source }: { source: string }) {
   const isLogout = source === 'logout';
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     window.sessionStorage.removeItem('fundersai-logout-feedback-pending');
@@ -19,6 +20,7 @@ export default function FeedbackPageForm({ source }: { source: string }) {
   const send = async () => {
     if (!rating || status === 'sending') return;
     setStatus('sending');
+    setErrorMessage('');
     try {
       await submitFeedback({
         feedback_type: isLogout ? 'logout' : 'general',
@@ -27,7 +29,8 @@ export default function FeedbackPageForm({ source }: { source: string }) {
         page_path: '/feedback',
       });
       setStatus('sent');
-    } catch {
+    } catch (error) {
+      setErrorMessage(feedbackErrorMessage(error));
       setStatus('error');
     }
   };
@@ -61,7 +64,7 @@ export default function FeedbackPageForm({ source }: { source: string }) {
               Your thoughts <span className="font-normal text-slate-600">(optional)</span>
               <textarea value={comment} onChange={(event) => setComment(event.target.value.slice(0, 2000))} rows={6} placeholder="What should FundersAI keep, improve, or explain better?" className="mt-2 w-full resize-none rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-[#00FF9D]/50" />
             </label>
-            {status === 'error' ? <p role="alert" className="mt-3 text-sm text-rose-300">Feedback could not be saved. Please try again.</p> : null}
+            {status === 'error' ? <p role="alert" className="mt-3 text-sm text-rose-300">{errorMessage}</p> : null}
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
               <Link href={isLogout ? '/auth' : '/dashboard'} className="text-sm text-slate-500 hover:text-slate-300">Skip for now</Link>
               <button type="button" onClick={send} disabled={!rating || status === 'sending'} className="rounded-xl bg-[#00FF9D] px-5 py-2.5 text-sm font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50">
@@ -74,4 +77,3 @@ export default function FeedbackPageForm({ source }: { source: string }) {
     </main>
   );
 }
-
