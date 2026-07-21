@@ -8,6 +8,8 @@
 [![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS_4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 
+[Live App](https://www.fundersai.co.in) · [Code Repository](https://github.com/Naman6019/FundersAI)
+
 </div>
 
 ---
@@ -72,6 +74,28 @@ FundersAI is built to handle complex, high-volume financial data efficiently wit
 3. **Resilient Ingestion Parsers**: Enabled AMC sources cover PPFAS, HDFC, ICICI, SBI, Axis, Motilal Oswal, and Nippon, with explicit tracking states (`pending`, `downloaded`, `needs_reparse`, `parsed`, `parsed_partial`, `needs_review`, `failed`, `skipped_not_supported`).
 4. **Reviewable Ingestion**: Scheduled retries and admin review actions handle missed parses without hiding states such as `parsed_partial`, `needs_review`, or `failed`.
 5. **Evaluation-First Research Retrieval**: The deterministic lexical baseline and v2 reranker use a versioned development seed. OpenAI vector retrieval and hybrid ranking have lexical fallback and remain separately gated by quality, latency, and cost evidence. The bounded evidence path returns cited official-document claims or abstains.
+
+---
+
+## 🤖 How Codex & GPT-5.6 Were Used
+
+Codex with GPT-5.6 was used as FundersAI's primary engineering collaborator during development. It was used for repository-wide reasoning and implementation—not as an unreviewed source of financial facts or investment recommendations.
+
+### Main contributions
+
+- **Architecture and planning:** Mapped the existing Next.js, FastAPI, Supabase, R2, ingestion, and retrieval paths before extending them. This kept new work attached to real product flows instead of creating disconnected demo infrastructure.
+- **Implementation:** Helped build and refine official-document retrieval, OpenAI vector search with lexical fallback, deterministic reranking and abstention, the bounded LangGraph evidence workflow, golden-set evaluation, Prefect job wrappers, MLflow training guards, Docker/GCP deployment scaffolding, monitoring, authentication, feedback, and chat persistence.
+- **Debugging and hardening:** Traced failures across frontend, backend, migrations, provider configuration, and scheduled jobs; proposed focused fixes; and added regression coverage for the changed behavior.
+- **Verification:** Ran targeted Pytest and Node contract tests, TypeScript checks, ESLint, production builds, retrieval evaluations, and safe orchestration dry runs. Failed checks were treated as blockers or documented limitations rather than hidden.
+- **Documentation and demo preparation:** Updated architecture, API, deployment, ML, and current-state documentation and produced judge-facing walkthroughs that distinguish implemented, locally verified, deployed, and planned work.
+
+### Human oversight
+
+The developer defined the product scope, research-only boundary, official-source policy, provider budget, and deployment decisions; reviewed proposed changes; supplied authorized credentials; and retained control over production data and external actions. Codex did not autonomously execute trades, provide investment advice, apply destructive migrations, or promote unverified models.
+
+### Runtime boundary
+
+GPT-5.6 was used through Codex for software engineering, debugging, review, and documentation. It is not claimed as FundersAI's default production chat model. The deployed application uses its separately configured OpenRouter/Groq chat and extraction providers, while official-document and query embeddings use OpenAI `text-embedding-3-small`. Deterministic financial calculations and citation checks remain in application code.
 
 ---
 
