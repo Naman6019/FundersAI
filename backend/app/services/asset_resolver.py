@@ -371,6 +371,9 @@ class AssetResolver:
         input_words = [word for word in input_norm.split() if len(word) > 2]
         scored: list[ResolverCandidate] = []
         for row in rows:
+            scheme_code = row.get("scheme_code")
+            if scheme_code in (None, ""):
+                continue
             name = str(row.get("scheme_name") or "")
             name_norm = normalize_text(name)
             score = 0.0
@@ -408,7 +411,7 @@ class AssetResolver:
                 ResolverCandidate(
                     resolved_name=name,
                     asset_type="mutual_fund",
-                    id=str(row.get("scheme_code")) if row.get("scheme_code") is not None else None,
+                    id=str(scheme_code),
                     confidence=confidence,
                     amc=amc,
                     match_reason=",".join(reasons) or "candidate_rank",

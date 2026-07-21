@@ -145,7 +145,9 @@ function MessageMetadataBadges({ metadata, content }: { metadata?: Record<string
   const modelStatus = typeof metadata?.model_status === 'string' ? metadata.model_status : null;
   const coverageStatus = typeof metadata?.coverage_status === 'string' ? metadata.coverage_status : null;
   const sourceRows = sourceFreshness ? Object.entries(sourceFreshness).slice(0, 2) : [];
-  const riskItems = Array.isArray(riskAnalysis?.items) ? riskAnalysis.items : [];
+  const analysisItems = Array.isArray(riskAnalysis?.items) ? riskAnalysis.items : [];
+  const riskItems = analysisItems.filter(item => asRecord(item)?.kind !== 'data_gap');
+  const dataGapItems = analysisItems.filter(item => asRecord(item)?.kind === 'data_gap');
   const missingCount = dataQuality
     ? Object.values(dataQuality).reduce((count: number, value) => {
         const row = asRecord(value);
@@ -207,6 +209,11 @@ function MessageMetadataBadges({ metadata, content }: { metadata?: Record<string
       {riskItems.length ? (
         <span className="rounded-full border border-rose-300/20 bg-rose-300/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-100">
           {riskItems.length} risk flags
+        </span>
+      ) : null}
+      {dataGapItems.length ? (
+        <span className="rounded-full border border-slate-300/20 bg-slate-300/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-200">
+          {dataGapItems.length} data gaps
         </span>
       ) : null}
       {missingCount ? (

@@ -10,6 +10,7 @@ from app.models.fund_models import (
     FundDataQuality, FundProfileResponse, FundHolding, SectorAllocation
 )
 from app.services.mfapi_service import get_cached_nav_history, get_nav_cache_summary
+from app.services.mf_holdings_quality import is_holding_summary_or_noise
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +216,8 @@ class FundService:
             if latest_as_of is None:
                 latest_as_of = as_of
             if as_of != latest_as_of:
+                continue
+            if is_holding_summary_or_noise(row.get("security_name")):
                 continue
             holdings.append(FundHolding(**row))
         return holdings, latest_as_of

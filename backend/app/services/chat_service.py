@@ -3009,6 +3009,7 @@ def _build_reasoning_summary(
     quant_data: Any,
     response_json: dict[str, Any],
     comparison_view_mode: str,
+    comparison_canvas_available: bool | None = None,
 ) -> dict[str, Any]:
     intent = str(intent_info.get("intent") or "general")
     mode = answer_mode or ("general_education" if intent == "general" else intent)
@@ -3046,8 +3047,14 @@ def _build_reasoning_summary(
             },
             {
                 "label": "View",
-                "detail": "Opened canvas for the full comparison table." if comparison_view_mode == "canvas" else "Kept the comparison inside chat.",
-                "status": "ok",
+                "detail": (
+                    "Opened canvas for the full comparison table."
+                    if comparison_view_mode == "canvas" and comparison_canvas_available is not False
+                    else "Could not open the canvas because two validated asset identifiers were unavailable."
+                    if comparison_view_mode == "canvas"
+                    else "Kept the comparison inside chat."
+                ),
+                "status": "limited" if comparison_view_mode == "canvas" and comparison_canvas_available is False else "ok",
             },
         ])
     elif intent in {"quant", "both"}:
@@ -3552,6 +3559,7 @@ async def synthesis_response(
     comparison_view_mode: str = "canvas",
     usage_collector: list[dict[str, Any]] | None = None,
     response_meta: dict[str, Any] | None = None,
+    comparison_canvas_available: bool | None = None,
 ) -> str:
     """Synthesis Core"""
 
@@ -3653,7 +3661,13 @@ Use clear language, practical examples, and no buy/sell advice."""
             response_meta["model_status"] = "skipped"
             response_meta["status_flag"] = None
         title = "Quick Read"
-        view_text = "Canvas is open with the full metric view." if comparison_view_mode == "canvas" else "Here is the comparison snapshot."
+        view_text = (
+            "Canvas is open with the full metric view."
+            if comparison_view_mode == "canvas" and comparison_canvas_available is not False
+            else "The comparison canvas could not be opened because two validated asset identifiers were unavailable."
+            if comparison_view_mode == "canvas"
+            else "Here is the comparison snapshot."
+        )
 
         long_term_read = compare_direct_answer or (
             "Use the metrics below to compare returns, volatility, expense ratio, AUM, and other factors."
@@ -3766,8 +3780,13 @@ Controlled Web Context:
         long_term_read = compare_direct_answer or (
             "Use the canvas metrics to compare returns, volatility, drawdown, Sharpe ratio, expense ratio, AUM, and data freshness side by side."
         )
+        canvas_message = (
+            "Canvas is open with the full metric view. Here is the usable read from the data available now."
+            if comparison_canvas_available is not False
+            else "The comparison canvas could not be opened because two validated asset identifiers were unavailable. Here is the usable read from the data available now."
+        )
         return f"""### {subject} — {title}
-> Canvas is open with the full metric view. Here is the usable read from the data available now.
+> {canvas_message}
 
 ### What the Data Says
 {long_term_read}
@@ -3891,6 +3910,66 @@ def _pick_best_fund_match(
         min_history_points=min_history_points,
     )
     return scored_rows[0]["row"] if scored_rows else None
+
+
+def _resolve_compare_action_ids(
+    entities: list[str],
+    quant_data: Any,
+    asset_type: str,
+    resolutions: list[Any] | None = None,
+) -> list[str]:
+    resolved_ids: list[str] = []
+    seen_ids: set[str] = set()
+    repository = get_mf_repository()
+    comparison = quant_data.get("comparison", {}) if isinstance(quant_data, dict) else {}
+    canonical_codes = {
+        "hdfc flexi cap": "118955",
+        "parag parikh flexi cap": "122639",
+        "nippon india small cap": "119332",
+    }
+
+    def append_id(value: Any) -> bool:
+        scheme_id = str(value or "").strip()
+        if not scheme_id:
+            return False
+        if scheme_id not in seen_ids:
+            seen_ids.add(scheme_id)
+            resolved_ids.append(scheme_id)
+        return True
+
+    for index, entity in enumerate(entities):
+        resolution = resolutions[index] if resolutions and index < len(resolutions) else None
+        if resolution is not None and getattr(resolution, "is_high_confidence", False) and append_id(getattr(resolution, "id", None)):
+            continue
+
+        payload = comparison.get(entity) if isinstance(comparison, dict) else None
+        if isinstance(payload, dict) and append_id(payload.get("scheme_code")):
+            continue
+
+        normalized_entity = _normalize_fund_text(entity)
+        canonical_code = next((code for name, code in canonical_codes.items() if name in normalized_entity), None)
+        if canonical_code and repository:
+            try:
+                if repository.get_fund_by_scheme_code(canonical_code) and append_id(canonical_code):
+                    continue
+            except Exception as exc:
+                logger.warning("Canonical compare ID validation failed for %s: %s", entity, exc)
+
+        if repository and asset_type == "mutual_fund":
+            try:
+                search_pattern = _fund_search_pattern(entity)
+                rows = repository.search_mutual_funds(search_pattern, limit=25) if search_pattern else []
+                best_match = _pick_best_fund_match(entity, rows, nav_history_cache={}, min_history_points=0)
+                if best_match and append_id(best_match.get("scheme_code")):
+                    continue
+            except Exception as exc:
+                logger.warning("Compare action ID lookup failed for %s: %s", entity, exc)
+
+        if asset_type == "stock":
+            stock_symbol = resolve_stock_symbol(entity)
+            append_id(stock_symbol or entity.split()[0].upper())
+
+    return resolved_ids
 
 
 def _score_fund_candidates(
@@ -4440,6 +4519,24 @@ To experience FundersAI's advanced research capabilities, please try:
             news_items = await analyze_news_sentiment(news_items, usage_collector=usage_collector)
         news_data = news_items
 
+    resolved_compare_ids: list[str] = []
+    comparison_canvas_available: bool | None = None
+    if intent == "compare":
+        compare_entities = [str(entity) for entity in intent_info.get("compare_entities", [])]
+        compare_asset_type = (
+            intent_info.get("asset_type")
+            or (quant_data.get("asset_type") if isinstance(quant_data, dict) else None)
+            or ("stock" if asset_type == "stock" else "mutual_fund")
+        )
+        resolved_compare_ids = _resolve_compare_action_ids(
+            compare_entities,
+            quant_data,
+            str(compare_asset_type),
+            compare_resolutions,
+        )
+        if req.comparison_view_mode == "canvas":
+            comparison_canvas_available = len(resolved_compare_ids) >= 2
+
     synthesis_meta: dict[str, Any] = {}
     await _emit_status("Generating the research explanation...")
     final_answer = await synthesis_response(
@@ -4453,6 +4550,7 @@ To experience FundersAI's advanced research capabilities, please try:
         req.comparison_view_mode,
         usage_collector=usage_collector,
         response_meta=synthesis_meta,
+        comparison_canvas_available=comparison_canvas_available,
     )
     model_status = synthesis_meta.get("model_status", model_status)
     status_flag = synthesis_meta.get("status_flag", status_flag)
@@ -4490,6 +4588,7 @@ To experience FundersAI's advanced research capabilities, please try:
         quant_data=quant_data,
         response_json=response_json,
         comparison_view_mode=req.comparison_view_mode,
+        comparison_canvas_available=comparison_canvas_available,
     )
 
     if intent == "compare":
@@ -4506,87 +4605,11 @@ To experience FundersAI's advanced research capabilities, please try:
                 }
             }
             response_json["conversation_context"] = compare_context
-            resolved_ids = []
-            seen_ids = set()
-            nav_history_cache_for_ids: dict[str, dict[str, Any]] = {}
-            comparison_payload = quant_data.get("comparison", {}) if isinstance(quant_data, dict) else {}
-            fallback_map = {
-                "hdfc flexi cap": "118955",
-                "parag parikh flexi cap": "122639",
-                "quant small cap": "120847",
-                "nippon india small cap": "119332"
-            }
-            def _append_resolved_id(value: str) -> None:
-                if value not in seen_ids:
-                    seen_ids.add(value)
-                    resolved_ids.append(value)
-
-            for entity in entities:
-                if comparison_payload and _is_unavailable_entity(comparison_payload.get(entity)):
-                    continue
-                if comparison_payload:
-                    payload_row = comparison_payload.get(entity)
-                    if isinstance(payload_row, dict):
-                        payload_code = payload_row.get("scheme_code")
-                        if payload_code not in (None, "", "N/A"):
-                            payload_code_str = str(payload_code)
-                            if asset_type != "stock":
-                                payload_hist = _nav_history_summary_for_scheme(payload_code_str, nav_history_cache_for_ids)
-                                if payload_hist.get("count", 0) < MF_COMPARE_MIN_NAV_POINTS:
-                                    if DEBUG_MF_RESOLUTION:
-                                        logger.info(
-                                            "Skipping scheme_code=%s for entity='%s' due to low history_points=%s",
-                                            payload_code_str,
-                                            entity,
-                                            payload_hist.get("count"),
-                                        )
-                                else:
-                                    _append_resolved_id(payload_code_str)
-                                    continue
-                            else:
-                                _append_resolved_id(payload_code_str)
-                                continue
-                ent_lower = entity.lower()
-                resolved = False
-                if asset_type != "stock":
-                    for key, code in fallback_map.items():
-                        if key in ent_lower:
-                            fallback_hist = _nav_history_summary_for_scheme(code, nav_history_cache_for_ids)
-                            if fallback_hist.get("count", 0) >= MF_COMPARE_MIN_NAV_POINTS:
-                                _append_resolved_id(code)
-                                resolved = True
-                                break
-                if resolved: continue
-                if get_mf_repository() and asset_type != "stock":
-                    try:
-                        search_term = _entity_search_term(entity)
-                        search_pattern = _fund_search_pattern(search_term)
-                        res = None
-                        if search_pattern:
-                            res = get_mf_repository().table('mutual_fund_core_snapshot').select('scheme_code,scheme_name').ilike('scheme_name', search_pattern).limit(25).execute()
-                            if not res.data:
-                                res = get_mf_repository().table('mutual_funds').select('scheme_code,scheme_name').ilike('scheme_name', search_pattern).limit(25).execute()
-                        if res and res.data and len(res.data) > 0:
-                            best_match = _pick_best_fund_match(
-                                search_term,
-                                res.data,
-                                nav_history_cache=nav_history_cache_for_ids,
-                                min_history_points=MF_COMPARE_MIN_NAV_POINTS,
-                            )
-                            _append_resolved_id(str(best_match['scheme_code']))
-                            resolved = True
-                    except: pass
-                if resolved: continue
-                if asset_type != "mutual_fund":
-                    stock_symbol = resolve_stock_symbol(entity)
-                    ticker_clean = stock_symbol or entity.split()[0].upper()
-                    _append_resolved_id(ticker_clean); resolved = True
-
-            if len(resolved_ids) >= 2:
-                compare_context["last_compare"]["ids"] = resolved_ids[:2]
+            if len(resolved_compare_ids) >= 2:
+                compare_context["last_compare"]["ids"] = resolved_compare_ids[:2]
                 response_json["system_action"] = {
                     "type": "COMPARE",
-                    "ids": resolved_ids[:2],
+                    "ids": resolved_compare_ids[:2],
                     "entities": [str(entity) for entity in entities[:2]],
                     "asset_type": compare_context["last_compare"]["asset_type"],
                 }

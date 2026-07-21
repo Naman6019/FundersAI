@@ -240,7 +240,7 @@ Acceptance Criteria:
 - [ ] Expanding stock coverage beyond the current Nifty-focused list.
 - [ ] Testing `NIFTY500` vs `NIFTYTOTALMARKET`.
 - [ ] Tuning `STOCK_INFO_ENRICH_LIMIT` and `STOCK_YFINANCE_FALLBACK_LIMIT`.
-- [ ] Fill mutual fund missing data gaps beyond AUM/TER/holdings for PPFAS, ICICI, HDFC, SBI (benchmark/risk/ratios).
+- [ ] Fill mutual fund missing data gaps beyond AUM/TER/holdings for PPFAS, ICICI, HDFC, and SBI (benchmark/risk/ratios); the HDFC/PPFAS Flexi Cap pair now has a verified repair path.
 - [ ] Reduce historical `mf_raw_documents` + `mf_parse_review_queue` backlog (`needs_review` and failed rows).
 
 ## Done

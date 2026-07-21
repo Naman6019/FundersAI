@@ -1,6 +1,6 @@
 # Current State
 
-**Last Updated**: 2026-07-21
+**Last Updated**: 2026-07-22
 
 ## Project Summary
 FundersAI is a research-first Indian stocks + mutual funds app with deterministic comparison outputs, Supabase-first runtime reads, and workflow-driven data ingestion.
@@ -48,6 +48,16 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - admin data-health and operations reads are ordered and capped at 5,000 rows per query.
 - Research-oriented landing page at `/`.
 - Deterministic compare responses with `why_better`, structured winner context, and data limitation/freshness metadata.
+- Comparison canvas delivery hardening:
+  - mutual-fund resolver candidates must carry a real `scheme_code`, and snapshot rows missing identifiers fall through to the canonical mutual-fund table;
+  - a canvas action can open with partial NAV-history coverage once two fund identifiers are validated;
+  - unavailable comparison payloads no longer prevent validated ID recovery;
+  - chat and reasoning copy only claim that the canvas opened when the response contains a usable comparison action;
+  - verified metadata fallbacks and an idempotent repair migration correct HDFC/PPFAS Flexi Cap category, benchmark, and risk labels for scheme codes `118955` and `122639`;
+  - a missing fund benchmark is disclosed as a fallback limitation instead of being counted as a missing core comparison field;
+  - NAV-derived Sharpe is calculated when a risk-free rate is supplied, drawdown accepts positive magnitudes and legacy negative values, and malformed subtotal holdings are filtered at parse and read time;
+  - `backend/scripts/diagnose_mf_comparison_coverage.py` provides a read-only scheme-code diagnostic; see `MF_COMPARISON_COVERAGE_REPAIR.md`.
+  - unavailable metrics are labeled as data gaps instead of inflating the risk-signal count.
 - Source-neutral stock data model and scheduled stock workflows.
 - Mutual-fund NAV sync and metadata pipelines.
 - AMC disclosure ingestion registry enabled for `ppfas`, `hdfc`, `icici`, `sbi`, `axis`, `motilal`, and `nippon`:
@@ -184,6 +194,12 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - all `41` frontend contract tests passed;
   - TypeScript, focused ESLint, and the Next.js `16.2.11` production build passed;
   - `npm audit --omit=dev` reports `0` vulnerabilities after patching Next.js and affected transitive dependencies;
+  - `git diff --check` passes.
+- Local verification for comparison canvas delivery hardening:
+  - exact HDFC Flexi Cap versus Parag Parikh Flexi Cap regression returns scheme codes `118955` and `122639` and emits the comparison action without requiring complete NAV history;
+  - backend: `419 passed, 6 skipped` (`backend/tests/tmp` excluded because the local directory is access-denied during collection);
+  - frontend contracts: `41 passed`; TypeScript and the Next.js production build passed;
+  - focused touched-file ESLint reports only the two pre-existing synchronous-effect findings in `ChatWindow.tsx`; with that existing rule disabled, the touched files pass;
   - `git diff --check` passes.
 
 ## In Progress

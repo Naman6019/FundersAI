@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pandas as pd
 
-from app.mf_ingestion.parsers.adapters.hdfc_adapter import HDFCAdapter
+from app.mf_ingestion.parsers.adapters.hdfc_adapter import HDFCAdapter, _dedupe_holdings
 
 
 def test_hdfc_parse_holdings_extracts_rows_from_portfolio_frame():
@@ -164,3 +164,13 @@ def test_hdfc_parse_holdings_ignores_full_text_when_multiple_schemes_present():
     assert len(parsed.holdings) == 1
     assert parsed.holdings[0]["instrument_name"] == "ICICI Bank Ltd."
     assert parsed.metrics["total_percent_aum"] == 100.0
+
+
+def test_hdfc_dedupe_removes_fragmented_subtotal_rows():
+    holdings = _dedupe_holdings([
+        {"instrument_name": "HDFC Bank Ltd.", "percent_aum": 7.0},
+        {"instrument_name": "Sub T otal", "percent_aum": 99.0},
+        {"instrument_name": "Ramco Systems Ltd. Sub Total Nexus Select Trust REIT", "percent_aum": 5.0},
+    ])
+
+    assert [row["instrument_name"] for row in holdings] == ["HDFC Bank Ltd."]

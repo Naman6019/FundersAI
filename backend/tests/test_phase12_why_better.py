@@ -390,6 +390,7 @@ def test_compare_synthesis_canvas_mode_hides_data_table(monkeypatch):
             news_data=[],
             comparison_view_mode="canvas",
             response_meta=metadata,
+            comparison_canvas_available=True,
         )
     )
 
@@ -399,6 +400,29 @@ def test_compare_synthesis_canvas_mode_hides_data_table(monkeypatch):
     assert "### How They Differ" not in response
     assert metadata["model_status"] == "not_used"
     assert "status_flag" not in metadata
+
+
+def test_compare_synthesis_does_not_claim_unavailable_canvas_is_open(monkeypatch):
+    from app.services import chat_service as main
+
+    async def fake_function_ollama_chat(*_args, **_kwargs):
+        raise AssertionError("OpenRouter synthesis called")
+
+    monkeypatch.setattr(main, "function_ollama_chat", fake_function_ollama_chat)
+
+    response = asyncio.run(
+        main.synthesis_response(
+            query="Compare A and B",
+            intent_info={"intent": "compare", "ticker": None},
+            quant_data={"comparison": {"A": {"error": "missing"}, "B": {"error": "missing"}}},
+            news_data=[],
+            comparison_view_mode="canvas",
+            comparison_canvas_available=False,
+        )
+    )
+
+    assert "Canvas is open" not in response
+    assert "comparison canvas could not be opened" in response
 
 
 def test_compare_synthesis_canvas_followup_calls_model(monkeypatch):

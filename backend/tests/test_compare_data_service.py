@@ -67,7 +67,7 @@ def _resolution(name: str, code: str, amc: str = "HDFC") -> AssetResolution:
     )
 
 
-def test_compare_service_returns_partial_data_and_benchmark_fallback():
+def test_compare_service_keeps_benchmark_fallback_as_limitation_not_missing_field():
     fake = _FakeSupabase({
         "mutual_fund_core_snapshot": [
             {
@@ -103,7 +103,8 @@ def test_compare_service_returns_partial_data_and_benchmark_fallback():
     assert result["coverage_status"] == "partial"
     assert item["benchmark"] == "NIFTY"
     assert item["benchmark_source"] == "nifty_fallback"
-    assert "fund_benchmark" in item["data_quality"]["missing_fields"]
+    assert "fund_benchmark" not in item["data_quality"]["missing_fields"]
+    assert item["data_quality"]["limitations"]
     assert "aum" in item["data_quality"]["missing_fields"]
     assert not any(call[0] == "mfapi" for call in fake.calls)
 
@@ -156,6 +157,40 @@ def test_compare_service_builds_holdings_overlap_from_local_rows():
     assert overlap["coverage_status"] == "available"
     assert overlap["common_holding_count"] == 1
     assert overlap["top_common_holdings"][0]["name"] == "HDFC Bank"
+
+
+def test_compare_service_filters_fragmented_summary_rows_from_holdings():
+    fake = _FakeSupabase({
+        "mutual_fund_core_snapshot": [
+            {
+                "scheme_code": "101",
+                "scheme_name": "HDFC Flexi Cap Fund Direct Growth",
+                "category": "Flexi Cap",
+                "benchmark": "NIFTY 500 TRI",
+                "nav": 100.0,
+                "nav_date": "2026-05-31",
+                "expense_ratio": 0.75,
+                "aum": 1000,
+            }
+        ],
+        "mutual_fund_nav_history": [],
+        "stock_prices_daily": [],
+        "mutual_fund_holdings": [
+            {"scheme_code": "101", "as_of_date": "2026-05-31", "security_name": "HDFC Bank", "weight_pct": 7.0},
+            {"scheme_code": "101", "as_of_date": "2026-05-31", "security_name": "Sub T otal", "weight_pct": 99.0},
+            {"scheme_code": "101", "as_of_date": "2026-05-31", "security_name": "Ramco Systems Ltd. Sub Total Nexus Select Trust REIT", "weight_pct": 5.0},
+        ],
+        "mutual_fund_sectors": [],
+    })
+    service = CompareDataService(fake)
+
+    result = asyncio.run(service.build_mutual_fund_compare(
+        ["HDFC Flexi Cap"],
+        pre_resolutions=[_resolution("HDFC Flexi Cap Fund Direct Growth", "101")],
+    ))
+
+    holdings = result["quant_data"]["comparison"]["HDFC Flexi Cap Fund Direct Growth"]["holdings"]
+    assert [row["security_name"] for row in holdings] == ["HDFC Bank"]
 
 
 def test_compare_service_loads_family_id_holdings_and_sectors():

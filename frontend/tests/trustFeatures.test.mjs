@@ -26,6 +26,8 @@ test('chat window renders templates and source risk badges', () => {
   assert.match(chat, /MessageMetadataBadges/);
   assert.match(chat, /risk_analysis/);
   assert.match(chat, /explanation_mode/);
+  assert.match(chat, /dataGapItems/);
+  assert.match(chat, /data gaps/);
 });
 
 test('comparison canvas renders risk analysis panel', () => {
@@ -33,5 +35,6 @@ test('comparison canvas renders risk analysis panel', () => {
   assert.match(comparison, /type RiskAnalysisPayload/);
   assert.match(comparison, /function RiskAnalysisPanel/);
   assert.match(comparison, /getRiskAnalysis/);
-  assert.match(comparison, /Risk Analysis/);
+  assert.match(comparison, /Risk and Data Quality/);
+  assert.match(comparison, /item\.kind === 'data_gap'/);
 });

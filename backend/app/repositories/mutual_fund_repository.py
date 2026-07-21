@@ -5,6 +5,28 @@ from typing import Any
 from app.database import supabase as default_supabase
 
 
+VERIFIED_SCHEME_METADATA_FALLBACKS: dict[str, dict[str, str]] = {
+    "118955": {
+        "category": "Equity Scheme - Flexi Cap Fund",
+        "sub_category": "Flexi Cap",
+        "benchmark": "NIFTY 500 TRI",
+        "risk_level": "Very High",
+    },
+    "122639": {
+        "category": "Equity Scheme - Flexi Cap Fund",
+        "sub_category": "Flexi Cap",
+        "benchmark": "NIFTY 500 TRI",
+        "risk_level": "Very High",
+    },
+}
+
+
+def _category_is_generic(row: dict[str, Any]) -> bool:
+    category = str(row.get("category") or "").strip().lower()
+    amc_name = str(row.get("amc_name") or row.get("fund_house") or "").strip().lower()
+    return not category or category in {"general", "mutual fund", amc_name}
+
+
 def _clean_variant_value(value: Any) -> str | None:
     if value in (None, ""):
         return None
@@ -35,6 +57,14 @@ def _with_normalized_variant_fields(row: dict[str, Any]) -> dict[str, Any]:
     scheme_name = str(normalized.get("scheme_name") or "")
     normalized["plan_type"] = _clean_variant_value(normalized.get("plan_type")) or _infer_plan_type(scheme_name)
     normalized["option_type"] = _clean_variant_value(normalized.get("option_type")) or _infer_option_type(scheme_name)
+    fallback = VERIFIED_SCHEME_METADATA_FALLBACKS.get(str(normalized.get("scheme_code") or "").strip())
+    if fallback:
+        if _category_is_generic(normalized):
+            normalized["category"] = fallback["category"]
+        if _clean_variant_value(normalized.get("sub_category")) in {None, "General"}:
+            normalized["sub_category"] = fallback["sub_category"]
+        normalized["benchmark"] = _clean_variant_value(normalized.get("benchmark")) or fallback["benchmark"]
+        normalized["risk_level"] = _clean_variant_value(normalized.get("risk_level")) or fallback["risk_level"]
     return normalized
 
 
@@ -82,8 +112,9 @@ class MutualFundRepository:
             query_snapshot = query_snapshot.ilike("scheme_name", f"%{option_type}%")
 
         rows = query_snapshot.limit(limit).execute().data or []
-        if rows:
-            return [_with_normalized_variant_fields(row) for row in rows]
+        rows_with_ids = [row for row in rows if row.get("scheme_code") not in (None, "")]
+        if rows_with_ids:
+            return [_with_normalized_variant_fields(row) for row in rows_with_ids]
 
         query_mf = self.table("mutual_funds").select("*").ilike("scheme_name", pattern)
         if plan_type:
@@ -91,7 +122,12 @@ class MutualFundRepository:
         if option_type:
             query_mf = query_mf.ilike("scheme_name", f"%{option_type}%")
 
-        return [_with_normalized_variant_fields(row) for row in query_mf.limit(limit).execute().data or []]
+        fallback_rows = query_mf.limit(limit).execute().data or []
+        return [
+            _with_normalized_variant_fields(row)
+            for row in fallback_rows
+            if row.get("scheme_code") not in (None, "")
+        ]
 
     def get_fund_by_scheme_code(self, scheme_code: Any) -> dict[str, Any] | None:
         code = int(str(scheme_code)) if str(scheme_code).isdigit() else scheme_code

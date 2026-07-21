@@ -11,6 +11,7 @@ from app.repositories.mutual_fund_repository import MutualFundRepository
 from app.services import cache_policy
 from app.services.asset_resolver import AssetResolution, AssetResolver, HIGH_CONFIDENCE
 from app.services.comparison_reasoning import build_mf_why_better
+from app.services.mf_holdings_quality import is_holding_summary_or_noise
 from app.services.mf_metrics_service import compute_nav_metrics
 from app.services.mfapi_service import get_nav_cache_summary, get_stored_nav_history
 
@@ -274,7 +275,7 @@ class CompareDataService:
             {"nav_date": index.strftime("%Y-%m-%d"), "nav": float(value)}
             for index, value in hist["Close"].items()
         ] if not hist.empty else []
-        refreshed_metrics = compute_nav_metrics(history_rows) if history_rows else {}
+        refreshed_metrics = compute_nav_metrics(history_rows, risk_free_rate=0.06) if history_rows else {}
         risk_metrics = _calculate_alpha_beta(hist, benchmark_hist) if not hist.empty and not benchmark_hist.empty else {}
         benchmark = row.get("benchmark") or "NIFTY"
         benchmark_source = "fund_benchmark" if row.get("benchmark") else "nifty_fallback"
@@ -283,8 +284,9 @@ class CompareDataService:
             for field in ("nav", "nav_date", "expense_ratio", "aum")
             if _is_missing(row.get(field))
         ]
+        limitations = []
         if benchmark_source == "nifty_fallback":
-            missing_fields.append("fund_benchmark")
+            limitations.append("Fund benchmark is unavailable; NIFTY is used only as fallback context.")
 
         provider_payload = row.get("provider_payload") or {}
         qualitative = provider_payload.get("qualitative_insights") or {}
@@ -316,7 +318,7 @@ class CompareDataService:
             "return_5y": refreshed_metrics.get("return_5y") if refreshed_metrics.get("return_5y") is not None else row.get("return_5y"),
             "volatility_1y": refreshed_metrics.get("volatility_1y") if refreshed_metrics.get("volatility_1y") is not None else row.get("volatility_1y"),
             "max_drawdown_1y": refreshed_metrics.get("max_drawdown_1y") if refreshed_metrics.get("max_drawdown_1y") is not None else row.get("max_drawdown_1y"),
-            "sharpe_ratio": row.get("sharpe_ratio"),
+            "sharpe_ratio": refreshed_metrics.get("sharpe_ratio") if refreshed_metrics.get("sharpe_ratio") is not None else row.get("sharpe_ratio"),
             "alpha": row.get("alpha"),
             "beta": row.get("beta"),
             "source": "FundersAI DB",
@@ -335,6 +337,7 @@ class CompareDataService:
             },
             "data_quality": {
                 "missing_fields": missing_fields,
+                "limitations": limitations,
                 "message": "Some mutual fund fields are unavailable from local Supabase data." if missing_fields else "Complete for requested fields.",
                 "coverage_status": "incomplete" if missing_fields else "complete",
             },
@@ -431,6 +434,8 @@ class CompareDataService:
             if latest_as_of is None:
                 latest_as_of = as_of
             if as_of != latest_as_of:
+                continue
+            if is_holding_summary_or_noise(row.get("security_name")):
                 continue
             holdings.append({
                 "security_name": row.get("security_name"),

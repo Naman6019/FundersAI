@@ -63,7 +63,7 @@ These routes proxy to their matching `/api/quant/*` FastAPI endpoints.
 - `GET /api/search`: searches stock and fund entities.
 - `GET /api/funds/category`: category fund list.
 - `POST /api/funds/category/compare`: deterministic within-category comparison.
-- `POST /api/funds/compare/verdict`: structured comparison summary with coverage and limitations.
+- `POST /api/funds/compare/verdict`: structured comparison summary with coverage and limitations. Missing core fields reduce coverage; a disclosed benchmark fallback is a limitation and does not by itself make otherwise complete return/risk/cost data partial.
 - `POST /api/funds/research/answer`: bounded official-document research answer with citations or abstention.
   - Returns `answer_format=field_summary` for concise verified claims, `source_excerpts` when only matching raw evidence is available, or `abstention` when the evidence gate fails.
 - `GET /api/funds/research/evaluation`: versioned development evaluation artifact used by the evidence UI.

@@ -137,6 +137,7 @@ type RiskAnalysisItem = {
   level?: string;
   evidence?: string;
   confidence?: string;
+  kind?: 'risk' | 'data_gap';
 };
 
 type RiskAnalysisPayload = {
@@ -614,7 +615,10 @@ function WhyBetterPanel({ payload }: { payload: WhyBetterPayload | null }) {
 }
 
 function RiskAnalysisPanel({ payload }: { payload: RiskAnalysisPayload | null }) {
-  const items = payload?.items || [];
+  const rawItems = payload?.items || [];
+  const riskItems = rawItems.filter(item => item.kind !== 'data_gap');
+  const dataGapItems = rawItems.filter(item => item.kind === 'data_gap');
+  const items = [...riskItems, ...dataGapItems];
   if (!payload || items.length === 0) return null;
 
   const levelClass = (level: string | undefined) => {
@@ -628,10 +632,11 @@ function RiskAnalysisPanel({ payload }: { payload: RiskAnalysisPayload | null })
   return (
     <section className="mb-6 rounded-2xl border border-white/10 bg-[#0e182a] p-4">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold tracking-wide text-[#9ec5ff]">Risk Analysis</h3>
+        <h3 className="text-sm font-semibold tracking-wide text-[#9ec5ff]">Risk and Data Quality</h3>
         <p className="mt-1 text-xs leading-relaxed text-[#8ea7cd]">
-          {payload.summary || 'Deterministic risk flags based on available data.'}
+          {payload.summary || 'Risk signals and unavailable metrics are shown separately.'}
         </p>
+        <p className="mt-1 text-[11px] text-slate-400">{riskItems.length} risk signals · {dataGapItems.length} data gaps</p>
       </div>
       <div className="grid gap-2 md:grid-cols-2">
         {items.slice(0, 8).map((item, index) => (
@@ -639,7 +644,7 @@ function RiskAnalysisPanel({ payload }: { payload: RiskAnalysisPayload | null })
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-semibold text-white">{item.label || 'Risk flag'}</span>
               <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${levelClass(item.level)}`}>
-                {item.level || 'Not available'}
+                {item.kind === 'data_gap' ? 'Data gap' : item.level || 'Not available'}
               </span>
             </div>
             <p className="mt-1 text-[#c8d8f6]">{item.entity || 'Entity'}: {item.evidence || 'Evidence unavailable.'}</p>

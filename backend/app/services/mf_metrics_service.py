@@ -133,10 +133,15 @@ def compute_nav_metrics(
         "sharpe_ratio": None,
     }
 
-    # Alpha/Beta/Sharpe are intentionally null unless reliable benchmark and
-    # risk-free inputs are explicitly supplied.
+    nav_returns = _daily_returns(points, 365)
+    if risk_free_rate is not None and len(nav_returns) >= 30:
+        nav_mean = sum(nav_returns) / len(nav_returns)
+        annualized_std = sqrt(sum((value - nav_mean) ** 2 for value in nav_returns) / len(nav_returns)) * sqrt(252)
+        if annualized_std > 0:
+            metrics["sharpe_ratio"] = ((nav_mean * 252) - risk_free_rate) / annualized_std
+
+    # Alpha and beta still require aligned benchmark returns.
     if benchmark_daily_returns and risk_free_rate is not None:
-        nav_returns = _daily_returns(points, 365)
         paired = min(len(nav_returns), len(benchmark_daily_returns))
         if paired >= 30:
             nav_sample = nav_returns[-paired:]
@@ -150,10 +155,7 @@ def compute_nav_metrics(
                 ann_nav = nav_mean * 252
                 ann_bench = bench_mean * 252
                 alpha = ann_nav - (risk_free_rate + beta * (ann_bench - risk_free_rate))
-                std_nav = sqrt(sum((r - nav_mean) ** 2 for r in nav_sample) / paired) * sqrt(252)
-                sharpe = ((ann_nav - risk_free_rate) / std_nav) if std_nav > 0 else None
                 metrics["beta"] = beta
                 metrics["alpha"] = alpha * 100
-                metrics["sharpe_ratio"] = sharpe
 
     return metrics

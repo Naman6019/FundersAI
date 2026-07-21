@@ -161,6 +161,33 @@ def test_resolver_prefers_growth_variant_over_idcw():
     assert result.id == "axis-growth"
 
 
+def test_resolver_ignores_snapshot_rows_without_scheme_codes_and_uses_fallback_table():
+    fake = _FakeSupabase(
+        {
+            "mutual_fund_core_snapshot": [
+                {
+                    "scheme_code": None,
+                    "scheme_name": "HDFC Flexi Cap Fund - Growth Option - Direct Plan",
+                    "amc_name": "HDFC Mutual Fund",
+                }
+            ],
+            "mutual_funds": [
+                {
+                    "scheme_code": "118955",
+                    "scheme_name": "HDFC Flexi Cap Fund - Growth Option - Direct Plan",
+                    "amc_name": "HDFC Mutual Fund",
+                }
+            ],
+        }
+    )
+    resolver = AssetResolver(fake, cache=ResolverCache(ttl_seconds=60, max_size=10))
+
+    result = resolver.resolve("HDFC Flexi Cap Fund", asset_type="mutual_fund")
+
+    assert result.coverage_status == "supported"
+    assert result.id == "118955"
+
+
 def test_resolver_rejects_unsupported_amc_without_db_lookup():
     resolver, fake = _resolver([])
 

@@ -1,6 +1,6 @@
 # Documentation Index
 
-**Last updated:** 2026-07-21
+**Last updated:** 2026-07-22
 
 ## Authoritative Current Documents
 
@@ -19,7 +19,7 @@ Read these in order for current implementation work:
 11. `10_TASKS.md` — active work, completed work, and known issues
 12. `11_ML_SYSTEMS.md` — implemented/experimental ML and retrieval boundaries
 
-`jobs.md`, `providers.md`, `12_INTERVIEW_GUIDE.md`, `13_DISCOVERY_AGENTS.md`, and `14_BUILD_WEEK_DEMO_VIDEO.md` are maintained supporting references.
+`jobs.md`, `providers.md`, `12_INTERVIEW_GUIDE.md`, `13_DISCOVERY_AGENTS.md`, `14_BUILD_WEEK_DEMO_VIDEO.md`, and `MF_COMPARISON_COVERAGE_REPAIR.md` are maintained supporting references.
 
 ## Evidence Snapshots
 

@@ -234,14 +234,26 @@ def _freshness_snapshot(comparison: dict[str, dict[str, Any]]) -> dict[str, Any]
     return snapshot
 
 
-def _risk_item(entity: str, label: str, level: str, evidence: str, confidence: str = "Medium") -> dict[str, Any]:
+def _risk_item(
+    entity: str,
+    label: str,
+    level: str,
+    evidence: str,
+    confidence: str = "Medium",
+    kind: str = "risk",
+) -> dict[str, Any]:
     return {
         "entity": entity,
         "label": label,
         "level": level,
         "evidence": evidence,
         "confidence": confidence,
+        "kind": kind,
     }
+
+
+def _data_gap_item(entity: str, label: str, evidence: str) -> dict[str, Any]:
+    return _risk_item(entity, label, "Not available", evidence, "Low", "data_gap")
 
 
 def _build_stock_risk_analysis(comparison: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -253,7 +265,7 @@ def _build_stock_risk_analysis(comparison: dict[str, dict[str, Any]]) -> dict[st
 
         debt = _to_float(fundamentals.get("debt_to_equity"))
         if debt is None:
-            items.append(_risk_item(entity, "Debt risk", "Not available", "Debt/equity is missing.", "Low"))
+            items.append(_data_gap_item(entity, "Debt risk", "Debt/equity is missing."))
         elif debt >= 2:
             items.append(_risk_item(entity, "Debt risk", "High", f"Debt/equity is {debt:.2f}."))
         elif debt >= 1:
@@ -262,14 +274,14 @@ def _build_stock_risk_analysis(comparison: dict[str, dict[str, Any]]) -> dict[st
         pe = _to_float(fundamentals.get("pe"))
         profit_growth = _to_float(fundamentals.get("profit_growth_3y"))
         if pe is None:
-            items.append(_risk_item(entity, "Valuation risk", "Not available", "P/E ratio is missing.", "Low"))
+            items.append(_data_gap_item(entity, "Valuation risk", "P/E ratio is missing."))
         elif pe >= 60:
             items.append(_risk_item(entity, "Valuation risk", "High", f"P/E ratio is {pe:.2f}."))
         elif pe >= 35:
             items.append(_risk_item(entity, "Valuation risk", "Medium", f"P/E ratio is {pe:.2f}."))
 
         if profit_growth is None:
-            items.append(_risk_item(entity, "Earnings trend", "Not available", "3Y profit growth is missing.", "Low"))
+            items.append(_data_gap_item(entity, "Earnings trend", "3Y profit growth is missing."))
         elif profit_growth < 0:
             items.append(_risk_item(entity, "Earnings trend", "High", f"3Y profit growth is {profit_growth:.2f}%."))
 
@@ -279,14 +291,14 @@ def _build_stock_risk_analysis(comparison: dict[str, dict[str, Any]]) -> dict[st
 
         missing_fields = quality.get("missing_fields") if isinstance(quality.get("missing_fields"), list) else []
         if missing_fields:
-            items.append(_risk_item(entity, "Data availability", "Medium", f"Missing fields: {', '.join(str(field) for field in missing_fields[:5])}.", "Low"))
+            items.append(_data_gap_item(entity, "Data availability", f"Missing fields: {', '.join(str(field) for field in missing_fields[:5])}."))
         if source.get("stale"):
             items.append(_risk_item(entity, "Freshness risk", "Medium", str(source.get("stale_warning") or "Source data may be stale."), "Medium"))
 
     return {
         "asset_type": "stock",
         "items": items,
-        "summary": "Deterministic stock risk flags based on available valuation, debt, growth, freshness, and data coverage fields.",
+        "summary": "Deterministic stock risk signals with unavailable metrics labeled separately as data gaps.",
     }
 
 
@@ -301,11 +313,11 @@ def _build_mf_risk_analysis(comparison: dict[str, dict[str, Any]]) -> dict[str, 
             level = "High" if "high" in risk_level.lower() else "Medium"
             items.append(_risk_item(entity, "Official risk label", level, f"AMC risk label is {risk_level}.", "High"))
         else:
-            items.append(_risk_item(entity, "Official risk label", "Not available", "AMC risk label is missing.", "Low"))
+            items.append(_data_gap_item(entity, "Official risk label", "AMC risk label is missing."))
 
         volatility = _to_float(payload.get("volatility_1y"))
         if volatility is None:
-            items.append(_risk_item(entity, "Volatility", "Not available", "1Y volatility is missing.", "Low"))
+            items.append(_data_gap_item(entity, "Volatility", "1Y volatility is missing."))
         elif volatility >= 20:
             items.append(_risk_item(entity, "Volatility", "High", f"1Y volatility is {volatility:.2f}%."))
         elif volatility >= 12:
@@ -313,15 +325,15 @@ def _build_mf_risk_analysis(comparison: dict[str, dict[str, Any]]) -> dict[str, 
 
         drawdown = _to_float(payload.get("max_drawdown_1y"))
         if drawdown is None:
-            items.append(_risk_item(entity, "Drawdown", "Not available", "1Y max drawdown is missing.", "Low"))
-        elif drawdown <= -20:
-            items.append(_risk_item(entity, "Drawdown", "High", f"1Y max drawdown is {drawdown:.2f}%."))
-        elif drawdown <= -10:
-            items.append(_risk_item(entity, "Drawdown", "Medium", f"1Y max drawdown is {drawdown:.2f}%."))
+            items.append(_data_gap_item(entity, "Drawdown", "1Y max drawdown is missing."))
+        elif abs(drawdown) >= 20:
+            items.append(_risk_item(entity, "Drawdown", "High", f"1Y max drawdown is {abs(drawdown):.2f}%."))
+        elif abs(drawdown) >= 10:
+            items.append(_risk_item(entity, "Drawdown", "Medium", f"1Y max drawdown is {abs(drawdown):.2f}%."))
 
         expense = _to_float(payload.get("expense_ratio"))
         if expense is None:
-            items.append(_risk_item(entity, "Cost risk", "Not available", "Expense ratio is missing.", "Low"))
+            items.append(_data_gap_item(entity, "Cost risk", "Expense ratio is missing."))
         elif expense >= 1.5:
             items.append(_risk_item(entity, "Cost risk", "High", f"Expense ratio is {expense:.2f}%."))
         elif expense >= 1:
@@ -329,23 +341,23 @@ def _build_mf_risk_analysis(comparison: dict[str, dict[str, Any]]) -> dict[str, 
 
         return_3y = _to_float(payload.get("return_3y"))
         if return_3y is None:
-            items.append(_risk_item(entity, "Performance risk", "Not available", "3Y return is missing.", "Low"))
+            items.append(_data_gap_item(entity, "Performance risk", "3Y return is missing."))
         elif return_3y < 0:
             items.append(_risk_item(entity, "Performance risk", "Medium", f"3Y return is {return_3y:.2f}%."))
 
         if not payload.get("holdings"):
-            items.append(_risk_item(entity, "Concentration risk", "Not available", "Holdings data is missing.", "Low"))
+            items.append(_data_gap_item(entity, "Concentration risk", "Holdings data is missing."))
         if source.get("stale"):
             items.append(_risk_item(entity, "Freshness risk", "Medium", "Latest NAV or source data may be stale.", "Medium"))
 
         missing_fields = quality.get("missing_fields") if isinstance(quality.get("missing_fields"), list) else []
         if missing_fields:
-            items.append(_risk_item(entity, "Data availability", "Medium", f"Missing fields: {', '.join(str(field) for field in missing_fields[:5])}.", "Low"))
+            items.append(_data_gap_item(entity, "Data availability", f"Missing fields: {', '.join(str(field) for field in missing_fields[:5])}."))
 
     return {
         "asset_type": "mutual_fund",
         "items": items,
-        "summary": "Deterministic mutual fund risk flags based on available NAV, risk, cost, holdings, freshness, and data coverage fields.",
+        "summary": "Deterministic mutual fund risk signals with unavailable metrics labeled separately as data gaps.",
     }
 
 

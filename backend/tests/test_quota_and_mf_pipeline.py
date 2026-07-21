@@ -234,6 +234,15 @@ def test_mf_metrics_compute_and_null_safety():
     assert metrics["beta"] is None
     assert metrics["sharpe_ratio"] is None
 
+    daily_rows = [
+        {"nav_date": f"2026-04-{day:02d}", "nav": 100 + day + (day % 3)}
+        for day in range(1, 31)
+    ] + [{"nav_date": "2026-05-01", "nav": 133}]
+    risk_metrics = compute_nav_metrics(daily_rows, risk_free_rate=0.06)
+    assert risk_metrics["sharpe_ratio"] is not None
+    assert risk_metrics["alpha"] is None
+    assert risk_metrics["beta"] is None
+
     short_metrics = compute_nav_metrics([{"nav_date": "2026-05-10", "nav": 100}])
     assert short_metrics["return_1m"] is None
     assert short_metrics["return_3m"] is None

@@ -130,3 +130,93 @@ def test_compare_canvas_action_opens_for_hdfc_mid_cpa_typo(monkeypatch):
     assert response["reasoning_summary"]["title"] == "Reasoning summary"
     assert [step["label"] for step in response["reasoning_summary"]["steps"]] == ["Resolved", "Compared", "View"]
     assert response["reasoning_summary"]["steps"][2]["detail"] == "Opened canvas for the full comparison table."
+
+
+def test_exact_hdfc_ppfas_query_opens_partial_data_canvas_without_nav_history(monkeypatch):
+    from app.services import chat_service as main
+
+    fake = _FakeSupabase(
+        {
+            "mutual_fund_core_snapshot": [
+                {
+                    "scheme_code": "118955",
+                    "scheme_name": "HDFC Flexi Cap Fund - Growth Option - Direct Plan",
+                    "amc_name": "HDFC Mutual Fund",
+                    "nav": 201.5,
+                    "nav_date": "2026-06-01",
+                    "expense_ratio": 0.8,
+                    "aum": 76000,
+                },
+                {
+                    "scheme_code": "122639",
+                    "scheme_name": "Parag Parikh Flexi Cap Fund - Direct Plan - Growth",
+                    "amc_name": "PPFAS Mutual Fund",
+                    "nav": 92.4,
+                    "nav_date": "2026-06-01",
+                    "expense_ratio": 0.63,
+                    "aum": 91000,
+                },
+            ],
+            "mutual_funds": [],
+            "mutual_fund_nav_history": [],
+            "mutual_fund_holdings": [],
+            "mutual_fund_sectors": [],
+            "stock_prices_daily": [],
+        }
+    )
+
+    async def fake_synthesis_response(*_args, **kwargs):
+        assert kwargs["comparison_canvas_available"] is True
+        return "Canvas is open with the full metric view."
+
+    monkeypatch.setattr(main, "synthesis_response", fake_synthesis_response)
+    monkeypatch.setattr(main, "fetch_news", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("news fetch called")))
+
+    req = main.ChatRequest(
+        query="Compare HDFC Flexi Cap Fund and Parag Parikh Flexi Cap Fund for returns, risk, cost, and data freshness.",
+        asset_type="mutual_fund",
+        comparison_view_mode="canvas",
+    )
+    response = asyncio.run(main.ChatService(fake).handle_chat(req))
+
+    assert response["system_action"] == {
+        "type": "COMPARE",
+        "ids": ["118955", "122639"],
+        "entities": [
+            "HDFC Flexi Cap Fund - Growth Option - Direct Plan",
+            "Parag Parikh Flexi Cap Fund - Direct Plan - Growth",
+        ],
+        "asset_type": "mutual_fund",
+    }
+    assert response["reasoning_summary"]["steps"][2]["status"] == "ok"
+
+
+def test_compare_action_recovers_validated_ids_from_unavailable_payloads():
+    from app.repositories.mutual_fund_repository import MutualFundRepository
+    from app.services import chat_service as main
+
+    fake = _FakeSupabase(
+        {
+            "mutual_fund_core_snapshot": [
+                {"scheme_code": "118955", "scheme_name": "HDFC Flexi Cap Fund - Direct Plan - Growth"},
+                {"scheme_code": "122639", "scheme_name": "Parag Parikh Flexi Cap Fund - Direct Plan - Growth"},
+            ],
+            "mutual_funds": [],
+        }
+    )
+    token = main._current_mf_repository.set(MutualFundRepository(fake))
+    try:
+        resolved_ids = main._resolve_compare_action_ids(
+            ["HDFC Flexi Cap", "Parag Parikh Flexi Cap"],
+            {
+                "comparison": {
+                    "HDFC Flexi Cap": {"error": "missing local comparison row"},
+                    "Parag Parikh Flexi Cap": {"error": "missing local comparison row"},
+                }
+            },
+            "mutual_fund",
+        )
+    finally:
+        main._current_mf_repository.reset(token)
+
+    assert resolved_ids == ["118955", "122639"]

@@ -23,7 +23,8 @@ def test_stock_risk_analysis_flags_debt_stale_and_missing_data():
     assert ("ABC", "Valuation risk", "High") in labels
     assert ("ABC", "Earnings trend", "High") in labels
     assert ("ABC", "Freshness risk", "Medium") in labels
-    assert any(item["label"] == "Data availability" and item["confidence"] == "Low" for item in items)
+    assert any(item["label"] == "Data availability" and item["kind"] == "data_gap" for item in items)
+    assert all(item["kind"] == "risk" for item in items if item["level"] in {"High", "Medium"} and item["label"] != "Data availability")
 
 
 def test_mf_risk_analysis_flags_expense_volatility_stale_and_holdings_gap():
@@ -60,3 +61,22 @@ def test_mf_risk_analysis_flags_expense_volatility_stale_and_holdings_gap():
     assert ("Fund A", "Cost risk", "High") in labels
     assert ("Fund A", "Freshness risk", "Medium") in labels
     assert ("Fund A", "Concentration risk", "Not available") in labels
+    assert next(item for item in items if item["label"] == "Concentration risk")["kind"] == "data_gap"
+    assert next(item for item in items if item["label"] == "Freshness risk")["kind"] == "risk"
+
+
+def test_mf_risk_analysis_accepts_positive_drawdown_magnitude():
+    payload = build_mf_why_better(
+        {
+            "Fund A": {
+                "max_drawdown_1y": 21,
+                "holdings": [{"security_name": "Example", "weight_pct": 1}],
+                "data_quality": {"missing_fields": []},
+                "source_summary": {"stale": False},
+            }
+        }
+    )
+
+    drawdown = next(item for item in payload["risk_analysis"]["items"] if item["label"] == "Drawdown")
+    assert drawdown["level"] == "High"
+    assert "21.00%" in drawdown["evidence"]

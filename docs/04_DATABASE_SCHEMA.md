@@ -1,6 +1,6 @@
 # Database Schema
 
-**Last updated:** 2026-07-21
+**Last updated:** 2026-07-22
 
 FundersAI uses Supabase PostgreSQL for structured application data and authentication. Browser access is limited by Row Level Security (RLS); service-role writes are server-side only.
 
@@ -17,7 +17,7 @@ FundersAI uses Supabase PostgreSQL for structured application data and authentic
 ## Core Mutual-Fund Tables
 
 - `mutual_funds`: compatibility/source table
-- `mutual_fund_core_snapshot`: query-critical fund snapshot
+- `mutual_fund_core_snapshot`: query-critical fund snapshot. `20260722_repair_flexi_cap_comparison_metadata.sql` idempotently repairs verified category, benchmark, and risk metadata for scheme codes `118955` and `122639`, with official source provenance in `provider_payload`.
 - `mutual_fund_nav_history`: normalized historical table retained until the archive and drop-readiness gate passes
 - `mutual_fund_holdings`
 - `mutual_fund_sectors`
@@ -125,5 +125,6 @@ The Next.js proxy uses the service role only after authenticating the user and c
 5. `20260721_harden_amc_document_chunks.sql`
 6. `20260721_add_user_feedback.sql`
 7. `20260721_ensure_user_feedback_storage.sql` (idempotently creates the table, reapplies least-privilege grants, and reloads the PostgREST schema cache)
+8. `20260722_repair_flexi_cap_comparison_metadata.sql`
 
 Equivalent production SQL is not a substitute for keeping the migration in version control.

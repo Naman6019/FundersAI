@@ -89,6 +89,29 @@ def test_search_mutual_funds_preserves_existing_variant_fields():
     assert rows[0]["option_type"] == "Dividend"
 
 
+def test_verified_flexi_cap_metadata_repairs_only_missing_or_generic_fields():
+    source_row = {
+        "scheme_code": "118955",
+        "scheme_name": "HDFC Flexi Cap Fund - Growth Option - Direct Plan",
+        "amc_name": "HDFC Mutual Fund",
+        "category": "HDFC Mutual Fund",
+        "sub_category": "General",
+        "benchmark": None,
+        "risk_level": None,
+    }
+    repo = MutualFundRepository(
+        _FakeSupabase({"mutual_fund_core_snapshot": [source_row], "mutual_funds": []})
+    )
+
+    row = repo.get_fund_by_scheme_code("118955")
+
+    assert row["category"] == "Equity Scheme - Flexi Cap Fund"
+    assert row["sub_category"] == "Flexi Cap"
+    assert row["benchmark"] == "NIFTY 500 TRI"
+    assert row["risk_level"] == "Very High"
+    assert source_row["benchmark"] is None
+
+
 def test_search_mutual_funds_normalizes_legacy_table_fallback_rows():
     repo = MutualFundRepository(
         _FakeSupabase(

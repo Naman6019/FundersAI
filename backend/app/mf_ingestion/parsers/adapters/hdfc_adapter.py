@@ -564,6 +564,9 @@ def _is_summary_or_noise_row(name: str) -> bool:
     low = re.sub(r"\s+", " ", str(name or "").strip().lower())
     if not low:
         return True
+    compact = re.sub(r"[^a-z0-9]+", "", low)
+    if "subtotal" in compact or "grandtotal" in compact:
+        return True
     if any(marker in low for marker in SUMMARY_ROW_MARKERS):
         return True
     if re.fullmatch(r"[\d\.\-\(\)% ,]+", low):
@@ -792,7 +795,7 @@ def _dedupe_holdings(holdings: list[dict]) -> list[dict]:
     deduped: dict[str, dict] = {}
     for row in holdings:
         key = str(row.get("instrument_name") or "").strip().lower()
-        if not key:
+        if not key or _is_summary_or_noise_row(key):
             continue
         existing = deduped.get(key)
         if not existing or float(row.get("percent_aum") or 0.0) > float(existing.get("percent_aum") or 0.0):
