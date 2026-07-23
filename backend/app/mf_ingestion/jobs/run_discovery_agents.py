@@ -19,6 +19,13 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 from app.database import supabase
 from app.mf_ingestion.agents.discovery_agent import TOP_10_AMC_AGENT_KEYS
+from app.mf_ingestion.agents.history import (
+    build_discovery_diff,
+    build_source_configuration_candidates,
+    load_last_known_good_documents,
+    load_recent_document_observations,
+)
+from app.mf_ingestion.agents.llm_recovery import BoundedLLMPageRecovery
 from app.mf_ingestion.agents.persistence import persist_discovery_run
 from app.mf_ingestion.agents.supervisor import AMCDiscoverySupervisor
 from app.mf_ingestion.config import get_config
@@ -40,7 +47,8 @@ def main() -> int:
     parser.add_argument("--document-type", choices=DOCUMENT_TYPES)
     parser.add_argument("--all-document-types", action="store_true")
     parser.add_argument("--expected-month", help="Expected report month in YYYY-MM format.")
-    parser.add_argument("--max-candidates", type=int, default=1)
+    parser.add_argument("--expected-month-grace-days", type=int, default=14)
+    parser.add_argument("--max-candidates", type=int, default=3)
     parser.add_argument("--max-actions", type=int, default=12)
     parser.add_argument("--skip-download-probes", action="store_true")
     parser.add_argument("--output", help="Optional path for the complete JSON report.")
@@ -60,10 +68,37 @@ def main() -> int:
         parser.error("--minimum-completed must be between zero and the requested AMC count")
     document_types = DOCUMENT_TYPES if args.all_document_types else (args.document_type,)
     expected_month = _parse_expected_month(args.expected_month)
-    supervisor = AMCDiscoverySupervisor.build(amcs, max_actions_per_agent=args.max_actions)
+    last_known_good_loader = None
+    previous_documents: list[dict] = []
+    if args.persist_run and supabase is not None:
+        last_known_good_loader = lambda source, document_type: load_last_known_good_documents(
+            supabase,
+            source,
+            document_type,
+        )
+        try:
+            previous_documents = load_recent_document_observations(
+                supabase,
+                amcs=amcs,
+                document_types=document_types,
+            )
+        except Exception as exc:
+            logger.warning("Unable to load discovery history: %s", exc)
+    config = get_config()
+    llm_recovery_loader = BoundedLLMPageRecovery(
+        enabled=config.discovery_llm_recovery_enabled,
+        model=config.discovery_llm_recovery_model,
+    )
+    supervisor = AMCDiscoverySupervisor.build(
+        amcs,
+        max_actions_per_agent=args.max_actions,
+        last_known_good_loader=last_known_good_loader,
+        llm_recovery_loader=llm_recovery_loader,
+    )
     result = supervisor.run(
         document_types=document_types,
         expected_month=expected_month,
+        expected_month_grace_days=max(args.expected_month_grace_days, 0),
         max_candidates_per_type=args.max_candidates,
         probe_downloads=not args.skip_download_probes,
     )
@@ -73,10 +108,16 @@ def main() -> int:
         "run_id": run_id,
         "trigger_source": args.trigger_source,
         "expected_month": expected_month.isoformat() if expected_month else None,
+        "expected_month_grace_days": max(args.expected_month_grace_days, 0),
         "requested_amcs": amcs,
         "document_types": list(document_types),
     }
     payload["manifest"]["run_id"] = run_id
+    current_documents = list(payload["manifest"].get("documents") or [])
+    payload["diff"] = build_discovery_diff(previous_documents, current_documents)
+    payload["source_configuration_candidates"] = build_source_configuration_candidates(
+        [*previous_documents, *current_documents]
+    )
     rendered = json.dumps(payload, indent=2, default=str)
     logger.info(rendered)
 
@@ -86,7 +127,6 @@ def main() -> int:
         _write_json(args.manifest_output, payload["manifest"])
 
     if args.persist_run:
-        config = get_config()
         r2_store = R2Store(
             endpoint=config.r2_endpoint,
             access_key_id=config.r2_access_key_id,

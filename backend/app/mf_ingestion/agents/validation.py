@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import date
+from hashlib import sha256
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -30,6 +32,8 @@ def validate_candidate(
     document: DiscoveredDocument,
     *,
     expected_month: date | None,
+    expected_month_grace_days: int = 14,
+    observed_on: date | None = None,
 ) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -49,10 +53,19 @@ def validate_candidate(
         errors.append(f"unsupported_file_type:{extension or 'missing'}")
 
     if document.report_month is None:
-        target = errors if expected_month else warnings
-        target.append("report_month_unknown")
-    elif expected_month and _month_index(document.report_month) < _month_index(expected_month):
-        errors.append(f"report_month_before_expected:{document.report_month.isoformat()}")
+        warnings.append("report_month_unknown")
+    elif expected_month and _month_index(document.report_month) != _month_index(expected_month):
+        grace_deadline = date(
+            expected_month.year,
+            expected_month.month,
+            min(max(int(expected_month_grace_days), 1), 28),
+        )
+        if (observed_on or date.today()) <= grace_deadline:
+            warnings.append(f"report_month_pending_expected:{document.report_month.isoformat()}")
+        elif _month_index(document.report_month) < _month_index(expected_month):
+            warnings.append(f"report_month_before_expected:{document.report_month.isoformat()}")
+        else:
+            warnings.append(f"report_month_after_expected:{document.report_month.isoformat()}")
 
     if not str(document.discovery_page_url or "").strip():
         warnings.append("discovery_page_unknown")
@@ -87,6 +100,39 @@ def validate_download(
         errors.append("invalid_xls_body")
 
     return errors
+
+
+def validate_parser_smoke(downloaded: DownloadedDocument) -> list[str]:
+    """Check that a validated body is structurally readable without ingesting it."""
+    extension = _normalize_extension(downloaded.file_ext or downloaded.file_name)
+    if extension == ".pdf":
+        try:
+            from pypdf import PdfReader
+
+            reader = PdfReader(BytesIO(downloaded.file_bytes), strict=False)
+            if not reader.pages:
+                return ["parser_smoke_pdf_no_pages"]
+        except Exception as exc:
+            return [f"parser_smoke_pdf_failed:{type(exc).__name__}"]
+    elif extension in {".xlsx", ".xlsm"}:
+        try:
+            from openpyxl import load_workbook
+
+            workbook = load_workbook(BytesIO(downloaded.file_bytes), read_only=True, data_only=True)
+            if not workbook.sheetnames:
+                return ["parser_smoke_excel_no_sheets"]
+            workbook.close()
+        except Exception as exc:
+            return [f"parser_smoke_excel_failed:{type(exc).__name__}"]
+    elif extension == ".xls":
+        # The compound-file signature was checked above. Full XLS parsing remains
+        # owned by the existing ingestion parser, which supports its configured engine.
+        return []
+    return []
+
+
+def content_sha256(downloaded: DownloadedDocument) -> str:
+    return sha256(downloaded.file_bytes).hexdigest()
 
 
 def _is_official_host(source: AMCDocumentSource, hostname: str) -> bool:

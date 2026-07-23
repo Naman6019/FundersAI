@@ -130,6 +130,10 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - server-only `mf_discovery_runs` summary migration with RLS and service-role-only access;
   - 30-day GitHub evidence artifact and a readable per-AMC workflow summary;
   - discovery remains separate from ingestion, parser readiness, and user-facing AMC promotion.
+- Locally verified Discovery V2 enhancements (not deployed):
+  - document readiness gates, exact-month handling with a 14-day grace period, range probes, content checks, and parser smoke tests;
+  - checksum-addressed R2 persistence stages, RLS-protected discovery-document history, last-known-good fallback, and run-to-run diff evidence;
+  - browser fallback disabled by default and restricted to explicitly approved AMC adapters.
 - Hosted official-research indexing implementation:
   - weekday/manual GitHub Actions indexing for validated R2-backed PDFs from the six enabled AMCs;
   - PDF filtering occurs before the job limit, and already indexed document IDs are skipped;

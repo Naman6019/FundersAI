@@ -24,6 +24,11 @@ class IngestionConfig:
     r2_cold_bucket: str
     r2_signed_url_ttl_seconds: int
     require_r2_for_raw_storage: bool
+    discovery_expected_month_grace_days: int
+    discovery_browser_enabled: bool
+    discovery_browser_amcs: tuple[str, ...]
+    discovery_llm_recovery_enabled: bool
+    discovery_llm_recovery_model: str
 
 
 
@@ -50,4 +55,13 @@ def get_config() -> IngestionConfig:
         r2_cold_bucket=os.getenv("R2_COLD_BUCKET", "").strip(),
         r2_signed_url_ttl_seconds=int(os.getenv("R2_SIGNED_URL_TTL_SECONDS", "300")),
         require_r2_for_raw_storage=os.getenv("MF_REQUIRE_R2_FOR_RAW_STORAGE", "false").strip().lower() in {"1", "true", "yes", "on"},
+        discovery_expected_month_grace_days=max(int(os.getenv("MF_DISCOVERY_EXPECTED_MONTH_GRACE_DAYS", "14")), 0),
+        discovery_browser_enabled=os.getenv("MF_DISCOVERY_BROWSER_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"},
+        discovery_browser_amcs=tuple(
+            item.strip().lower()
+            for item in os.getenv("MF_DISCOVERY_BROWSER_AMCS", "").split(",")
+            if item.strip()
+        ),
+        discovery_llm_recovery_enabled=os.getenv("MF_DISCOVERY_LLM_RECOVERY_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"},
+        discovery_llm_recovery_model=os.getenv("MF_DISCOVERY_LLM_RECOVERY_MODEL", "").strip(),
     )

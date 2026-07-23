@@ -6,6 +6,16 @@ from typing import Any, Literal
 
 AgentStatus = Literal["completed", "partial", "escalated", "failed"]
 TraceStatus = Literal["ok", "warning", "error", "skipped"]
+DocumentReadiness = Literal[
+    "discovered",
+    "link_validated",
+    "probe_passed",
+    "content_validated",
+    "parser_smoke_passed",
+    "promotable",
+    "needs_review",
+    "failed",
+]
 
 
 def _utc_now() -> str:
@@ -46,6 +56,11 @@ class ValidatedDiscovery:
     priority_score: int
     warnings: tuple[str, ...] = ()
     probe_status: str = "not_requested"
+    readiness: DocumentReadiness = "discovered"
+    month_confirmation: str = "unconfirmed"
+    content_sha256: str | None = None
+    content_status: str = "not_requested"
+    parser_smoke_status: str = "not_requested"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -59,6 +74,11 @@ class ValidatedDiscovery:
             "priority_score": self.priority_score,
             "warnings": list(self.warnings),
             "probe_status": self.probe_status,
+            "readiness": self.readiness,
+            "month_confirmation": self.month_confirmation,
+            "content_sha256": self.content_sha256,
+            "content_status": self.content_status,
+            "parser_smoke_status": self.parser_smoke_status,
         }
 
     def to_manifest_row(self) -> dict[str, Any]:
@@ -71,7 +91,9 @@ class ValidatedDiscovery:
             "expected_file_type": self.expected_file_type,
             "title": self.title,
             "priority_score": self.priority_score,
-            "discovery_agent_status": "validated",
+            "discovery_agent_status": self.readiness,
+            "month_confirmation": self.month_confirmation,
+            "content_sha256": self.content_sha256,
         }
 
 

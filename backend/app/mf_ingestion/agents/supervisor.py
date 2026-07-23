@@ -28,10 +28,18 @@ class AMCDiscoverySupervisor:
         *,
         config: IngestionConfig | None = None,
         max_actions_per_agent: int = 12,
+        last_known_good_loader=None,
+        llm_recovery_loader=None,
     ) -> "AMCDiscoverySupervisor":
         resolved_config = config or get_config()
         agents = {
-            key: build_discovery_agent(key, config=resolved_config, max_actions=max_actions_per_agent)
+            key: build_discovery_agent(
+                key,
+                config=resolved_config,
+                max_actions=max_actions_per_agent,
+                last_known_good_loader=last_known_good_loader,
+                llm_recovery_loader=llm_recovery_loader,
+            )
             for key in _normalize_amcs(amcs)
         }
         return cls(agents)
@@ -41,6 +49,7 @@ class AMCDiscoverySupervisor:
         *,
         document_types: tuple[str, ...],
         expected_month: date | None = None,
+        expected_month_grace_days: int = 14,
         max_candidates_per_type: int = 1,
         probe_downloads: bool = True,
     ) -> DiscoverySupervisorResult:
@@ -53,6 +62,7 @@ class AMCDiscoverySupervisor:
                     agent.run,
                     document_types=document_types,
                     expected_month=expected_month,
+                    expected_month_grace_days=expected_month_grace_days,
                     max_candidates_per_type=max_candidates_per_type,
                     probe_downloads=probe_downloads,
                 ): key

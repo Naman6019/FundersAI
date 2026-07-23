@@ -21,6 +21,10 @@ on:
         description: 'Minimum report month in YYYY-MM; blank uses the previous UTC month'
         required: false
         default: ''
+      expected_month_grace_days:
+        description: 'Days to retain the prior verified month while the target month is pending'
+        required: false
+        default: '14'
       minimum_completed:
         description: 'Minimum agents that must complete'
         required: false
@@ -32,12 +36,21 @@ on:
       max_candidates:
         description: 'Maximum validated candidates per document type'
         required: false
-        default: '1'
+        default: '3'
       probe_downloads:
         description: 'Download and validate candidate file bodies'
         required: false
         type: boolean
         default: true
+      browser_fallback:
+        description: 'Enable reviewed AMC-specific Playwright fallback'
+        required: false
+        type: boolean
+        default: false
+      browser_amcs:
+        description: 'Comma-separated approved AMC adapter keys for browser fallback'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -49,7 +62,7 @@ concurrency:
 jobs:
   discover:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -60,6 +73,8 @@ jobs:
       R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
       MF_INGESTION_USER_AGENT: ${{ vars.MF_INGESTION_USER_AGENT || 'FundersAIResearchBot/1.0' }}
       MF_SOURCE_MANIFEST_PATH: backend/config/mf_document_sources.json
+      MF_DISCOVERY_BROWSER_ENABLED: ${{ inputs.browser_fallback || 'false' }}
+      MF_DISCOVERY_BROWSER_AMCS: ${{ inputs.browser_amcs || '' }}
 
     steps:
       - name: Checkout repository
@@ -74,6 +89,10 @@ jobs:
 
       - name: Install backend dependencies
         run: pip install -r backend/requirements.txt
+
+      - name: Install reviewed browser fallback runtime
+        if: inputs.browser_fallback == true
+        run: python -m playwright install --with-deps chromium
 
       - name: Validate persistence secrets
         shell: bash
@@ -95,6 +114,7 @@ jobs:
           amcs="${{ inputs.amcs }}"
           document_scope="${{ inputs.document_scope }}"
           expected_month="${{ inputs.expected_month }}"
+          expected_month_grace_days="${{ inputs.expected_month_grace_days }}"
           minimum_completed="${{ inputs.minimum_completed }}"
           max_actions="${{ inputs.max_actions }}"
           max_candidates="${{ inputs.max_candidates }}"
@@ -103,14 +123,16 @@ jobs:
           amcs="${amcs:-sbi,mirae,ppfas,icici,hdfc,nippon,kotak,aditya_birla,uti,dsp}"
           document_scope="${document_scope:-factsheet}"
           expected_month="${expected_month:-$(date -u -d '1 month ago' +%Y-%m)}"
+          expected_month_grace_days="${expected_month_grace_days:-14}"
           minimum_completed="${minimum_completed:-8}"
           max_actions="${max_actions:-12}"
-          max_candidates="${max_candidates:-1}"
+          max_candidates="${max_candidates:-3}"
           probe_downloads="${probe_downloads:-true}"
 
           args=(
             --amcs "$amcs"
             --expected-month "$expected_month"
+            --expected-month-grace-days "$expected_month_grace_days"
             --max-actions "$max_actions"
             --max-candidates "$max_candidates"
             --minimum-completed "$minimum_completed"
@@ -130,7 +152,7 @@ jobs:
             args+=(--skip-download-probes)
           fi
 
-          timeout 25m python -m backend.app.mf_ingestion.jobs.run_discovery_agents "${args[@]}"
+          timeout 55m python -m backend.app.mf_ingestion.jobs.run_discovery_agents "${args[@]}"
 
       - name: Publish run summary
         if: always() && hashFiles('discovery-output/report.json') != ''

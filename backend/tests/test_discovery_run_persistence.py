@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.mf_ingestion.agents.persistence import build_discovery_run_summary, persist_discovery_run
+import pytest
+
+from app.mf_ingestion.agents.persistence import (
+    build_discovery_document_observations,
+    build_discovery_run_summary,
+    persist_discovery_run,
+)
 from scripts.render_discovery_run_summary import render_summary
 
 
@@ -24,6 +30,11 @@ class _FakeR2Store:
         return {"bucket": bucket, "key": key.lower()}
 
 
+class _FailingR2Store(_FakeR2Store):
+    def upload_bytes(self, *args, **kwargs):
+        raise RuntimeError("r2 unavailable")
+
+
 class _FakeQuery:
     def __init__(self) -> None:
         self.row = None
@@ -41,11 +52,13 @@ class _FakeQuery:
 class _FakeSupabase:
     def __init__(self) -> None:
         self.table_name = None
-        self.query = _FakeQuery()
+        self.table_names: list[str] = []
+        self.queries: dict[str, _FakeQuery] = {}
 
     def table(self, name):
         self.table_name = name
-        return self.query
+        self.table_names.append(name)
+        return self.queries.setdefault(name, _FakeQuery())
 
 
 def _payload():
@@ -96,11 +109,13 @@ def test_persist_discovery_run_uploads_r2_evidence_and_upserts_summary() -> None
     )
 
     assert len(r2_store.uploads) == 2
-    assert r2_store.uploads[0]["key"].endswith("/report.json")
-    assert r2_store.uploads[1]["key"].endswith("/manifest.json")
-    assert supabase.table_name == "mf_discovery_runs"
-    assert supabase.query.on_conflict == "run_id"
-    assert supabase.query.row == summary
+    assert "/report-" in r2_store.uploads[0]["key"]
+    assert "/manifest-" in r2_store.uploads[1]["key"]
+    assert supabase.table_names.count("mf_discovery_runs") == 4
+    assert supabase.table_names.count("mf_discovery_documents") == 1
+    assert supabase.queries["mf_discovery_runs"].on_conflict == "run_id"
+    assert supabase.queries["mf_discovery_runs"].row == summary
+    assert supabase.queries["mf_discovery_documents"].on_conflict == "run_id,source_url"
 
 
 def test_render_summary_is_github_readable() -> None:
@@ -122,9 +137,47 @@ def test_discovery_workflow_is_persistence_only_and_keeps_the_top_ten_gate() -> 
 
 
 def test_discovery_run_migration_is_service_role_only() -> None:
-    migration = Path("backend/migrations/20260721_add_mf_discovery_runs.sql").read_text(encoding="utf-8")
+    migration = Path("backend/migrations/20260723_add_discovery_v2_history.sql").read_text(encoding="utf-8")
 
-    assert "alter table public.mf_discovery_runs enable row level security" in migration
-    assert "revoke all on table public.mf_discovery_runs from anon" in migration
-    assert "revoke all on table public.mf_discovery_runs from authenticated" in migration
-    assert "grant select, insert, update, delete on table public.mf_discovery_runs to service_role" in migration
+    assert "alter table public.mf_discovery_documents enable row level security" in migration
+    assert "revoke all on table public.mf_discovery_documents from anon" in migration
+    assert "revoke all on table public.mf_discovery_documents from authenticated" in migration
+    assert "grant select, insert, update, delete on table public.mf_discovery_documents to service_role" in migration
+
+
+def test_document_observations_keep_readiness_and_checksum() -> None:
+    payload = _payload()
+    payload["manifest"]["documents"][0].update(
+        {
+            "document_type": "factsheet",
+            "report_month": "2026-06-01",
+            "discovery_agent_status": "promotable",
+            "content_sha256": "abc123",
+            "month_confirmation": "confirmed",
+        }
+    )
+
+    observations = build_discovery_document_observations(payload, run_id="github-123-1")
+
+    assert observations[0]["readiness"] == "promotable"
+    assert observations[0]["content_sha256"] == "abc123"
+
+
+def test_persistence_records_a_failed_stage_for_reconciliation() -> None:
+    supabase = _FakeSupabase()
+
+    with pytest.raises(RuntimeError, match="r2 unavailable"):
+        persist_discovery_run(
+            _payload(),
+            run_id="github-123-1",
+            trigger_source="github_actions:schedule",
+            expected_month="2026-06-01",
+            requested_amcs=["sbi", "hdfc"],
+            document_types=("factsheet",),
+            r2_store=_FailingR2Store(),
+            r2_bucket="cold",
+            supabase_client=supabase,
+        )
+
+    assert supabase.queries["mf_discovery_runs"].row["persistence_state"] == "failed"
+    assert supabase.queries["mf_discovery_runs"].row["persistence_retry_count"] == 1

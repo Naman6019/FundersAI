@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from app.mf_ingestion.downloaders import amc_downloader
 from app.mf_ingestion.downloaders.amc_downloader import AMCDownloader
-from app.mf_ingestion.parsers.adapters.axis_adapter import AxisAdapter, _axis_render_url
+from app.mf_ingestion.parsers.adapters.axis_adapter import AxisAdapter, _axis_render_url, _browser_fallback_allowed
 from app.mf_ingestion.parsers.adapters.ppfas_adapter import _ppfas_confirmation_url
 from app.mf_ingestion.sources.registry import AMCDocumentSource
 
@@ -169,6 +169,16 @@ def test_axis_playwright_fallback_avoids_networkidle_wait() -> None:
 
     assert 'wait_until="domcontentloaded"' in text
     assert 'wait_until="networkidle"' not in text
+
+
+def test_axis_browser_fallback_requires_explicit_enablement(monkeypatch) -> None:
+    monkeypatch.delenv("MF_DISCOVERY_BROWSER_ENABLED", raising=False)
+    monkeypatch.delenv("MF_DISCOVERY_BROWSER_AMCS", raising=False)
+    assert _browser_fallback_allowed("axis") is False
+
+    monkeypatch.setenv("MF_DISCOVERY_BROWSER_ENABLED", "true")
+    monkeypatch.setenv("MF_DISCOVERY_BROWSER_AMCS", "axis")
+    assert _browser_fallback_allowed("axis") is True
 
 
 def test_axis_factsheet_render_url_selects_factsheet_filter() -> None:

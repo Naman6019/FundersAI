@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from io import BytesIO
 
 import pytest
 
@@ -15,6 +16,16 @@ from app.mf_ingestion.agents.discovery_agent import (
 from app.mf_ingestion.agents.supervisor import AMCDiscoverySupervisor
 from app.mf_ingestion.downloaders.base_downloader import DiscoveredDocument, DownloadedDocument
 from app.mf_ingestion.sources.registry import get_source
+
+
+def _valid_pdf() -> bytes:
+    from pypdf import PdfWriter
+
+    output = BytesIO()
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+    writer.write(output)
+    return output.getvalue()
 
 
 class _FakeDownloader:
@@ -34,7 +45,7 @@ class _FakeDownloader:
             raise value
         if value is not None:
             return value
-        return _downloaded(discovered, b"%PDF-1.7 valid")
+        return _downloaded(discovered, _valid_pdf())
 
 
 def _discovered(
@@ -114,7 +125,11 @@ def test_axis_agent_accepts_valid_official_document() -> None:
     downloader = _FakeDownloader(documents={"factsheet": [official]})
     agent = AxisLinkDiscoveryAgent(source=get_source("axis"), downloader=downloader)
 
-    result = agent.run(document_types=("factsheet",), expected_month=date(2026, 6, 1))
+    result = agent.run(
+        document_types=("factsheet",),
+        expected_month=date(2026, 6, 1),
+        max_candidates_per_type=2,
+    )
 
     assert result.status == "completed"
     assert result.documents[0].source_url == official.url
@@ -140,10 +155,14 @@ def test_agent_rejects_unknown_or_stale_month_when_expected_month_is_supplied() 
         downloader=_FakeDownloader(documents={"factsheet": [unknown, stale]}),
     )
 
-    result = agent.run(document_types=("factsheet",), expected_month=date(2026, 6, 1))
+    result = agent.run(
+        document_types=("factsheet",),
+        expected_month=date(2026, 6, 1),
+        max_candidates_per_type=2,
+    )
 
     assert result.status == "escalated"
-    assert result.documents == []
+    assert all(document.readiness == "needs_review" for document in result.documents)
     assert any("report_month_unknown" in event.detail for event in result.trace)
     assert any("report_month_before_expected" in event.detail for event in result.trace)
 
@@ -241,7 +260,7 @@ def test_supervisor_isolates_specialist_failure_and_emits_manifest() -> None:
     assert result.status == "partial"
     assert [agent.status for agent in result.agents] == ["completed", "escalated"]
     assert payload["manifest"]["documents"][0]["source_url"] == hdfc_doc.url
-    assert payload["manifest"]["documents"][0]["discovery_agent_status"] == "validated"
+    assert payload["manifest"]["documents"][0]["discovery_agent_status"] == "promotable"
 
 
 def test_agent_action_budget_stops_additional_candidate_probes() -> None:

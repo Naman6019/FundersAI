@@ -1,6 +1,6 @@
 # AMC Link Discovery Agents
 
-**Last updated:** 2026-07-21
+**Last updated:** 2026-07-23
 
 FundersAI has a default top-10 supervisor roster for official AMC document discovery:
 
@@ -23,11 +23,15 @@ Axis has an additional bounded specialist used by the active ingestion workflow 
 
 - Only approved official AMC hosts and explicitly verified first-party CDN hosts are accepted.
 - Every run has a fixed action budget.
-- Expected-month runs reject stale or undated candidates.
-- Candidate URLs must pass metadata validation and an optional live download probe.
+- Run status is separate from document readiness. A run can complete while a document remains `needs_review`.
+- Document identity is AMC + document type + report month; checksum-versioned observations retain prior months.
+- Expected-month runs require an exact month after the 14-day publication grace period. Undated or non-exact candidates remain reviewable but cannot be promoted.
+- Candidate URLs pass metadata validation, a ranged GET probe, content validation, and a parser smoke test before becoming `promotable`.
 - HTML block pages and invalid PDF, Excel, and ZIP bodies are rejected.
 - A specialist escalates instead of guessing a URL.
-- Agents emit a validated manifest; ingestion, R2 storage, parsing, and review remain separate stages.
+- Agents emit evidence-rich manifests; ingestion, raw R2 storage, parsing, and user-facing promotion remain separate stages.
+- Browser fallback is disabled unless `MF_DISCOVERY_BROWSER_ENABLED=true` and the AMC is listed in `MF_DISCOVERY_BROWSER_AMCS`.
+- LLM recovery is disabled unless `MF_DISCOVERY_LLM_RECOVERY_ENABLED=true` with an explicit model. It can choose only links already present on the approved AMC listing page and cannot fetch candidates, persist data, or change configuration.
 
 ## Discovery strategies
 
@@ -62,19 +66,20 @@ The default roster is all ten AMCs. Use `--amcs sbi,mirae,ppfas` to run a subset
 
 ## GitHub Actions deployment
 
-`discover-mf-documents.yml` is the first hosted deployment target. It runs at `03:15 UTC` on weekdays and supports manual overrides for the AMC roster, document scope, expected month, action budget, candidate count, probes, and minimum completion gate.
+`discover-mf-documents.yml` is the first hosted deployment target. It runs at `03:15 UTC` on weekdays and supports manual overrides for the AMC roster, document scope, expected month, grace period, action budget, candidate count, probes, the browser fallback, and the minimum completion gate. Chromium is installed only for an explicitly enabled browser run.
 
 The workflow:
 
 - defaults to the ten-agent factsheet roster;
 - uses the previous UTC month as the minimum report month when none is supplied;
-- persists the complete report and manifest to the R2 cold bucket;
-- upserts a server-only summary into `mf_discovery_runs`;
+- persists checksum-addressed reports and manifests to the R2 cold bucket;
+- records persistence stages, evidence, and document observations in server-only discovery tables;
+- compares meaningful document changes with the prior run and stages source-configuration evidence only after three promotable observations;
 - retains the local JSON files as a GitHub artifact for 30 days;
 - fails when fewer than the configured minimum agents complete;
 - never invokes ingestion or promotes a disabled AMC.
 
-Apply `20260721_add_mf_discovery_runs.sql` and configure the documented Supabase/R2 secrets before enabling the schedule. A successful discovery run proves official-link discovery and file validation only; it does not prove parser or app coverage.
+Apply `20260721_add_mf_discovery_runs.sql` and `20260723_add_discovery_v2_history.sql` and configure the documented Supabase/R2 secrets before enabling the schedule. A successful discovery run proves discovery readiness only; it does not invoke ingestion or prove app coverage.
 
 To test acquisition for a discovery-ready source that remains disabled in production, run `ingest_latest_amc_docs.py` with `--allow-disabled-source`. The source remains disabled in `mf_amc_sources`; only the explicitly requested raw document is acquired and inserted.
 
@@ -106,8 +111,9 @@ The worker emits:
 - supervisor and per-agent status;
 - selected strategies;
 - rejected candidates and reasons;
-- download-probe evidence;
+- readiness, content checksum, parser-smoke, and download-probe evidence;
+- run-to-run source/content/readiness changes and staged configuration candidates;
 - action counts and limits;
 - a validated source manifest.
 
-OpenAI is intentionally absent from this stage, so these discovery runs consume no OpenAI API credits.
+Discovery is provider-free by default. The optional bounded LLM recovery flag can use the configured OpenRouter/OpenAI key only after deterministic and browser recovery produce no candidates.

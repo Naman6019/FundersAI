@@ -47,8 +47,11 @@ FundersAI uses Supabase PostgreSQL for structured application data and authentic
 - `mf_r2_archive_manifests`
 - `mf_discovery_runs`
   - One server-only summary per hosted discovery supervisor run.
-  - Stores agent/document counts and the R2 keys for the immutable report and validated manifest.
+  - Stores agent/document counts, checksum-addressed R2 evidence keys, and idempotent persistence state.
   - RLS is enabled; `anon` and `authenticated` have no table privileges; `service_role` performs workflow upserts.
+- `mf_discovery_documents`
+  - Server-only checksum/readiness observations keyed to one discovery run and monthly document identity.
+  - Retains last-known-good candidates and evidence without invoking raw-document ingestion.
 
 Raw document bytes belong in Cloudflare R2. Supabase stores the object location and query-critical structured output.
 
@@ -126,5 +129,6 @@ The Next.js proxy uses the service role only after authenticating the user and c
 6. `20260721_add_user_feedback.sql`
 7. `20260721_ensure_user_feedback_storage.sql` (idempotently creates the table, reapplies least-privilege grants, and reloads the PostgREST schema cache)
 8. `20260722_repair_flexi_cap_comparison_metadata.sql`
+9. `20260723_add_discovery_v2_history.sql`
 
 Equivalent production SQL is not a substitute for keeping the migration in version control.

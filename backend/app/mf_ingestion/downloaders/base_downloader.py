@@ -38,3 +38,7 @@ class BaseDownloader:
 
     def download(self, discovered: DiscoveredDocument) -> DownloadedDocument:
         raise NotImplementedError
+
+    def probe_download(self, discovered: DiscoveredDocument, *, max_bytes: int = 65536) -> DownloadedDocument:
+        """Return a bounded body probe when the downloader supports it."""
+        return self.download(discovered)

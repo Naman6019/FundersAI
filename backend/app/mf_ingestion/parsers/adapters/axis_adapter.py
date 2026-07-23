@@ -325,10 +325,12 @@ class AxisAdapter(BaseAMCAdapter):
             attempted_tiers.append("amfi")
             docs = self.fetch_from_amfi(source, document_type)
 
-        if not docs:
-            logger.info("AMFI fallback yielded no documents. Falling back to Playwright.")
+        if not docs and _browser_fallback_allowed(source.adapter_key):
+            logger.info("AMFI fallback yielded no documents. Running approved Playwright fallback.")
             attempted_tiers.append("playwright")
             docs = self.fetch_with_playwright(source, document_type)
+        elif not docs:
+            logger.info("Axis browser fallback is disabled or not approved for this AMC.")
 
         if not docs:
             logger.warning(
@@ -483,6 +485,18 @@ def _axis_render_url(page_url: str, document_type: str) -> str:
     if document_type != "factsheet":
         return page_url
     return urljoin(page_url, "/downloads/products")
+
+
+def _browser_fallback_allowed(adapter_key: str) -> bool:
+    enabled = str(os.getenv("MF_DISCOVERY_BROWSER_ENABLED", "false") or "").strip().lower()
+    if enabled not in {"1", "true", "yes", "on"}:
+        return False
+    approved = {
+        item.strip().lower()
+        for item in str(os.getenv("MF_DISCOVERY_BROWSER_AMCS", "") or "").split(",")
+        if item.strip()
+    }
+    return adapter_key.strip().lower() in approved
 
 
 def _axis_download_links_from_cards(page) -> list[dict[str, str]]:

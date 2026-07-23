@@ -4,7 +4,12 @@ from datetime import UTC, date, datetime
 from typing import Callable
 
 from app.mf_ingestion.agents.contracts import AgentTraceEvent, DiscoveryAgentResult, ValidatedDiscovery
-from app.mf_ingestion.agents.validation import validate_candidate, validate_download
+from app.mf_ingestion.agents.validation import (
+    content_sha256,
+    validate_candidate,
+    validate_download,
+    validate_parser_smoke,
+)
 from app.mf_ingestion.config import IngestionConfig, get_config
 from app.mf_ingestion.downloaders.amc_downloader import AMCDownloader
 from app.mf_ingestion.downloaders.base_downloader import BaseDownloader, DiscoveredDocument
@@ -12,6 +17,8 @@ from app.mf_ingestion.services.source_manifest import load_source_manifest_docum
 from app.mf_ingestion.sources.registry import AMCDocumentSource, get_source
 
 ManifestLoader = Callable[[str, AMCDocumentSource, str], list[DiscoveredDocument]]
+LastKnownGoodLoader = Callable[[AMCDocumentSource, str], list[DiscoveredDocument]]
+LLMRecoveryLoader = Callable[[AMCDocumentSource, str], list[DiscoveredDocument]]
 
 
 class AMCLinkDiscoveryAgent:
@@ -26,6 +33,8 @@ class AMCLinkDiscoveryAgent:
         downloader: BaseDownloader,
         manifest_path: str = "",
         manifest_loader: ManifestLoader = load_source_manifest_documents,
+        last_known_good_loader: LastKnownGoodLoader | None = None,
+        llm_recovery_loader: LLMRecoveryLoader | None = None,
         max_actions: int = 12,
     ) -> None:
         if self.expected_adapter_key and source.adapter_key.lower() != self.expected_adapter_key:
@@ -34,6 +43,8 @@ class AMCLinkDiscoveryAgent:
         self.downloader = downloader
         self.manifest_path = manifest_path
         self.manifest_loader = manifest_loader
+        self.last_known_good_loader = last_known_good_loader
+        self.llm_recovery_loader = llm_recovery_loader
         self.max_actions = max(max_actions, 1)
 
     @property
@@ -45,6 +56,7 @@ class AMCLinkDiscoveryAgent:
         *,
         document_types: tuple[str, ...],
         expected_month: date | None = None,
+        expected_month_grace_days: int = 14,
         max_candidates_per_type: int = 1,
         probe_downloads: bool = True,
     ) -> DiscoveryAgentResult:
@@ -116,7 +128,56 @@ class AMCLinkDiscoveryAgent:
                         )
                     )
 
-            candidates = _dedupe_candidates([*manifest_documents, *dynamic_documents])
+            last_known_good_documents: list[DiscoveredDocument] = []
+            if self.last_known_good_loader and actions_used < self.max_actions:
+                actions_used += 1
+                try:
+                    last_known_good_documents = self.last_known_good_loader(self.source, document_type)
+                    trace.append(
+                        AgentTraceEvent(
+                            step="discover",
+                            status="ok" if last_known_good_documents else "skipped",
+                            detail=f"Loaded {len(last_known_good_documents)} last-known-good candidate(s).",
+                            document_type=document_type,
+                            strategy="last_known_good",
+                        )
+                    )
+                except Exception as exc:
+                    trace.append(
+                        AgentTraceEvent(
+                            step="discover",
+                            status="warning",
+                            detail=f"Last-known-good lookup failed: {exc}",
+                            document_type=document_type,
+                            strategy="last_known_good",
+                        )
+                    )
+
+            candidates = _dedupe_candidates([*manifest_documents, *dynamic_documents, *last_known_good_documents])
+            if not candidates and self.llm_recovery_loader and actions_used < self.max_actions:
+                actions_used += 1
+                try:
+                    recovered = self.llm_recovery_loader(self.source, document_type)
+                    candidates = _dedupe_candidates(recovered)
+                    trace.append(
+                        AgentTraceEvent(
+                            step="recover",
+                            status="ok" if candidates else "skipped",
+                            detail=f"Bounded LLM recovery returned {len(candidates)} existing-page candidate(s).",
+                            document_type=document_type,
+                            strategy="bounded_llm_page_recovery",
+                        )
+                    )
+                except Exception as exc:
+                    trace.append(
+                        AgentTraceEvent(
+                            step="recover",
+                            status="warning",
+                            detail=f"Bounded LLM recovery failed: {exc}",
+                            document_type=document_type,
+                            strategy="bounded_llm_page_recovery",
+                        )
+                    )
             if not candidates:
                 trace.append(
                     AgentTraceEvent(
@@ -141,7 +202,12 @@ class AMCLinkDiscoveryAgent:
                 if accepted_for_type >= max_candidates or actions_used >= self.max_actions:
                     break
                 actions_used += 1
-                errors, warnings = validate_candidate(self.source, candidate, expected_month=expected_month)
+                errors, warnings = validate_candidate(
+                    self.source,
+                    candidate,
+                    expected_month=expected_month,
+                    expected_month_grace_days=expected_month_grace_days,
+                )
                 if errors:
                     trace.append(
                         AgentTraceEvent(
@@ -156,6 +222,10 @@ class AMCLinkDiscoveryAgent:
                     continue
 
                 probe_status = "not_requested"
+                readiness = "link_validated"
+                parser_smoke_status = "not_requested"
+                content_status = "not_requested"
+                checksum = None
                 if probe_downloads:
                     if actions_used >= self.max_actions:
                         trace.append(
@@ -170,8 +240,13 @@ class AMCLinkDiscoveryAgent:
                         break
                     actions_used += 1
                     try:
-                        downloaded = self.downloader.download(candidate)
-                        probe_errors = validate_download(self.source, downloaded)
+                        probe_method = getattr(self.downloader, "probe_download", None)
+                        probed = (
+                            probe_method(candidate)
+                            if callable(probe_method)
+                            else self.downloader.download(candidate)
+                        )
+                        probe_errors = validate_download(self.source, probed)
                     except Exception as exc:
                         probe_errors = [f"download_probe_failed:{exc}"]
 
@@ -188,6 +263,54 @@ class AMCLinkDiscoveryAgent:
                         )
                         continue
                     probe_status = "passed"
+                    readiness = "probe_passed"
+
+                    try:
+                        downloaded = self.downloader.download(candidate)
+                        content_errors = validate_download(self.source, downloaded)
+                    except Exception as exc:
+                        content_errors = [f"content_download_failed:{exc}"]
+
+                    if content_errors:
+                        trace.append(
+                            AgentTraceEvent(
+                                step="content_validate",
+                                status="error",
+                                detail="Candidate content rejected: " + ", ".join(content_errors),
+                                document_type=document_type,
+                                strategy="content_validation",
+                                source_url=candidate.url,
+                            )
+                        )
+                        continue
+
+                    content_status = "passed"
+                    readiness = "content_validated"
+                    checksum = content_sha256(downloaded)
+                    parser_errors = validate_parser_smoke(downloaded)
+                    if parser_errors:
+                        warnings.extend(parser_errors)
+                        parser_smoke_status = "failed"
+                        trace.append(
+                            AgentTraceEvent(
+                                step="parser_smoke",
+                                status="warning",
+                                detail="Candidate requires parser review: " + ", ".join(parser_errors),
+                                document_type=document_type,
+                                strategy="parser_smoke",
+                                source_url=candidate.url,
+                            )
+                        )
+                    else:
+                        parser_smoke_status = "passed"
+                        readiness = "parser_smoke_passed"
+                else:
+                    warnings.append("download_probe_skipped")
+
+                if not warnings and readiness == "parser_smoke_passed":
+                    readiness = "promotable"
+                elif readiness != "failed":
+                    readiness = "needs_review"
 
                 accepted.append(
                     ValidatedDiscovery(
@@ -201,14 +324,22 @@ class AMCLinkDiscoveryAgent:
                         priority_score=int(candidate.priority_score),
                         warnings=tuple(warnings),
                         probe_status=probe_status,
+                        readiness=readiness,
+                        month_confirmation="confirmed" if candidate.report_month else "unconfirmed",
+                        content_sha256=checksum,
+                        content_status=content_status,
+                        parser_smoke_status=parser_smoke_status,
                     )
                 )
                 accepted_for_type += 1
                 trace.append(
                     AgentTraceEvent(
                         step="accept",
-                        status="warning" if warnings else "ok",
-                        detail="Candidate accepted" + (f" with warnings: {', '.join(warnings)}" if warnings else "."),
+                        status="warning" if readiness != "promotable" else "ok",
+                        detail=(
+                            f"Candidate {readiness}"
+                            + (f" with warnings: {', '.join(warnings)}" if warnings else ".")
+                        ),
                         document_type=document_type,
                         strategy="official_source_gate",
                         source_url=candidate.url,
@@ -225,7 +356,11 @@ class AMCLinkDiscoveryAgent:
                     )
                 )
 
-        covered_types = {document.document_type for document in accepted}
+        covered_types = {
+            document.document_type
+            for document in accepted
+            if document.readiness == "promotable"
+        }
         if len(covered_types) == len(set(document_types)):
             status = "completed"
         elif covered_types:
@@ -330,6 +465,8 @@ def build_discovery_agent(
     *,
     config: IngestionConfig | None = None,
     max_actions: int = 12,
+    last_known_good_loader: LastKnownGoodLoader | None = None,
+    llm_recovery_loader: LLMRecoveryLoader | None = None,
 ) -> AMCLinkDiscoveryAgent:
     requested_key = str(amc or "").strip().lower()
     key = AGENT_KEY_ALIASES.get(requested_key, requested_key)
@@ -343,6 +480,8 @@ def build_discovery_agent(
         source=source,
         downloader=downloader,
         manifest_path=resolved_config.source_manifest_path,
+        last_known_good_loader=last_known_good_loader,
+        llm_recovery_loader=llm_recovery_loader,
         max_actions=max_actions,
     )
 

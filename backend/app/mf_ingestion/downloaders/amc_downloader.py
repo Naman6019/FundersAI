@@ -335,6 +335,39 @@ class AMCDownloader(BaseDownloader):
             file_bytes=response.content,
         )
 
+    def probe_download(self, discovered: DiscoveredDocument, *, max_bytes: int = 65536) -> DownloadedDocument:
+        """Use a ranged GET to validate a candidate before a full smoke-test download."""
+        if (self.source.adapter_key or "").lower() in {"icici", "ppfas"}:
+            # These AMCs require their existing session/URL recovery download paths.
+            return self.download(discovered)
+        referer = discovered.discovery_page_url or _base_site_url(discovered.url)
+        response = _request_with_retry(
+            "GET",
+            discovered.url,
+            timeout_seconds=self.timeout_seconds,
+            headers={
+                "User-Agent": self.user_agent,
+                "Referer": referer,
+                "Accept": "application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*;q=0.8",
+                "Range": f"bytes=0-{max(int(max_bytes), 1024) - 1}",
+            },
+        )
+        body = response.content[:max(int(max_bytes), 1024)]
+        source_url = response.url or discovered.url
+        return DownloadedDocument(
+            amc_name=discovered.amc_name,
+            amc_code=discovered.amc_code,
+            document_type=discovered.document_type,
+            source_url=source_url,
+            discovery_page_url=discovered.discovery_page_url,
+            file_name=_derive_file_name(source_url, discovered.title),
+            file_ext=discovered.file_ext,
+            report_month=discovered.report_month,
+            content_type=response.headers.get("Content-Type"),
+            file_size_bytes=len(body),
+            file_bytes=body,
+        )
+
 
 def _derive_file_name(url: str, fallback_title: str) -> str:
     path = Path(url.split("?", 1)[0])
