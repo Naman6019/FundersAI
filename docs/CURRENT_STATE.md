@@ -14,7 +14,7 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 
 ## Implemented
 - Supabase-auth dashboard (`/dashboard`) with `/auth` sign-in/sign-up and password recovery.
-  - The auth screen uses accessible labeled fields, local icons, explicit error/success states, password visibility controls, a non-enumerating reset response, and a dedicated password-update route.
+  - The auth screen uses the FundersAI logo and the app-native black, charcoal, and neon-green palette, with accessible labeled fields, local icons, explicit error/success states, password visibility controls, a non-enumerating reset response, and a dedicated password-update route.
   - Unsupported adoption claims and stock user avatars were removed. The replacement trust strip describes only the product's research-only boundary, official evidence availability, and visible data limits.
   - `/terms` and `/privacy` are linked from authentication surfaces; their product copy requires normal legal review before material policy changes.
 - Frontend ESLint passes with zero errors and zero warnings.

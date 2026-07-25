@@ -24,12 +24,12 @@ function CallbackCard({ message, hasError = false }: { message: string; hasError
       {hasError ? (
         <Link
           href="/auth"
-          className="flex min-h-11 w-full items-center justify-center rounded-xl bg-[#66a3ff] px-4 text-sm font-semibold text-[#07111f] transition hover:bg-[#80b3ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9bc3ff]"
+          className="flex min-h-11 w-full items-center justify-center rounded-xl bg-[#00FF9D] px-4 text-sm font-semibold text-[#03120c] transition hover:bg-[#72ffca] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8ffe1]"
         >
           Return to sign in
         </Link>
       ) : (
-        <div role="status" className="flex items-center justify-center gap-2 py-4 text-sm text-[#91a3bf]">
+        <div role="status" className="flex items-center justify-center gap-2 py-4 text-sm text-[#9aa3a1]">
           <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />
           Verifying your session…
         </div>

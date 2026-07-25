@@ -75,7 +75,7 @@ export default function ResetPasswordForm() {
       }
     >
       {recoveryState === 'checking' && (
-        <div role="status" className="flex items-center justify-center gap-2 py-8 text-sm text-[#91a3bf]">
+        <div role="status" className="flex items-center justify-center gap-2 py-8 text-sm text-[#9aa3a1]">
           <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />
           Verifying your reset link…
         </div>
@@ -84,7 +84,7 @@ export default function ResetPasswordForm() {
       {recoveryState === 'invalid' && (
         <Link
           href="/auth"
-          className="flex min-h-11 w-full items-center justify-center rounded-xl bg-[#66a3ff] px-4 text-sm font-semibold text-[#07111f] transition hover:bg-[#80b3ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9bc3ff]"
+          className="flex min-h-11 w-full items-center justify-center rounded-xl bg-[#00FF9D] px-4 text-sm font-semibold text-[#03120c] transition hover:bg-[#72ffca] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8ffe1]"
         >
           Request a new reset link
         </Link>
@@ -93,7 +93,7 @@ export default function ResetPasswordForm() {
       {recoveryState === 'ready' && (
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label htmlFor="new-password" className="mb-1.5 block text-sm font-medium text-[#dce8fa]">
+            <label htmlFor="new-password" className="mb-1.5 block text-sm font-medium text-[#e2e2e3]">
               New password
             </label>
             <div className="relative">
@@ -106,12 +106,12 @@ export default function ResetPasswordForm() {
                 minLength={8}
                 autoComplete="new-password"
                 aria-invalid={Boolean(errorMessage)}
-                className="min-h-11 w-full rounded-xl border border-white/12 bg-[#0b1220] px-3.5 pr-11 text-sm text-white outline-none transition placeholder:text-[#60728e] focus:border-[#66a3ff] focus:ring-2 focus:ring-[#66a3ff]/20"
+                className="min-h-11 w-full rounded-xl border border-white/12 bg-[#0b0c10] px-3.5 pr-11 text-sm text-white outline-none transition placeholder:text-[#65706d] focus:border-[#00FF9D] focus:ring-2 focus:ring-[#00FF9D]/20"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((visible) => !visible)}
-                className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-[#8093af] transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#66a3ff]"
+                className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-[#7f8986] transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#00FF9D]"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? <EyeOff aria-hidden="true" className="h-4 w-4" /> : <Eye aria-hidden="true" className="h-4 w-4" />}
@@ -120,7 +120,7 @@ export default function ResetPasswordForm() {
           </div>
 
           <div>
-            <label htmlFor="confirm-password" className="mb-1.5 block text-sm font-medium text-[#dce8fa]">
+            <label htmlFor="confirm-password" className="mb-1.5 block text-sm font-medium text-[#e2e2e3]">
               Confirm new password
             </label>
             <input
@@ -133,7 +133,7 @@ export default function ResetPasswordForm() {
               autoComplete="new-password"
               aria-invalid={Boolean(errorMessage)}
               aria-describedby={errorMessage ? 'reset-password-error' : undefined}
-              className="min-h-11 w-full rounded-xl border border-white/12 bg-[#0b1220] px-3.5 text-sm text-white outline-none transition placeholder:text-[#60728e] focus:border-[#66a3ff] focus:ring-2 focus:ring-[#66a3ff]/20"
+              className="min-h-11 w-full rounded-xl border border-white/12 bg-[#0b0c10] px-3.5 text-sm text-white outline-none transition placeholder:text-[#65706d] focus:border-[#00FF9D] focus:ring-2 focus:ring-[#00FF9D]/20"
             />
           </div>
 
@@ -150,7 +150,7 @@ export default function ResetPasswordForm() {
           <button
             type="submit"
             disabled={isLoading}
-            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#66a3ff] px-4 text-sm font-semibold text-[#07111f] transition hover:bg-[#80b3ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9bc3ff] disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#00FF9D] px-4 text-sm font-semibold text-[#03120c] transition hover:bg-[#72ffca] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8ffe1] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isLoading && <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />}
             {isLoading ? 'Updating password…' : 'Update password'}

@@ -10,7 +10,7 @@ function AuthPageFallback() {
       <div className="space-y-4">
         <div className="h-16 animate-pulse rounded-xl bg-white/[0.04]" />
         <div className="h-16 animate-pulse rounded-xl bg-white/[0.04]" />
-        <div className="h-11 animate-pulse rounded-xl bg-[#66a3ff]/20" />
+        <div className="h-11 animate-pulse rounded-xl bg-[#00FF9D]/20" />
       </div>
     </AuthShell>
   );

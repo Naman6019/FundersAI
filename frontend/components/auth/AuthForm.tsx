@@ -169,13 +169,13 @@ export default function AuthForm() {
             type="button"
             onClick={handleGoogleAuth}
             disabled={isAuthLoading}
-            className="flex min-h-11 w-full items-center justify-center gap-2.5 rounded-xl border border-white/12 bg-white px-4 text-sm font-semibold text-[#171717] shadow-sm transition hover:bg-[#f4f4f5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#66a3ff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#101724] disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex min-h-11 w-full items-center justify-center gap-2.5 rounded-xl border border-white/12 bg-white px-4 text-sm font-semibold text-[#171717] shadow-sm transition hover:bg-[#f4f4f5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FF9D] focus-visible:ring-offset-2 focus-visible:ring-offset-[#111415] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isGoogleLoading ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <GoogleIcon />}
             {isGoogleLoading ? 'Connecting…' : 'Continue with Google'}
           </button>
 
-          <div className="my-5 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7183a0]">
+          <div className="my-5 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#78817f]">
             <span className="h-px flex-1 bg-white/10" />
             <span>or continue with email</span>
             <span className="h-px flex-1 bg-white/10" />
@@ -187,7 +187,7 @@ export default function AuthForm() {
         <button
           type="button"
           onClick={() => resetFormState('signin')}
-          className="mb-5 inline-flex items-center gap-1.5 text-sm font-medium text-[#9eb4d6] transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#66a3ff]"
+          className="mb-5 inline-flex items-center gap-1.5 text-sm font-medium text-[#a9b4b1] transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FF9D]"
         >
           <ArrowLeft aria-hidden="true" className="h-4 w-4" />
           Back to sign in
@@ -196,7 +196,7 @@ export default function AuthForm() {
 
       <form className="space-y-4" onSubmit={handleSubmit} noValidate>
         <div>
-          <label htmlFor="auth-email" className="mb-1.5 block text-sm font-medium text-[#dce8fa]">
+          <label htmlFor="auth-email" className="mb-1.5 block text-sm font-medium text-[#e2e2e3]">
             Email address
           </label>
           <input
@@ -213,7 +213,7 @@ export default function AuthForm() {
             placeholder="you@example.com"
             aria-invalid={Boolean(fieldErrors.email)}
             aria-describedby={fieldErrors.email ? 'auth-email-error' : undefined}
-            className="min-h-11 w-full rounded-xl border border-white/12 bg-[#0b1220] px-3.5 text-sm text-white outline-none transition placeholder:text-[#60728e] hover:border-white/20 focus:border-[#66a3ff] focus:ring-2 focus:ring-[#66a3ff]/20"
+            className="min-h-11 w-full rounded-xl border border-white/12 bg-[#0b0c10] px-3.5 text-sm text-white outline-none transition placeholder:text-[#65706d] hover:border-white/20 focus:border-[#00FF9D] focus:ring-2 focus:ring-[#00FF9D]/20"
           />
           {fieldErrors.email && (
             <p id="auth-email-error" className="mt-1.5 text-xs text-[#ff9cae]">
@@ -225,14 +225,14 @@ export default function AuthForm() {
         {mode !== 'forgot' && (
           <div>
             <div className="mb-1.5 flex items-center justify-between gap-3">
-              <label htmlFor="auth-password" className="text-sm font-medium text-[#dce8fa]">
+              <label htmlFor="auth-password" className="text-sm font-medium text-[#e2e2e3]">
                 Password
               </label>
               {mode === 'signin' && (
                 <button
                   type="button"
                   onClick={() => resetFormState('forgot')}
-                  className="text-xs font-medium text-[#82aff6] transition hover:text-[#b8d3ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#66a3ff]"
+                  className="text-xs font-medium text-[#5eeebb] transition hover:text-[#b8ffe1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FF9D]"
                 >
                   Forgot password?
                 </button>
@@ -254,12 +254,12 @@ export default function AuthForm() {
                 placeholder={mode === 'signup' ? 'At least 8 characters' : 'Enter your password'}
                 aria-invalid={Boolean(fieldErrors.password)}
                 aria-describedby={fieldErrors.password ? 'auth-password-error' : undefined}
-                className="min-h-11 w-full rounded-xl border border-white/12 bg-[#0b1220] px-3.5 pr-11 text-sm text-white outline-none transition placeholder:text-[#60728e] hover:border-white/20 focus:border-[#66a3ff] focus:ring-2 focus:ring-[#66a3ff]/20"
+                className="min-h-11 w-full rounded-xl border border-white/12 bg-[#0b0c10] px-3.5 pr-11 text-sm text-white outline-none transition placeholder:text-[#65706d] hover:border-white/20 focus:border-[#00FF9D] focus:ring-2 focus:ring-[#00FF9D]/20"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((visible) => !visible)}
-                className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-[#8093af] transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#66a3ff]"
+                className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-[#7f8986] transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#00FF9D]"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? <EyeOff aria-hidden="true" className="h-4 w-4" /> : <Eye aria-hidden="true" className="h-4 w-4" />}
@@ -289,7 +289,7 @@ export default function AuthForm() {
         <button
           type="submit"
           disabled={isAuthLoading}
-          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#66a3ff] px-4 text-sm font-semibold text-[#07111f] shadow-[0_12px_30px_rgba(49,117,225,0.22)] transition hover:bg-[#80b3ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9bc3ff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#101724] disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#00FF9D] px-4 text-sm font-semibold text-[#03120c] shadow-[0_12px_30px_rgba(0,255,157,0.18)] transition hover:bg-[#72ffca] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8ffe1] focus-visible:ring-offset-2 focus-visible:ring-offset-[#111415] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isLoading && <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />}
           {isLoading
@@ -305,12 +305,12 @@ export default function AuthForm() {
       </form>
 
       {mode !== 'forgot' && (
-        <p className="mt-5 text-center text-sm text-[#91a3bf]">
+        <p className="mt-5 text-center text-sm text-[#9aa3a1]">
           {mode === 'signin' ? 'New to FundersAI? ' : 'Already have an account? '}
           <button
             type="button"
             onClick={() => resetFormState(mode === 'signin' ? 'signup' : 'signin')}
-            className="font-semibold text-white transition hover:text-[#a9caff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#66a3ff]"
+            className="font-semibold text-white transition hover:text-[#5eeebb] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FF9D]"
           >
             {mode === 'signin' ? 'Create an account' : 'Sign in'}
           </button>
