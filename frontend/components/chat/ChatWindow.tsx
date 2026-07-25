@@ -495,7 +495,6 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
     const query = searchParams.get('query')?.trim();
     if (!query) return;
 
-    initialQuerySentRef.current = true;
     const selectedAssetType = searchParams.get('asset_type');
     const nextAssetType: AssetType =
       selectedAssetType === 'stock' || selectedAssetType === 'mutual_fund' ? selectedAssetType : 'auto';
@@ -505,17 +504,28 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
     const nextExplanationMode: ExplanationMode =
       selectedExplanationMode === 'advanced' || nextResearchDepth === 'deep' ? 'advanced' : 'beginner';
 
-    setAssetType(nextAssetType);
-    setExplanationMode(nextExplanationMode);
-    setResearchDepth(nextExplanationMode === 'advanced' ? 'deep' : nextResearchDepth);
-    void sendQuery(query, nextAssetType, nextExplanationMode === 'advanced' ? 'deep' : nextResearchDepth, nextExplanationMode, comparisonViewMode);
+    const resolvedResearchDepth = nextExplanationMode === 'advanced' ? 'deep' : nextResearchDepth;
+    const timer = window.setTimeout(() => {
+      if (initialQuerySentRef.current) return;
+      initialQuerySentRef.current = true;
+      setAssetType(nextAssetType);
+      setExplanationMode(nextExplanationMode);
+      setResearchDepth(resolvedResearchDepth);
+      void sendQuery(query, nextAssetType, resolvedResearchDepth, nextExplanationMode, comparisonViewMode);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [comparisonViewMode, isHistoryReady, searchParams, sendQuery, setAssetType, setExplanationMode, setResearchDepth]);
 
   useEffect(() => {
-    if (pendingQuery) {
-      void sendQuery(pendingQuery);
+    if (!pendingQuery) return;
+    const query = pendingQuery;
+    const timer = window.setTimeout(() => {
       setPendingQuery(null);
-    }
+      void sendQuery(query);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [pendingQuery, sendQuery, setPendingQuery]);
 
   const handleSend = async () => {

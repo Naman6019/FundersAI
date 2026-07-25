@@ -9,6 +9,7 @@ import {
   useMemo,
   useCallback,
 } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import React from "react";
@@ -81,7 +82,6 @@ interface MediaItem {
   src: string;
   alt?: string;
   className?: string;
-  [key: string]: any;
 }
 
 interface InfoCardMediaProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -251,7 +251,7 @@ const InfoCardMedia = ({
   const { isHovered } = useContext(InfoCardContext);
   const { setAllImagesLoaded } = useContext(InfoCardImageContext);
   const [isOverflowVisible, setIsOverflowVisible] = useState(false);
-  const loadedMedia = useRef(new Set());
+  const loadedMedia = useRef(new Set<string>());
 
   const handleMediaLoad = (mediaSrc: string) => {
     loadedMedia.current.add(mediaSrc);
@@ -281,18 +281,14 @@ const InfoCardMedia = ({
     } else {
       setAllImagesLoaded(true); // No media to load
     }
-  }, [media.length]);
+  }, [media.length, setAllImagesLoaded]);
 
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    if (isHovered) {
-      timeoutId = setTimeout(() => {
-        setIsOverflowVisible(true);
-      }, 100);
-    } else {
-      setIsOverflowVisible(false);
-    }
-    return () => clearTimeout(timeoutId);
+    const timeoutId = window.setTimeout(
+      () => setIsOverflowVisible(isHovered),
+      isHovered ? 100 : 0,
+    );
+    return () => window.clearTimeout(timeoutId);
   }, [isHovered]);
 
   const mediaCount = displayMedia.length;
@@ -357,7 +353,6 @@ const InfoCardMedia = ({
               src,
               alt,
               className: itemClassName,
-              ...mediaProps
             } = item;
 
             return (
@@ -387,19 +382,20 @@ const InfoCardMedia = ({
                     preload="metadata"
                     muted
                     playsInline
-                    {...mediaProps}
                   />
                 ) : (
-                  <img
+                  <Image
                     src={src}
-                    alt={alt}
+                    alt={alt || ""}
+                    width={720}
+                    height={450}
+                    unoptimized
                     className={cn(
                       "w-full rounded-md border border-gray-200 object-cover shadow-lg",
                       itemClassName
                     )}
                     onLoad={() => handleMediaLoad(src)}
                     loading={loading}
-                    {...mediaProps}
                   />
                 )}
               </motion.div>

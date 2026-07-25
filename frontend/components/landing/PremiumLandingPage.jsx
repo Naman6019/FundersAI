@@ -8,7 +8,6 @@ import { motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
 } from "@phosphor-icons/react";
-import LandingPromptBox from "./LandingPromptBox";
 import { HeroWave } from "@/components/ui/ai-input-hero";
 import { FeatureCarousel } from "@/components/ui/animated-feature-carousel";
 
@@ -18,29 +17,6 @@ function AmbientGlow({ className = "", color = "rgba(0, 255, 157, 0.12)" }) {
       className={`pointer-events-none absolute z-0 rounded-full blur-[100px] sm:blur-[140px] ${className}`}
       style={{ background: color }}
     />
-  );
-}
-
-function HeroGrid() {
-  return (
-    <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden">
-      {/* Animated Glowing Orbs */}
-      <div className="absolute top-[10%] left-[20%] h-[40vw] w-[40vw] animate-pulse rounded-full bg-[#00FF9D]/20 blur-[100px] mix-blend-screen" style={{ animationDuration: '8s' }} />
-      <div className="absolute top-[30%] right-[20%] h-[40vw] w-[40vw] animate-pulse rounded-full bg-[#66a3ff]/20 blur-[120px] mix-blend-screen" style={{ animationDuration: '12s', animationDelay: '2s' }} />
-      
-      {/* High-Tech Grid Pattern */}
-      <div 
-        className="absolute inset-0 z-0 bg-[length:50px_50px] opacity-[0.15]"
-        style={{
-          backgroundImage: `
-            linear-gradient(to right, rgba(255,255,255,1) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(255,255,255,1) 1px, transparent 1px)
-          `,
-          maskImage: 'radial-gradient(ellipse 80% 80% at 50% 40%, #000 10%, transparent 80%)',
-          WebkitMaskImage: 'radial-gradient(ellipse 80% 80% at 50% 40%, #000 10%, transparent 80%)'
-        }}
-      />
-    </div>
   );
 }
 
@@ -69,14 +45,6 @@ const carouselImages = {
   // Synthesis: Clean UI reporting
   step4img: "https://images.unsplash.com/photo-1555421689-d68471e189f2?q=80&w=2000&auto=format&fit=crop",
 };
-
-const researchSteps = [
-  ["01", "Ask a natural language question", "Compare Axis Large Cap and HDFC Mid Cap, or ask why one fund looks riskier."],
-  ["02", "Resolve matching funds", "Typos, AMC shorthand, and scheme variants are routed to normalized records before analysis."],
-  ["03", "Open the comparison canvas", "Returns, cost, NAV history, AUM, and risk metrics sit side by side in one workspace."],
-  ["04", "Explain risk and cost", "Sharpe, beta, drawdown, expense ratio, and missing fields are translated into plain research context."],
-  ["05", "Show sources and confidence", "Freshness, data gaps, and research-only guardrails stay visible before any independent decision."],
-];
 
 const intelligenceTiles = [
   {
@@ -137,21 +105,6 @@ function Reveal({ children, className = "", delay = 0 }) {
     >
       {children}
     </motion.div>
-  );
-}
-
-function HeroLine({ children, delay }) {
-  const reduceMotion = useReducedMotion();
-
-  return (
-    <motion.span
-      className="block"
-      initial={reduceMotion ? false : { opacity: 0, y: 80 }}
-      animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-      transition={{ duration: 1.6, ease, delay }}
-    >
-      {children}
-    </motion.span>
   );
 }
 
@@ -227,7 +180,6 @@ function NoiseOverlay() {
 
 export default function FundersAILandingPage() {
   const router = useRouter();
-  const reduceMotion = useReducedMotion();
 
   return (
     <main className="landing-editorial relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] text-[var(--text-primary)]  selection:bg-[var(--accent-crimson)] selection:text-[var(--bg-base)]">

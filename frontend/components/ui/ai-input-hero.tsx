@@ -20,12 +20,23 @@ export type HeroWaveProps = {
   onPromptSubmit?: (value: string) => void;
 };
 
-export function HeroWave({ className, style, extendLeftPx = 320, title = "Build with AI.", subtitle = "The AI Fullstack Engineer. Build prototypes, apps, and websites", placeholder = "Describe what you want to create...", buttonText = "Generate", onPromptSubmit }: HeroWaveProps) {
+type WaveState = {
+  gain: number;
+  frequency: number;
+  waveLength: number;
+  currentAngle: number;
+};
+
+type WaveKeyframe = Omit<WaveState, "currentAngle"> & {
+  time: number;
+};
+
+export function HeroWave({ className, style, extendLeftPx = 320, title = "Build with AI.", subtitle = "The AI Fullstack Engineer. Build prototypes, apps, and websites", placeholder = "Compare ", buttonText = "Generate", onPromptSubmit }: HeroWaveProps) {
   const [prompt, setPrompt] = useState("");
   const containerRef = useRef<HTMLDivElement | null>(null);
   const waveRef = useRef<HTMLDivElement | null>(null);
   // Typing placeholder animation (runs only when input is empty)
-  const basePlaceholder = "Compare ";
+  const basePlaceholder = placeholder;
   const suggestionsRef = useRef<string[]>([
     " Axis Flexi and HDFC Flexi",
     " large cap vs mid cap risks",
@@ -43,7 +54,9 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
   const timersRef = useRef<number[]>([]);
 
   useEffect(() => {
-    typingStateRef.current.running = true;
+    const typingState = typingStateRef.current;
+    const timers = timersRef.current;
+    typingState.running = true;
     const typeSpeed = 70; // ms per char
     const deleteSpeed = 40;
     const pauseAtEnd = 1200; // pause after full word
@@ -51,16 +64,16 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
 
     function schedule(fn: () => void, delay: number) {
       const id = window.setTimeout(fn, delay);
-      timersRef.current.push(id);
+      timers.push(id);
     }
 
     function clearTimers() {
-      for (const id of timersRef.current) window.clearTimeout(id);
-      timersRef.current = [];
+      for (const id of timers) window.clearTimeout(id);
+      timers.length = 0;
     }
 
     function step() {
-      if (!typingStateRef.current.running) return;
+      if (!typingState.running) return;
       // Only animate when empty
       if (prompt !== "") {
         setAnimatedPlaceholder(basePlaceholder);
@@ -68,7 +81,7 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
         return;
       }
 
-      const state = typingStateRef.current;
+      const state = typingState;
       const suggestions = suggestionsRef.current;
       const current = suggestions[state.suggestionIndex % suggestions.length] || "";
 
@@ -107,11 +120,10 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
     clearTimers();
     schedule(step, 400);
     return () => {
-      typingStateRef.current.running = false;
+      typingState.running = false;
       clearTimers();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prompt]);
+  }, [basePlaceholder, prompt]);
 
   useEffect(() => {
     if (!containerRef.current || !waveRef.current) return;
@@ -163,17 +175,17 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
     };
 
     function createFilmGrainPass(intensity = 0.9, grainScale = 0.3) {
-      const pass = new ShaderPass(FilmGrainShader as any);
-      (pass.uniforms as any).intensity.value = intensity;
-      (pass.uniforms as any).grainScale.value = grainScale;
+      const pass = new ShaderPass(FilmGrainShader);
+      pass.uniforms.intensity.value = intensity;
+      pass.uniforms.grainScale.value = grainScale;
       return pass;
     }
 
     // --- Wave State & Keyframes ---
-    const wave1 = { gain: 10, frequency: 0, waveLength: 0.5, currentAngle: 0 };
-    const wave2 = { gain: 0, frequency: 0, waveLength: 0.5, currentAngle: 0 };
+    const wave1: WaveState = { gain: 10, frequency: 0, waveLength: 0.5, currentAngle: 0 };
+    const wave2: WaveState = { gain: 0, frequency: 0, waveLength: 0.5, currentAngle: 0 };
 
-    const waveKeyframes1 = [
+    const waveKeyframes1: WaveKeyframe[] = [
       { time: 0, gain: 10, frequency: 0, waveLength: 0.5 },
       { time: 4, gain: 300, frequency: 1, waveLength: 0.5 },
       { time: 6, gain: 300, frequency: 4, waveLength: Math.PI * 1.5 },
@@ -193,7 +205,7 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
       { time: 55, gain: 10, frequency: 0, waveLength: 0.5 },
     ];
 
-    const waveKeyframes2 = [
+    const waveKeyframes2: WaveKeyframe[] = [
       { time: 0, gain: 0, frequency: 0, waveLength: 0.5 },
       { time: 9, gain: 0, frequency: 0, waveLength: 0.5 },
       { time: 10, gain: 400, frequency: 1, waveLength: 0.5 },
@@ -254,7 +266,7 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
         return;
       }
       waveRenderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
-    } catch (e) {
+    } catch {
       console.warn("WebGL not supported in this browser, skipping HeroWave animation. Enable Hardware Acceleration for 3D waves.");
       return;
     }
@@ -265,7 +277,6 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
     waveContainer.appendChild(waveRenderer.domElement);
 
     const waveScene = new THREE.Scene();
-    waveScene.fog = null as any;
     waveScene.add(new THREE.AmbientLight(0xffffff, 0.2));
 
     let waveCamera: THREE.OrthographicCamera;
@@ -298,7 +309,7 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
       const totalWidth = currentBarCount * (FIXED_BAR_WIDTH + FIXED_BAR_GAP) - FIXED_BAR_GAP;
       const spanPx = totalWidth * 0.3;
       glowConfig.maxGlowDistance = spanPx;
-      (barMaterial.uniforms as any).uMaxGlowDist.value = spanPx;
+      barMaterial.uniforms.uMaxGlowDist.value = spanPx;
     }
 
     function createInstancedMaterial() {
@@ -413,11 +424,15 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
     }
 
     function setupQuickSetters() {
-      const u = (instancedBars!.material as THREE.ShaderMaterial).uniforms as any;
-      setMouseNDC = gsap.quickSetter(u.uMouseClipX, "value") as any;
-      setSmoothSpeed = gsap.quickSetter(u.uSmoothSpeed, "value") as any;
-      setPhase1 = gsap.quickSetter(u.w1Phase, "value") as any;
-      setPhase2 = gsap.quickSetter(u.w2Phase, "value") as any;
+      const uniforms = (instancedBars!.material as THREE.ShaderMaterial).uniforms;
+      const mouseSetter = gsap.quickSetter(uniforms.uMouseClipX, "value");
+      const speedSetter = gsap.quickSetter(uniforms.uSmoothSpeed, "value");
+      const phase1Setter = gsap.quickSetter(uniforms.w1Phase, "value");
+      const phase2Setter = gsap.quickSetter(uniforms.w2Phase, "value");
+      setMouseNDC = (value) => mouseSetter(value);
+      setSmoothSpeed = (value) => speedSetter(value);
+      setPhase1 = (value) => phase1Setter(value);
+      setPhase2 = (value) => phase2Setter(value);
     }
 
     const MAX_KEYFRAME_GAIN = 500;
@@ -425,7 +440,7 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
     function updateGainMultiplier() {
       if (!barMaterial) return;
       const targetPx = cameraHeight * SCREEN_COVERAGE;
-      (barMaterial.uniforms as any).uGainMul.value = targetPx / MAX_KEYFRAME_GAIN;
+      barMaterial.uniforms.uGainMul.value = targetPx / MAX_KEYFRAME_GAIN;
     }
 
     // Pointer tracking
@@ -436,8 +451,8 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
         const t = (e as TouchEvent).touches?.[0] || (e as TouchEvent).changedTouches?.[0];
         return t ? { x: t.clientX, y: t.clientY } : { x: mouse.x, y: mouse.y };
       };
-      const updatePos = (e: any, active: boolean) => {
-        const { x, y } = readCoords(e);
+      const updatePos = (event: PointerEvent | TouchEvent, active: boolean) => {
+        const { x, y } = readCoords(event);
         const r = rect;
         mouse.x = x - r.left;
         mouse.y = y - r.top;
@@ -448,31 +463,33 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
           proxyInitialized = true;
         }
       };
-      const activate = (e: any) => updatePos(e, true);
-      const move = (e: any) => updatePos(e, true);
+      const activatePointer = (event: PointerEvent) => updatePos(event, true);
+      const movePointer = (event: PointerEvent) => updatePos(event, true);
+      const activateTouch = (event: TouchEvent) => updatePos(event, true);
+      const moveTouch = (event: TouchEvent) => updatePos(event, true);
       const deactivate = () => {
         mouse.active = false;
       };
 
-      el.addEventListener("pointerdown", activate, { passive: true });
-      el.addEventListener("pointermove", move, { passive: true });
-      window.addEventListener("pointerup", deactivate as any, { passive: true });
-      el.addEventListener("pointerleave", deactivate as any, { passive: true });
+      el.addEventListener("pointerdown", activatePointer, { passive: true });
+      el.addEventListener("pointermove", movePointer, { passive: true });
+      window.addEventListener("pointerup", deactivate, { passive: true });
+      el.addEventListener("pointerleave", deactivate, { passive: true });
 
-      el.addEventListener("touchstart", activate as any, { passive: true });
-      el.addEventListener("touchmove", move as any, { passive: true });
-      window.addEventListener("touchend", deactivate as any, { passive: true });
-      window.addEventListener("touchcancel", deactivate as any, { passive: true });
+      el.addEventListener("touchstart", activateTouch, { passive: true });
+      el.addEventListener("touchmove", moveTouch, { passive: true });
+      window.addEventListener("touchend", deactivate, { passive: true });
+      window.addEventListener("touchcancel", deactivate, { passive: true });
 
       listeners.push(() => {
-        el.removeEventListener("pointerdown", activate as any);
-        el.removeEventListener("pointermove", move as any);
-        window.removeEventListener("pointerup", deactivate as any);
-        el.removeEventListener("pointerleave", deactivate as any);
-        el.removeEventListener("touchstart", activate as any);
-        el.removeEventListener("touchmove", move as any);
-        window.removeEventListener("touchend", deactivate as any);
-        window.removeEventListener("touchcancel", deactivate as any);
+        el.removeEventListener("pointerdown", activatePointer);
+        el.removeEventListener("pointermove", movePointer);
+        window.removeEventListener("pointerup", deactivate);
+        el.removeEventListener("pointerleave", deactivate);
+        el.removeEventListener("touchstart", activateTouch);
+        el.removeEventListener("touchmove", moveTouch);
+        window.removeEventListener("touchend", deactivate);
+        window.removeEventListener("touchcancel", deactivate);
       });
     }
 
@@ -497,32 +514,32 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
         const targetAdd = hit * smoothSpeed;
         const add = targetAdd * addEase;
 
-        let g = (arr as any)[i] + add - (arr as any)[i] * decayLerp;
+        let g = arr[i] + add - arr[i] * decayLerp;
 
         if (g > vmax) g = vmax;
-        (arr as any)[i] = (arr as any)[i + currentBarCount] = g;
+        arr[i] = g;
+        arr[i + currentBarCount] = g;
       }
-      (attr as any).needsUpdate = true;
+      attr.needsUpdate = true;
     }
 
     function createInstancedBars() {
       if (instancedBars) {
         waveScene.remove(instancedBars);
         instancedBars.geometry.dispose();
-        (instancedBars.material as any).dispose();
+        (instancedBars.material as THREE.Material).dispose();
         instancedBars = null;
       }
 
       const waveWidth = cameraWidth;
       const span = waveWidth + EXTEND_LEFT_PX;
-      let barCount = Math.min(
+      const barCount = Math.min(
         MAX_BARS,
         Math.max(1, Math.floor((span + FIXED_BAR_GAP) / (FIXED_BAR_WIDTH + FIXED_BAR_GAP)))
       );
       const gap = barCount > 1 ? (span - barCount * FIXED_BAR_WIDTH) / (barCount - 1) : 0;
       currentBarCount = barCount;
 
-      const totalW = span;
       const startX = -waveWidth / 2 - EXTEND_LEFT_PX;
       const instCnt = barCount * 2;
       barCenters = new Float32Array(barCount);
@@ -564,7 +581,7 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
     }
 
     // --- Scene 1 Timeline ---
-    function buildKeyframeTweens(target: any, keyframes: Array<any>) {
+    function buildKeyframeTweens(target: WaveState, keyframes: WaveKeyframe[]) {
       const tl = gsap.timeline();
       for (let i = 0; i < keyframes.length - 1; i++) {
         const cur = keyframes[i];
@@ -625,13 +642,13 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
 
       waveRenderer.setSize(cameraWidth, cameraHeight);
       waveComposer = new EffectComposer(waveRenderer);
-      (waveComposer as any).setPixelRatio(EFFECT_PR);
+      waveComposer.setPixelRatio(EFFECT_PR);
 
       waveRenderPass = new RenderPass(waveScene, waveCamera);
       waveComposer.addPass(waveRenderPass);
 
       waveBloomPass = new UnrealBloomPass(new THREE.Vector2(cameraWidth, cameraHeight), 1.0, 0.68, 0.0);
-      (waveBloomPass as any).resolution.set(cameraWidth * 0.5, cameraHeight * 0.5);
+      waveBloomPass.resolution.set(cameraWidth * 0.5, cameraHeight * 0.5);
       waveComposer.addPass(waveBloomPass);
 
       grainPass = createFilmGrainPass();
@@ -645,7 +662,7 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
 
     let pendingW = 0,
       pendingH = 0,
-      heavyResizeTimer: any = null;
+      heavyResizeTimer: number | null = null;
 
     function onResize(newW: number, newH: number) {
       if (!waveCameraInitialized) return;
@@ -662,7 +679,7 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
 
       const waveWidth = cameraWidth;
       const span = waveWidth + EXTEND_LEFT_PX;
-      let barCount = Math.min(
+      const barCount = Math.min(
         MAX_BARS,
         Math.max(1, Math.floor((span + FIXED_BAR_GAP) / (FIXED_BAR_WIDTH + FIXED_BAR_GAP)))
       );
@@ -672,27 +689,30 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
         currentBarCount = barCount;
         createInstancedBars();
       } else {
-        const totW = span;
         const startX = -waveWidth / 2 - EXTEND_LEFT_PX;
         const aX = instancedBars!.geometry.getAttribute("aXPos") as THREE.InstancedBufferAttribute;
         const aT = instancedBars!.geometry.getAttribute("aPosNorm") as THREE.InstancedBufferAttribute;
+        const xValues = aX.array as Float32Array;
+        const normalizedValues = aT.array as Float32Array;
 
         for (let i = 0; i < barCount; i++) {
           const x = startX + FIXED_BAR_WIDTH / 2 + i * (FIXED_BAR_WIDTH + gap);
           const t = barCount > 1 ? i / (barCount - 1) : 0;
-          (aX.array as any)[i] = (aX.array as any)[i + barCount] = x;
-          (aT.array as any)[i] = (aT.array as any)[i + barCount] = t;
+          xValues[i] = x;
+          xValues[i + barCount] = x;
+          normalizedValues[i] = t;
+          normalizedValues[i + barCount] = t;
         }
         aX.needsUpdate = true;
         aT.needsUpdate = true;
       }
 
-      (barMaterial.uniforms as any).uHalfW.value = cameraWidth * 0.5;
+      barMaterial.uniforms.uHalfW.value = cameraWidth * 0.5;
       updateGainMultiplier();
       updateGlowDistance();
 
-      clearTimeout(heavyResizeTimer);
-      heavyResizeTimer = setTimeout(applyHeavyResize, 10);
+      if (heavyResizeTimer !== null) window.clearTimeout(heavyResizeTimer);
+      heavyResizeTimer = window.setTimeout(applyHeavyResize, 10);
       rect = waveRenderer.domElement.getBoundingClientRect();
     }
 
@@ -700,28 +720,30 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
       heavyResizeTimer = null;
       waveRenderer.setPixelRatio(EFFECT_PR);
       waveRenderer.setSize(pendingW, pendingH);
-      (waveComposer as any).setSize(pendingW, pendingH);
-      (waveBloomPass as any)?.setSize(pendingW, pendingH);
-      (grainPass as any)?.setSize(pendingW, pendingH);
-      (grainPass.uniforms as any).grainScale.value = 0.5;
+      waveComposer.setSize(pendingW, pendingH);
+      waveBloomPass.setSize(pendingW, pendingH);
+      grainPass.setSize(pendingW, pendingH);
+      grainPass.uniforms.grainScale.value = 0.5;
     }
 
+    let mainTimeline: gsap.core.Timeline | null = null;
+
     function disposeWaveScene() {
-      gsap.globalTimeline.clear();
-      waveScene.traverse((obj: any) => {
-        if (obj.isMesh) {
-          obj.geometry.dispose();
-          if (Array.isArray(obj.material)) {
-            obj.material.forEach((m: any) => m.dispose());
+      mainTimeline?.kill();
+      waveScene.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry.dispose();
+          if (Array.isArray(object.material)) {
+            object.material.forEach((material) => material.dispose());
           } else {
-            obj.material.dispose();
+            object.material.dispose();
           }
         }
       });
-      (grainPass as any)?.dispose?.();
-      (waveBloomPass as any)?.dispose?.();
-      (waveComposer as any)?.dispose?.();
-      (waveRenderer as any)?.dispose?.();
+      grainPass.dispose();
+      waveBloomPass.dispose();
+      waveComposer.dispose();
+      waveRenderer.dispose();
       instancedBars = null;
     }
 
@@ -751,19 +773,19 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
       smoothSpeed += (rawSpeed - smoothSpeed) * kSpeed;
       setSmoothSpeed(smoothSpeed);
 
-      const u = (instancedBars.material as THREE.ShaderMaterial).uniforms as any;
-      u.w1Gain.value = wave1.gain;
-      u.w1Len.value = wave1.waveLength;
-      u.w2Gain.value = wave2.gain;
-      u.w2Len.value = wave2.waveLength;
+      const uniforms = (instancedBars.material as THREE.ShaderMaterial).uniforms;
+      uniforms.w1Gain.value = wave1.gain;
+      uniforms.w1Len.value = wave1.waveLength;
+      uniforms.w2Gain.value = wave2.gain;
+      uniforms.w2Len.value = wave2.waveLength;
 
       const mouseClipX = (proxyMouseX / cameraWidth) * 2 - 1;
       setMouseNDC(mouseClipX);
       let baseOffset = 40;
       if (window.innerWidth < 768) baseOffset = 20;
-      u.uBaseY.value = -cameraHeight * 0.5 + baseOffset;
+      uniforms.uBaseY.value = -cameraHeight * 0.5 + baseOffset;
 
-      (grainPass.uniforms as any).time.value += dt * 0.2;
+      grainPass.uniforms.time.value += dt * 0.2;
 
       accumulateGlow(dt);
       waveComposer.render();
@@ -779,7 +801,7 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
     });
 
     // Init
-    const mainTimeline = buildScene1Timeline();
+    mainTimeline = buildScene1Timeline();
     mainTimeline.play(0);
 
     gsap.ticker.add(ticker);
@@ -788,7 +810,8 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
     listeners.push(() => ro.disconnect());
 
     const onVisibility = () => {
-      document.hidden ? gsap.globalTimeline.pause() : gsap.globalTimeline.resume();
+      if (document.hidden) mainTimeline?.pause();
+      else mainTimeline?.resume();
     };
     document.addEventListener("visibilitychange", onVisibility);
     listeners.push(() => document.removeEventListener("visibilitychange", onVisibility));
@@ -806,7 +829,7 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
         }
       } catch {}
     };
-  }, []);
+  }, [extendLeftPx]);
 
   return (
     <section
@@ -888,6 +911,10 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
           </form>
         </div>
       </div>
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_72%_78%,rgba(0,255,157,0.18),transparent_34%),radial-gradient(circle_at_28%_64%,rgba(102,163,255,0.2),transparent_38%)]"
+      />
       <div
         ref={waveRef}
         id="waveCanvas"

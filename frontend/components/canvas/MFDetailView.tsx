@@ -3,12 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useCanvasStore } from '@/store/useCanvasStore';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Sparkles, MessageSquare, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Sparkles, TrendingUp, AlertTriangle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { MagicCard } from '@/components/ui/magic-card';
 import { NumberTicker } from '@/components/ui/number-ticker';
-import { ShimmerButton } from '@/components/ui/shimmer-button';
-import InlineCopilot from './InlineCopilot';
 import type { MFDetailApiResponse } from '@/types/funds';
 
 const SUGGESTED_COMPARISONS = [
@@ -17,8 +15,15 @@ const SUGGESTED_COMPARISONS = [
   { code: '118269', name: 'HDFC Mid-Cap Opportunities Fund' }
 ];
 
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
+type NavTooltipProps = {
+  active?: boolean;
+  payload?: Array<{ value?: number }>;
+  label?: string | number;
+};
+
+const CustomTooltip = ({ active, payload, label }: NavTooltipProps) => {
+  const value = payload?.[0]?.value;
+  if (active && typeof value === 'number') {
     return (
       <motion.div
         initial={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -27,7 +32,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       >
         <p className="text-xs font-semibold text-slate-400 mb-1">{label}</p>
         <p className="text-xl font-mono font-bold text-[#00FF9D]">
-          ₹{payload[0].value.toFixed(2)}
+          ₹{value.toFixed(2)}
         </p>
       </motion.div>
     );
@@ -152,7 +157,7 @@ export default function MFDetailView({ schemeCode }: { schemeCode: string }) {
             </div>
             {!aiSummary ? (
               <div className="flex items-center justify-between">
-                <p className="text-sm text-slate-400">Generate an instant, contextual summary of this fund's performance and risk profile using Nemotron 3 Ultra.</p>
+                <p className="text-sm text-slate-400">Generate an instant, contextual summary of this fund&apos;s performance and risk profile using Nemotron 3 Ultra.</p>
                 <button 
                   onClick={generateSummary}
                   disabled={isGeneratingSummary}

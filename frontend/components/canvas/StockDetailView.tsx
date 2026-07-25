@@ -1,12 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Sparkles, MessageSquare, AlertTriangle } from 'lucide-react';
+import { Sparkles, AlertTriangle } from 'lucide-react';
 import { MagicCard } from '@/components/ui/magic-card';
 import { NumberTicker } from '@/components/ui/number-ticker';
-import { ShimmerButton } from '@/components/ui/shimmer-button';
 import { AnimatedList } from '@/components/ui/animated-list';
-import InlineCopilot from './InlineCopilot';
 
 const UNAVAILABLE = 'This data is currently unavailable from the provider.';
 
@@ -83,6 +81,27 @@ function ProviderSection({ title, block }: { title: string; block?: ProviderBloc
   );
 }
 
+function StockDetailSkeleton() {
+  return (
+    <div className="flex-1 space-y-6 overflow-hidden p-6 animate-pulse">
+      <div className="space-y-3 pb-4 border-b border-white/5">
+        <div className="h-8 w-1/3 rounded-lg bg-white/[0.05]" />
+        <div className="h-4 w-1/4 rounded-md bg-white/[0.05]" />
+      </div>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        {[1, 2, 3, 4].map((item) => (
+          <div key={item} className="h-28 rounded-xl border border-white/5 bg-white/[0.03]" />
+        ))}
+      </div>
+      <div className="space-y-4 pt-4">
+        {[1, 2].map((item) => (
+          <div key={item} className="h-40 rounded-xl border border-white/5 bg-white/[0.02]" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function StockDetailView({ stockId }: { stockId?: string }) {
   const [data, setData] = useState<StockProfileData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -136,28 +155,9 @@ export default function StockDetailView({ stockId }: { stockId?: string }) {
   const rawPe = String(data?.ratios?.pe ?? '0');
   const peVal = parseFloat(rawPe.replace(/[^0-9.-]+/g, ""));
 
-  const Skeleton = () => (
-    <div className="flex-1 space-y-6 overflow-hidden p-6 animate-pulse">
-      <div className="space-y-3 pb-4 border-b border-white/5">
-        <div className="h-8 w-1/3 rounded-lg bg-white/[0.05]" />
-        <div className="h-4 w-1/4 rounded-md bg-white/[0.05]" />
-      </div>
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-28 rounded-xl border border-white/5 bg-white/[0.03]" />
-        ))}
-      </div>
-      <div className="space-y-4 pt-4">
-        {[1, 2].map((i) => (
-          <div key={i} className="h-40 rounded-xl border border-white/5 bg-white/[0.02]" />
-        ))}
-      </div>
-    </div>
-  );
-
   return (
     <div className="stock-detail h-full flex flex-col text-slate-100 overflow-hidden relative">
-      {loading && <Skeleton />}
+      {loading && <StockDetailSkeleton />}
       {error && (
         <div className="m-6 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400 shadow-lg">
           <AlertTriangle className="inline-block w-4 h-4 mr-2" /> Error: {error}

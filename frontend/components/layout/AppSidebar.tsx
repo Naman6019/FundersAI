@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   Sidebar,
   SidebarContent,
@@ -14,8 +15,6 @@ import {
 } from "@/components/ui/sidebar";
 import {
   LayoutDashboard,
-  Landmark,
-  LineChart,
   Brain,
   ChartSpline,
   Database,
@@ -49,7 +48,6 @@ export function AppSidebar({
   healthCheckedAt: string | null;
   currentTier: UserTier;
 }) {
-  const assetType = useChatStore((state) => state.assetType);
   const setAssetType = useChatStore((state) => state.setAssetType);
   const sessions = useChatStore((state) => state.sessions);
   const fetchSessions = useChatStore((state) => state.fetchSessions);
@@ -85,7 +83,14 @@ export function AppSidebar({
     <Sidebar className="border-r border-white/10 bg-[#0a0a0a]">
       <SidebarHeader className="p-5 border-b border-white/10">
         <div className="flex flex-col gap-1 items-start">
-          <img src="/FUNDERSAI-vertical.png" alt="FundersAI Logo" className="h-8 w-auto object-contain origin-left" />
+          <Image
+            src="/FUNDERSAI-vertical.png"
+            alt="FundersAI Logo"
+            width={173}
+            height={80}
+            priority
+            className="h-8 w-auto object-contain origin-left"
+          />
           <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400 pl-1">Research terminal</p>
         </div>
       </SidebarHeader>

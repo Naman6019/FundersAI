@@ -1,6 +1,22 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useMemo } from "react";
 import { motion } from "framer-motion";
+
+type Particle = {
+  id: number;
+  x: string;
+  y: string;
+  size: number;
+  opacity: number;
+  delay: number;
+  duration: number;
+};
+
+function seededUnit(index: number, salt: number): number {
+  const value = Math.sin((index + 1) * 12.9898 + salt * 78.233) * 43758.5453;
+  return value - Math.floor(value);
+}
 
 export const Sparkles = ({
   density = 100,
@@ -15,46 +31,45 @@ export const Sparkles = ({
   color?: string;
   className?: string;
 }) => {
-  const [particles, setParticles] = useState<any[]>([]);
-
-  useEffect(() => {
-    const newParticles = Array.from({ length: Math.min(density, 200) }).map((_, i) => ({
-      id: i,
-      x: Math.random() * 100 + "%",
-      y: Math.random() * 100 + "%",
-      size: Math.random() * 2 + 1,
-      opacity: Math.random(),
-      delay: Math.random() * 5,
-      duration: Math.random() * 10 + 10 / speed,
-    }));
-    setParticles(newParticles);
-  }, [density, speed]);
+  const particles = useMemo<Particle[]>(
+    () =>
+      Array.from({ length: Math.min(density, 200) }, (_, index) => ({
+        id: index,
+        x: `${seededUnit(index, 1) * 100}%`,
+        y: `${seededUnit(index, 2) * 100}%`,
+        size: seededUnit(index, 3) * 2 + 1,
+        opacity: seededUnit(index, 4),
+        delay: seededUnit(index, 5) * 5,
+        duration: seededUnit(index, 6) * 10 + 10 / Math.max(speed, 0.1),
+      })),
+    [density, speed],
+  );
 
   return (
     <div className={className} style={{ position: "absolute", overflow: "hidden" }}>
-      {particles.map((p) => (
+      {particles.map((particle) => (
         <motion.div
-          key={p.id}
-          initial={{ x: p.x, y: p.y, opacity: 0 }}
+          key={particle.id}
+          initial={{ x: particle.x, y: particle.y, opacity: 0 }}
           animate={{
-            y: direction === "bottom" ? ["0%", "100%"] : direction === "top" ? ["100%", "0%"] : p.y,
-            x: direction === "right" ? ["0%", "100%"] : direction === "left" ? ["100%", "0%"] : p.x,
-            opacity: [0, p.opacity, 0],
+            y: direction === "bottom" ? ["0%", "100%"] : direction === "top" ? ["100%", "0%"] : particle.y,
+            x: direction === "right" ? ["0%", "100%"] : direction === "left" ? ["100%", "0%"] : particle.x,
+            opacity: [0, particle.opacity, 0],
           }}
           transition={{
-            duration: p.duration,
+            duration: particle.duration,
             repeat: Infinity,
             ease: "linear",
-            delay: p.delay,
+            delay: particle.delay,
           }}
           style={{
             position: "absolute",
-            width: p.size,
-            height: p.size,
+            width: particle.size,
+            height: particle.size,
             backgroundColor: color,
             borderRadius: "50%",
-            left: p.x,
-            top: p.y,
+            left: particle.x,
+            top: particle.y,
           }}
         />
       ))}

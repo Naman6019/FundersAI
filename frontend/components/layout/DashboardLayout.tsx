@@ -2,37 +2,24 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
-  Bolt,
   ChartSpline,
   Clock3,
   Database,
-  PanelLeftClose,
-  PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
   ShieldCheck,
-  Sparkles,
-  LayoutDashboard,
   Landmark,
-  LineChart,
   Brain,
-  Bell,
-  Settings,
-  Bot,
-  Eye,
-  Bookmark,
   AlertCircle,
   CheckCircle2,
   ArrowLeftRight,
   ArrowRight,
   Search,
-  Send,
   PieChart,
   Wallet,
   TrendingUp,
@@ -41,8 +28,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCanvasStore } from '@/store/useCanvasStore';
-import { useChatStore, AssetType } from '@/store/useChatStore';
-import UserProfileDropdown from '@/components/auth/UserProfileDropdown';
+import { useChatStore } from '@/store/useChatStore';
 import ChatWindow from '@/components/chat/ChatWindow';
 import StockDetailView from '@/components/canvas/StockDetailView';
 import MFDetailView from '@/components/canvas/MFDetailView';
@@ -50,7 +36,6 @@ import ComparisonView from '@/components/canvas/ComparisonView';
 import PortfolioReviewView from '@/components/canvas/PortfolioReviewView';
 import CategoryCompareView from '@/components/canvas/CategoryCompareView';
 import FundSearchSelect from '@/components/ui/FundSearchSelect';
-import Magnetic from '@/components/ui/Magnetic';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import type { CategoryComparePayload, CategoryFundRow, SearchResultItem } from '@/types/funds';
 import type { UserTier } from '@/lib/billing/tiers';
@@ -70,7 +55,6 @@ const DEFAULT_DATA_HEALTH: DataHealthItem[] = [
 ];
 
 const HEADER_HEIGHT = 64;
-const SIDEBAR_WIDTH = 276;
 const MAIN_PADDING = 24;
 const PANEL_GAP = 16;
 const RESIZE_HANDLE_WIDTH = 12;
@@ -147,8 +131,7 @@ function FineGrid() {
 }
 
 export default function DashboardLayout() {
-  const searchParams = useSearchParams();
-  const { activeView, selectedIds, auxiliaryData, isCanvasOpen, toggleCanvas, comparisonMode } = useCanvasStore();
+  const { activeView, selectedIds, auxiliaryData, isCanvasOpen, toggleCanvas } = useCanvasStore();
   const [activeTab, setActiveTab] = useState<'overview' | 'research'>('research');
   const [dataHealth, setDataHealth] = useState<DataHealthItem[]>(DEFAULT_DATA_HEALTH);
   const [healthCheckedAt, setHealthCheckedAt] = useState<string | null>(null);

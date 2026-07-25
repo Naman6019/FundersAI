@@ -28,29 +28,32 @@ export default function FundSearchSelect({ placeholder = "Search for a fund or s
   }, []);
 
   useEffect(() => {
-    if (!query || query.length < 2) {
-      setResults([]);
-      setIsOpen(false);
-      return;
-    }
+    if (query.trim().length < 2) return;
 
+    const controller = new AbortController();
     const timer = setTimeout(async () => {
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+          signal: controller.signal,
+        });
         if (res.ok) {
-          const data = await res.json();
+          const data = (await res.json()) as { results?: SearchResultItem[] };
           setResults(data.results || []);
           setIsOpen(true);
         }
-      } catch (err) {
-        console.error("Search failed:", err);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        console.error("Search failed:", error);
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     }, 300);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [query]);
 
   const handleSelect = (item: SearchResultItem) => {
@@ -66,7 +69,15 @@ export default function FundSearchSelect({ placeholder = "Search for a fund or s
         <input
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(event) => {
+            const nextQuery = event.target.value;
+            setQuery(nextQuery);
+            if (nextQuery.trim().length < 2) {
+              setResults([]);
+              setIsOpen(false);
+              setIsLoading(false);
+            }
+          }}
           onFocus={() => { if (results.length > 0) setIsOpen(true); }}
           placeholder={placeholder}
           className="w-full bg-[#080d1a] border border-white/20 rounded-lg py-2.5 pl-10 pr-10 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#66a3ff] focus:border-[#66a3ff] transition-all"

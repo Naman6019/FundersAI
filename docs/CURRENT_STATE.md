@@ -13,7 +13,14 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 - Automation: GitHub Actions workflows
 
 ## Implemented
-- Supabase-auth dashboard (`/dashboard`) with `/auth` sign-in/sign-up.
+- Supabase-auth dashboard (`/dashboard`) with `/auth` sign-in/sign-up and password recovery.
+  - The auth screen uses accessible labeled fields, local icons, explicit error/success states, password visibility controls, a non-enumerating reset response, and a dedicated password-update route.
+  - Unsupported adoption claims and stock user avatars were removed. The replacement trust strip describes only the product's research-only boundary, official evidence availability, and visible data limits.
+  - `/terms` and `/privacy` are linked from authentication surfaces; their product copy requires normal legal review before material policy changes.
+- Frontend ESLint passes with zero errors and zero warnings.
+  - Active WebGL, motion, search, chat, billing, canvas, and responsive hooks use explicit types and lifecycle-safe updates instead of lint suppressions.
+  - The landing hero now scopes GSAP cleanup to its own timeline and keeps a deliberate CSS gradient fallback when WebGL is unavailable.
+  - Dead landing backup code and unused imports were removed.
   - Current implementation is one authenticated client workspace powered by `DashboardLayout`.
   - The profile menu reads each Supabase user's name/avatar metadata and falls back to a formatted email name and initial; it does not use a shared hardcoded identity.
   - `/dashboard` now opens the Overview tab by default.

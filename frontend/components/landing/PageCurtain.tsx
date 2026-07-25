@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 
 /**
  * PageCurtain — Corporate Blues (#003366) overlay that slides up after mount.
@@ -10,19 +10,15 @@ import { motion, AnimatePresence } from 'framer-motion';
  */
 export default function PageCurtain() {
   const [visible, setVisible] = useState(true);
+  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
-    // Respect reduced motion: remove curtain immediately
-    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (prefersReduced) {
-      setVisible(false);
-      return;
-    }
-
-    // Brief delay so fonts + layout are ready, then animate out
-    const timer = setTimeout(() => setVisible(false), 320);
+    const timer = window.setTimeout(
+      () => setVisible(false),
+      prefersReducedMotion ? 0 : 320,
+    );
     return () => clearTimeout(timer);
-  }, []);
+  }, [prefersReducedMotion]);
 
   return (
     <AnimatePresence>

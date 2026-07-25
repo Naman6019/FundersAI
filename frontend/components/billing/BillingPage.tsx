@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
-import { Check, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { MONTHLY_TIERS, PaidTier, UserTier } from '@/lib/billing/tiers';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -218,7 +218,7 @@ export default function BillingPage() {
       prefill: checkout.prefill,
       notes: checkout.notes,
       theme: { color: '#66a3ff' },
-      handler: (response: RazorpaySubscriptionCheckoutResponse) => {
+      handler: () => {
         console.info('[razorpay:checkout:success]', { tier });
         setMessage('Payment authorised. Your tier updates after Razorpay confirms the subscription.');
         setBusyTier(null);

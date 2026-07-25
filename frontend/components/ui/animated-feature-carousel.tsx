@@ -7,6 +7,7 @@ import {
   useState,
   type MouseEvent,
 } from "react"
+import Image from "next/image"
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import {
@@ -184,14 +185,16 @@ const stepVariants: Variants = {
 const StepImage = forwardRef<HTMLImageElement, StepImageProps>(
   ({ src, alt, className, style, ...props }, ref) => {
     return (
-      <img
+      <Image
         ref={ref}
         alt={alt}
         className={className}
         src={src}
+        width={props.width ?? 1200}
+        height={props.height ?? 800}
+        unoptimized
         style={{ position: "absolute", userSelect: "none", maxWidth: "unset", ...style }}
         onError={(e) => (e.currentTarget.src = placeholderImage(alt))}
-        {...props}
       />
     )
   }
