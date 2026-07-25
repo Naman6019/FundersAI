@@ -151,6 +151,7 @@ type MFHoldingRow = {
   isin?: string | null;
   sector?: string | null;
   weight_pct?: number | string | null;
+  as_of_date?: string | null;
 };
 
 type MFSectorRow = {
@@ -180,11 +181,103 @@ type MFComparisonRecord = {
   best_for?: string | null;
   main_risk?: string | null;
   minimum_sip?: string | null;
+  holdings_as_of_date?: string | null;
   holdings?: MFHoldingRow[];
   sector_allocation?: MFSectorRow[];
 };
 
 type CompositionFund = { details: MFComparisonRecord; label?: string };
+
+function buildHoldingsOverlapFromFunds(
+  funds: Array<CompositionFund | null>,
+): HoldingsOverlapPayload | null {
+  const active = funds.filter((fund): fund is CompositionFund => Boolean(fund?.details));
+  if (active.length < 2) return null;
+  const first = active[0];
+  const second = active[1];
+  const holdingsA = Array.isArray(first.details.holdings) ? first.details.holdings : [];
+  const holdingsB = Array.isArray(second.details.holdings) ? second.details.holdings : [];
+  if (!holdingsA.length || !holdingsB.length) {
+    return {
+      coverage_status: 'unavailable',
+      reason: 'Holdings data is unavailable for one or both funds.',
+      entities: [first.label || 'Fund A', second.label || 'Fund B'],
+      top_common_holdings: [],
+      sector_overlap: [],
+      total_overlap_weight: 0,
+    };
+  }
+
+  const holdingKey = (row: MFHoldingRow) => {
+    const isin = String(row.isin || '').trim().toUpperCase();
+    if (isin) return `isin:${isin}`;
+    const name = String(row.security_name || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+    return name ? `name:${name}` : null;
+  };
+  const weight = (row: MFHoldingRow) => toNumber(row.weight_pct) || 0;
+  const buildHoldingMap = (rows: MFHoldingRow[]) => {
+    const result = new Map<string, MFHoldingRow>();
+    rows.forEach(row => {
+      const key = holdingKey(row);
+      if (key) result.set(key, row);
+    });
+    return result;
+  };
+  const mapA = buildHoldingMap(holdingsA);
+  const mapB = buildHoldingMap(holdingsB);
+  const common = Array.from(mapA.keys())
+    .filter(key => mapB.has(key))
+    .map(key => {
+      const rowA = mapA.get(key)!;
+      const rowB = mapB.get(key)!;
+      return {
+        name: rowA.security_name || rowB.security_name || 'Not available',
+        isin: rowA.isin || rowB.isin,
+        sector: rowA.sector || rowB.sector,
+        weight_a: weight(rowA),
+        weight_b: weight(rowB),
+        overlap_weight: Math.min(weight(rowA), weight(rowB)),
+      };
+    })
+    .sort((a, b) => b.overlap_weight - a.overlap_weight);
+
+  const sectors = (rows: MFHoldingRow[]) => {
+    const result = new Map<string, number>();
+    rows.forEach(row => {
+      const sector = String(row.sector || 'Unclassified');
+      result.set(sector, (result.get(sector) || 0) + weight(row));
+    });
+    return result;
+  };
+  const sectorsA = sectors(holdingsA);
+  const sectorsB = sectors(holdingsB);
+  const sectorOverlap = Array.from(sectorsA.keys())
+    .filter(sector => sectorsB.has(sector))
+    .map(sector => ({
+      sector,
+      weight_a: sectorsA.get(sector) || 0,
+      weight_b: sectorsB.get(sector) || 0,
+      overlap_weight: Math.min(sectorsA.get(sector) || 0, sectorsB.get(sector) || 0),
+    }))
+    .sort((a, b) => b.overlap_weight - a.overlap_weight);
+  const topConcentration = (rows: MFHoldingRow[]) => (
+    rows.map(weight).sort((a, b) => b - a).slice(0, 10).reduce((total, value) => total + value, 0)
+  );
+
+  return {
+    coverage_status: 'available',
+    entities: [first.label || 'Fund A', second.label || 'Fund B'],
+    as_of_date: [first.details.holdings_as_of_date, second.details.holdings_as_of_date]
+      .filter(Boolean)
+      .join(' / ') || null,
+    common_holding_count: common.length,
+    total_overlap_weight: common.reduce((total, row) => total + row.overlap_weight, 0),
+    fund_a_top_concentration: topConcentration(holdingsA),
+    fund_b_top_concentration: topConcentration(holdingsB),
+    top_common_holdings: common.slice(0, 10),
+    sector_overlap: sectorOverlap.slice(0, 10),
+  };
+}
 
 type FundCoverage = Record<string, unknown> & {
   supports?: Record<string, boolean | undefined>;
@@ -673,7 +766,13 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
   const fund4 = useFundData(isMF ? id4 : null);
   const fundsData = [fund1, fund2, fund3, fund4].slice(0, Math.max(2, ids.length));
 
-  const benchmark = useBenchmarkData();
+  const needsBenchmarkFallback = isMF && fundsData.some((fund, index) => (
+    index < ids.length
+    && Boolean(fund.meta)
+    && (toNumber(fund.riskMetrics?.alpha_vs_nifty ?? fund.riskMetrics?.alpha) === null
+      || toNumber(fund.riskMetrics?.beta) === null)
+  ));
+  const benchmark = useBenchmarkData(needsBenchmarkFallback);
   const [fetchedComparison, setFetchedComparison] = useState<Record<string, StockComparisonMetric>>({});
   const [fetchedWhyBetter, setFetchedWhyBetter] = useState<WhyBetterPayload | null>(null);
   const [stockError, setStockError] = useState<string | null>(null);
@@ -987,7 +1086,7 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
   const mfWhyBetter = getWhyBetter(auxiliaryData?.quant_data);
   const mfRiskAnalysis = getRiskAnalysis(auxiliaryData?.quant_data);
   const comparisonSummary = mfQuant?.comparison_summary;
-  const holdingsOverlap = mfQuant?.holdings_overlap;
+  const auxiliaryHoldingsOverlap = mfQuant?.holdings_overlap;
   const periods: Period[] = ['1D', '6M', '1Y', '3Y', '5Y'];
   const comparisonMap =
     auxiliaryData?.quant_data && typeof auxiliaryData.quant_data === 'object'
@@ -1248,6 +1347,8 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
             };
 
             const activeFunds = Array.from({ length: ids.length }).map((_, i) => getFundData(i)).filter(Boolean) as ReturnType<typeof getFundData>[];
+            const holdingsOverlap = auxiliaryHoldingsOverlap
+              || buildHoldingsOverlapFromFunds(activeFunds as Array<CompositionFund | null>);
             const freshnessLabel = (fund: NonNullable<ReturnType<typeof getFundData>>) => {
               if (fund.freshness?.status === 'fresh' || fund.freshness?.stale === false) return 'NAV synced';
               if (fund.freshness?.status) return String(fund.freshness.status);

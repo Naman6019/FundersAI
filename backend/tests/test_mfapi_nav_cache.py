@@ -326,6 +326,7 @@ def test_github_actions_use_cache_retention_and_gated_archive():
     assert "sync_mf_history.py" not in combined
     assert "compact_mf_nav_5y" not in combined
     assert "python -m backend.app.jobs.sync_mf_nav" not in combined
+    assert "python -m backend.app.jobs.refresh_mf_snapshot_metrics" in combined
 
     compact = (workflows / "compact-mf-storage.yml").read_text(encoding="utf-8")
     assert "cleanup_nav_api_cache" in compact

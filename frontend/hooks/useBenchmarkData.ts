@@ -20,12 +20,12 @@ function normalizeToDdMmYyyy(raw: string): string | null {
   return null;
 }
 
-export function useBenchmarkData() {
+export function useBenchmarkData(enabled = true) {
   const [data, setData] = useState<BenchmarkPoint[] | null>(cachedData);
-  const [loading, setLoading] = useState<boolean>(!cachedData);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     if (cachedData) return;
 
     if (!pendingRequest) {
@@ -58,14 +58,12 @@ export function useBenchmarkData() {
     pendingRequest
       .then(points => {
         setData(points);
-        setLoading(false);
       })
       .catch(err => {
         setError(err.message);
-        setLoading(false);
         pendingRequest = null; // Reset on failure
       });
-  }, []);
+  }, [enabled]);
 
-  return { data, loading, error };
+  return { data, loading: enabled && !data && !error, error };
 }

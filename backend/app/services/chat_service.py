@@ -3042,7 +3042,11 @@ def _build_reasoning_summary(
             },
             {
                 "label": "Compared",
-                "detail": "Checked returns, risk, cost, holdings, and freshness where data was present.",
+                "detail": (
+                    "Checked stored returns, risk, cost, and freshness; detailed history and holdings load in the canvas."
+                    if isinstance(quant_data, dict) and quant_data.get("comparison_data_level") == "summary"
+                    else "Checked returns, risk, cost, holdings, and freshness where data was present."
+                ),
                 "status": "ok" if coverage_status != "unavailable" else "limited",
             },
             {
@@ -3189,6 +3193,37 @@ def _compare_direct_answer_markdown(quant_data: Any) -> str:
         lines.append(f"- Data limitations: {'; '.join(str(item) for item in limitations[:3])}")
 
     return "\n".join(lines)
+
+
+def _canvas_trend_observation(quant_data: Any) -> str:
+    """Create the short, data-backed chat read while the full canvas loads."""
+    if not isinstance(quant_data, dict):
+        return "The canvas contains the available structured comparison. Read the metric coverage before drawing a conclusion."
+
+    why_better = quant_data.get("why_better") if isinstance(quant_data.get("why_better"), dict) else {}
+    summary = str(why_better.get("summary") or "Structured comparison is available in the canvas.").strip()
+    factor_results = why_better.get("factor_results") if isinstance(why_better.get("factor_results"), list) else []
+    edges = []
+    for factor in factor_results:
+        if not isinstance(factor, dict):
+            continue
+        winner = factor.get("winner")
+        label = factor.get("factor")
+        if winner and label and label != "Freshness":
+            edges.append(f"{winner} leads on {str(label).lower()}.")
+    if edges:
+        return f"{summary} {' '.join(edges[:2])}"
+
+    limitations = why_better.get("data_limitations") if isinstance(why_better.get("data_limitations"), list) else []
+    snapshot_limitations = [
+        str(item)
+        for item in limitations
+        if "holdings data missing" not in str(item).lower()
+        and "holdings-based reasoning unavailable" not in str(item).lower()
+    ]
+    if snapshot_limitations:
+        return f"{summary} Limits: {snapshot_limitations[0]}."
+    return summary
 
 def _comparison_valid_items(comparison: Any) -> list[tuple[str, dict[str, Any]]]:
     if not isinstance(comparison, dict):
@@ -3736,7 +3771,7 @@ Controlled Web Context:
     
     deterministic_canvas = intent == "compare" and comparison_view_mode == "canvas" and not has_followup and not is_deep_or_advanced
     if deterministic_canvas:
-        trend = None
+        trend = _canvas_trend_observation(quant_data)
     else:
         model_timeout = 20.0 if intent == "compare" and comparison_view_mode == "canvas" else 60.0
         trend = await function_ollama_chat(messages, format="text", usage_collector=usage_collector, timeout_seconds=model_timeout)
@@ -3777,29 +3812,15 @@ Controlled Web Context:
     analysis_heading = "Deep Research Analysis" if deep_research else "Trend Observation"
 
     if intent == "compare" and comparison_view_mode == "canvas":
-        long_term_read = compare_direct_answer or (
-            "Use the canvas metrics to compare returns, volatility, drawdown, Sharpe ratio, expense ratio, AUM, and data freshness side by side."
-        )
         canvas_message = (
-            "Canvas is open with the full metric view. Here is the usable read from the data available now."
+            "Canvas is open with the full metric view. Below is a concise summary."
             if comparison_canvas_available is not False
-            else "The comparison canvas could not be opened because two validated asset identifiers were unavailable. Here is the usable read from the data available now."
+            else "The comparison canvas could not be opened because two validated asset identifiers were unavailable. Below is a concise summary."
         )
-        return f"""### {subject} — {title}
+        return f"""### {subject}
 > {canvas_message}
-
-### What the Data Says
-{long_term_read}
-{chr(10) + chr(10) + "### Comparison Snapshot" + chr(10) + comparison_summary if comparison_summary else ""}
 {chr(10) + chr(10) + "### Follow-up Answer" + chr(10) + followup_answer if followup_answer else ""}
-
-### {analysis_heading}
-
-{trend}
-{glossary_markdown}
-
-### Best Follow-up
-- Compare downside protection and max drawdown.
+{chr(10) + chr(10) + "### " + analysis_heading + chr(10) + chr(10) + trend if trend else ""}
 
 {DISCLAIMER}"""
 
@@ -4196,16 +4217,24 @@ async def get_mutual_fund_details(scheme_code: int, background_tasks: Background
         raise DataUnavailableError("Supabase client not initialized")
 
     try:
-        profile = FundService.get_mutual_fund_profile(scheme_code)
+        profile, nav_freshness = await asyncio.gather(
+            asyncio.to_thread(FundService.get_mutual_fund_profile, scheme_code),
+            asyncio.to_thread(get_nav_cache_summary, str(scheme_code)),
+        )
         if not profile:
             raise EntityNotFoundError("Mutual fund not found")
 
-        # Nifty fallback for alpha/beta
-        nifty_hist = await get_nifty_history_df(days=2200)
-        hist_df = FundService.get_mf_history_df(scheme_code, days=2200)
-
         risk_metrics = profile.risk_metrics.model_dump()
-        if not hist_df.empty and not nifty_hist.empty:
+        needs_alpha_beta = risk_metrics.get("beta") is None or risk_metrics.get("alpha_vs_nifty") is None
+        if needs_alpha_beta and profile.full_nav_history:
+            hist_df = pd.DataFrame([
+                {
+                    "date": pd.to_datetime(point.date, dayfirst=True),
+                    "Close": float(point.value),
+                }
+                for point in profile.full_nav_history
+            ]).set_index("date").sort_index()
+            nifty_hist = await get_nifty_history_df(days=2200)
             alpha_beta = calculate_alpha_beta_v2(hist_df, nifty_hist)
             if risk_metrics.get("beta") is None:
                 risk_metrics["beta"] = alpha_beta.get("beta")
@@ -4213,8 +4242,23 @@ async def get_mutual_fund_details(scheme_code: int, background_tasks: Background
                 risk_metrics["alpha_vs_nifty"] = alpha_beta.get("alpha")
             risk_metrics["risk_period"] = f"{alpha_beta.get('period_years', 3)}Y"
 
-        history_coverage = _history_coverage_from_df(hist_df)
-        nav_freshness = get_nav_cache_summary(str(scheme_code))
+        first_nav = pd.to_datetime(profile.data_quality.first_nav_date, errors="coerce")
+        last_nav = pd.to_datetime(profile.data_quality.last_nav_date, errors="coerce")
+        span_days = (
+            max(int((last_nav - first_nav).days), 0)
+            if not pd.isna(first_nav) and not pd.isna(last_nav)
+            else 0
+        )
+        history_coverage = {
+            "history_points": profile.data_quality.nav_points_count,
+            "first_nav_date": profile.data_quality.first_nav_date,
+            "last_nav_date": profile.data_quality.last_nav_date,
+            "supports": {
+                "1Y": span_days >= 365,
+                "3Y": span_days >= 365 * 3,
+                "5Y": span_days >= 365 * 5,
+            },
+        }
         details_dump = profile.details.model_dump()
         stale = profile.data_quality.is_stale
 
@@ -4440,7 +4484,18 @@ To experience FundersAI's advanced research capabilities, please try:
                 intent_info["compare_entities"] = entities
             else:
                 compare_service = CompareDataService(get_mf_repository(), resolver=resolver)
-                compare_payload = await compare_service.build_mutual_fund_compare(
+                simple_canvas_compare = (
+                    req.comparison_view_mode == "canvas"
+                    and not intent_info.get("followup_question")
+                    and req.research_depth != "deep"
+                    and req.explanation_mode != "advanced"
+                )
+                compare_builder = (
+                    compare_service.build_mutual_fund_compare_summary
+                    if simple_canvas_compare
+                    else compare_service.build_mutual_fund_compare
+                )
+                compare_payload = await compare_builder(
                     [str(entity) for entity in entities],
                     downside_focus=bool(intent_info.get("downside_focus")),
                     pre_resolutions=compare_resolutions,

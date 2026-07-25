@@ -6,6 +6,9 @@ from math import sqrt
 from typing import Any
 
 
+NAV_METRIC_SNAPSHOT_VERSION = "mf_nav_metrics_v2"
+
+
 @dataclass
 class NavPoint:
     nav_date: date
@@ -39,7 +42,13 @@ def normalize_nav_history(rows: list[dict[str, Any]]) -> list[NavPoint]:
     points: list[NavPoint] = []
     for row in rows:
         nav_date = _parse_date(row.get("nav_date") or row.get("date"))
-        nav = _parse_float(row.get("nav"))
+        nav = _parse_float(
+            row.get("nav")
+            if row.get("nav") is not None
+            else row.get("close")
+            if row.get("close") is not None
+            else row.get("value")
+        )
         if nav_date and nav is not None and nav > 0:
             points.append(NavPoint(nav_date=nav_date, nav=nav))
     points.sort(key=lambda item: item.nav_date)
@@ -85,6 +94,18 @@ def _daily_returns(points: list[NavPoint], lookback_days: int) -> list[float]:
     return returns
 
 
+def _daily_returns_by_date(points: list[NavPoint], lookback_days: int) -> dict[date, float]:
+    if len(points) < 2:
+        return {}
+    cutoff = points[-1].nav_date - timedelta(days=lookback_days)
+    returns: dict[date, float] = {}
+    for prev, curr in zip(points[:-1], points[1:]):
+        if curr.nav_date < cutoff or prev.nav <= 0:
+            continue
+        returns[curr.nav_date] = (curr.nav / prev.nav) - 1
+    return returns
+
+
 def _volatility_1y(points: list[NavPoint]) -> float | None:
     rets = _daily_returns(points, 365)
     if len(rets) < 2:
@@ -116,6 +137,8 @@ def compute_nav_metrics(
     rows: list[dict[str, Any]],
     benchmark_daily_returns: list[float] | None = None,
     risk_free_rate: float | None = None,
+    *,
+    benchmark_rows: list[dict[str, Any]] | None = None,
 ) -> dict[str, float | None]:
     points = normalize_nav_history(rows)
 
@@ -140,12 +163,26 @@ def compute_nav_metrics(
         if annualized_std > 0:
             metrics["sharpe_ratio"] = ((nav_mean * 252) - risk_free_rate) / annualized_std
 
-    # Alpha and beta still require aligned benchmark returns.
-    if benchmark_daily_returns and risk_free_rate is not None:
+    nav_sample: list[float] = []
+    bench_sample: list[float] = []
+    if benchmark_rows:
+        benchmark_points = normalize_nav_history(benchmark_rows)
+        nav_by_date = _daily_returns_by_date(points, 365)
+        benchmark_by_date = _daily_returns_by_date(benchmark_points, 365)
+        shared_dates = sorted(set(nav_by_date).intersection(benchmark_by_date))
+        nav_sample = [nav_by_date[item] for item in shared_dates]
+        bench_sample = [benchmark_by_date[item] for item in shared_dates]
+    elif benchmark_daily_returns:
         paired = min(len(nav_returns), len(benchmark_daily_returns))
+        nav_sample = nav_returns[-paired:]
+        bench_sample = benchmark_daily_returns[-paired:]
+
+    # Alpha and beta require at least 30 aligned daily returns.
+    if risk_free_rate is not None and len(nav_sample) >= 30:
+        paired = min(len(nav_sample), len(bench_sample))
         if paired >= 30:
-            nav_sample = nav_returns[-paired:]
-            bench_sample = benchmark_daily_returns[-paired:]
+            nav_sample = nav_sample[-paired:]
+            bench_sample = bench_sample[-paired:]
             bench_mean = sum(bench_sample) / paired
             nav_mean = sum(nav_sample) / paired
             bench_var = sum((r - bench_mean) ** 2 for r in bench_sample) / paired

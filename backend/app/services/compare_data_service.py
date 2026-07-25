@@ -12,7 +12,7 @@ from app.services import cache_policy
 from app.services.asset_resolver import AssetResolution, AssetResolver, HIGH_CONFIDENCE
 from app.services.comparison_reasoning import build_mf_why_better
 from app.services.mf_holdings_quality import is_holding_summary_or_noise
-from app.services.mf_metrics_service import compute_nav_metrics
+from app.services.mf_metrics_service import NAV_METRIC_SNAPSHOT_VERSION, compute_nav_metrics
 from app.services.mfapi_service import get_nav_cache_summary, get_stored_nav_history
 
 logger = logging.getLogger(__name__)
@@ -43,6 +43,24 @@ def _to_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _metric_snapshot_metadata(row: dict[str, Any]) -> dict[str, Any]:
+    provider_payload = row.get("provider_payload")
+    if not isinstance(provider_payload, dict):
+        return {}
+    metadata = provider_payload.get("metric_snapshot")
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _has_precomputed_metric_snapshot(row: dict[str, Any] | None) -> bool:
+    if not isinstance(row, dict):
+        return False
+    metadata = _metric_snapshot_metadata(row)
+    return (
+        metadata.get("version") == NAV_METRIC_SNAPSHOT_VERSION
+        and bool(metadata.get("as_of_date"))
+    )
 
 
 def _normalize_price_df_index(df: pd.DataFrame) -> pd.DataFrame:
@@ -193,10 +211,12 @@ class CompareDataService:
                 return None
             return await asyncio.to_thread(self._core_snapshot_row, resolution.id)
 
-        benchmark_hist, core_rows = await asyncio.gather(
-            self._nifty_history_df(),
-            asyncio.gather(*[_load_core_row(resolution) for resolution in resolutions]),
+        core_rows = await asyncio.gather(*[_load_core_row(resolution) for resolution in resolutions])
+        needs_request_metrics = any(
+            row and not _has_precomputed_metric_snapshot(row)
+            for row in core_rows
         )
+        benchmark_task = asyncio.create_task(self._nifty_history_df()) if needs_request_metrics else None
 
         async def _build_entry(
             entity: str,
@@ -211,7 +231,7 @@ class CompareDataService:
                     resolution,
                     reason="Resolved fund is missing from local snapshot data.",
                 ), "partial"
-            item = await self._comparison_item(row, resolution, benchmark_hist)
+            item = await self._comparison_item(row, resolution, benchmark_task)
             return key, item, item.get("data_quality", {}).get("coverage_status", "complete")
 
         entries = await asyncio.gather(*[
@@ -254,6 +274,92 @@ class CompareDataService:
             "data_status": data_status,
         }
 
+    async def build_mutual_fund_compare_summary(
+        self,
+        entities: list[str],
+        *,
+        downside_focus: bool = False,
+        pre_resolutions: list[AssetResolution] | None = None,
+        trace_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Build the small comparison payload used before the canvas opens.
+
+        The canvas loads its own NAV history, holdings, and sector detail. Keeping
+        those reads out of chat removes duplicate remote reads from the first paint.
+        """
+        resolutions = pre_resolutions or self.resolver.resolve_many(entities, asset_type="mutual_fund")
+
+        async def _load_core_row(resolution: AssetResolution) -> dict[str, Any] | None:
+            if not resolution.is_high_confidence or not resolution.id:
+                return None
+            return await asyncio.to_thread(self._core_snapshot_row, resolution.id)
+
+        core_rows = await asyncio.gather(*[_load_core_row(resolution) for resolution in resolutions])
+        comparison: dict[str, Any] = {}
+        data_status: dict[str, str] = {}
+        for entity, resolution, row in zip(entities, resolutions, core_rows):
+            key = resolution.resolved_name or entity
+            if not resolution.is_high_confidence or not resolution.id:
+                item = self._unavailable_item(resolution)
+                status = resolution.coverage_status
+            elif not row:
+                item = self._unavailable_item(
+                    resolution,
+                    reason="Resolved fund is missing from local snapshot data.",
+                )
+                status = "partial"
+            else:
+                item = self._summary_item(row, resolution)
+                status = item["data_quality"]["coverage_status"]
+            comparison[key] = item
+            data_status[key] = status
+
+        why_better = build_mf_why_better(comparison, downside_focus=downside_focus)
+        why_better["data_limitations"] = [
+            limitation
+            for limitation in why_better.get("data_limitations", [])
+            if "holdings data missing" not in str(limitation).lower()
+            and "holdings-based reasoning unavailable" not in str(limitation).lower()
+        ]
+        why_better["holdings_based_reasoning"] = {
+            "status": "deferred_to_canvas",
+            "reason": "Holdings and sector detail load in the comparison canvas.",
+        }
+        risk_analysis = why_better.get("risk_analysis")
+        if isinstance(risk_analysis, dict) and isinstance(risk_analysis.get("items"), list):
+            risk_analysis["items"] = [
+                item
+                for item in risk_analysis["items"]
+                if not (isinstance(item, dict) and item.get("label") == "Concentration risk")
+            ]
+        quant_data = {
+            "comparison": comparison,
+            "why_better": why_better,
+            "verdict_context": why_better.get("verdict_context"),
+            "source_freshness": why_better.get("source_freshness"),
+            "data_quality": {name: (payload.get("data_quality") or {}) for name, payload in comparison.items()},
+            "risk_analysis": why_better.get("risk_analysis"),
+            "asset_type": "mutual_fund",
+            "comparison_data_level": "summary",
+            "resolution": [resolution.client_payload() for resolution in resolutions],
+        }
+        quant_data["comparison_summary"] = _build_comparison_summary(comparison)
+        coverage_status = self._aggregate_coverage(data_status)
+        logger.info(
+            "compare_summary trace_id=%s coverage=%s data_status=%s resolution=%s",
+            trace_id,
+            coverage_status,
+            data_status,
+            [resolution.client_payload() for resolution in resolutions],
+        )
+        return {
+            "quant_data": quant_data,
+            "entities": list(comparison.keys()),
+            "resolution": [resolution.client_payload() for resolution in resolutions],
+            "coverage_status": coverage_status,
+            "data_status": data_status,
+        }
+
     def _core_snapshot_row(self, scheme_code: Any) -> dict[str, Any] | None:
         if not self.repository:
             return None
@@ -263,13 +369,34 @@ class CompareDataService:
             logger.warning("MF core snapshot lookup failed for %s: %s", scheme_code, exc)
             return None
 
-    async def _comparison_item(self, row: dict[str, Any], resolution: AssetResolution, benchmark_hist: pd.DataFrame) -> dict[str, Any]:
+    async def _comparison_item(
+        self,
+        row: dict[str, Any],
+        resolution: AssetResolution,
+        benchmark_task: asyncio.Task[pd.DataFrame] | None,
+    ) -> dict[str, Any]:
         scheme_code = row.get("scheme_code") or resolution.id
-        holdings_result, hist, history_summary = await asyncio.gather(
-            asyncio.to_thread(self._load_holdings_and_sectors, scheme_code),
-            self._mf_history_df(scheme_code),
-            asyncio.to_thread(self._nav_history_summary, scheme_code),
-        )
+        uses_precomputed_metrics = _has_precomputed_metric_snapshot(row)
+        if uses_precomputed_metrics:
+            holdings_result, history_summary = await asyncio.gather(
+                self._load_holdings_and_sectors(scheme_code),
+                asyncio.to_thread(self._nav_history_summary, scheme_code),
+            )
+            hist = pd.DataFrame()
+            benchmark_hist = pd.DataFrame()
+        else:
+            pending = [
+                self._load_holdings_and_sectors(scheme_code),
+                self._mf_history_df(scheme_code),
+                asyncio.to_thread(self._nav_history_summary, scheme_code),
+            ]
+            if benchmark_task is not None:
+                pending.append(asyncio.shield(benchmark_task))
+            results = await asyncio.gather(*pending)
+            holdings_result = results[0]
+            hist = results[1]
+            history_summary = results[2]
+            benchmark_hist = results[3] if len(results) > 3 else pd.DataFrame()
         holdings_rows, sector_rows, holdings_as_of = holdings_result
         history_rows = [
             {"nav_date": index.strftime("%Y-%m-%d"), "nav": float(value)}
@@ -277,6 +404,7 @@ class CompareDataService:
         ] if not hist.empty else []
         refreshed_metrics = compute_nav_metrics(history_rows, risk_free_rate=0.06) if history_rows else {}
         risk_metrics = _calculate_alpha_beta(hist, benchmark_hist) if not hist.empty and not benchmark_hist.empty else {}
+        metric_snapshot = _metric_snapshot_metadata(row)
         benchmark = row.get("benchmark") or "NIFTY"
         benchmark_source = "fund_benchmark" if row.get("benchmark") else "nifty_fallback"
         missing_fields = [
@@ -321,6 +449,8 @@ class CompareDataService:
             "sharpe_ratio": refreshed_metrics.get("sharpe_ratio") if refreshed_metrics.get("sharpe_ratio") is not None else row.get("sharpe_ratio"),
             "alpha": row.get("alpha"),
             "beta": row.get("beta"),
+            "metrics_source": "precomputed_snapshot" if uses_precomputed_metrics else "request_fallback",
+            "metrics_as_of_date": metric_snapshot.get("as_of_date") if uses_precomputed_metrics else history_summary.get("last_nav_date"),
             "source": "FundersAI DB",
             "source_summary": {
                 "metadata": "FundersAI DB",
@@ -333,6 +463,12 @@ class CompareDataService:
                     "status": history_summary.get("cache_status"),
                     "stale": history_summary.get("stale"),
                     "fetched_at": history_summary.get("fetched_at"),
+                },
+                "metrics": {
+                    "source": "precomputed_snapshot" if uses_precomputed_metrics else "request_fallback",
+                    "version": metric_snapshot.get("version") if uses_precomputed_metrics else None,
+                    "as_of_date": metric_snapshot.get("as_of_date") if uses_precomputed_metrics else history_summary.get("last_nav_date"),
+                    "computed_at": metric_snapshot.get("computed_at") if uses_precomputed_metrics else None,
                 },
             },
             "data_quality": {
@@ -347,6 +483,59 @@ class CompareDataService:
         }
         item.update(risk_metrics)
         return item
+
+    def _summary_item(self, row: dict[str, Any], resolution: AssetResolution) -> dict[str, Any]:
+        """Return snapshot metrics only; detailed data is loaded by the canvas."""
+        scheme_code = row.get("scheme_code") or resolution.id
+        missing_fields = [
+            field
+            for field in (
+                "nav",
+                "nav_date",
+                "return_3y",
+                "volatility_1y",
+                "max_drawdown_1y",
+                "expense_ratio",
+                "aum",
+            )
+            if _is_missing(row.get(field))
+        ]
+        return {
+            "scheme_code": str(scheme_code) if scheme_code is not None else None,
+            "name": row.get("scheme_name") or resolution.resolved_name,
+            "resolved_scheme_name": row.get("scheme_name") or resolution.resolved_name,
+            "nav": row.get("nav"),
+            "nav_date": row.get("nav_date"),
+            "category": row.get("category"),
+            "benchmark": row.get("benchmark"),
+            "fund_manager": row.get("fund_manager"),
+            "risk_level": row.get("risk_level"),
+            "fund_house": row.get("amc_name") or row.get("fund_house"),
+            "expense_ratio": row.get("expense_ratio"),
+            "aum": row.get("aum"),
+            "return_1y": row.get("return_1y"),
+            "return_3y": row.get("return_3y"),
+            "return_5y": row.get("return_5y"),
+            "volatility_1y": row.get("volatility_1y"),
+            "max_drawdown_1y": row.get("max_drawdown_1y"),
+            "sharpe_ratio": row.get("sharpe_ratio"),
+            "alpha": row.get("alpha"),
+            "beta": row.get("beta"),
+            "source": "FundersAI DB",
+            "source_summary": {
+                "metadata": "FundersAI DB",
+                "stale": not cache_policy.is_fresh(row.get("nav_date") or row.get("last_updated"), "mutual_fund_nav"),
+                "nav_date": row.get("nav_date"),
+            },
+            "data_quality": {
+                "missing_fields": missing_fields,
+                "limitations": ["Detailed NAV history, holdings, and sector data load in the comparison canvas."],
+                "message": "Some mutual fund snapshot fields are unavailable." if missing_fields else "Snapshot comparison fields are available.",
+                "coverage_status": "incomplete" if missing_fields else "complete",
+            },
+            "holdings": [],
+            "sector_allocation": [],
+        }
 
     def _unavailable_item(self, resolution: AssetResolution, reason: str | None = None) -> dict[str, Any]:
         message = reason or "Mutual fund could not be matched with high confidence in local Supabase data."
@@ -420,13 +609,38 @@ class CompareDataService:
         except Exception:
             return pd.DataFrame()
 
-    def _load_holdings_and_sectors(self, scheme_code: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str | None]:
+    async def _load_holdings_and_sectors(
+        self,
+        scheme_code: Any,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str | None]:
         if not self.repository or scheme_code in (None, ""):
             return [], [], None
         try:
-            holding_rows = self.repository.get_latest_holdings(scheme_code)
+            family_id = await asyncio.to_thread(self.repository.get_family_id_for_scheme, scheme_code)
         except Exception:
-            holding_rows = []
+            family_id = None
+
+        async def _holdings() -> list[dict[str, Any]]:
+            try:
+                return await asyncio.to_thread(
+                    self.repository.get_latest_holdings_for_resolved_family,
+                    scheme_code,
+                    family_id,
+                )
+            except Exception:
+                return []
+
+        async def _sectors() -> list[dict[str, Any]]:
+            try:
+                return await asyncio.to_thread(
+                    self.repository.get_sector_rows_for_resolved_family,
+                    scheme_code,
+                    family_id,
+                )
+            except Exception:
+                return []
+
+        holding_rows, sectors = await asyncio.gather(_holdings(), _sectors())
         latest_as_of = None
         holdings = []
         for row in holding_rows:
@@ -446,10 +660,6 @@ class CompareDataService:
                 "source": row.get("source"),
                 "provider_payload": row.get("provider_payload"),
             })
-        try:
-            sectors = self.repository.get_sector_rows(scheme_code)
-        except Exception:
-            sectors = []
         return holdings, sectors, latest_as_of
 
     def _aggregate_coverage(self, data_status: dict[str, str]) -> str:

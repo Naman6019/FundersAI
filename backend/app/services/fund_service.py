@@ -1,4 +1,5 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
@@ -247,8 +248,14 @@ class FundService:
                 if not raw_details.get("expense_ratio"):
                     raw_details["expense_ratio"] = legacy_row.get("expense_ratio")
 
-        # Fetch holdings & calculate sectors
-        holdings, holdings_as_of = FundService.load_latest_fund_holdings(scheme_code)
+        # Holdings and NAV history are independent remote reads.
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            holdings_future = executor.submit(FundService.load_latest_fund_holdings, scheme_code)
+            history_future = executor.submit(FundService.get_mf_history_df, scheme_code, 2200)
+            holdings, holdings_as_of = holdings_future.result()
+            hist_df = history_future.result()
+
+        # Calculate sectors from the already loaded holdings.
         sector_map = {}
         for h in holdings:
             sec = h.sector or "Unclassified"
@@ -259,8 +266,6 @@ class FundService:
             for k, v in sorted(sector_map.items(), key=lambda item: item[1], reverse=True)
         ]
 
-        # Fetch NAV History
-        hist_df = FundService.get_mf_history_df(scheme_code, days=2200)
         close_series = hist_df["Close"] if not hist_df.empty else pd.Series(dtype=float)
 
         chart_nav_points = []
@@ -349,13 +354,15 @@ class FundService:
 
         details = FundDetails(**raw_details)
         
-        summary = FundService.get_nav_history_summary(scheme_code)
-        nav_points_count = int(summary.get("count") or 0)
+        ordered_history = hist_df.sort_index() if not hist_df.empty else pd.DataFrame()
+        nav_points_count = int(len(ordered_history))
+        first_nav_date = ordered_history.index[0].strftime("%Y-%m-%d") if nav_points_count else None
+        last_nav_date = ordered_history.index[-1].strftime("%Y-%m-%d") if nav_points_count else None
         
         data_quality = FundDataQuality(
             nav_points_count=nav_points_count,
-            first_nav_date=summary.get("first_nav_date"),
-            last_nav_date=summary.get("last_nav_date"),
+            first_nav_date=first_nav_date,
+            last_nav_date=last_nav_date,
             is_stale=nav_points_count < 10,
             warning="Insufficient historical data" if nav_points_count < 10 else None
         )

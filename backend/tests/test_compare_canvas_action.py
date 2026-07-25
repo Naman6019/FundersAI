@@ -134,6 +134,7 @@ def test_compare_canvas_action_opens_for_hdfc_mid_cpa_typo(monkeypatch):
 
 def test_exact_hdfc_ppfas_query_opens_partial_data_canvas_without_nav_history(monkeypatch):
     from app.services import chat_service as main
+    from app.services.compare_data_service import CompareDataService
 
     fake = _FakeSupabase(
         {
@@ -171,6 +172,18 @@ def test_exact_hdfc_ppfas_query_opens_partial_data_canvas_without_nav_history(mo
 
     monkeypatch.setattr(main, "synthesis_response", fake_synthesis_response)
     monkeypatch.setattr(main, "fetch_news", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("news fetch called")))
+    summary_calls = []
+    original_summary = CompareDataService.build_mutual_fund_compare_summary
+
+    async def tracked_summary(self, *args, **kwargs):
+        summary_calls.append((args, kwargs))
+        return await original_summary(self, *args, **kwargs)
+
+    async def full_compare_called(*_args, **_kwargs):
+        raise AssertionError("full compare called for a standard canvas request")
+
+    monkeypatch.setattr(CompareDataService, "build_mutual_fund_compare_summary", tracked_summary)
+    monkeypatch.setattr(CompareDataService, "build_mutual_fund_compare", full_compare_called)
 
     req = main.ChatRequest(
         query="Compare HDFC Flexi Cap Fund and Parag Parikh Flexi Cap Fund for returns, risk, cost, and data freshness.",
@@ -189,6 +202,7 @@ def test_exact_hdfc_ppfas_query_opens_partial_data_canvas_without_nav_history(mo
         "asset_type": "mutual_fund",
     }
     assert response["reasoning_summary"]["steps"][2]["status"] == "ok"
+    assert summary_calls
 
 
 def test_compare_action_recovers_validated_ids_from_unavailable_payloads():

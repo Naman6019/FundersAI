@@ -201,6 +201,13 @@ class MutualFundRepository:
             family_id = self.get_family_id_for_scheme(scheme_code)
         except Exception:
             family_id = None
+        return self.get_latest_holdings_for_resolved_family(scheme_code, family_id)
+
+    def get_latest_holdings_for_resolved_family(
+        self,
+        scheme_code: Any,
+        family_id: str | None,
+    ) -> list[dict[str, Any]]:
         if family_id:
             rows = (
                 self.table("mutual_fund_holdings")
@@ -233,6 +240,13 @@ class MutualFundRepository:
             family_id = self.get_family_id_for_scheme(scheme_code)
         except Exception:
             family_id = None
+        return self.get_sector_rows_for_resolved_family(scheme_code, family_id)
+
+    def get_sector_rows_for_resolved_family(
+        self,
+        scheme_code: Any,
+        family_id: str | None,
+    ) -> list[dict[str, Any]]:
         if family_id:
             rows = (
                 self.table("mutual_fund_sectors")

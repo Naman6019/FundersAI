@@ -345,6 +345,165 @@ def test_compare_service_builds_fund_items_concurrently():
     assert list(result["quant_data"]["comparison"]) == ["Fund A", "Fund B"]
 
 
+def test_compare_service_summary_skips_history_holdings_and_sector_reads():
+    fake = _FakeSupabase({
+        "mutual_fund_core_snapshot": [
+            {
+                "scheme_code": "101",
+                "scheme_name": "HDFC Flexi Cap Fund Direct Growth",
+                "category": "Flexi Cap",
+                "nav": 100.0,
+                "nav_date": "2026-05-31",
+                "return_3y": 12.0,
+                "volatility_1y": 10.0,
+                "max_drawdown_1y": -8.0,
+                "expense_ratio": 0.75,
+                "aum": 1000,
+            },
+            {
+                "scheme_code": "102",
+                "scheme_name": "Parag Parikh Flexi Cap Fund Direct Growth",
+                "category": "Flexi Cap",
+                "nav": 200.0,
+                "nav_date": "2026-05-31",
+                "return_3y": 11.0,
+                "volatility_1y": 11.0,
+                "max_drawdown_1y": -9.0,
+                "expense_ratio": 0.65,
+                "aum": 2000,
+            },
+        ],
+        "mutual_fund_nav_history": [],
+        "stock_prices_daily": [],
+        "mutual_fund_holdings": [],
+        "mutual_fund_sectors": [],
+    })
+
+    result = asyncio.run(CompareDataService(fake).build_mutual_fund_compare_summary(
+        ["HDFC Flexi Cap", "Parag Parikh Flexi Cap"],
+        pre_resolutions=[
+            _resolution("HDFC Flexi Cap Fund Direct Growth", "101", "HDFC"),
+            _resolution("Parag Parikh Flexi Cap Fund Direct Growth", "102", "PPFAS"),
+        ],
+    ))
+
+    assert result["quant_data"]["comparison_data_level"] == "summary"
+    assert result["quant_data"]["why_better"]["winner"]["entity_name"] == "HDFC Flexi Cap Fund Direct Growth"
+    assert {table for table, _action in fake.calls} == {"mutual_fund_core_snapshot"}
+
+
+def test_compare_service_uses_precomputed_metrics_without_history_or_benchmark(monkeypatch):
+    from app.services import compare_data_service as module
+    from app.services.mf_metrics_service import NAV_METRIC_SNAPSHOT_VERSION
+
+    class SnapshotService(CompareDataService):
+        async def _nifty_history_df(self, days: int = 1100):
+            raise AssertionError("benchmark history loaded")
+
+        async def _mf_history_df(self, scheme_code, days: int = 2200):
+            raise AssertionError("fund history loaded")
+
+        async def _load_holdings_and_sectors(self, scheme_code):
+            return [], [], None
+
+        def _nav_history_summary(self, scheme_code):
+            return {
+                "count": 2200,
+                "first_nav_date": "2020-01-01",
+                "last_nav_date": "2026-07-24",
+                "cache_status": "hit",
+                "stale": False,
+                "supports": {"1Y": True, "3Y": True, "5Y": True},
+            }
+
+    fake = _FakeSupabase({
+        "mutual_fund_core_snapshot": [
+            {
+                "scheme_code": "101",
+                "scheme_name": "HDFC Flexi Cap Fund Direct Growth",
+                "category": "Flexi Cap",
+                "nav": 100.0,
+                "nav_date": "2026-07-24",
+                "return_1y": 14.0,
+                "return_3y": 13.0,
+                "return_5y": 12.0,
+                "volatility_1y": 10.0,
+                "max_drawdown_1y": 8.0,
+                "sharpe_ratio": 1.1,
+                "alpha": 2.4,
+                "beta": 0.9,
+                "expense_ratio": 0.75,
+                "aum": 1000,
+                "provider_payload": {
+                    "metric_snapshot": {
+                        "version": NAV_METRIC_SNAPSHOT_VERSION,
+                        "as_of_date": "2026-07-24",
+                        "computed_at": "2026-07-25T00:00:00+00:00",
+                    }
+                },
+            }
+        ],
+    })
+    monkeypatch.setattr(
+        module,
+        "compute_nav_metrics",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("request metrics computed")),
+    )
+
+    result = asyncio.run(SnapshotService(fake).build_mutual_fund_compare(
+        ["HDFC Flexi Cap"],
+        pre_resolutions=[_resolution("HDFC Flexi Cap Fund Direct Growth", "101")],
+    ))
+
+    item = result["quant_data"]["comparison"]["HDFC Flexi Cap Fund Direct Growth"]
+    assert item["metrics_source"] == "precomputed_snapshot"
+    assert item["metrics_as_of_date"] == "2026-07-24"
+    assert item["return_3y"] == 13.0
+    assert item["sharpe_ratio"] == 1.1
+    assert item["beta"] == 0.9
+
+
+def test_holdings_and_sectors_load_in_parallel_after_one_family_lookup():
+    import time
+
+    from app.repositories.mutual_fund_repository import MutualFundRepository
+
+    class ParallelRepository(MutualFundRepository):
+        def __init__(self):
+            super().__init__(object())
+            self.active = 0
+            self.max_active = 0
+            self.family_calls = 0
+
+        def get_family_id_for_scheme(self, scheme_code):
+            self.family_calls += 1
+            return "family-101"
+
+        def _delayed(self, result):
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+            time.sleep(0.03)
+            self.active -= 1
+            return result
+
+        def get_latest_holdings_for_resolved_family(self, scheme_code, family_id):
+            return self._delayed([{"security_name": "HDFC Bank", "as_of_date": "2026-07-01"}])
+
+        def get_sector_rows_for_resolved_family(self, scheme_code, family_id):
+            return self._delayed([{"sector": "Financials", "weight_pct": 30.0}])
+
+    repository = ParallelRepository()
+    holdings, sectors, as_of = asyncio.run(
+        CompareDataService(repository)._load_holdings_and_sectors("101")
+    )
+
+    assert repository.family_calls == 1
+    assert repository.max_active == 2
+    assert holdings[0]["security_name"] == "HDFC Bank"
+    assert sectors[0]["sector"] == "Financials"
+    assert as_of == "2026-07-01"
+
+
 def test_compare_history_uses_stored_cache_without_provider_refresh(monkeypatch):
     from app.services import compare_data_service as module
 

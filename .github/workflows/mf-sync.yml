@@ -40,3 +40,10 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python -m backend.app.jobs.sync_mf_enrichment_unified
+
+      - name: Refresh cached NAV metrics
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          ENABLE_MF_SNAPSHOT_METRICS_REFRESH: "true"
+        run: python -m backend.app.jobs.refresh_mf_snapshot_metrics

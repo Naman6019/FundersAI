@@ -60,6 +60,8 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - NAV-derived Sharpe is calculated when a risk-free rate is supplied, drawdown accepts positive magnitudes and legacy negative values, and malformed subtotal holdings are filtered at parse and read time;
   - `backend/scripts/diagnose_mf_comparison_coverage.py` provides a read-only scheme-code diagnostic; see `MF_COMPARISON_COVERAGE_REPAIR.md`.
   - unavailable metrics are labeled as data gaps instead of inflating the risk-signal count.
+  - standard mutual-fund canvas requests now return a snapshot-only Trend Observation from chat, so full NAV history, holdings, and sector reads occur once in the canvas rather than before it opens; deep or follow-up comparisons retain the full comparison path.
+  - locally implemented comparison-latency hardening adds a nightly cache-backed metric refresh for returns, volatility, drawdown, Sharpe, alpha, and beta; versioned snapshot metrics bypass request-time history/benchmark math, holdings and sector reads run concurrently after one family lookup, and MF detail requests skip the benchmark when precomputed alpha/beta are present. Deployment and the first hosted workflow run remain pending.
 - Source-neutral stock data model and scheduled stock workflows.
 - Mutual-fund NAV sync and metadata pipelines.
 - AMC disclosure ingestion registry enabled for `ppfas`, `hdfc`, `icici`, `sbi`, `axis`, `motilal`, and `nippon`:

@@ -395,7 +395,9 @@ def test_compare_synthesis_canvas_mode_hides_data_table(monkeypatch):
     )
 
     assert "Canvas is open with the full metric view" in response
-    assert "### What the Data Says" in response
+    assert "### Trend Observation" in response
+    assert "B leads on returns (3y)." in response
+    assert "### What the Data Says" not in response
     assert "### Data Table" not in response
     assert "### How They Differ" not in response
     assert metadata["model_status"] == "not_used"
