@@ -71,8 +71,8 @@ def _enabled() -> bool:
 
 
 def _upstash_config() -> tuple[str, str, bool]:
-    url = os.getenv("UPSTASH_REDIS_REST_URL", "").strip().rstrip("/")
-    token = os.getenv("UPSTASH_REDIS_REST_TOKEN", "").strip()
+    url = os.getenv("UPSTASH_REDIS_REST_URL", "").strip().strip("'\"").rstrip("/")
+    token = os.getenv("UPSTASH_REDIS_REST_TOKEN", "").strip().strip("'\"")
     return url, token, bool(url and token)
 
 
