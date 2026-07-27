@@ -13,7 +13,6 @@ interface CanvasState {
   setView: (view: ViewMode, data?: CanvasPayload | null) => void;
   setIds: (ids: string[]) => void;
   setComparisonMode: (mode: ComparisonMode) => void;
-  toggleCanvas: () => void;
   openCanvas: (data?: CanvasPayload | null) => void;
   closeCanvas: () => void;
 }
@@ -27,7 +26,6 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   setView: (view, data = null) => set({ activeView: view, auxiliaryData: data }),
   setIds: (ids) => set({ selectedIds: ids }),
   setComparisonMode: (mode) => set({ comparisonMode: mode }),
-  toggleCanvas: () => set((state) => ({ isCanvasOpen: !state.isCanvasOpen })),
   openCanvas: (data = null) => set({ isCanvasOpen: true, auxiliaryData: data }),
   closeCanvas: () => set({ isCanvasOpen: false, auxiliaryData: null }),
 }));

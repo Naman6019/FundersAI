@@ -5,6 +5,31 @@ export default function SchemaMarkup() {
     '@context': 'https://schema.org',
     '@graph': [
       {
+        '@type': 'Organization',
+        '@id': 'https://www.fundersai.co.in/#organization',
+        'name': 'FundersAI',
+        'url': 'https://www.fundersai.co.in',
+        'logo': {
+          '@type': 'ImageObject',
+          '@id': 'https://www.fundersai.co.in/#logo',
+          'url': 'https://www.fundersai.co.in/logo.png',
+          'contentUrl': 'https://www.fundersai.co.in/logo.png',
+          'width': 912,
+          'height': 912,
+          'caption': 'FundersAI',
+        },
+      },
+      {
+        '@type': 'WebSite',
+        '@id': 'https://www.fundersai.co.in/#website',
+        'name': 'FundersAI',
+        'alternateName': 'FundersAI Research Workspace',
+        'url': 'https://www.fundersai.co.in',
+        'publisher': {
+          '@id': 'https://www.fundersai.co.in/#organization',
+        },
+      },
+      {
         '@type': 'SoftwareApplication',
         '@id': 'https://www.fundersai.co.in/#software',
         'name': 'FundersAI',
@@ -12,6 +37,9 @@ export default function SchemaMarkup() {
         'applicationCategory': 'FinanceApplication',
         'operatingSystem': 'All',
         'description': 'Research-first workspace for comparing Indian stocks and mutual funds with deterministic metrics, official-source evidence, and visible data limits.',
+        'publisher': {
+          '@id': 'https://www.fundersai.co.in/#organization',
+        },
         'offers': {
           '@type': 'Offer',
           'price': '0',

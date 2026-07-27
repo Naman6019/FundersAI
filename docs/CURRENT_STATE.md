@@ -1,6 +1,6 @@
 # Current State
 
-**Last Updated**: 2026-07-22
+**Last Updated**: 2026-07-27
 
 ## Project Summary
 FundersAI is a research-first Indian stocks + mutual funds app with deterministic comparison outputs, Supabase-first runtime reads, and workflow-driven data ingestion.
@@ -56,6 +56,7 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - admin data-health and operations reads are ordered and capped at 5,000 rows per query.
 - Research-oriented landing page at `/`.
 - Landing page copy and metadata now match the research-first product boundary: deterministic metrics, official-source evidence, visible freshness/limits, and the seven-family AMC ingestion registry; fabricated market snapshots were removed and the landing prompt/carousel were made responsive.
+- Search and browser identity use the square mark-only FundersAI logo for the favicon and Apple icon, with Organization and WebSite structured data pointing to the stable public logo URL. Deployment and search-engine recrawl remain pending.
 - Deterministic compare responses with `why_better`, structured winner context, and data limitation/freshness metadata.
 - Comparison canvas delivery hardening:
   - mutual-fund resolver candidates must carry a real `scheme_code`, and snapshot rows missing identifiers fall through to the canonical mutual-fund table;
@@ -76,6 +77,10 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - comparison-chat metadata carries `fresh`, `lagging`, `stale`, or `missing` NAV status and the latest expected NAV date. Deployment remains pending.
   - locally implemented chat trust controls keep an `As of` source/date line, `Why is this lagging?`, read-only `Refresh data status`, and `Find official evidence` actions visible on fund answers;
   - the explicit official-evidence action prefills chat instead of auto-sending, routes the submitted query through the existing official AMC corpus workflow, links each numbered claim citation, and persists source/claim-validation metadata. Deployment remains pending.
+  - locally implemented `/dashboard/data-trust` provides authenticated, one-minute foreground polling for MF NAV, AUM/TER, risk metrics, AMC-document parsing, document pipeline counts, and per-AMC coverage; refresh remains read-only and retains the last successful status on transient failures. The landing page has a static preview and authenticated CTA. Deployment remains pending.
+  - trust labels remain visible and expose explanations/actions on hover, keyboard focus, or tap; claim sources remain directly beneath cited answers.
+  - the sidebar no longer duplicates pipeline/data-health cards, and the header uses an exact Data & Trust summary instead of labeling non-NAV document processing as “MF data lagging.”
+  - the first-party chat UI no longer exposes or sends a Chat/Canvas preference. The canvas opens only for valid compare/portfolio system actions or explicit manual comparison flows; the backend keeps `comparison_view_mode` for older-client compatibility. Deployment remains pending.
 - AMC disclosure ingestion registry enabled for `ppfas`, `hdfc`, `icici`, `sbi`, `axis`, `motilal`, and `nippon`:
   - raw document ingestion
   - parsing

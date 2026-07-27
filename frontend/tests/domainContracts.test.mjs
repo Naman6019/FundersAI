@@ -26,3 +26,17 @@ test('root metadata publishes an explicit canonical URL', () => {
   assert.match(source, /metadataBase: new URL\('https:\/\/www\.fundersai\.co\.in'\)/);
   assert.match(source, /alternates:\s*\{\s*canonical: '\/'/);
 });
+
+test('search identity publishes the FundersAI organization and square logo', () => {
+  const source = readFileSync(
+    new URL('../components/landing/SchemaMarkup.tsx', import.meta.url),
+    'utf8',
+  );
+  const logo = readFileSync(new URL('../public/logo.png', import.meta.url));
+
+  assert.match(source, /'@type': 'Organization'/);
+  assert.match(source, /'@type': 'WebSite'/);
+  assert.match(source, /https:\/\/www\.fundersai\.co\.in\/logo\.png/);
+  assert.deepEqual(readFileSync(new URL('../app/icon.png', import.meta.url)), logo);
+  assert.deepEqual(readFileSync(new URL('../app/apple-icon.png', import.meta.url)), logo);
+});

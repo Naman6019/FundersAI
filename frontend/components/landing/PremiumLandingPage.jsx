@@ -141,9 +141,9 @@ function DataTrailRibbon({ compact = false }) {
 
 function ComparisonWorkspaceMock() {
   const panels = [
-    ["Chat", "Compare Axis Large Cap and HDFC Mid Cap for risk, cost, and source freshness."],
-    ["Canvas", "Side-by-side metrics with NAV, expense ratio, Sharpe, drawdown, and AUM."],
-    ["Sources", "Freshness badges, missing fields, and confidence status remain visible."],
+    ["Ask", "Start with a fund research question in plain language."],
+    ["Compare", "A side-by-side canvas opens only when the query or a manual comparison needs it."],
+    ["Verify", "Inspect freshness, missing fields, claim sources, and confidence labels."],
   ];
 
   return (
@@ -201,6 +201,7 @@ export default function FundersAILandingPage() {
           <nav className="hidden items-center gap-8 text-sm font-semibold text-[var(--text-muted)] md:flex">
             <a href="#flow" className="transition hover:text-[var(--text-primary)]">Flow</a>
             <a href="#intelligence" className="transition hover:text-[var(--text-primary)]">Intelligence</a>
+            <a href="#data-trust" className="transition hover:text-[var(--text-primary)]">Data &amp; Trust</a>
             <a href="#workspace" className="transition hover:text-[var(--text-primary)]">Workspace</a>
             <a href="#proof" className="transition hover:text-[var(--text-primary)]">Proof</a>
           </nav>
@@ -263,6 +264,39 @@ export default function FundersAILandingPage() {
         </div>
       </section>
 
+      <section id="data-trust" className="relative border-y border-white/10 bg-white/[0.01]">
+        <div className="relative z-10 mx-auto grid w-full max-w-[1500px] gap-12 px-5 py-24 sm:px-8 lg:grid-cols-[0.46fr_0.54fr] lg:py-32">
+          <Reveal>
+            <MetadataLabel className="text-[var(--accent-glow)]">Data &amp; Trust</MetadataLabel>
+            <h2 className="mt-8 font-sans text-[10.5vw] font-bold leading-[1.05] tracking-tight text-white sm:text-[8vw] lg:text-[4.6vw]">
+              Know what is ready.
+            </h2>
+            <p className="mt-6 max-w-xl text-sm leading-7 text-[var(--text-muted)]">
+              FundersAI keeps discovery, acquisition, parsing, and validated runtime data separate.
+              Status labels explain freshness and gaps instead of turning pipeline activity into a false claim of readiness.
+            </p>
+            <div className="mt-10">
+              <EditorialButton href="/dashboard/data-trust">Open Data &amp; Trust</EditorialButton>
+            </div>
+          </Reveal>
+
+          <Reveal className="grid gap-4 sm:grid-cols-2">
+            {[
+              ["MF NAV", "FRESH", "Checked against the latest expected business day."],
+              ["AMC docs", "PROCESSING", "New official documents can be in progress without changing current answers."],
+              ["Missing fields", "SHOWN", "Unavailable fields stay visible and out of unsupported conclusions."],
+              ["Claim sources", "LINKED", "Official-document evidence stays directly beneath supported answers."],
+            ].map(([label, value, body]) => (
+              <div key={label} className="group rounded-2xl border border-white/10 bg-white/[0.025] p-6 backdrop-blur-md transition hover:border-white/20 hover:bg-white/[0.045]">
+                <MetadataLabel>{label}</MetadataLabel>
+                <p className="mt-6 text-2xl font-semibold text-[#00FF9D]">{value}</p>
+                <p className="mt-4 text-sm leading-6 text-[var(--text-muted)]">{body}</p>
+              </div>
+            ))}
+          </Reveal>
+        </div>
+      </section>
+
       <section id="workspace" className="relative bg-white/[0.01]">
         <div className="relative z-10 mx-auto grid w-full max-w-[1500px] gap-12 px-5 py-24 sm:px-8 lg:grid-cols-[0.28fr_0.72fr] lg:py-32">
           <div>
@@ -272,7 +306,7 @@ export default function FundersAILandingPage() {
                 Not a chat toy.
               </h2>
               <p className="mt-6 text-sm leading-7 text-[var(--text-muted)]">
-                The product surface keeps source-backed research, comparison, and guardrails visible together.
+                The product surface keeps source-backed research, intent-driven comparison, and guardrails visible together.
               </p>
               <div className="mt-10">
                 <EditorialButton href="/dashboard">Open Workspace</EditorialButton>
@@ -347,6 +381,7 @@ export default function FundersAILandingPage() {
           <div className="flex flex-wrap gap-6 text-sm font-semibold text-[var(--text-muted)]">
             <a href="#flow" className="transition hover:text-[var(--text-primary)]">Flow</a>
             <a href="#intelligence" className="transition hover:text-[var(--text-primary)]">Intelligence</a>
+            <a href="#data-trust" className="transition hover:text-[var(--text-primary)]">Data &amp; Trust</a>
             <a href="#workspace" className="transition hover:text-[var(--text-primary)]">Workspace</a>
           </div>
           <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)] lg:text-right">

@@ -5,7 +5,6 @@ import { hasSupabaseBrowserEnv, supabaseBrowser } from '@/lib/supabaseBrowser';
 export type AssetType = 'auto' | 'stock' | 'mutual_fund';
 export type ResearchDepth = 'standard' | 'deep';
 export type ExplanationMode = 'beginner' | 'advanced';
-export type ComparisonViewMode = 'canvas' | 'chat';
 
 export type Message = {
   id: string;
@@ -60,7 +59,6 @@ interface ChatState {
   assetType: AssetType;
   researchDepth: ResearchDepth;
   explanationMode: ExplanationMode;
-  comparisonViewMode: ComparisonViewMode;
   conversationContext: ConversationContext;
   pendingQuery: string | null;
   setPendingQuery: (query: string | null) => void;
@@ -69,7 +67,6 @@ interface ChatState {
   setAssetType: (assetType: AssetType) => void;
   setResearchDepth: (researchDepth: ResearchDepth) => void;
   setExplanationMode: (explanationMode: ExplanationMode) => void;
-  setComparisonViewMode: (comparisonViewMode: ComparisonViewMode) => void;
   setConversationContext: (conversationContext: ConversationContext) => void;
   setMessages: (messages: Message[]) => void;
   addMessage: (message: Message) => void;
@@ -92,7 +89,6 @@ export const useChatStore = create<ChatState>()(
       assetType: 'auto',
       researchDepth: 'standard',
       explanationMode: 'beginner',
-      comparisonViewMode: 'canvas',
       conversationContext: {},
       pendingQuery: null,
       setPendingQuery: (pendingQuery) => set({ pendingQuery }),
@@ -104,7 +100,6 @@ export const useChatStore = create<ChatState>()(
         explanationMode,
         researchDepth: explanationMode === 'advanced' ? 'deep' : 'standard',
       }),
-      setComparisonViewMode: (comparisonViewMode) => set({ comparisonViewMode }),
       setConversationContext: (conversationContext) => set({ conversationContext }),
       setMessages: (messages) => set({ messages }),
       addMessage: (message) => set((state) => ({ messages: [...state.messages, message] })),
@@ -200,7 +195,6 @@ export const useChatStore = create<ChatState>()(
         assetType: state.assetType,
         researchDepth: state.researchDepth,
         explanationMode: state.explanationMode,
-        comparisonViewMode: state.comparisonViewMode,
       }),
     },
   ),

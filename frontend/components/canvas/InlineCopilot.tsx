@@ -50,7 +50,6 @@ export default function InlineCopilot({ assetId, assetType, assetName }: InlineC
           asset_type: assetType === 'MUTUAL_FUND' ? 'mutual_fund' : 'stock',
           research_depth: 'standard',
           explanation_mode: 'beginner',
-          comparison_view_mode: 'canvas',
           history: messages.map((message) => ({
             role: message.role === 'assistant' ? 'system' : 'user',
             content: message.content,

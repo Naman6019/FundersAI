@@ -2,14 +2,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-test('chat input exposes asset, explanation, and comparison controls', () => {
+test('chat input exposes asset and explanation controls without a manual canvas mode', () => {
   const source = readFileSync(new URL('../components/chat/ChatWindow.tsx', import.meta.url), 'utf8');
+  const store = readFileSync(new URL('../store/useChatStore.ts', import.meta.url), 'utf8');
 
-  for (const label of ["'Auto'", "'Stocks'", "'Funds'", "'Beginner'", "'Advanced'", "'Canvas'", "'Chat'"]) {
+  for (const label of ["'Auto'", "'Stocks'", "'Funds'", "'Beginner'", "'Advanced'"]) {
     assert.match(source, new RegExp(label.replace(/[']/g, "\\'")));
   }
-  assert.match(source, /setComparisonViewMode\(option\.value as ComparisonViewMode\)/);
   assert.match(source, /setResearchDepth\(nextMode === 'advanced' \? 'deep' : 'standard'\)/);
+  assert.doesNotMatch(source, /setComparisonViewMode|comparison_view_mode|comparisonViewMode/);
+  assert.doesNotMatch(store, /ComparisonViewMode|comparisonViewMode/);
 });
 
 test('chat renders a collapsed reasoning summary without raw model thinking', () => {
@@ -71,6 +73,7 @@ test('inline copilot uses the real chat API request and response shape', () => {
   assert.match(source, /asset_type:/);
   assert.match(source, /conversation_context:/);
   assert.match(source, /data\.answer/);
+  assert.doesNotMatch(source, /comparison_view_mode/);
   assert.doesNotMatch(source, /messages:\s*\[\{\s*role:\s*'user'/);
   assert.doesNotMatch(source, /data\.content \|\| data\.reply/);
 });
@@ -82,6 +85,8 @@ test('comparison view syncs local ids when a new compare action arrives', () => 
 
   assert.match(layout, /key=\{`comparison:\$\{selectedIds\.join\('\|'\)\}`\}/);
   assert.match(layout, /key=\{`comparison-graph:\$\{selectedIds\.join\('\|'\)\}`\}/);
-  assert.match(chat, /key=\{\(msg\.metadata\.system_action_ids as string\[\]\)\.join\('\|'\)\}/);
+  assert.match(chat, /data\.system_action\?\.type === 'COMPARE' && \(data\.system_action\.ids\?\.length \|\| 0\) >= 2/);
+  assert.match(chat, /setView\('COMPARISON', data\);\s*openCanvas\(data\);/);
+  assert.doesNotMatch(chat, /variant="metrics_only"/);
   assert.match(comparison, /setIds\(newIds\);\s*store\.setIds\(newIds\);/);
 });

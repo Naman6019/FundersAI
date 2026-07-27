@@ -83,6 +83,8 @@ stitch_downloads/
 *.pdf
 *.png
 !frontend/public/logo.png
+!frontend/app/icon.png
+!frontend/app/apple-icon.png
 *.jpg
 *.jpeg
 *.svg

@@ -6,13 +6,15 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CircleHelp, ExternalLink, FileSearch, RefreshCw, Send, Sparkles, Trash2 } from 'lucide-react';
 import { useCanvasStore } from '@/store/useCanvasStore';
-import { AssetType, ComparisonViewMode, ConversationContext, ExplanationMode, Message, ResearchDepth, useChatStore } from '@/store/useChatStore';
+import { AssetType, ConversationContext, ExplanationMode, Message, ResearchDepth, useChatStore } from '@/store/useChatStore';
 import { hasSupabaseBrowserEnv, supabaseBrowser } from '@/lib/supabaseBrowser';
 import { readChatStream } from '@/lib/chatStream';
 import Magnetic from '@/components/ui/Magnetic';
 import { motion } from 'framer-motion';
-import ComparisonView from '@/components/canvas/ComparisonView';
 import ResponseFeedback from '@/components/feedback/ResponseFeedback';
+import StatusLabel from '@/components/data-health/StatusLabel';
+import { useDataHealthContext } from '@/components/data-health/DataHealthProvider';
+import { statusExplanation } from '@/lib/dataHealth';
 
 const markdownComponents = {
   h1: (props: React.ComponentProps<'h1'>) => <h1 className="mb-3 mt-1 text-lg font-bold text-white" {...props} />,
@@ -213,13 +215,6 @@ function ResponseSources({ metadata }: { metadata?: Record<string, unknown> | nu
   );
 }
 
-type DataHealthMetric = {
-  label?: string;
-  status?: string;
-  note?: string;
-  last_updated?: string | null;
-};
-
 function FundAnswerActions({
   metadata,
   query,
@@ -230,89 +225,63 @@ function FundAnswerActions({
   onFindEvidence: (query: string) => void;
 }) {
   const [showLagDetails, setShowLagDetails] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshError, setRefreshError] = useState('');
-  const [navHealth, setNavHealth] = useState<DataHealthMetric | null>(null);
+  const { data, error: refreshError, isRefreshing, refresh } = useDataHealthContext();
   const asOf = asRecord(metadata?.as_of);
   const lagDetails = asRecord(metadata?.lag_details);
+  const navHealth = data.metrics.find((metric) => metric.label === 'MF NAV');
   const lagItems = Array.isArray(lagDetails?.items)
     ? lagDetails.items.map(asRecord).filter((item): item is Record<string, unknown> => Boolean(item))
     : [];
-
-  const refreshStatus = async () => {
-    setRefreshing(true);
-    setRefreshError('');
-    try {
-      const response = await fetch('/api/data-health', { cache: 'no-store' });
-      if (!response.ok) throw new Error('Status check failed.');
-      const payload = await response.json();
-      const metrics = Array.isArray(payload?.metrics) ? payload.metrics : [];
-      const metric = metrics.find((value: unknown) => asRecord(value)?.label === 'MF NAV');
-      setNavHealth((asRecord(metric) || { label: 'MF NAV', status: 'Unknown', note: 'No NAV status was returned.' }) as DataHealthMetric);
-    } catch (error) {
-      setRefreshError(error instanceof Error ? error.message : 'Status check failed.');
-    } finally {
-      setRefreshing(false);
-    }
-  };
+  const lagSummary = lagItems.length
+    ? lagItems.map((item) => {
+        const missing = Array.isArray(item.missing_fields) ? item.missing_fields : [];
+        return `${String(item.entity)}: ${String(item.status || 'unknown')}; observed ${String(item.observed_date || 'unavailable')}; expected ${String(item.expected_date || 'unavailable')}${missing.length ? `; missing ${missing.join(', ')}` : ''}`;
+      }).join(' ')
+    : 'No fund-level lag details were returned for this answer.';
 
   return (
-    <div className="mt-3 space-y-2 rounded-xl border border-white/10 bg-black/15 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-        <p className="m-0 text-slate-300">
-          <span className="font-semibold text-slate-100">As of:</span>{' '}
-          {String(asOf?.date || 'date unavailable')} · {String(asOf?.source || 'FundersAI data')}
-        </p>
-        {asOf?.source_count ? <span className="text-[10px] text-slate-500">{String(asOf.source_count)} official source(s)</span> : null}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setShowLagDetails((value) => !value)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-amber-100 transition hover:border-amber-300/40"
-          aria-expanded={showLagDetails}
-        >
-          <CircleHelp className="h-3.5 w-3.5" /> Why is this lagging?
-        </button>
-        <button
-          type="button"
-          onClick={() => void refreshStatus()}
-          disabled={refreshing}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[#66a3ff]/20 bg-[#66a3ff]/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-[#cce0ff] transition hover:border-[#66a3ff]/45 disabled:opacity-60"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-          {refreshing ? 'Checking status…' : 'Refresh data status'}
-        </button>
-        <button
-          type="button"
-          onClick={() => onFindEvidence(query)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-emerald-100 transition hover:border-emerald-300/40"
-        >
-          <FileSearch className="h-3.5 w-3.5" /> Find official evidence
-        </button>
-      </div>
-      <p className="m-0 text-[10px] text-slate-500">Refresh is a read-only health check. It never starts ingestion or a sync.</p>
-      {showLagDetails ? (
-        <div className="rounded-lg border border-white/10 bg-black/20 p-2.5 text-[11px] leading-5 text-slate-300">
-          {lagItems.length ? lagItems.map((item) => {
-            const missing = Array.isArray(item.missing_fields) ? item.missing_fields : [];
-            return (
-              <p key={String(item.entity)} className="m-0">
-                <span className="font-semibold text-slate-100">{String(item.entity)}:</span>{' '}
-                {String(item.status || 'unknown')} · observed {String(item.observed_date || 'unavailable')} · expected {String(item.expected_date || 'unavailable')}
-                {missing.length ? ` · missing ${missing.join(', ')}` : ''}
-              </p>
-            );
-          }) : <p className="m-0">No fund-level lag details were returned for this answer.</p>}
-        </div>
-      ) : null}
-      {navHealth ? (
-        <p className="m-0 rounded-lg border border-white/10 bg-black/20 px-2.5 py-2 text-[11px] text-slate-300" aria-live="polite">
-          <span className="font-semibold text-slate-100">Live MF NAV status: {navHealth.status || 'Unknown'}.</span>{' '}
-          {navHealth.note || ''}
-        </p>
-      ) : null}
-      {refreshError ? <p className="m-0 text-[11px] text-rose-200" aria-live="polite">{refreshError}</p> : null}
+    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/5 pt-3">
+      <StatusLabel
+        label="As of"
+        status={String(asOf?.date || 'Unavailable')}
+        description={`Source: ${String(asOf?.source || 'FundersAI data')}. ${asOf?.source_count ? `${String(asOf.source_count)} official source(s).` : ''}`}
+        details={(
+          <>
+            <span className="block">Live MF NAV: {navHealth?.status || 'Unknown'}. {navHealth?.note || ''}</span>
+            {showLagDetails ? <span className="mt-2 block text-amber-100">{lagSummary}</span> : null}
+            <span className="mt-2 block text-slate-500">Refresh is read-only and never starts ingestion or a sync.</span>
+            {refreshError ? <span className="mt-2 block text-rose-200" aria-live="polite">{refreshError}</span> : null}
+          </>
+        )}
+        actions={(
+          <>
+            <button
+              type="button"
+              onClick={() => setShowLagDetails((value) => !value)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300/25 bg-amber-300/[0.08] px-2.5 py-1.5 text-[11px] font-medium text-amber-100"
+              aria-expanded={showLagDetails}
+            >
+              <CircleHelp className="h-3.5 w-3.5" /> Why is this lagging?
+            </button>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              disabled={isRefreshing}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#66a3ff]/25 bg-[#66a3ff]/[0.08] px-2.5 py-1.5 text-[11px] font-medium text-[#cce0ff] disabled:opacity-60"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Checking…' : 'Refresh data status'}
+            </button>
+            <button
+              type="button"
+              onClick={() => onFindEvidence(query)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300/25 bg-emerald-300/[0.08] px-2.5 py-1.5 text-[11px] font-medium text-emerald-100"
+            >
+              <FileSearch className="h-3.5 w-3.5" /> Find official evidence
+            </button>
+          </>
+        )}
+      />
     </div>
   );
 }
@@ -340,36 +309,47 @@ function MessageMetadataBadges({ metadata, content }: { metadata?: Record<string
 
   if (content.toLowerCase().includes('coverage pending')) {
     return (
-      <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200">
-        Coverage pending
-      </span>
+      <StatusLabel
+        label="Coverage"
+        status="Pending"
+        description="The requested structured coverage has not been established yet."
+      />
     );
   }
 
   if (!metadata || (!sourceRows.length && !confidence?.label && !riskItems.length && !missingCount && !statusFlag && !modelStatus && !coverageStatus && !reasoningSummary)) {
     return (
-      <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-300">
-        Source metadata pending
-      </span>
+      <StatusLabel
+        label="Source metadata"
+        status="Pending"
+        description="No structured source, freshness, confidence, or coverage metadata was attached to this answer."
+      />
     );
   }
 
   return (
     <>
       {statusFlag === 'deterministic_fallback' ? (
-        <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200">
-          Basic comparison shown
-        </span>
+        <StatusLabel
+          label="Comparison"
+          status="Basic"
+          description="The answer used the deterministic fallback because the richer synthesis path was unavailable."
+        />
       ) : null}
       {coverageStatus && coverageStatus !== 'not_applicable' ? (
-        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-300">
-          Coverage {coverageStatus}
-        </span>
+        <StatusLabel
+          label="Coverage"
+          status={coverageStatus}
+          description="Coverage describes how much requested structured data or official evidence was available."
+        />
       ) : null}
       {confidence?.label ? (
-        <span className="rounded-full border border-[#66a3ff]/20 bg-[#66a3ff]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#cce0ff]">
-          Confidence {String(confidence.label)}
-        </span>
+        <StatusLabel
+          label="Confidence"
+          status={String(confidence.label)}
+          description="This is a qualified resolver or evidence-support signal, not an investment-performance prediction."
+          details={confidence.reason ? String(confidence.reason) : undefined}
+        />
       ) : null}
       {sourceRows.map(([entity, raw]) => {
         const row = asRecord(raw) || {};
@@ -385,35 +365,41 @@ function MessageMetadataBadges({ metadata, content }: { metadata?: Record<string
               ? 'NAV missing'
               : 'Fresh';
         return (
-          <span
+          <StatusLabel
             key={entity}
-            className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${
-              freshnessStatus === 'fresh'
-                ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
-                : freshnessStatus === 'stale' || freshnessStatus === 'missing'
-                  ? 'border-rose-300/20 bg-rose-300/10 text-rose-100'
-                  : 'border-amber-400/20 bg-amber-400/10 text-amber-200'
-            }`}
-            title={expectedNavDate ? `Latest expected NAV date: ${String(expectedNavDate)}` : undefined}
-          >
-            {label} {lastUpdated ? String(lastUpdated) : entity}
-          </span>
+            label={label}
+            status={lastUpdated ? String(lastUpdated) : entity}
+            description={statusExplanation(freshnessStatus)}
+            details={(
+              <>
+                <span className="block">Fund or entity: {entity}</span>
+                <span className="block">Observed: {lastUpdated ? String(lastUpdated) : 'unavailable'}</span>
+                <span className="block">Latest expected NAV date: {expectedNavDate ? String(expectedNavDate) : 'not supplied'}</span>
+              </>
+            )}
+          />
         );
       })}
       {riskItems.length ? (
-        <span className="rounded-full border border-rose-300/20 bg-rose-300/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-100">
-          {riskItems.length} risk flags
-        </span>
+        <StatusLabel
+          label="Risk"
+          status={`${riskItems.length} flag${riskItems.length === 1 ? '' : 's'}`}
+          description="These are deterministic research flags derived from available metrics, not personalized advice."
+        />
       ) : null}
       {dataGapItems.length ? (
-        <span className="rounded-full border border-slate-300/20 bg-slate-300/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-200">
-          {dataGapItems.length} data gaps
-        </span>
+        <StatusLabel
+          label="Data gaps"
+          status={String(dataGapItems.length)}
+          description="These data gaps are expected research inputs that were unavailable and excluded from supported conclusions."
+        />
       ) : null}
       {missingCount ? (
-        <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200">
-          {missingCount} missing fields
-        </span>
+        <StatusLabel
+          label="Missing fields"
+          status={String(missingCount)}
+          description="These expected fields were absent from the stored data used for this answer."
+        />
       ) : null}
     </>
   );
@@ -483,14 +469,12 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
   const assetType = useChatStore((state) => state.assetType);
   const researchDepth = useChatStore((state) => state.researchDepth);
   const explanationMode = useChatStore((state) => state.explanationMode);
-  const comparisonViewMode = useChatStore((state) => state.comparisonViewMode);
   const conversationContext = useChatStore((state) => state.conversationContext);
   const setInput = useChatStore((state) => state.setInput);
   const setIsProcessing = useChatStore((state) => state.setIsProcessing);
   const setAssetType = useChatStore((state) => state.setAssetType);
   const setResearchDepth = useChatStore((state) => state.setResearchDepth);
   const setExplanationMode = useChatStore((state) => state.setExplanationMode);
-  const setComparisonViewMode = useChatStore((state) => state.setComparisonViewMode);
   const setConversationContext = useChatStore((state) => state.setConversationContext);
   const addMessage = useChatStore((state) => state.addMessage);
   const resetMessages = useChatStore((state) => state.resetMessages);
@@ -552,7 +536,6 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
     selectedAssetType: AssetType = assetType,
     selectedResearchDepth: ResearchDepth = researchDepth,
     selectedExplanationMode: ExplanationMode = explanationMode,
-    selectedComparisonViewMode: ComparisonViewMode = comparisonViewMode,
   ) => {
     const text = queryText.trim();
     if (!text) return;
@@ -598,7 +581,6 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
           asset_type: selectedAssetType,
           research_depth: selectedResearchDepth,
           explanation_mode: selectedExplanationMode,
-          comparison_view_mode: selectedComparisonViewMode,
           history: requestHistory,
           conversation_context: conversationContext,
           session_id: activeSessionId,
@@ -625,16 +607,10 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
       }
       const data = await readChatStream(res, setStreamStatus);
 
-      if (data.system_action?.type === 'COMPARE') {
-        if (selectedComparisonViewMode === 'canvas') {
-          setIds(data.system_action.ids || []);
-          setView('COMPARISON', data);
-          openCanvas(data);
-        } else {
-          setIds(data.system_action.ids || []);
-          setView('COMPARISON_GRAPH_ONLY', data);
-          openCanvas(data);
-        }
+      if (data.system_action?.type === 'COMPARE' && (data.system_action.ids?.length || 0) >= 2) {
+        setIds(data.system_action.ids || []);
+        setView('COMPARISON', data);
+        openCanvas(data);
       }
       if (data.system_action?.type === 'PORTFOLIO_REVIEW') {
         setIds([]);
@@ -685,7 +661,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
     } finally {
       setIsProcessing(false);
     }
-  }, [addMessage, assetType, comparisonViewMode, conversationContext, currentSessionId, createNewSession, explanationMode, getAccessToken, messages, openCanvas, researchDepth, setConversationContext, setIds, setInput, setIsProcessing, setView]);
+  }, [addMessage, assetType, conversationContext, currentSessionId, createNewSession, explanationMode, getAccessToken, messages, openCanvas, researchDepth, setConversationContext, setIds, setInput, setIsProcessing, setView]);
 
   useEffect(() => {
     if (!isHistoryReady) return;
@@ -709,11 +685,11 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
       setAssetType(nextAssetType);
       setExplanationMode(nextExplanationMode);
       setResearchDepth(resolvedResearchDepth);
-      void sendQuery(query, nextAssetType, resolvedResearchDepth, nextExplanationMode, comparisonViewMode);
+      void sendQuery(query, nextAssetType, resolvedResearchDepth, nextExplanationMode);
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [comparisonViewMode, isHistoryReady, searchParams, sendQuery, setAssetType, setExplanationMode, setResearchDepth]);
+  }, [isHistoryReady, searchParams, sendQuery, setAssetType, setExplanationMode, setResearchDepth]);
 
   useEffect(() => {
     if (!pendingQuery) return;
@@ -727,7 +703,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
   }, [pendingQuery, sendQuery, setPendingQuery]);
 
   const handleSend = async () => {
-    await sendQuery(input, assetType, researchDepth, explanationMode, comparisonViewMode);
+    await sendQuery(input, assetType, researchDepth, explanationMode);
   };
 
   const handleClearHistory = async () => {
@@ -842,22 +818,6 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
                         {responseWithCitationLinks(msg.content, msg.metadata)}
                       </ReactMarkdown>
                       <ResponseSources metadata={msg.metadata} />
-                      {msg.id !== '1' && <ReasoningSummary metadata={msg.metadata} />}
-                      {msg.metadata?.system_action_type === 'COMPARE' && comparisonViewMode === 'chat' && Array.isArray(msg.metadata?.system_action_ids) && (
-                        <div className="mt-4 -mx-2 sm:-mx-4 h-[600px] border border-white/10 rounded-2xl overflow-hidden bg-[#050505]/50">
-                          <ComparisonView
-                            key={(msg.metadata.system_action_ids as string[]).join('|')}
-                            ids={msg.metadata.system_action_ids as string[]}
-                            type={(msg.metadata.system_action_ids[0] as string)?.match(/^[0-9]+$/) ? 'MUTUAL_FUND' : 'STOCK'}
-                            variant="metrics_only"
-                          />
-                        </div>
-                      )}
-                      {msg.id !== '1' && (
-                        <div className="mt-3 flex flex-wrap gap-2 border-t border-white/5 pt-3">
-                          <MessageMetadataBadges metadata={msg.metadata} content={msg.content} />
-                        </div>
-                      )}
                       {msg.id !== '1' && isFundResponse(msg.metadata, previousUserQuery(messages, messageIndex), assetType) ? (
                         <FundAnswerActions
                           metadata={msg.metadata}
@@ -869,6 +829,12 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
                           }}
                         />
                       ) : null}
+                      {msg.id !== '1' && <ReasoningSummary metadata={msg.metadata} />}
+                      {msg.id !== '1' && (
+                        <div className="mt-3 flex flex-wrap gap-2 border-t border-white/5 pt-3">
+                          <MessageMetadataBadges metadata={msg.metadata} content={msg.content} />
+                        </div>
+                      )}
                     </div>
                   ) : (
                     msg.content
@@ -1001,26 +967,6 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
                         setExplanationMode(nextMode);
                         setResearchDepth(nextMode === 'advanced' ? 'deep' : 'standard');
                       }}
-                      disabled={isProcessing}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="inline-flex rounded-lg bg-white/[0.02] p-0.5 border border-white/5">
-                  {[
-                    { label: 'Canvas', value: 'canvas' },
-                    { label: 'Chat', value: 'chat' },
-                  ].map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-all ${
-                        comparisonViewMode === option.value
-                          ? 'bg-[#66a3ff]/15 text-[#66a3ff]'
-                          : 'text-white/40 hover:text-white/80'
-                      }`}
-                      onClick={() => setComparisonViewMode(option.value as ComparisonViewMode)}
                       disabled={isProcessing}
                     >
                       {option.label}

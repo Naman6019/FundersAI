@@ -10,8 +10,6 @@ import {
   ChartSpline,
   Clock3,
   Database,
-  PanelRightClose,
-  PanelRightOpen,
   ShieldCheck,
   Landmark,
   Brain,
@@ -39,20 +37,8 @@ import FundSearchSelect from '@/components/ui/FundSearchSelect';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import type { CategoryComparePayload, CategoryFundRow, SearchResultItem } from '@/types/funds';
 import type { UserTier } from '@/lib/billing/tiers';
-
-export type DataHealthItem = {
-  label: string;
-  status: string;
-  note?: string | null;
-  last_updated?: string | null;
-};
-
-const DEFAULT_DATA_HEALTH: DataHealthItem[] = [
-  { label: 'MF NAV', status: 'Checking' },
-  { label: 'AUM / TER', status: 'Checking' },
-  { label: 'Risk metrics', status: 'Checking' },
-  { label: 'AMC docs', status: 'Checking' },
-];
+import { useDataHealthContext } from '@/components/data-health/DataHealthProvider';
+import { dataHealthSummary, statusDotClass } from '@/lib/dataHealth';
 
 const HEADER_HEIGHT = 64;
 const MAIN_PADDING = 24;
@@ -69,18 +55,6 @@ const CATEGORY_CARDS = [
   { key: 'index', title: 'Index Funds', desc: 'Low cost tracking', icon: Database },
   { key: 'elss', title: 'ELSS', desc: 'Tax saving funds', icon: ShieldCheck },
 ];
-
-function statusColorClass(status: string): string {
-  const normalized = (status || '').toLowerCase();
-  if (['fresh', 'synced', 'ready', 'indexed'].includes(normalized)) return 'text-emerald-300';
-  if (['lagging', 'partial', 'processing', 'checking'].includes(normalized)) return 'text-amber-300';
-  if (['stale', 'missing', 'error'].includes(normalized)) return 'text-rose-300';
-  return 'text-slate-300';
-}
-
-function isLaggingMfDataStatus(status: string): boolean {
-  return ['lagging', 'partial', 'processing', 'stale', 'missing', 'error'].includes((status || '').toLowerCase());
-}
 
 function CanvasPlaceholder() {
   return (
@@ -135,10 +109,8 @@ function FineGrid() {
 }
 
 export default function DashboardLayout() {
-  const { activeView, selectedIds, auxiliaryData, isCanvasOpen, toggleCanvas } = useCanvasStore();
+  const { activeView, selectedIds, auxiliaryData, isCanvasOpen } = useCanvasStore();
   const [activeTab, setActiveTab] = useState<'overview' | 'research'>('research');
-  const [dataHealth, setDataHealth] = useState<DataHealthItem[]>(DEFAULT_DATA_HEALTH);
-  const [healthCheckedAt, setHealthCheckedAt] = useState<string | null>(null);
   const [currentTier, setCurrentTier] = useState<UserTier>('free');
   const [isResizingCanvas, setIsResizingCanvas] = useState(false);
   const [canvasWidth, setCanvasWidth] = useState(500);
@@ -146,11 +118,8 @@ export default function DashboardLayout() {
   const [compareFund2, setCompareFund2] = useState<SearchResultItem | null>(null);
 
   const setPendingQuery = useChatStore((state) => state.setPendingQuery);
-  const navStatus = dataHealth.find((item) => item.label === 'MF NAV')?.status || 'Checking';
-  const laggingMfData = healthCheckedAt
-    ? dataHealth.filter((item) => item.label !== 'MF NAV' && isLaggingMfDataStatus(item.status))
-    : [];
-  const laggingMfDataTitle = laggingMfData.map((item) => item.label).join(', ');
+  const { data: dataHealth, lastSuccessfulCheck } = useDataHealthContext();
+  const healthSummary = dataHealthSummary(dataHealth.metrics);
 
   const getCanvasBounds = () => {
     const shellPadding = MAIN_PADDING * 2;
@@ -183,43 +152,6 @@ export default function DashboardLayout() {
     };
     void loadBilling();
     return () => { ignore = true; };
-  }, []);
-
-  useEffect(() => {
-    let ignore = false;
-    const loadDataHealth = async () => {
-      try {
-        const res = await fetch('/api/data-health', { cache: 'no-store' });
-        if (!res.ok) {
-          if (!ignore) {
-            setDataHealth((current) => current.map((item) => ({ ...item, status: 'Error', note: 'Data health request failed.' })));
-          }
-          return;
-        }
-        const payload = await res.json();
-        const incoming = Array.isArray(payload?.metrics) ? payload.metrics : [];
-        const byLabel = new Map(incoming.map((item: DataHealthItem) => [item.label, item]));
-        if (!ignore) {
-          setDataHealth(
-            DEFAULT_DATA_HEALTH.map((item) => {
-              const next = byLabel.get(item.label);
-              return next ? { ...item, ...next } : item;
-            }),
-          );
-          setHealthCheckedAt(typeof payload?.checked_at === 'string' ? payload.checked_at : new Date().toISOString());
-        }
-      } catch {
-        if (!ignore) {
-          setDataHealth((current) => current.map((item) => ({ ...item, status: 'Error', note: 'Data health request failed.' })));
-        }
-      }
-    };
-    loadDataHealth();
-    const timer = window.setInterval(loadDataHealth, 120000);
-    return () => {
-      ignore = true;
-      window.clearInterval(timer);
-    };
   }, []);
 
   useEffect(() => {
@@ -769,8 +701,6 @@ export default function DashboardLayout() {
       <AppSidebar 
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        dataHealth={dataHealth}
-        healthCheckedAt={healthCheckedAt}
         currentTier={currentTier}
       />
       <div className="relative h-screen w-full overflow-hidden bg-[#050505] text-[#e8f0ff] flex flex-col selection:bg-[#00FF9D]/30 selection:text-white flex-1">
@@ -785,7 +715,7 @@ export default function DashboardLayout() {
                 <Image src="/FUNDERSAI-nobackground.png" alt="FundersAI Logo" width={28} height={28} className="object-contain" />
                 <div>
                   <p className="text-sm font-semibold text-white">FundersAI Research</p>
-                  <p className="text-xs text-slate-400">Centered chat + optional canvas</p>
+                  <p className="text-xs text-slate-400">Research chat + intent-driven canvas</p>
                 </div>
               </div>
             </div>
@@ -811,33 +741,15 @@ export default function DashboardLayout() {
             </div>
 
             <div className="flex items-center gap-2">
-              {laggingMfData.length > 0 && (
-                <div
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300/30 bg-amber-300/10 px-2.5 py-1.5 text-xs font-semibold text-amber-100"
-                  title={`MF data lagging: ${laggingMfDataTitle}. Check Data health for details.`}
-                >
-                  <AlertCircle className="h-3.5 w-3.5" />
-                  <span>MF data lagging</span>
-                </div>
-              )}
-              {activeTab === 'research' && (
-                <button
-                  type="button"
-                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
-                    isCanvasOpen
-                      ? 'border-[#00FF9D]/35 bg-[#00FF9D]/12 text-[#b3ffdb]'
-                      : 'border-white/15 bg-white/[0.04] text-slate-200 hover:border-[#00FF9D]/45 hover:text-white'
-                  }`}
-                  onClick={toggleCanvas}
-                >
-                  {isCanvasOpen ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
-                  Canvas
-                </button>
-              )}
-              <div className="hidden items-center gap-1.5 text-xs font-medium text-emerald-300 sm:flex">
-                <Clock3 className="h-3.5 w-3.5" />
-                <span className={statusColorClass(navStatus)}>MF NAV {navStatus}</span>
-              </div>
+              <Link
+                href="/dashboard/data-trust"
+                className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white"
+                title={`Data & Trust: ${healthSummary.label}. Last checked ${lastSuccessfulCheck || 'pending'}.`}
+              >
+                <span className={`h-2 w-2 rounded-full ${statusDotClass(healthSummary.status)}`} aria-hidden="true" />
+                <span>Data &amp; Trust</span>
+                <span className="hidden max-w-40 truncate font-normal text-slate-400 lg:inline">{healthSummary.label}</span>
+              </Link>
             </div>
           </header>
 

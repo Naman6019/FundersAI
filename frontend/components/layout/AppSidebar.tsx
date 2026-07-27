@@ -16,36 +16,20 @@ import {
 import {
   LayoutDashboard,
   Brain,
-  ChartSpline,
-  Database,
-  ShieldCheck,
 } from "lucide-react";
 import { useChatStore } from "@/store/useChatStore";
 import { useEffect } from "react";
 import UserProfileDropdown from "@/components/auth/UserProfileDropdown";
 import { InfoCard, InfoCardContent, InfoCardDescription, InfoCardTitle, InfoCardMedia } from "@/components/ui/info-card";
 import { UserTier } from "@/lib/billing/tiers";
-import { DataHealthItem } from "@/components/layout/DashboardLayout";
-
-function statusColorClass(status: string): string {
-  const normalized = (status || "").toLowerCase();
-  if (["fresh", "synced", "ready", "indexed"].includes(normalized)) return "text-emerald-300";
-  if (["lagging", "partial", "processing", "checking"].includes(normalized)) return "text-amber-300";
-  if (["stale", "missing", "error"].includes(normalized)) return "text-rose-300";
-  return "text-slate-300";
-}
 
 export function AppSidebar({
   activeTab,
   setActiveTab,
-  dataHealth,
-  healthCheckedAt,
   currentTier,
 }: {
   activeTab: "overview" | "research";
   setActiveTab: (tab: "overview" | "research") => void;
-  dataHealth: DataHealthItem[];
-  healthCheckedAt: string | null;
   currentTier: UserTier;
 }) {
   const setAssetType = useChatStore((state) => state.setAssetType);
@@ -116,47 +100,6 @@ export function AppSidebar({
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup className="mt-4">
-          <SidebarGroupLabel className="text-[11px] uppercase tracking-[0.16em] text-slate-400 font-semibold px-3">
-            Pipelines
-          </SidebarGroupLabel>
-          <SidebarGroupContent className="px-3 py-2 space-y-2">
-            <div className="flex items-center gap-2 text-xs text-slate-300">
-              <ChartSpline className="h-3.5 w-3.5 text-[#00FF9D] shrink-0" />
-              <span>Quant + comparison</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-300">
-              <Database className="h-3.5 w-3.5 text-[#00cc7d] shrink-0" />
-              <span>Normalized stored data</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-300">
-              <ShieldCheck className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-              <span>Research guardrails</span>
-            </div>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup className="mt-4">
-          <SidebarGroupLabel className="text-[11px] uppercase tracking-[0.16em] text-slate-400 font-semibold px-3">
-            Data health
-          </SidebarGroupLabel>
-          <SidebarGroupContent className="px-3 py-2 space-y-2">
-            {dataHealth.slice(0, 4).map(({ label, status, note }) => (
-              <div key={label} className="rounded-lg border border-white/5 bg-white/[0.045] backdrop-blur-md px-2.5 py-1.5 text-[11px]">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400" title={note || ""}>{label}</span>
-                  <span className={`font-semibold ${statusColorClass(status)}`} title={note || ""}>{status}</span>
-                </div>
-              </div>
-            ))}
-            {healthCheckedAt && (
-              <p className="mt-2 text-[9px] text-slate-500">
-                Checked {new Date(healthCheckedAt).toLocaleString("en-IN", { hour12: false })}
-              </p>
-            )}
           </SidebarGroupContent>
         </SidebarGroup>
 
