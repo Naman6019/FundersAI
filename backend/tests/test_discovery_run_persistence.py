@@ -146,6 +146,15 @@ def test_discovery_run_migration_is_service_role_only() -> None:
     assert "grant select, insert, update, delete on table public.mf_discovery_documents to service_role" in migration
 
 
+def test_discovery_month_confirmation_migration_accepts_content_confirmation() -> None:
+    migration = Path(
+        "backend/migrations/20260728_allow_content_confirmed_discovery_month.sql"
+    ).read_text(encoding="utf-8")
+
+    assert "drop constraint if exists mf_discovery_documents_month_confirmation_check" in migration
+    assert "'confirmed', 'content_confirmed', 'unconfirmed'" in migration
+
+
 def test_document_observations_keep_readiness_and_checksum() -> None:
     payload = _payload()
     payload["manifest"]["documents"][0].update(

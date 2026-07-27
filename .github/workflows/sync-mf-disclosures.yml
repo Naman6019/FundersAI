@@ -300,7 +300,7 @@ jobs:
               --max-stale-months 2
           fi
 
-          if [ "$EDGE_ACQUIRED" = "true" ]; then
+          if [ "$EDGE_ACQUIRED" = "true" ] && [ "$PARSE_ONLY" != "true" ]; then
             if [ -n "${MF_EDGE_ACQUIRE_URL:-}" ] && [ -n "${MF_EDGE_ACQUIRE_KEY:-}" ]; then
               echo "Requesting Supabase Edge document acquisition for $amc before parsing."
               edge_payload=$(CURRENT_AMC="$amc" EDGE_MAX_DOCS="$max_docs" python - <<'PY'

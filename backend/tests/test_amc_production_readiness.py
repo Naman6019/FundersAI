@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
@@ -182,6 +183,7 @@ def test_staging_migration_and_workflows_keep_acquisition_and_promotion_separate
     assert 'default: "2026-06"' in acquisition
     assert 'PARSE_ONLY="true"' in parser_workflow
     assert "Acquisition is separated. Use Acquire MF Documents" in parser_workflow
+    assert 'if [ "$EDGE_ACQUIRED" = "true" ] && [ "$PARSE_ONLY" != "true" ]; then' in parser_workflow
     assert "capability_keys('portfolio_parser_enabled')" in parser_workflow
     assert "MF_DISCLOSURE_COVERAGE_AMCS=\"$(PYTHONPATH=backend python -c" in parser_workflow
     assert "DISPATCH_AMCS:-$(PYTHONPATH=backend python -c" in parser_workflow
@@ -195,6 +197,30 @@ def test_staging_migration_and_workflows_keep_acquisition_and_promotion_separate
     assert 'supabase.table("mutual_fund_holdings").upsert' not in parsing_service
     assert 'supabase.table("mutual_fund_sectors").upsert' not in parsing_service
     assert 'supabase.table("mutual_fund_core_snapshot").update' not in parsing_service
+
+
+def test_reviewed_source_manifest_keeps_exact_june_axis_and_absl_fallbacks():
+    manifest = json.loads(
+        Path("backend/config/mf_document_sources.json").read_text(encoding="utf-8")
+    )
+    documents = manifest["documents"]
+
+    axis_scopes = {
+        row["document_type"]
+        for row in documents
+        if row["amc"] == "AXIS" and row["report_month"] == "2026-06-01"
+    }
+    absl_factsheets = [
+        row
+        for row in documents
+        if row["amc"] == "ABSL"
+        and row["document_type"] == "factsheet"
+        and row["report_month"] == "2026-06-01"
+    ]
+
+    assert axis_scopes == {"factsheet", "portfolio_disclosure"}
+    assert len(absl_factsheets) == 1
+    assert "adityabirlacapital.com" in absl_factsheets[0]["source_url"]
 
 
 def test_promotion_validation_requires_exact_r2_evidence_and_only_available_scopes():

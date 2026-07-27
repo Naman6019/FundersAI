@@ -1,3 +1,39 @@
 {
-  "documents": []
+  "generated_at": "2026-07-28T00:00:00+00:00",
+  "generated_by": "reviewed_official_source_manifest",
+  "documents": [
+    {
+      "amc": "AXIS",
+      "document_type": "factsheet",
+      "report_month": "2026-06-01",
+      "source_url": "https://www.axismf.com/1/5/1423/1484/1487/2872/4351/Axis_Fund_Factsheet_June_2026.pdf",
+      "discovery_page_url": "https://www.axismf.com/downloads",
+      "expected_file_type": ".pdf",
+      "title": "Axis Fund Factsheet June-2026",
+      "priority_score": 8000000,
+      "discovery_agent_status": "promotable"
+    },
+    {
+      "amc": "AXIS",
+      "document_type": "portfolio_disclosure",
+      "report_month": "2026-06-01",
+      "source_url": "https://www.axismf.com/1/5/1423/1484/1487/2872/4351/Axis_Fund_Factsheet_June_2026.pdf",
+      "discovery_page_url": "https://www.axismf.com/downloads",
+      "expected_file_type": ".pdf",
+      "title": "Axis Fund Factsheet June-2026",
+      "priority_score": 8000000,
+      "discovery_agent_status": "promotable"
+    },
+    {
+      "amc": "ABSL",
+      "document_type": "factsheet",
+      "report_month": "2026-06-01",
+      "source_url": "https://mutualfund.adityabirlacapital.com/-/media/bsl/files/resources/factsheets/2026/absl-factsheet_july-2026.pdf",
+      "discovery_page_url": "https://mutualfund.adityabirlacapital.com/forms-and-downloads/factsheets",
+      "expected_file_type": ".pdf",
+      "title": "Empower - Monthly Factsheet",
+      "priority_score": 8000000,
+      "discovery_agent_status": "promotable"
+    }
+  ]
 }

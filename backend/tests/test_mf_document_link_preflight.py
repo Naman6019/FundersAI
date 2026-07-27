@@ -91,3 +91,38 @@ def test_validate_link_warns_on_stale_report_month():
 
     assert result["status"] == "ok"
     assert result["warnings"] == ["stale_report_month:2026-01-01"]
+
+
+def test_preflight_missing_link_gate_uses_registry_amc_code_alias(tmp_path: Path):
+    manifest = tmp_path / "mf_document_sources.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "documents": [
+                    {
+                        "amc": "ABSL",
+                        "document_type": "factsheet",
+                        "report_month": "2026-06-01",
+                        "source_url": "https://mutualfund.adityabirlacapital.com/factsheet.pdf",
+                        "expected_file_type": ".pdf",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    response = SimpleNamespace(
+        status_code=200,
+        content=b"%PDF-1.4",
+        headers={"Content-Type": "application/pdf"},
+    )
+
+    report = preflight.run_preflight(
+        amcs=["aditya_birla"],
+        manifest_path=str(manifest),
+        require_links=True,
+        session=_FakeSession(response),
+    )
+
+    assert report["status"] == "ok"
+    assert report["warnings"] == []

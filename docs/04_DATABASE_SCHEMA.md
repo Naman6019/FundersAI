@@ -1,6 +1,6 @@
 # Database Schema
 
-**Last updated:** 2026-07-22
+**Last updated:** 2026-07-28
 
 FundersAI uses Supabase PostgreSQL for structured application data and authentication. Browser access is limited by Row Level Security (RLS); service-role writes are server-side only.
 
@@ -52,6 +52,7 @@ FundersAI uses Supabase PostgreSQL for structured application data and authentic
 - `mf_discovery_documents`
   - Server-only checksum/readiness observations keyed to one discovery run and monthly document identity.
   - Retains last-known-good candidates and evidence without invoking raw-document ingestion.
+  - `month_confirmation` accepts `confirmed`, `content_confirmed`, and `unconfirmed`; `content_confirmed` means the downloaded body verified the reporting month.
 - `mf_factsheet_candidates` (`20260727_add_mf_extraction_staging_and_promotion.sql`, production presence verified 2026-07-27)
   - Preserves raw and normalized AMC scheme names, reviewed scheme/family mappings, extracted fields, source/R2/checksum evidence, parser version, and per-scope promotion state.
 - `mf_promotion_runs` (`20260727_add_mf_extraction_staging_and_promotion.sql`, production presence verified 2026-07-27)
@@ -137,5 +138,6 @@ The Next.js proxy uses the service role only after authenticating the user and c
 8. `20260722_repair_flexi_cap_comparison_metadata.sql`
 9. `20260723_add_discovery_v2_history.sql`
 10. `20260727_add_mf_extraction_staging_and_promotion.sql` (production schema presence verified 2026-07-27; no promotion was applied during verification)
+11. `20260728_allow_content_confirmed_discovery_month.sql` (required before the updated discovery supervisor can persist body-confirmed observations)
 
 Equivalent production SQL is not a substitute for keeping the migration in version control.

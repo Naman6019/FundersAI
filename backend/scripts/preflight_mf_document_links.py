@@ -163,7 +163,11 @@ def run_preflight(
         )
         for candidate in candidates
     ]
-    missing_amcs = sorted({amc.upper() for amc in amcs} - {str(item.get("amc") or "").upper() for item in results})
+    requested_amc_codes = {get_source(amc).amc_code.upper() for amc in amcs}
+    missing_amcs = sorted(
+        requested_amc_codes
+        - {str(item.get("amc") or "").upper() for item in results}
+    )
     warnings = []
     if missing_amcs:
         warnings.append(f"no_links_found:{','.join(missing_amcs)}")

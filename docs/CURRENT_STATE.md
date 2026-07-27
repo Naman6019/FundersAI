@@ -178,6 +178,7 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - checksum-addressed R2 persistence stages, RLS-protected discovery-document history, last-known-good fallback, and run-to-run diff evidence;
   - browser fallback disabled by default and restricted to explicitly approved AMC adapters.
   - production requires `backend/migrations/20260723_add_discovery_v2_history.sql`; the discovery workflow now verifies that schema before it probes official sources.
+  - July 27 hosted run `30304766428` completed its official-source probes but failed while persisting the first `content_confirmed` observation because the deployed check constraint only accepts `confirmed` and `unconfirmed`; `20260728_allow_content_confirmed_discovery_month.sql` is prepared but not yet applied.
 - Hosted official-research indexing implementation:
   - weekday/manual GitHub Actions indexing for validated R2-backed PDFs from the six enabled AMCs;
   - PDF filtering occurs before the job limit, and already indexed document IDs are skipped;
