@@ -105,6 +105,25 @@ jobs:
             fi
           done
 
+      - name: Validate Discovery V2 persistence schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! schema_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --get \
+            --header "apikey: $SUPABASE_KEY" \
+            --header "Authorization: Bearer $SUPABASE_KEY" \
+            --data-urlencode 'select=id' \
+            --data-urlencode 'limit=1' \
+            "${SUPABASE_URL%/}/rest/v1/mf_discovery_documents")"; then
+            echo "Unable to verify the Discovery V2 persistence schema."
+            exit 1
+          fi
+          if [ "$schema_status" != '200' ]; then
+            echo "Discovery V2 persistence schema is unavailable (HTTP $schema_status). Apply backend/migrations/20260723_add_discovery_v2_history.sql before running discovery."
+            exit 1
+          fi
+
       - name: Run bounded discovery supervisor
         shell: bash
         run: |
