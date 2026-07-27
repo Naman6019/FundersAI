@@ -28,7 +28,7 @@ Use this guide for repository conventions and quick orientation. For the authori
 
 - Supabase PostgreSQL for structured data and authentication
 - Cloudflare R2 for raw AMC documents and cold archives
-- 17 GitHub Actions workflows for discovery, indexing, sync, ingestion, retry, archive, migration, and compaction jobs
+- 20 GitHub Actions workflows for discovery, acquisition, parsing, indexing, promotion, retry, archive, migration, and compaction jobs
 - Razorpay for subscription and payment flows
 
 ## Runtime Boundaries
@@ -80,8 +80,8 @@ See `docs/03_API_CONTRACTS.md` for the complete route inventory and security beh
 
 ## Testing Conventions
 
-- Backend tests live under `backend/tests/` (`60` tracked `test_*.py` modules at this update).
-- Frontend contract tests live under `frontend/tests/` (`10` tracked `*.test.mjs` files at this update).
+- Backend tests live under `backend/tests/` (`68` tracked `test_*.py` modules at this update).
+- Frontend contract tests live under `frontend/tests/` (`16` tracked `*.test.mjs` files at this update).
 - Run focused tests for touched behavior first, followed by the relevant full suite.
 - Typical full checks from the repository root:
 

@@ -40,7 +40,11 @@ def get_config() -> IngestionConfig:
         parser_version=os.getenv("MF_PARSER_VERSION", "mf_ingestion_v1"),
         user_agent=os.getenv(
             "MF_INGESTION_USER_AGENT",
-            "FundersAIResearchBot/1.0 contact: YOUR_EMAIL_HERE",
+            (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36"
+            ),
         ),
         extractor_mode=os.getenv("MF_EXTRACTOR_MODE", "deterministic").strip().lower(),
         llm_extractor_enabled=os.getenv("MF_LLM_EXTRACTOR_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"},

@@ -102,7 +102,23 @@ def validate_download(
     return errors
 
 
-def validate_parser_smoke(downloaded: DownloadedDocument) -> list[str]:
+def validate_parser_smoke(
+    downloaded: DownloadedDocument,
+    *,
+    expected_report_month: date | None = None,
+) -> list[str]:
+    errors, _detected_report_month = inspect_parser_smoke(
+        downloaded,
+        expected_report_month=expected_report_month,
+    )
+    return errors
+
+
+def inspect_parser_smoke(
+    downloaded: DownloadedDocument,
+    *,
+    expected_report_month: date | None = None,
+) -> tuple[list[str], date | None]:
     """Check that a validated body is structurally readable without ingesting it."""
     extension = _normalize_extension(downloaded.file_ext or downloaded.file_name)
     if extension == ".pdf":
@@ -111,23 +127,65 @@ def validate_parser_smoke(downloaded: DownloadedDocument) -> list[str]:
 
             reader = PdfReader(BytesIO(downloaded.file_bytes), strict=False)
             if not reader.pages:
-                return ["parser_smoke_pdf_no_pages"]
+                return ["parser_smoke_pdf_no_pages"], None
+            if str(downloaded.document_type or "").strip().lower() == "factsheet":
+                text = "\n".join(str(page.extract_text() or "") for page in reader.pages)
+                detected_report_month = detect_factsheet_content_month(text)
+                month_errors = _validate_detected_factsheet_month(
+                    detected_report_month,
+                    expected_report_month=expected_report_month,
+                )
+                if month_errors:
+                    return month_errors, detected_report_month
+                return [], detected_report_month
         except Exception as exc:
-            return [f"parser_smoke_pdf_failed:{type(exc).__name__}"]
+            return [f"parser_smoke_pdf_failed:{type(exc).__name__}"], None
     elif extension in {".xlsx", ".xlsm"}:
         try:
             from openpyxl import load_workbook
 
             workbook = load_workbook(BytesIO(downloaded.file_bytes), read_only=True, data_only=True)
             if not workbook.sheetnames:
-                return ["parser_smoke_excel_no_sheets"]
+                return ["parser_smoke_excel_no_sheets"], None
             workbook.close()
         except Exception as exc:
-            return [f"parser_smoke_excel_failed:{type(exc).__name__}"]
+            return [f"parser_smoke_excel_failed:{type(exc).__name__}"], None
     elif extension == ".xls":
         # The compound-file signature was checked above. Full XLS parsing remains
         # owned by the existing ingestion parser, which supports its configured engine.
+        return [], None
+    return [], None
+
+
+def validate_factsheet_content_month(
+    text: str,
+    *,
+    expected_report_month: date | None,
+) -> list[str]:
+    return _validate_detected_factsheet_month(
+        detect_factsheet_content_month(text),
+        expected_report_month=expected_report_month,
+    )
+
+
+def detect_factsheet_content_month(text: str) -> date | None:
+    from app.mf_ingestion.parsers.factsheet_parser import detect_dominant_factsheet_month
+
+    return detect_dominant_factsheet_month(text)
+
+
+def _validate_detected_factsheet_month(
+    detected: date | None,
+    *,
+    expected_report_month: date | None,
+) -> list[str]:
+    if expected_report_month is None:
         return []
+    if detected and _month_index(detected) != _month_index(expected_report_month):
+        return [
+            "factsheet_content_report_month_mismatch:"
+            f"{detected.isoformat()}!={expected_report_month.isoformat()}"
+        ]
     return []
 
 

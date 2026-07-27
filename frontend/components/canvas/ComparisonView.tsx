@@ -52,12 +52,12 @@ type ComparisonSummaryPayload = {
 };
 
 type HoldingsOverlapPayload = {
-  coverage_status?: string;
+  coverage_status?: 'available' | 'unavailable';
   reason?: string;
   entities?: string[];
   as_of_date?: string | null;
   common_holding_count?: number;
-  total_overlap_weight?: number;
+  total_overlap_weight?: number | null;
   fund_a_top_concentration?: number;
   fund_b_top_concentration?: number;
   top_common_holdings?: Array<{
@@ -204,7 +204,7 @@ function buildHoldingsOverlapFromFunds(
       entities: [first.label || 'Fund A', second.label || 'Fund B'],
       top_common_holdings: [],
       sector_overlap: [],
-      total_overlap_weight: 0,
+      total_overlap_weight: null,
     };
   }
 
@@ -752,7 +752,6 @@ function RiskAnalysisPanel({ payload }: { payload: RiskAnalysisPayload | null })
 export default function ComparisonView({ ids: initialIds, type, auxiliaryData, variant = 'full' }: Props) {
   const [ids, setIds] = useState<string[]>(initialIds);
   const [period, setPeriod] = useState<Period>('1Y');
-  const { comparisonMode, setComparisonMode } = useCanvasStore();
 
   const id1 = ids?.[0] || null;
   const id2 = ids?.[1] || null;
@@ -984,27 +983,6 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
             </p>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            {comparisonMode === 'simple' ? (
-              <button
-                onClick={() => setComparisonMode('llm')}
-                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#66a3ff] to-[#4f8ff7] px-4 py-2 text-xs font-bold text-slate-950 shadow-lg shadow-[#66a3ff]/20 transition-transform hover:scale-105 active:scale-95 whitespace-nowrap"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                Ask AI
-              </button>
-            ) : (
-              <button
-                onClick={() => setComparisonMode('simple')}
-                className="flex items-center gap-2 rounded-xl bg-[#222] border border-[#333] px-4 py-2 text-xs font-bold text-slate-300 hover:bg-[#333] transition-transform hover:scale-105 active:scale-95 whitespace-nowrap"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                Hide AI
-              </button>
-            )}
             <div className="flex-1 sm:w-48">
               <FundSearchSelect
                 placeholder={ids[0] || "Select Stock 1"}
@@ -1206,27 +1184,6 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
       )}
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-        {comparisonMode === 'simple' ? (
-          <button
-            onClick={() => setComparisonMode('llm')}
-            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#66a3ff] to-[#4f8ff7] px-4 py-2 text-xs font-bold text-slate-950 shadow-lg shadow-[#66a3ff]/20 transition-transform hover:scale-105 active:scale-95 whitespace-nowrap"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            Ask AI
-          </button>
-        ) : (
-          <button
-            onClick={() => setComparisonMode('simple')}
-            className="flex items-center gap-2 rounded-xl bg-[#222] border border-[#333] px-5 py-2.5 text-sm font-bold text-slate-300 hover:bg-[#333] transition-transform hover:scale-105 active:scale-95"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Hide AI
-          </button>
-        )}
         <div className={`flex max-w-full overflow-x-auto rounded-xl bg-white/[0.02] p-1 border border-white/5 gap-1.5 shrink-0 ${variant === 'graph_only' ? 'mx-auto' : 'self-end ml-auto'}`}>
           {periods.map(p => {
             const isSupported = (() => {
@@ -1354,15 +1311,25 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
               if (fund.freshness?.status) return String(fund.freshness.status);
               return fund.lastNav ? 'NAV date available' : 'Coverage pending';
             };
-            const keyDifferences = comparisonSummary?.key_differences?.length
-              ? comparisonSummary.key_differences
-              : ['Compare returns with risk, cost, and source freshness before interpreting any edge.'];
-            const tradeoffs = mfWhyBetter?.tradeoffs?.length
-              ? mfWhyBetter.tradeoffs
-              : ['Different mandates can make direct return-only comparisons incomplete.'];
-            const dataLimitations = mfWhyBetter?.data_limitations?.length
-              ? mfWhyBetter.data_limitations
-              : ['Coverage is limited to available NAV, factsheet, and mapped risk data.'];
+            const keyDifferences = comparisonSummary?.key_differences || [];
+            const tradeoffs = mfWhyBetter?.tradeoffs || [];
+            const dataLimitations = mfWhyBetter?.data_limitations || [];
+            const verdictCards = (comparisonSummary?.verdict_cards || []).filter(card => (
+              Boolean(card.label?.trim() || card.value?.trim() || card.note?.trim())
+            ));
+            const decisionHeadline = comparisonSummary?.headline?.trim() || '';
+            const showDecisionClarity = Boolean(
+              decisionHeadline || verdictCards.length || keyDifferences.length || tradeoffs.length || dataLimitations.length
+            );
+            const researchFrame = (() => {
+              if (activeFunds.some(f => !supportsFundPeriod(f!.cov, '1Y'))) {
+                return 'No overall comparison is available because one or more funds have insufficient one-year NAV history.';
+              }
+              const confidence = mfWhyBetter?.confidence?.score;
+              if (confidence === undefined || confidence === null) return '';
+              if (confidence < 0.6) return 'No strong overall winner is supported. The funds serve different mandates or the available evidence is incomplete.';
+              return 'The available metrics show a directional difference, but mandate and portfolio differences still require independent review.';
+            })();
 
             const pGroup = [
               { label: '1Y Return', values: activeFunds.map(f => formatPercent(f!.return1Y)), winnerIndex: getWinnerIndex('1Y Return', activeFunds.map(f => f!.return1Y)) },
@@ -1525,58 +1492,64 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
 
                 <RiskAnalysisPanel payload={mfRiskAnalysis} />
 
-                <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
-                  <h3 className="mb-2 text-sm font-semibold text-white">Decision clarity</h3>
-                  <p className="text-sm leading-relaxed text-[#c8d8f6]">
-                    {comparisonSummary?.headline || 'Use this view to compare facts, tradeoffs, and coverage limits before making an independent decision.'}
-                  </p>
-                  {Array.isArray(comparisonSummary?.verdict_cards) && comparisonSummary.verdict_cards.length > 0 && (
+                {showDecisionClarity && (
+                <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-6">
+                  <h3 className="mb-3 text-base font-semibold text-white">Decision clarity</h3>
+                  {decisionHeadline && <p className="text-base leading-7 text-[#d7e4fb]">{decisionHeadline}</p>}
+                  {verdictCards.length > 0 && (
                       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                        {comparisonSummary.verdict_cards.slice(0, 4).map((card) => (
+                        {verdictCards.slice(0, 4).map((card) => (
                           <div key={`${card.label}-${card.value}`} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">{card.label || 'Signal'}</p>
-                            <p className="mt-2 text-lg font-semibold text-white">{card.value || 'Not available'}</p>
-                            <p className="mt-1 text-xs leading-relaxed text-[#c8d8f6]">{card.note || 'No note available.'}</p>
+                            {card.value && <p className="mt-2 text-lg font-semibold text-white">{card.value}</p>}
+                            {card.note && <p className="mt-2 text-sm leading-6 text-[#d7e4fb]">{card.note}</p>}
                           </div>
                         ))}
                       </div>
                   )}
+                  {(keyDifferences.length > 0 || tradeoffs.length > 0 || dataLimitations.length > 0) && (
                   <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                    {keyDifferences.length > 0 && (
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">Key differences</p>
-                      <ul className="mt-3 list-disc space-y-1 pl-4 text-xs leading-relaxed text-[#c8d8f6]">
+                      <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-[#d7e4fb]">
                         {keyDifferences.slice(0, 4).map((item) => (
                           <li key={item}>{item}</li>
                         ))}
                       </ul>
                     </div>
+                    )}
+                    {tradeoffs.length > 0 && (
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">Tradeoffs</p>
-                      <ul className="mt-3 list-disc space-y-1 pl-4 text-xs leading-relaxed text-[#c8d8f6]">
+                      <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-[#d7e4fb]">
                         {tradeoffs.slice(0, 4).map((item) => (
                           <li key={item}>{item}</li>
                         ))}
                       </ul>
                     </div>
+                    )}
+                    {dataLimitations.length > 0 && (
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">Data limitations</p>
-                      <ul className="mt-3 list-disc space-y-1 pl-4 text-xs leading-relaxed text-[#c8d8f6]">
+                      <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-[#d7e4fb]">
                         {dataLimitations.slice(0, 4).map((item) => (
                           <li key={item}>{item}</li>
                         ))}
                       </ul>
                     </div>
+                    )}
                   </div>
+                  )}
                 </div>
+                )}
 
-                <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
-                  <h3 className="mb-2 text-sm font-semibold text-white">Research frame</h3>
-                  <p className="text-sm leading-relaxed text-[#c8d8f6]">
-                    {activeFunds.some(f => !f!.cov?.supports_1y) ? "No strong overall winner due to limited NAV history." :
-                     (mfWhyBetter?.confidence?.score ?? 0) < 0.6 ? "No strong overall winner. Both funds serve different mandates." :
-                     "Directional edge based on available data. Asset allocation flexibility and mandate differences still need independent review."}
-                  </p>
-                </div>
+                {researchFrame && (
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-6">
+                    <h3 className="mb-3 text-base font-semibold text-white">Research frame</h3>
+                    <p className="text-base leading-7 text-[#d7e4fb]">{researchFrame}</p>
+                  </div>
+                )}
 
                 {holdingsOverlap && (
                   <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
@@ -1591,7 +1564,11 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
                       </div>
                       <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-right">
                         <p className="text-[11px] uppercase tracking-[0.12em] text-[#8ea7cd]">Overlap weight</p>
-                        <p className="text-xl font-semibold text-white">{formatPercent(toNumber(holdingsOverlap.total_overlap_weight), 2)}</p>
+                        <p className="text-xl font-semibold text-white">
+                          {holdingsOverlap.coverage_status === 'available'
+                            ? formatPercent(toNumber(holdingsOverlap.total_overlap_weight), 2)
+                            : 'Unavailable'}
+                        </p>
                       </div>
                     </div>
 

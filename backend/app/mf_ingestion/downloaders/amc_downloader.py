@@ -10,7 +10,7 @@ from html import unescape
 from datetime import UTC, date, datetime
 from calendar import monthrange
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit, urlunsplit, unquote
+from urllib.parse import quote, unquote, urljoin, urlsplit, urlunsplit
 
 import requests
 from bs4 import BeautifulSoup
@@ -38,10 +38,27 @@ MIRAE_MODULE_BY_DOCUMENT_TYPE = {
     "portfolio_disclosure": "portfolio_tab1",
 }
 DSP_DOWNLOADS_ENDPOINT = "https://www.dspim.com/downloads.json"
+MOTILAL_SITE_BASE_URL = "https://www.motilaloswalmf.com"
+MOTILAL_DOCUMENTS_ENDPOINT = (
+    f"{MOTILAL_SITE_BASE_URL}/content/aem-cloud-dept-backend-motilal-oswal/api/search-documents.json"
+)
+MOTILAL_CATEGORY_BY_DOCUMENT_TYPE = {
+    "factsheet": "factsheet",
+    "portfolio_disclosure": "month end portfolio",
+}
+MOTILAL_DISCOVERY_LOOKBACK_MONTHS = 6
 UTI_ENDPOINT_BY_DOCUMENT_TYPE = {
     "factsheet": "https://www.utimf.com/api/get-fact-sheet",
     "portfolio_disclosure": "https://www.utimf.com/api/get-consolidate-portfolio-disclosure",
 }
+ABSL_RESOURCES_ENDPOINT = (
+    "https://mutualfund.adityabirlacapital.com/"
+    "postlogin/CustomApi/Resources/FactsheetAccordionById"
+)
+ABSL_PORTFOLIO_RESOURCE_ID = "3ccab227-9de5-4494-b78d-2b4f7c0c054a"
+ABSL_INDIVIDUAL_CUSTOMER_TYPE = (
+    "/sitecore/content/Root/BSL/Library/Lists/FAQ/Customer Types/Individual"
+)
 MONTH_PATTERN = re.compile(
     r"(?P<month>jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:[\s\-_]+(?P<day>\d{1,2}))?[\s\-_\,]+(?P<year>20\d{2})",
     re.IGNORECASE,
@@ -54,40 +71,6 @@ SUPPORTED_FILE_EXTENSIONS = {".pdf", ".xls", ".xlsx", ".xlsm", ".csv", ".zip", "
 GENERIC_KEYWORDS = {
     "factsheet": ("factsheet", "fact sheet", "fund sheet", "monthly factsheet"),
     "portfolio_disclosure": ("portfolio", "disclosure", "holdings", "statutory", "monthly portfolio"),
-}
-GENERIC_REQUIRED_KEYWORDS: dict[str, dict[str, tuple[str, ...]]] = {
-    "hdfc": {
-        "factsheet": ("factsheet", "fact sheet", "fund fact"),
-        "portfolio_disclosure": ("portfolio", "holding", "monthly portfolio", "monthly hdfc"),
-    },
-    "sbi": {
-        "factsheet": ("factsheet", "fact sheet", "fund fact"),
-        "portfolio_disclosure": ("portfolio", "holding", "monthly portfolio"),
-    },
-    "nippon": {
-        "factsheet": ("factsheet", "fundamental", "fundamentals", "fund facts", "fund", "nippon"),
-        "portfolio_disclosure": ("portfolio", "monthly portfolio", "disclosure", "nippon"),
-    },
-    "mirae": {
-        "factsheet": ("factsheet", "fact sheet", "active factsheet", "passive factsheet"),
-        "portfolio_disclosure": ("portfolio", "monthly portfolio", "disclosure"),
-    },
-    "kotak": {
-        "factsheet": ("factsheet", "fact sheet"),
-        "portfolio_disclosure": ("portfolio", "monthly portfolio", "disclosure"),
-    },
-    "aditya_birla": {
-        "factsheet": ("factsheet", "monthly factsheet", "empower"),
-        "portfolio_disclosure": ("portfolio", "monthly portfolio", "disclosure"),
-    },
-    "uti": {
-        "factsheet": ("factsheet", "fact sheet"),
-        "portfolio_disclosure": ("portfolio", "monthly portfolio", "disclosure"),
-    },
-    "dsp": {
-        "factsheet": ("factsheet", "fact sheet"),
-        "portfolio_disclosure": ("portfolio", "monthly portfolio", "disclosure"),
-    },
 }
 GENERIC_EXCLUDE_KEYWORDS = (
     "moa",
@@ -114,6 +97,8 @@ class AMCDownloader(BaseDownloader):
         self.user_agent = user_agent
 
     def list_documents(self, document_type: str) -> list[DiscoveredDocument]:
+        if not self.source.discovery_enabled:
+            raise PermissionError(f"discovery_disabled:{self.source.adapter_key}")
         adapter_key = (self.source.adapter_key or "").lower()
         if adapter_key == "ppfas":
             adapter = PPFASAdapter(user_agent=self.user_agent, timeout_seconds=int(self.timeout_seconds))
@@ -182,9 +167,32 @@ class AMCDownloader(BaseDownloader):
                 len(docs),
             )
             return docs
-        if adapter_key == "dsp" and (document_type or "").strip().lower() == "factsheet":
-            docs = _discover_dsp_factsheet_documents(
+        if adapter_key == "dsp":
+            if (document_type or "").strip().lower() == "factsheet":
+                docs = _discover_dsp_factsheet_documents(
+                    self.source,
+                    timeout_seconds=self.timeout_seconds,
+                    user_agent=self.user_agent,
+                )
+            else:
+                docs = _discover_generic_anchor_documents(
+                    self.source,
+                    document_type=document_type,
+                    timeout_seconds=self.timeout_seconds,
+                    user_agent=self.user_agent,
+                )
+            logger.info(
+                "event=amc_discovery_complete amc_code=%s adapter=%s document_type=%s count=%s",
+                self.source.amc_code,
+                adapter_key,
+                document_type,
+                len(docs),
+            )
+            return docs
+        if adapter_key == "motilal":
+            docs = _discover_motilal_documents(
                 self.source,
+                document_type=document_type,
                 timeout_seconds=self.timeout_seconds,
                 user_agent=self.user_agent,
             )
@@ -200,10 +208,25 @@ class AMCDownloader(BaseDownloader):
             "aditya_birla",
             "hdfc",
             "kotak",
-            "motilal",
             "nippon",
             "sbi",
         }:
+            if adapter_key == "aditya_birla" and (
+                document_type or ""
+            ).strip().lower() == "portfolio_disclosure":
+                docs = _discover_absl_portfolio_documents(
+                    self.source,
+                    timeout_seconds=self.timeout_seconds,
+                    user_agent=self.user_agent,
+                )
+                logger.info(
+                    "event=amc_discovery_complete amc_code=%s adapter=%s document_type=%s count=%s",
+                    self.source.amc_code,
+                    adapter_key,
+                    document_type,
+                    len(docs),
+                )
+                return docs
             if adapter_key == "sbi" and (document_type or "").strip().lower() == "factsheet":
                 docs = _discover_sbi_factsheet_documents(
                     self.source,
@@ -235,7 +258,14 @@ class AMCDownloader(BaseDownloader):
 
         raise NotImplementedError(f"No discovery adapter configured for adapter_key={adapter_key}")
 
-    def download(self, discovered: DiscoveredDocument) -> DownloadedDocument:
+    def download(
+        self,
+        discovered: DiscoveredDocument,
+        *,
+        conditional_headers: dict[str, str] | None = None,
+    ) -> DownloadedDocument:
+        if not self.source.acquisition_enabled:
+            raise PermissionError(f"acquisition_disabled:{self.source.adapter_key}")
         adapter_key = (self.source.adapter_key or "").lower()
         if adapter_key == "icici":
             response = None
@@ -250,6 +280,7 @@ class AMCDownloader(BaseDownloader):
                         headers={
                             "User-Agent": self.user_agent,
                             "Referer": ICICI_SITE_BASE_URL + "/",
+                            **(conditional_headers or {}),
                         },
                     )
                     break
@@ -261,6 +292,7 @@ class AMCDownloader(BaseDownloader):
 
             source_url = response.url or discovered.url
             file_name = _derive_file_name(source_url, discovered.title)
+            file_ext = _normalize_download_file_ext(discovered.file_ext, response.content)
             return DownloadedDocument(
                 amc_name=discovered.amc_name,
                 amc_code=discovered.amc_code,
@@ -268,11 +300,14 @@ class AMCDownloader(BaseDownloader):
                 source_url=source_url,
                 discovery_page_url=discovered.discovery_page_url,
                 file_name=file_name,
-                file_ext=discovered.file_ext,
+                file_ext=file_ext,
                 report_month=discovered.report_month,
                 content_type=response.headers.get("Content-Type"),
                 file_size_bytes=len(response.content),
                 file_bytes=response.content,
+                etag=response.headers.get("ETag") or response.headers.get("etag"),
+                last_modified=response.headers.get("Last-Modified") or response.headers.get("last-modified"),
+                not_modified=response.status_code == 304,
             )
 
         if adapter_key in {
@@ -295,11 +330,30 @@ class AMCDownloader(BaseDownloader):
                 headers={
                     "User-Agent": self.user_agent,
                     "Referer": referer,
+                    **(conditional_headers or {}),
                 },
             )
+            if response.status_code == 304:
+                return DownloadedDocument(
+                    amc_name=discovered.amc_name,
+                    amc_code=discovered.amc_code,
+                    document_type=discovered.document_type,
+                    source_url=response.url or discovered.url,
+                    discovery_page_url=discovered.discovery_page_url,
+                    file_name=_derive_file_name(discovered.url, discovered.title),
+                    file_ext=discovered.file_ext,
+                    report_month=discovered.report_month,
+                    content_type=response.headers.get("Content-Type"),
+                    file_size_bytes=0,
+                    file_bytes=b"",
+                    etag=response.headers.get("ETag") or response.headers.get("etag"),
+                    last_modified=response.headers.get("Last-Modified") or response.headers.get("last-modified"),
+                    not_modified=True,
+                )
             _validate_generic_download_response(self.source, discovered, response)
             source_url = response.url or discovered.url
             file_name = _derive_file_name(source_url, discovered.title)
+            file_ext = _normalize_download_file_ext(discovered.file_ext, response.content)
             return DownloadedDocument(
                 amc_name=discovered.amc_name,
                 amc_code=discovered.amc_code,
@@ -307,11 +361,13 @@ class AMCDownloader(BaseDownloader):
                 source_url=source_url,
                 discovery_page_url=discovered.discovery_page_url,
                 file_name=file_name,
-                file_ext=discovered.file_ext,
+                file_ext=file_ext,
                 report_month=discovered.report_month,
                 content_type=response.headers.get("Content-Type"),
                 file_size_bytes=len(response.content),
                 file_bytes=response.content,
+                etag=response.headers.get("ETag") or response.headers.get("etag"),
+                last_modified=response.headers.get("Last-Modified") or response.headers.get("last-modified"),
             )
 
         if adapter_key != "ppfas":
@@ -321,6 +377,7 @@ class AMCDownloader(BaseDownloader):
         response = adapter.download_document(discovered.url)
         source_url = getattr(response, "url", None) or discovered.url
         file_name = _derive_file_name(source_url, discovered.title)
+        file_ext = _normalize_download_file_ext(discovered.file_ext, response.content)
         return DownloadedDocument(
             amc_name=discovered.amc_name,
             amc_code=discovered.amc_code,
@@ -328,11 +385,13 @@ class AMCDownloader(BaseDownloader):
             source_url=source_url,
             discovery_page_url=discovered.discovery_page_url,
             file_name=file_name,
-            file_ext=discovered.file_ext,
+            file_ext=file_ext,
             report_month=discovered.report_month,
             content_type=response.headers.get("Content-Type"),
             file_size_bytes=len(response.content),
             file_bytes=response.content,
+            etag=response.headers.get("ETag") or response.headers.get("etag"),
+            last_modified=response.headers.get("Last-Modified") or response.headers.get("last-modified"),
         )
 
     def probe_download(self, discovered: DiscoveredDocument, *, max_bytes: int = 65536) -> DownloadedDocument:
@@ -354,6 +413,7 @@ class AMCDownloader(BaseDownloader):
         )
         body = response.content[:max(int(max_bytes), 1024)]
         source_url = response.url or discovered.url
+        file_ext = _normalize_download_file_ext(discovered.file_ext, body)
         return DownloadedDocument(
             amc_name=discovered.amc_name,
             amc_code=discovered.amc_code,
@@ -361,7 +421,7 @@ class AMCDownloader(BaseDownloader):
             source_url=source_url,
             discovery_page_url=discovered.discovery_page_url,
             file_name=_derive_file_name(source_url, discovered.title),
-            file_ext=discovered.file_ext,
+            file_ext=file_ext,
             report_month=discovered.report_month,
             content_type=response.headers.get("Content-Type"),
             file_size_bytes=len(body),
@@ -377,6 +437,13 @@ def _derive_file_name(url: str, fallback_title: str) -> str:
 
     safe = "_".join((fallback_title or "document").split())
     return safe or "document"
+
+
+def _normalize_download_file_ext(declared_ext: str, body: bytes) -> str:
+    normalized = str(declared_ext or "").strip().lower()
+    if normalized == ".xls" and bytes(body or b"").startswith(b"PK\x03\x04"):
+        return ".xlsx"
+    return normalized
 
 
 def _discover_generic_anchor_documents(
@@ -395,6 +462,7 @@ def _discover_generic_anchor_documents(
     manual_docs = _manual_discovered_documents_for_source(source, doc_type, listing_url)
     docs: list[DiscoveredDocument] = list(manual_docs)
     seen_urls: set[str] = {item.url for item in manual_docs}
+    adapter_key = (source.adapter_key or "").strip().lower()
 
     try:
         response = _request_with_retry(
@@ -410,13 +478,21 @@ def _discover_generic_anchor_documents(
             doc_type,
             exc,
         )
+        if adapter_key == "hdfc":
+            docs.extend(
+                document
+                for document in _guess_hdfc_combined_factsheets(
+                    source,
+                    doc_type,
+                    now_utc=datetime.now(UTC),
+                )
+                if document.url not in seen_urls
+            )
         return docs
 
     soup = BeautifulSoup(response.text or "", "html.parser")
     keywords = GENERIC_KEYWORDS.get(doc_type, ())
     required_keywords = _required_keywords_for_generic_source(source, doc_type)
-    adapter_key = (source.adapter_key or "").strip().lower()
-
     for anchor in soup.find_all("a"):
         href = str(anchor.get("href") or "").strip()
         if not href or href.startswith("#") or href.lower().startswith("javascript:") or href.lower().startswith("mailto:"):
@@ -427,15 +503,31 @@ def _discover_generic_anchor_documents(
             continue
         seen_urls.add(url)
 
-        title = " ".join(anchor.get_text(" ", strip=True).split()) or Path(url.split("?", 1)[0]).name
-        combined = f"{title} {url}".lower()
+        anchor_title = _clean_discovery_text(anchor.get_text(" ", strip=True))
+        container = anchor.find_parent(["li", "tr", "p"])
+        context_text = (
+            _clean_discovery_text(container.get_text(" ", strip=True))
+            if container is not None
+            else anchor_title
+        )
+        title = anchor_title or Path(url.split("?", 1)[0]).name
+        if title.lower().strip() in {"download", "click here"} and context_text:
+            title = context_text
+        combined = f"{title} {context_text} {url}".lower()
         ext = Path(urlsplit(url).path).suffix.lower() or _infer_file_ext_from_text(combined)
+        if ext in {".html", ".htm"}:
+            # Listing/inner pages are discovery inputs, not ingestible documents.
+            continue
         if ext not in SUPPORTED_FILE_EXTENSIONS:
             continue
         if not _generic_candidate_allowed(source, combined, doc_type, ext, required_keywords):
             continue
 
         report_month = _detect_report_month_from_text(combined)
+        if adapter_key == "nippon" and doc_type == "factsheet" and report_month:
+            # Nippon labels each e-factsheet by publication month; its scheme
+            # data is for the preceding month (for example, July => June).
+            report_month = _previous_month(report_month)
         keyword_hits = sum(1 for keyword in keywords if keyword in combined)
         if keywords and keyword_hits == 0:
             # Keep weak matches for coverage, but with a lower ranking.
@@ -461,24 +553,6 @@ def _discover_generic_anchor_documents(
                 priority_score=base_score + recency_score + score_boost,
             )
         )
-
-    if adapter_key == "nippon" and doc_type == "factsheet" and not docs:
-        listing_ext = Path(urlsplit(response.url or listing_url).path).suffix.lower() or ".html"
-        if listing_ext in {".html", ".htm"}:
-            combined = f"{_human_title_from_url(response.url or listing_url)} {response.url or listing_url}".lower()
-            docs.append(
-                DiscoveredDocument(
-                    amc_name=source.amc_name,
-                    amc_code=source.amc_code,
-                    document_type=doc_type,
-                    title=_human_title_from_url(response.url or listing_url),
-                    url=response.url or listing_url,
-                    discovery_page_url=response.url or listing_url,
-                    file_ext=listing_ext,
-                    report_month=_detect_report_month_from_text(combined),
-                    priority_score=_generic_base_score(ext=listing_ext, document_type=doc_type),
-                )
-            )
 
     if adapter_key == "hdfc":
         hdfc_extensions = (".pdf",) if doc_type == "factsheet" else (".xlsx", ".xlsm", ".xls", ".csv", ".zip", ".pdf")
@@ -512,6 +586,16 @@ def _discover_generic_anchor_documents(
                     priority_score=base_score + recency_score + 40,
                 )
             )
+        if not docs:
+            for document in _guess_hdfc_combined_factsheets(
+                source,
+                doc_type,
+                now_utc=datetime.now(UTC),
+            ):
+                if document.url in seen_urls:
+                    continue
+                seen_urls.add(document.url)
+                docs.append(document)
 
     # SBI portfolios page often exposes XLSX links inside scripts/JSON, not plain anchors.
     if adapter_key == "sbi" and doc_type == "portfolio_disclosure":
@@ -591,6 +675,287 @@ def _discover_generic_anchor_documents(
 
     docs.sort(key=lambda item: item.priority_score, reverse=True)
     return docs
+
+
+def _clean_discovery_text(value: object) -> str:
+    text = re.sub(r"[\u200b-\u200f\u2060\ufeff]", "", str(value or ""))
+    return " ".join(text.split())
+
+
+def _previous_month(value: date) -> date:
+    if value.month == 1:
+        return date(value.year - 1, 12, 1)
+    return date(value.year, value.month - 1, 1)
+
+
+def _guess_hdfc_combined_factsheets(
+    source: AMCDocumentSource,
+    document_type: str,
+    *,
+    now_utc: datetime,
+) -> list[DiscoveredDocument]:
+    doc_type = str(document_type or "").strip().lower()
+    if doc_type not in {"factsheet", "portfolio_disclosure"}:
+        return []
+    if doc_type == "portfolio_disclosure" and not source.factsheet_contains_holdings:
+        return []
+
+    current_month = now_utc.date().replace(day=1)
+    previous_month = current_month.fromordinal(current_month.toordinal() - 1)
+    report_months = _recent_month_starts(previous_month, count=6)
+    documents: list[DiscoveredDocument] = []
+    for report_month in report_months:
+        if report_month.month == 12:
+            publication_month = date(report_month.year + 1, 1, 1)
+        else:
+            publication_month = date(report_month.year, report_month.month + 1, 1)
+        file_name = f"HDFC MF Factsheet - {report_month.strftime('%B %Y')}.pdf"
+        url = (
+            "https://files.hdfcfund.com/s3fs-public/"
+            f"{publication_month:%Y-%m}/{quote(file_name)}"
+        )
+        recency_score = (report_month.year * 12 + report_month.month) * 10
+        documents.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type=doc_type,
+                title=file_name,
+                url=url,
+                discovery_page_url=(
+                    source.factsheet_page_url
+                    if doc_type == "factsheet"
+                    else source.portfolio_disclosure_page_url
+                )
+                or "https://www.hdfcfund.com/",
+                file_ext=".pdf",
+                report_month=report_month,
+                priority_score=_generic_base_score(ext=".pdf", document_type=doc_type)
+                + recency_score
+                + 60,
+            )
+        )
+    return documents
+
+
+def _discover_motilal_documents(
+    source: AMCDocumentSource,
+    document_type: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    doc_type = (document_type or "").strip().lower()
+    category = MOTILAL_CATEGORY_BY_DOCUMENT_TYPE.get(doc_type)
+    if not category:
+        return []
+
+    listing_url = source.factsheet_page_url if doc_type == "factsheet" else source.portfolio_disclosure_page_url
+    listing_url = listing_url or source.factsheet_page_url or source.portfolio_disclosure_page_url or MOTILAL_SITE_BASE_URL
+    docs = _manual_discovered_documents_for_source(source, doc_type, listing_url)
+    seen_urls = {item.url for item in docs}
+
+    for year, month in _recent_month_buckets(datetime.now(UTC).date(), MOTILAL_DISCOVERY_LOOKBACK_MONTHS):
+        try:
+            response = _request_with_retry(
+                "GET",
+                MOTILAL_DOCUMENTS_ENDPOINT,
+                timeout_seconds=timeout_seconds,
+                headers={"User-Agent": user_agent, "Referer": listing_url},
+                params={
+                    "year": year,
+                    "category": category,
+                    "month": datetime(year, month, 1, tzinfo=UTC).strftime("%b").lower(),
+                    "type": "mf",
+                },
+            )
+            payload = response.json()
+        except Exception as exc:
+            logger.warning(
+                "event=motilal_discovery_bucket_failed document_type=%s year=%s month=%s reason=%s",
+                doc_type,
+                year,
+                month,
+                exc,
+            )
+            continue
+
+        results = payload.get("results") if isinstance(payload, dict) else []
+        if not isinstance(results, list):
+            continue
+        for item in results:
+            if not isinstance(item, dict):
+                continue
+            raw_path = str(item.get("path") or "").strip()
+            if not raw_path:
+                continue
+            url = urljoin(MOTILAL_SITE_BASE_URL, raw_path)
+            if url in seen_urls:
+                continue
+            title = str(item.get("title") or "").strip() or Path(urlsplit(url).path).stem
+            combined = f"{title} {raw_path}"
+            ext = Path(urlsplit(url).path).suffix.lower() or _motilal_extension_from_mime_type(item.get("mimeType"))
+            required_keywords = _required_keywords_for_generic_source(source, doc_type)
+            if ext not in SUPPORTED_FILE_EXTENSIONS:
+                continue
+            if not _generic_candidate_allowed(source, combined, doc_type, ext, required_keywords):
+                continue
+
+            seen_urls.add(url)
+            report_month = _detect_report_month_from_text(combined)
+            recency_score = 0
+            if report_month:
+                recency_score = (report_month.year * 12 + report_month.month) * 10
+            docs.append(
+                DiscoveredDocument(
+                    amc_name=source.amc_name,
+                    amc_code=source.amc_code,
+                    document_type=doc_type,
+                    title=title,
+                    url=url,
+                    discovery_page_url=listing_url,
+                    file_ext=ext,
+                    report_month=report_month,
+                    priority_score=_generic_base_score(ext=ext, document_type=doc_type) + recency_score,
+                )
+            )
+
+    docs.sort(key=lambda item: item.priority_score, reverse=True)
+    return docs
+
+
+def _discover_absl_portfolio_documents(
+    source: AMCDocumentSource,
+    *,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    listing_url = (
+        source.portfolio_disclosure_page_url
+        or source.factsheet_page_url
+        or "https://mutualfund.adityabirlacapital.com/forms-and-downloads/portfolio"
+    )
+    try:
+        response = _request_with_retry(
+            "GET",
+            ABSL_RESOURCES_ENDPOINT,
+            timeout_seconds=timeout_seconds,
+            headers={"User-Agent": user_agent, "Referer": listing_url},
+            params={
+                "id": ABSL_PORTFOLIO_RESOURCE_ID,
+                "ctype": ABSL_INDIVIDUAL_CUSTOMER_TYPE,
+                "month": " ",
+                "year": 0,
+            },
+        )
+        payload = response.json()
+    except Exception as exc:
+        logger.warning(
+            "event=absl_portfolio_api_failed amc_code=%s reason=%s",
+            source.amc_code,
+            exc,
+        )
+        return []
+
+    rows = payload.get("AccordionList") if isinstance(payload, dict) else []
+    if not isinstance(rows, list):
+        return []
+
+    docs: list[DiscoveredDocument] = []
+    seen_urls: set[str] = set()
+    required_keywords = _required_keywords_for_generic_source(
+        source,
+        "portfolio_disclosure",
+    )
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        title = _clean_discovery_text(row.get("ResourceLink"))
+        raw_url = str(row.get("pdfUrl") or "").strip()
+        url = _absl_official_download_url(raw_url, listing_url)
+        if not url or url in seen_urls:
+            continue
+        combined = f"{title} {url}".lower()
+        ext = Path(urlsplit(url).path).suffix.lower() or _infer_file_ext_from_text(combined)
+        if ext not in SUPPORTED_FILE_EXTENSIONS:
+            continue
+        if not _generic_candidate_allowed(
+            source,
+            combined,
+            "portfolio_disclosure",
+            ext,
+            required_keywords,
+        ):
+            continue
+
+        seen_urls.add(url)
+        report_month = _detect_report_month_from_text(combined)
+        recency_score = (
+            (report_month.year * 12 + report_month.month) * 10
+            if report_month
+            else 0
+        )
+        docs.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type="portfolio_disclosure",
+                title=title or _human_title_from_url(url),
+                url=url,
+                discovery_page_url=listing_url,
+                file_ext=ext,
+                report_month=report_month,
+                priority_score=_generic_base_score(
+                    ext=ext,
+                    document_type="portfolio_disclosure",
+                )
+                + recency_score,
+            )
+        )
+
+    docs.sort(key=lambda item: item.priority_score, reverse=True)
+    return docs
+
+
+def _absl_official_download_url(raw_url: str, listing_url: str) -> str:
+    parsed = urlsplit(str(raw_url or "").strip())
+    if not parsed.path:
+        return ""
+    if parsed.hostname and parsed.hostname.lower() == "abcscprod.azureedge.net":
+        listing = urlsplit(listing_url)
+        return urlunsplit(
+            (
+                listing.scheme or "https",
+                listing.netloc or "mutualfund.adityabirlacapital.com",
+                parsed.path,
+                parsed.query,
+                "",
+            )
+        )
+    return urljoin(listing_url, raw_url)
+
+
+def _motilal_extension_from_mime_type(value: object) -> str:
+    mime_type = str(value or "").strip().lower()
+    return {
+        "application/pdf": ".pdf",
+        "application/vnd.ms-excel": ".xls",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+        "application/zip": ".zip",
+        "text/csv": ".csv",
+    }.get(mime_type, "")
+
+
+def _recent_month_buckets(today: date, count: int) -> list[tuple[int, int]]:
+    year = today.year
+    month = today.month
+    buckets: list[tuple[int, int]] = []
+    for _ in range(max(count, 1)):
+        buckets.append((year, month))
+        month -= 1
+        if month == 0:
+            month = 12
+            year -= 1
+    return buckets
 
 
 def _discover_sbi_factsheet_documents(
@@ -845,18 +1210,17 @@ def _discover_uti_documents(
                 exc,
             )
             continue
-        if isinstance(payload_rows, list) and payload_rows:
-            rows = payload_rows
-            break
+        if isinstance(payload_rows, list):
+            rows.extend(row for row in payload_rows if isinstance(row, dict))
 
     docs: list[DiscoveredDocument] = []
+    seen_urls: set[str] = set()
     for row in rows:
-        if not isinstance(row, dict):
-            continue
         title = str(row.get("name") or "").strip()
         raw_url = str(row.get("doc") or row.get("url") or "").strip()
-        if not raw_url:
+        if not raw_url or raw_url in seen_urls:
             continue
+        seen_urls.add(raw_url)
         ext = Path(urlsplit(raw_url).path).suffix.lower()
         if doc_type == "factsheet" and ext != ".pdf":
             continue
@@ -1103,9 +1467,11 @@ def _ordinal_suffix(day: int) -> str:
 
 
 def _required_keywords_for_generic_source(source: AMCDocumentSource, document_type: str) -> tuple[str, ...]:
-    adapter_key = (source.adapter_key or "").strip().lower()
-    per_source = GENERIC_REQUIRED_KEYWORDS.get(adapter_key) or {}
-    keywords = per_source.get(document_type)
+    keywords = (
+        source.factsheet_required_keywords
+        if document_type == "factsheet"
+        else source.portfolio_required_keywords
+    )
     if keywords:
         return keywords
     return GENERIC_KEYWORDS.get(document_type, ())
@@ -1120,7 +1486,14 @@ def _generic_candidate_allowed(
 ) -> bool:
     low = str(combined_text or "").lower()
     adapter_key = (source.adapter_key or "").strip().lower()
-    if any(blocked in low for blocked in GENERIC_EXCLUDE_KEYWORDS):
+    if any(blocked in low for blocked in (*GENERIC_EXCLUDE_KEYWORDS, *source.excluded_keywords)):
+        return False
+    allowed_extensions = (
+        source.factsheet_extensions
+        if document_type == "factsheet"
+        else source.portfolio_extensions
+    )
+    if allowed_extensions and file_ext not in allowed_extensions:
         return False
 
     # Require direct signal to avoid picking random legal/compliance PDFs.
@@ -1132,15 +1505,6 @@ def _generic_candidate_allowed(
         if not (adapter_key == "hdfc" and "monthly hdfc" in low):
             return False
 
-    # SBI portfolio disclosures are expected as spreadsheet payloads.
-    if adapter_key == "sbi" and document_type == "portfolio_disclosure":
-        if file_ext not in {".xlsx", ".xls", ".xlsm", ".csv", ".zip"}:
-            return False
-
-    # SBI factsheets should come from scheme-factsheets docs path.
-    if adapter_key == "sbi" and document_type == "factsheet":
-        if "scheme-factsheets" not in low and "factsheet" not in low:
-            return False
     return True
 
 

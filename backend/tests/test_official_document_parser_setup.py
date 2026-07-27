@@ -217,6 +217,20 @@ def test_classifier_marks_supported_factsheet_and_unsupported_adapter():
     assert "adapter_not_found:unknown" in missing_adapter.issues
 
 
+def test_factsheet_content_month_mismatch_blocks_staging():
+    service = object.__new__(ParsingService)
+    service.factsheet_parser = SimpleNamespace(
+        detect_report_month=lambda _path: date(2026, 5, 1)
+    )
+
+    issue = service._factsheet_content_month_issue(
+        {"id": "nippon-june", "report_month": "2026-06-01"},
+        "unused.pdf",
+    )
+
+    assert issue == "factsheet_content_report_month_mismatch:2026-05-01!=2026-06-01"
+
+
 def test_llm_fallback_creates_review_only_payload(monkeypatch, tmp_path: Path):
     from app.mf_ingestion.services import parsing_service, review_service
 
@@ -504,12 +518,13 @@ def test_llm_primary_dry_run_enqueues_review_and_uses_deterministic_fallback(mon
     service._resolve_scheme_code_for_scheme = lambda _name: "101144"
     result = service.parse_pending_documents(limit=1, amc_code="ICICI")
 
-    assert result["processed"][0]["status"] == "parsed"
+    assert result["processed"][0]["status"] == "needs_review"
     assert any(table == "mf_parse_review_queue" for table, _payload in fake_supabase.inserts)
-    assert repo.upserts[0]["benchmark"] == "Nifty 500 TRI"
+    assert any(table == "mf_factsheet_candidates" for table, _payload, _conflict in fake_supabase.upserts)
+    assert repo.upserts == []
 
 
-def test_llm_primary_writes_core_fields_when_enabled(monkeypatch, tmp_path: Path):
+def test_llm_primary_never_bypasses_reviewed_staging_mapping(monkeypatch, tmp_path: Path):
     from app.mf_ingestion.services import parsing_service, review_service
 
     raw_file = tmp_path / "factsheet.txt"
@@ -568,14 +583,9 @@ def test_llm_primary_writes_core_fields_when_enabled(monkeypatch, tmp_path: Path
     service._resolve_scheme_code_for_scheme = lambda _name: "101144"
     result = service.parse_pending_documents(limit=1, amc_code="ICICI")
 
-    assert result["processed"][0]["status"] == "parsed"
+    assert result["processed"][0]["status"] == "fallback_needs_review"
     assert result["processed"][0]["extractor_type"] == "llm"
-    row = repo.upserts[0]
-    assert row["benchmark"] == "NIFTY 50 Hybrid Composite Debt 50:50 Index"
-    trace = row["provider_payload"]["amc_trace"]["benchmark"]
-    assert trace["extractor_type"] == "llm"
-    assert trace["extractor_model"] == "test-model"
-    assert trace["confidence_score"] == 95.0
+    assert repo.upserts == []
 
 
 def test_sync_workflow_does_not_fail_on_needs_review():
@@ -603,7 +613,7 @@ def test_sync_workflow_prints_disclosure_diagnostics_before_coverage_gate():
 def test_sync_workflow_has_strict_scheduled_coverage_defaults():
     workflow = Path(".github/workflows/sync-mf-disclosures.yml").read_text(encoding="utf-8")
 
-    assert "github.event.inputs.strict_coverage_amcs || 'axis,hdfc,sbi,icici,ppfas,nippon'" in workflow
+    assert "capability_keys('runtime_enabled')" in workflow
     assert 'MF_DISCLOSURE_MIN_CORE_FIELD_RATIO: "0.80"' in workflow
     assert 'MF_DISCLOSURE_MIN_PORTFOLIO_FAMILY_RATIO: "0.80"' in workflow
 
@@ -639,39 +649,6 @@ def test_supabase_edge_function_acquires_official_docs_to_r2():
     assert "extractAnchorDocumentLinks" in function_source
     assert "MF_EDGE_MAX_DISCOVERED_DOCUMENTS" in function_source
     assert "[functions.mf-acquire-docs]" in config
-
-
-def test_amc_derived_view_sync_passes_family_id_to_final_tables(monkeypatch):
-    from app.mf_ingestion.services import parsing_service
-
-    service = object.__new__(parsing_service.ParsingService)
-    calls: list[tuple[str, str | None]] = []
-
-    monkeypatch.setattr(service, "_resolve_scheme_code_for_scheme", lambda _scheme_name: "101")
-    monkeypatch.setattr(service, "_resolve_family_id_for_scheme", lambda _scheme_code: "sbi-first")
-    monkeypatch.setattr(
-        service,
-        "_upsert_mutual_fund_holdings",
-        lambda *_args: calls.append(("holdings", _args[-1])),
-    )
-    monkeypatch.setattr(
-        service,
-        "_upsert_mutual_fund_sectors",
-        lambda *_args: calls.append(("sectors", _args[-1])),
-    )
-    monkeypatch.setattr(service, "_upsert_mutual_fund_core_trace", lambda **_kwargs: None)
-
-    service._sync_amc_derived_views(
-        amc_code="sbi",
-        scheme_name="SBI First Fund",
-        report_month=date(2026, 5, 1),
-        source_document_id="doc-sbi-1",
-        source_url="local",
-        parser_version="test",
-        holdings=[{"instrument_name": "HDFC Bank Ltd.", "isin": "INE040A01034", "sector": "Banks", "percent_aum": 100.0}],
-    )
-
-    assert calls == [("holdings", "sbi-first"), ("sectors", "sbi-first")]
 
 
 def test_sync_workflow_can_call_supabase_edge_acquisition():

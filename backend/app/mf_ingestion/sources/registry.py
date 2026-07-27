@@ -15,6 +15,21 @@ class AMCDocumentSource:
     confirmation_type: str | None
     confirmation_notes: str | None
     enabled: bool = True
+    discovery_enabled: bool = True
+    acquisition_enabled: bool = True
+    factsheet_parser_enabled: bool = True
+    portfolio_parser_enabled: bool = True
+    promotion_enabled: bool = True
+    runtime_enabled: bool = False
+    discovery_strategy: str = "generic"
+    factsheet_required_keywords: tuple[str, ...] = ("factsheet", "fact sheet")
+    portfolio_required_keywords: tuple[str, ...] = ("portfolio", "monthly portfolio", "disclosure")
+    excluded_keywords: tuple[str, ...] = ()
+    factsheet_extensions: tuple[str, ...] = (".pdf", ".html", ".htm")
+    portfolio_extensions: tuple[str, ...] = (".pdf", ".xls", ".xlsx", ".xlsm", ".csv", ".zip")
+    factsheet_contains_holdings: bool = False
+    browser_recovery_allowed: bool = False
+    allowed_host_suffixes: tuple[str, ...] = ()
 
 
 def _env_url(name: str, default: str) -> str:
@@ -38,6 +53,9 @@ SOURCES: dict[str, AMCDocumentSource] = {
             "Downloads and statutory disclosure pages may require confirming Indian citizen eligibility before access."
         ),
         enabled=True,
+        runtime_enabled=True,
+        discovery_strategy="ppfas_adapter",
+        allowed_host_suffixes=("amc.ppfas.com", "ppfas.com"),
     ),
     "mirae": AMCDocumentSource(
         amc_name="Mirae Asset Mutual Fund",
@@ -55,6 +73,9 @@ SOURCES: dict[str, AMCDocumentSource] = {
         confirmation_type=None,
         confirmation_notes=None,
         enabled=False,
+        discovery_strategy="mirae_api",
+        factsheet_required_keywords=("factsheet", "fact sheet", "active factsheet", "passive factsheet"),
+        allowed_host_suffixes=("miraeassetmf.co.in",),
     ),
     "hdfc": AMCDocumentSource(
         amc_name="HDFC Mutual Fund",
@@ -66,6 +87,11 @@ SOURCES: dict[str, AMCDocumentSource] = {
         confirmation_type=None,
         confirmation_notes=None,
         enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet", "fund fact"),
+        portfolio_required_keywords=("portfolio", "holding", "monthly portfolio", "monthly hdfc"),
+        factsheet_contains_holdings=True,
+        allowed_host_suffixes=("hdfcfund.com",),
     ),
     "icici": AMCDocumentSource(
         amc_name="ICICI Prudential Mutual Fund",
@@ -77,6 +103,9 @@ SOURCES: dict[str, AMCDocumentSource] = {
         confirmation_type=None,
         confirmation_notes=None,
         enabled=True,
+        runtime_enabled=True,
+        discovery_strategy="icici_api",
+        allowed_host_suffixes=("icicipruamc.com",),
     ),
     "sbi": AMCDocumentSource(
         amc_name="SBI Mutual Fund",
@@ -88,6 +117,12 @@ SOURCES: dict[str, AMCDocumentSource] = {
         confirmation_type=None,
         confirmation_notes=None,
         enabled=True,
+        runtime_enabled=True,
+        discovery_strategy="sbi_api",
+        factsheet_required_keywords=("factsheet", "fact sheet", "fund fact", "scheme-factsheets"),
+        portfolio_required_keywords=("portfolio", "holding", "monthly portfolio"),
+        portfolio_extensions=(".xlsx", ".xls", ".xlsm", ".csv", ".zip"),
+        allowed_host_suffixes=("sbimf.com",),
     ),
     "axis": AMCDocumentSource(
         amc_name="Axis Mutual Fund",
@@ -99,6 +134,11 @@ SOURCES: dict[str, AMCDocumentSource] = {
         confirmation_type=None,
         confirmation_notes=None,
         enabled=True,
+        runtime_enabled=True,
+        discovery_strategy="axis_adapter",
+        factsheet_contains_holdings=True,
+        browser_recovery_allowed=True,
+        allowed_host_suffixes=("axismf.com",),
     ),
     "motilal": AMCDocumentSource(
         amc_name="Motilal Oswal Mutual Fund",
@@ -110,6 +150,17 @@ SOURCES: dict[str, AMCDocumentSource] = {
         confirmation_type=None,
         confirmation_notes=None,
         enabled=True,
+        discovery_strategy="motilal_aem_api",
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("month end portfolio", "monthly portfolio", "portfolio"),
+        excluded_keywords=(
+            "fortnightly",
+            "forthnightly",
+            "half yearly",
+            "half-yearly",
+            "performance",
+        ),
+        allowed_host_suffixes=("motilaloswalmf.com",),
     ),
     "nippon": AMCDocumentSource(
         amc_name="Nippon India Mutual Fund",
@@ -117,7 +168,7 @@ SOURCES: dict[str, AMCDocumentSource] = {
         adapter_key="nippon",
         factsheet_page_url=_env_url(
             "MF_NIPPON_FACTSHEET_PAGE_URL",
-            "https://mf.nipponindiaim.com/InvestorServices/FactsheetsDocuments/Fundamentals-June-2026/index.html",
+            "https://mf.nipponindiaim.com/investor-service/downloads/factsheet-portfolio-and-other-disclosures",
         ),
         portfolio_disclosure_page_url=_env_url(
             "MF_NIPPON_PORTFOLIO_PAGE_URL",
@@ -127,6 +178,11 @@ SOURCES: dict[str, AMCDocumentSource] = {
         confirmation_type=None,
         confirmation_notes=None,
         enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fundamental", "fundamentals", "fund facts", "fund", "nippon"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure", "nippon"),
+        excluded_keywords=("fortnightly",),
+        allowed_host_suffixes=("nipponindiaim.com",),
     ),
     "kotak": AMCDocumentSource(
         amc_name="Kotak Mahindra Mutual Fund",
@@ -144,6 +200,9 @@ SOURCES: dict[str, AMCDocumentSource] = {
         confirmation_type=None,
         confirmation_notes=None,
         enabled=False,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
+        allowed_host_suffixes=("kotakmf.com",),
     ),
     "aditya_birla": AMCDocumentSource(
         amc_name="Aditya Birla Sun Life Mutual Fund",
@@ -161,6 +220,11 @@ SOURCES: dict[str, AMCDocumentSource] = {
         confirmation_type=None,
         confirmation_notes=None,
         enabled=False,
+        discovery_strategy="absl_resources_api",
+        factsheet_required_keywords=("factsheet", "monthly factsheet", "empower"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
+        excluded_keywords=("fortnightly", "half yearly", "half-yearly"),
+        allowed_host_suffixes=("adityabirlacapital.com",),
     ),
     "uti": AMCDocumentSource(
         amc_name="UTI Mutual Fund",
@@ -178,6 +242,10 @@ SOURCES: dict[str, AMCDocumentSource] = {
         confirmation_type=None,
         confirmation_notes=None,
         enabled=False,
+        discovery_strategy="uti_api",
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
+        allowed_host_suffixes=("utimf.com",),
     ),
     "dsp": AMCDocumentSource(
         amc_name="DSP Mutual Fund",
@@ -189,14 +257,34 @@ SOURCES: dict[str, AMCDocumentSource] = {
         ),
         portfolio_disclosure_page_url=_env_url(
             "MF_DSP_PORTFOLIO_PAGE_URL",
-            "https://www.dspim.com/downloads",
+            "https://www.dspim.com/mandatory-disclosures/portfolio-disclosures",
         ),
         requires_confirmation=False,
         confirmation_type=None,
         confirmation_notes=None,
         enabled=False,
+        discovery_strategy="dsp_api",
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
+        excluded_keywords=("fortnightly", "half-yearly", "performance disclosure", "scheme performance"),
+        allowed_host_suffixes=("dspim.com",),
     ),
 }
+
+PRODUCTION_TARGET_AMC_KEYS = (
+    "hdfc",
+    "sbi",
+    "icici",
+    "axis",
+    "ppfas",
+    "nippon",
+    "motilal",
+    "mirae",
+    "uti",
+    "dsp",
+    "kotak",
+    "aditya_birla",
+)
 
 
 def normalize_amc_key(amc: str) -> str:
@@ -211,5 +299,30 @@ def get_source(amc: str) -> AMCDocumentSource:
     return source
 
 
+def get_source_by_code(amc_code: str) -> AMCDocumentSource:
+    normalized = str(amc_code or "").strip().lower()
+    for source in SOURCES.values():
+        if source.amc_code.lower() == normalized or source.adapter_key.lower() == normalized:
+            return source
+    raise ValueError(f"Unknown AMC code: {amc_code}")
+
+
 def enabled_sources() -> list[AMCDocumentSource]:
     return [source for source in SOURCES.values() if source.enabled]
+
+
+def sources_with_capability(capability: str) -> list[AMCDocumentSource]:
+    if capability not in {
+        "discovery_enabled",
+        "acquisition_enabled",
+        "factsheet_parser_enabled",
+        "portfolio_parser_enabled",
+        "promotion_enabled",
+        "runtime_enabled",
+    }:
+        raise ValueError(f"Unknown AMC capability: {capability}")
+    return [source for source in SOURCES.values() if bool(getattr(source, capability))]
+
+
+def capability_keys(capability: str) -> tuple[str, ...]:
+    return tuple(source.adapter_key for source in sources_with_capability(capability))

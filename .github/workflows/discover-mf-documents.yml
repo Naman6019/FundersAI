@@ -8,7 +8,7 @@ on:
       amcs:
         description: 'Discovery agents to run'
         required: false
-        default: 'sbi,mirae,ppfas,icici,hdfc,nippon,kotak,aditya_birla,uti,dsp'
+        default: ''
       document_scope:
         description: 'Document scope'
         required: false
@@ -16,7 +16,7 @@ on:
         options:
           - factsheet
           - all
-        default: factsheet
+        default: all
       expected_month:
         description: 'Minimum report month in YYYY-MM; blank uses the previous UTC month'
         required: false
@@ -28,7 +28,7 @@ on:
       minimum_completed:
         description: 'Minimum agents that must complete'
         required: false
-        default: '8'
+        default: '12'
       max_actions:
         description: 'Maximum bounded actions per agent'
         required: false
@@ -139,11 +139,11 @@ jobs:
           max_candidates="${{ inputs.max_candidates }}"
           probe_downloads="${{ inputs.probe_downloads }}"
 
-          amcs="${amcs:-sbi,mirae,ppfas,icici,hdfc,nippon,kotak,aditya_birla,uti,dsp}"
-          document_scope="${document_scope:-factsheet}"
+          amcs="${amcs:-$(PYTHONPATH=backend python -c "from app.mf_ingestion.sources.registry import capability_keys; print(','.join(capability_keys('discovery_enabled')))")}"
+          document_scope="${document_scope:-all}"
           expected_month="${expected_month:-$(date -u -d '1 month ago' +%Y-%m)}"
           expected_month_grace_days="${expected_month_grace_days:-14}"
-          minimum_completed="${minimum_completed:-8}"
+          minimum_completed="${minimum_completed:-12}"
           max_actions="${max_actions:-12}"
           max_candidates="${max_candidates:-3}"
           probe_downloads="${probe_downloads:-true}"

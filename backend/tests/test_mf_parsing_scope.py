@@ -212,3 +212,12 @@ def test_source_month_prefers_explicit_file_date_over_storage_folder():
     )
 
     assert _source_month_from_text(text) == date(2026, 4, 1)
+
+
+def test_source_month_prefers_dotted_file_date_over_publication_folder():
+    text = (
+        "https://d3ce1o48hc5oli.cloudfront.net/s3fs-public/2026-07/"
+        "fw_uti_mf_scheme_portfolios_30.06.2026_rv1.zip"
+    )
+
+    assert _source_month_from_text(text) == date(2026, 6, 1)

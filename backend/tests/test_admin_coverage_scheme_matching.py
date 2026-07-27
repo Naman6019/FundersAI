@@ -12,6 +12,14 @@ def test_build_relaxed_ilike_pattern_removes_plan_noise():
     assert "asset" in pattern
 
 
+def test_build_relaxed_ilike_pattern_ignores_and_symbol_variants():
+    pattern = _build_relaxed_ilike_pattern(
+        "ICICI Prudential Banking & Financial Services Fund"
+    )
+    assert "and" not in pattern
+    assert "banking%financial" in pattern
+
+
 def test_select_best_scheme_candidate_fallback_without_direct_growth():
     candidates = [
         {"scheme_code": "1", "scheme_name": "ICICI Prudential Multi Asset Fund - IDCW"},
@@ -20,4 +28,3 @@ def test_select_best_scheme_candidate_fallback_without_direct_growth():
     selected = _select_best_scheme_candidate("ICICI Multi Asset", candidates)
     assert selected is not None
     assert selected["scheme_code"] == "2"
-

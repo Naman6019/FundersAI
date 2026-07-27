@@ -5,7 +5,7 @@ import mimetypes
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
 
 from app.database import supabase
 from app.mf_ingestion.config import get_config
@@ -43,12 +43,14 @@ class IngestionService:
         max_documents: int = 1,
         *,
         allow_disabled_source: bool = False,
+        expected_report_month: str | None = None,
     ) -> dict[str, Any]:
         result = self.ingest_documents(
             amc=amc,
             document_type=document_type,
             max_documents=max_documents,
             allow_disabled_source=allow_disabled_source,
+            expected_report_month=expected_report_month,
         )
         if result.get("ingested_documents"):
             return result["ingested_documents"][0]
@@ -63,10 +65,15 @@ class IngestionService:
         max_documents: int = 1,
         *,
         allow_disabled_source: bool = False,
+        expected_report_month: str | None = None,
     ) -> dict[str, Any]:
         source = get_source(amc)
         if not source.enabled and not allow_disabled_source:
             return {"status": "skipped", "reason": f"{amc}_source_not_enabled"}
+        if not source.discovery_enabled:
+            return {"status": "skipped", "reason": f"{amc}_discovery_disabled"}
+        if not source.acquisition_enabled:
+            return {"status": "skipped", "reason": f"{amc}_acquisition_disabled"}
         if not supabase:
             return {"status": "error", "reason": "supabase_not_configured"}
         if self.config.require_r2_for_raw_storage and not self.r2_store.enabled:
@@ -75,10 +82,14 @@ class IngestionService:
         self._upsert_source_row(source)
 
         downloader = AMCDownloader(source, self.config.request_timeout_seconds, self.config.user_agent)
+        expected_month = _parse_report_month(expected_report_month)
         manifest_docs = load_source_manifest_documents(self.config.source_manifest_path, source, document_type)
         try:
-            discovered_docs = _dedupe_discovered_documents(
-                [*manifest_docs, *downloader.list_documents(document_type=document_type)]
+            discovered_docs = _rank_discovered_documents(
+                _dedupe_discovered_documents(
+                    [*manifest_docs, *downloader.list_documents(document_type=document_type)]
+                ),
+                expected_month=expected_month,
             )
         except Exception as exc:
             if manifest_docs:
@@ -89,7 +100,10 @@ class IngestionService:
                     len(manifest_docs),
                     exc,
                 )
-                discovered_docs = manifest_docs
+                discovered_docs = _rank_discovered_documents(
+                    _dedupe_discovered_documents(manifest_docs),
+                    expected_month=expected_month,
+                )
             else:
                 logger.error(
                     "event=amc_discovery_failed amc_code=%s document_type=%s reason=%s",
@@ -99,22 +113,52 @@ class IngestionService:
                 )
                 return {"status": "error", "reason": str(exc)}
 
+        if expected_month:
+            discovered_docs = _filter_expected_month_documents(discovered_docs, expected_month)
+
         if not discovered_docs:
             logger.error(
-                "event=amc_discovery_empty amc_code=%s document_type=%s manifest_count=%s",
+                "event=amc_discovery_empty amc_code=%s document_type=%s manifest_count=%s expected_month=%s",
                 source.amc_code,
                 document_type,
                 len(manifest_docs),
+                expected_month.isoformat() if expected_month else None,
             )
-            return {"status": "skipped", "reason": "no_documents_found", "document_type": document_type}
+            return {
+                "status": "skipped",
+                "reason": "no_documents_found",
+                "document_type": document_type,
+                "expected_report_month": expected_month.isoformat() if expected_month else None,
+            }
 
         selected = discovered_docs[: max(max_documents, 1)]
         ingested: list[dict[str, Any]] = []
         skipped: list[dict[str, Any]] = []
 
         for discovered in selected:
+            conditional_headers, existing_observation_id = self._conditional_request_context(
+                source.amc_code,
+                document_type,
+                discovered,
+            )
+            if existing_observation_id and not conditional_headers:
+                self._link_discovery_observation(discovered.url, existing_observation_id)
+                skipped.append(
+                    {
+                        "status": "skipped",
+                        "reason": "unchanged_canonical_observation",
+                        "source_document_id": existing_observation_id,
+                        "source_url": discovered.url,
+                        "document_type": document_type,
+                    }
+                )
+                continue
             try:
-                downloaded = downloader.download(discovered)
+                downloaded = (
+                    downloader.download(discovered, conditional_headers=conditional_headers)
+                    if conditional_headers
+                    else downloader.download(discovered)
+                )
                 logger.info(
                     "event=file_downloaded amc_code=%s document_type=%s source_url=%s",
                     downloaded.amc_code,
@@ -138,6 +182,18 @@ class IngestionService:
                     }
                 )
                 continue
+            if downloaded.not_modified:
+                self._link_discovery_observation(downloaded.source_url, existing_observation_id)
+                skipped.append(
+                    {
+                        "status": "skipped",
+                        "reason": "not_modified",
+                        "source_document_id": existing_observation_id,
+                        "source_url": downloaded.source_url,
+                        "document_type": downloaded.document_type,
+                    }
+                )
+                continue
 
             checksum = sha256_bytes(downloaded.file_bytes)
             duplicate_id = self._find_duplicate_document(
@@ -147,6 +203,7 @@ class IngestionService:
                 report_month=downloaded.report_month,
             )
             if duplicate_id:
+                self._link_discovery_observation(downloaded.source_url, duplicate_id)
                 logger.info(
                     "event=duplicate_checksum_skipped amc_code=%s document_type=%s checksum=%s",
                     downloaded.amc_code,
@@ -158,6 +215,23 @@ class IngestionService:
                         "status": "skipped",
                         "reason": "duplicate_checksum",
                         "source_document_id": duplicate_id,
+                        "source_url": downloaded.source_url,
+                        "document_type": downloaded.document_type,
+                    }
+                )
+                continue
+            conflict_id = self._find_checksum_month_conflict(
+                checksum=checksum,
+                amc_code=downloaded.amc_code,
+                document_type=downloaded.document_type,
+                report_month=downloaded.report_month,
+            )
+            if conflict_id:
+                skipped.append(
+                    {
+                        "status": "error",
+                        "reason": "checksum_month_conflict",
+                        "conflicting_source_document_id": conflict_id,
                         "source_url": downloaded.source_url,
                         "document_type": downloaded.document_type,
                     }
@@ -181,8 +255,8 @@ class IngestionService:
         documents: list[dict[str, Any]],
     ) -> dict[str, Any]:
         source = get_source(amc)
-        if not source.enabled:
-            return {"status": "skipped", "reason": f"{amc}_source_not_enabled"}
+        if not source.acquisition_enabled:
+            return {"status": "skipped", "reason": f"{amc}_acquisition_disabled"}
         if not supabase:
             return {"status": "error", "reason": "supabase_not_configured"}
         if self.config.require_r2_for_raw_storage and not self.r2_store.enabled:
@@ -262,8 +336,8 @@ class IngestionService:
         reuse_as_portfolio: bool = False,
     ) -> dict[str, Any]:
         source = get_source(amc)
-        if not source.enabled:
-            return {"status": "skipped", "reason": f"{amc}_source_not_enabled"}
+        if not source.acquisition_enabled:
+            return {"status": "skipped", "reason": f"{amc}_acquisition_disabled"}
         if not supabase:
             return {"status": "error", "reason": "supabase_not_configured"}
         if self.config.require_r2_for_raw_storage and not self.r2_store.enabled:
@@ -321,10 +395,27 @@ class IngestionService:
             report_month=downloaded.report_month,
         )
         if duplicate_id:
+            self._link_discovery_observation(downloaded.source_url, duplicate_id)
             return {
                 "status": "skipped",
                 "reason": "duplicate_checksum",
                 "source_document_id": duplicate_id,
+                "checksum": checksum,
+                "source_url": downloaded.source_url,
+                "document_type": downloaded.document_type,
+                "report_month": downloaded.report_month.isoformat() if downloaded.report_month else None,
+            }
+        conflict_id = self._find_checksum_month_conflict(
+            checksum=checksum,
+            amc_code=downloaded.amc_code,
+            document_type=downloaded.document_type,
+            report_month=downloaded.report_month,
+        )
+        if conflict_id:
+            return {
+                "status": "error",
+                "reason": "checksum_month_conflict",
+                "conflicting_source_document_id": conflict_id,
                 "checksum": checksum,
                 "source_url": downloaded.source_url,
                 "document_type": downloaded.document_type,
@@ -394,6 +485,7 @@ class IngestionService:
                 }
             raise
         source_document_id = str((inserted.data or [{}])[0].get("id") or "")
+        self._link_discovery_observation(downloaded.source_url, source_document_id)
         logger.info(
             "event=raw_document_inserted amc_code=%s document_type=%s source_document_id=%s",
             downloaded.amc_code,
@@ -433,6 +525,86 @@ class IngestionService:
         rows = query.limit(1).execute().data or []
         return str(rows[0].get("id")) if rows else None
 
+    def _find_checksum_month_conflict(
+        self,
+        *,
+        checksum: str,
+        amc_code: str,
+        document_type: str,
+        report_month: date | None,
+    ) -> str | None:
+        if not report_month:
+            return None
+        try:
+            rows = (
+                supabase.table("mf_raw_documents")
+                .select("id,report_month")
+                .eq("checksum", checksum)
+                .eq("amc_code", amc_code)
+                .eq("document_type", document_type)
+                .neq("report_month", report_month.isoformat())
+                .limit(1)
+                .execute()
+                .data
+                or []
+            )
+        except Exception:
+            logger.info("event=checksum_month_conflict_lookup_unavailable")
+            return None
+        return str(rows[0].get("id")) if rows else None
+
+    def _conditional_request_context(
+        self,
+        amc_code: str,
+        document_type: str,
+        discovered: DiscoveredDocument,
+    ) -> tuple[dict[str, str], str | None]:
+        try:
+            query = (
+                supabase.table("mf_raw_documents")
+                .select("id,source_url,storage_metadata")
+                .eq("amc_code", amc_code)
+                .eq("document_type", document_type)
+                .order("downloaded_at", desc=True)
+                .limit(100)
+            )
+            if discovered.report_month:
+                query = query.eq("report_month", discovered.report_month.isoformat())
+            rows = query.execute().data or []
+        except Exception:
+            logger.info("event=conditional_request_lookup_unavailable")
+            return {}, None
+        canonical = _canonicalize_document_url(discovered.url)
+        for row in rows:
+            if _canonicalize_document_url(str(row.get("source_url") or "")) != canonical:
+                continue
+            metadata = row.get("storage_metadata") if isinstance(row.get("storage_metadata"), dict) else {}
+            headers: dict[str, str] = {}
+            if metadata.get("etag"):
+                headers["If-None-Match"] = str(metadata["etag"])
+            if metadata.get("last_modified"):
+                headers["If-Modified-Since"] = str(metadata["last_modified"])
+            return headers, str(row.get("id") or "") or None
+        return {}, None
+
+    def _link_discovery_observation(self, source_url: str, raw_document_id: str | None) -> None:
+        if not source_url or not raw_document_id:
+            return
+        try:
+            supabase.table("mf_discovery_documents").update(
+                {
+                    "raw_document_id": raw_document_id,
+                    "canonical_url": _canonicalize_document_url(source_url),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            ).eq("source_url", source_url).execute()
+        except Exception:
+            logger.info(
+                "event=discovery_observation_link_skipped source_url=%s raw_document_id=%s",
+                source_url,
+                raw_document_id,
+            )
+
     def _upsert_source_row(self, source: AMCDocumentSource) -> None:
         payload = {
             "amc_name": source.amc_name,
@@ -460,6 +632,8 @@ class IngestionService:
             "checksum": checksum,
             "content_type": downloaded.content_type or "",
             "file_size_bytes": str(downloaded.file_size_bytes or 0),
+            "etag": downloaded.etag or "",
+            "last_modified": downloaded.last_modified or "",
         }
 
         ext = downloaded.file_ext or _safe_extension(downloaded.file_name)
@@ -554,6 +728,9 @@ def _with_document_type(downloaded: DownloadedDocument, document_type: str) -> D
         content_type=downloaded.content_type,
         file_size_bytes=downloaded.file_size_bytes,
         file_bytes=downloaded.file_bytes,
+        etag=downloaded.etag,
+        last_modified=downloaded.last_modified,
+        not_modified=downloaded.not_modified,
     )
 
 
@@ -578,9 +755,55 @@ def _dedupe_discovered_documents(documents: list[Any]) -> list[Any]:
     seen: set[str] = set()
     for document in documents:
         url = str(getattr(document, "url", "") or "").strip()
-        key = url.lower()
+        key = _canonicalize_document_url(url).lower()
         if not key or key in seen:
             continue
         seen.add(key)
         deduped.append(document)
     return deduped
+
+
+def _canonicalize_document_url(url: str) -> str:
+    raw = str(url or "").strip()
+    if not raw:
+        return ""
+    parts = urlsplit(raw)
+    retained = []
+    removable_exact = {"timestamp", "ts", "_", "cachebust", "cache_bust"}
+    for key, value in parse_qsl(parts.query, keep_blank_values=True):
+        normalized = key.strip().lower()
+        if normalized.startswith("utm_") or normalized in removable_exact:
+            continue
+        retained.append((key, value))
+    return urlunsplit(
+        (
+            parts.scheme.lower(),
+            parts.netloc.lower(),
+            parts.path,
+            urlencode(retained, doseq=True),
+            "",
+        )
+    )
+
+
+def _rank_discovered_documents(
+    documents: list[Any],
+    *,
+    expected_month: date | None,
+) -> list[Any]:
+    def rank(document: Any) -> tuple[int, int, int, int]:
+        report_month = getattr(document, "report_month", None)
+        exact_month = int(bool(expected_month and report_month == expected_month))
+        confirmed_month = int(report_month is not None)
+        month_recency = report_month.toordinal() if report_month else 0
+        priority = int(getattr(document, "priority_score", 0) or 0)
+        return exact_month, confirmed_month, month_recency, priority
+
+    return sorted(documents, key=rank, reverse=True)
+
+
+def _filter_expected_month_documents(
+    documents: list[Any],
+    expected_month: date,
+) -> list[Any]:
+    return [document for document in documents if getattr(document, "report_month", None) == expected_month]

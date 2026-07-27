@@ -1,14 +1,23 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 from app.mf_ingestion.downloaders import amc_downloader
-from app.mf_ingestion.downloaders.amc_downloader import AMCDownloader
-from app.mf_ingestion.parsers.adapters.axis_adapter import AxisAdapter, _axis_render_url, _browser_fallback_allowed
+from app.mf_ingestion.downloaders.amc_downloader import (
+    AMCDownloader,
+    _guess_hdfc_combined_factsheets,
+)
+from app.mf_ingestion.downloaders.base_downloader import DiscoveredDocument
+from app.mf_ingestion.parsers.adapters.axis_adapter import (
+    AxisAdapter,
+    _axis_factsheet_links_from_payload,
+    _axis_render_url,
+    _browser_fallback_allowed,
+)
 from app.mf_ingestion.parsers.adapters.ppfas_adapter import _ppfas_confirmation_url
-from app.mf_ingestion.sources.registry import AMCDocumentSource
+from app.mf_ingestion.sources.registry import AMCDocumentSource, get_source
 
 
 def _source(adapter_key: str, factsheet_url: str, portfolio_url: str | None = None) -> AMCDocumentSource:
@@ -37,7 +46,7 @@ def test_hdfc_embedded_portfolio_xlsx_links_are_discovered(monkeypatch) -> None:
         return SimpleNamespace(text=html, url="https://www.hdfcfund.com/statutory-disclosure/portfolio/monthly-portfolio")
 
     monkeypatch.setattr(amc_downloader, "_request_with_retry", fake_request)
-    source = _source("hdfc", "https://www.hdfcfund.com/factsheets", "https://www.hdfcfund.com/statutory-disclosure/portfolio/monthly-portfolio")
+    source = get_source("hdfc")
 
     docs = AMCDownloader(source, timeout_seconds=1, user_agent="test").list_documents("portfolio_disclosure")
 
@@ -90,6 +99,29 @@ def test_hdfc_factsheet_urls_can_be_reused_for_portfolios_when_enabled(monkeypat
     assert len(docs) == 1
     assert docs[0].document_type == "portfolio_disclosure"
     assert docs[0].url.endswith("May%202026.pdf")
+
+
+def test_hdfc_official_bucket_fallback_builds_prior_month_combined_factsheet() -> None:
+    source = get_source("hdfc")
+
+    factsheets = _guess_hdfc_combined_factsheets(
+        source,
+        "factsheet",
+        now_utc=datetime(2026, 7, 28, tzinfo=UTC),
+    )
+    portfolios = _guess_hdfc_combined_factsheets(
+        source,
+        "portfolio_disclosure",
+        now_utc=datetime(2026, 7, 28, tzinfo=UTC),
+    )
+
+    assert factsheets[0].report_month == date(2026, 6, 1)
+    assert factsheets[0].url == (
+        "https://files.hdfcfund.com/s3fs-public/2026-07/"
+        "HDFC%20MF%20Factsheet%20-%20June%202026.pdf"
+    )
+    assert portfolios[0].url == factsheets[0].url
+    assert portfolios[0].document_type == "portfolio_disclosure"
 
 
 def test_hdfc_generic_factsheet_reuse_flag_is_supported(monkeypatch) -> None:
@@ -191,6 +223,36 @@ def test_axis_factsheet_render_url_selects_factsheet_filter() -> None:
     assert _axis_render_url("https://www.axismf.com/downloads", "portfolio_disclosure") == (
         "https://www.axismf.com/downloads"
     )
+    assert _axis_render_url(
+        "https://www.axismf.com/downloads",
+        "portfolio_disclosure",
+        factsheet_contains_holdings=True,
+    ) == "https://www.axismf.com/downloads/products"
+
+
+def test_axis_factsheet_api_payload_maps_official_documents() -> None:
+    links = _axis_factsheet_links_from_payload(
+        {
+            "data": {
+                "productFactSheetData": [
+                    {
+                        "name": "Axis Fund Factsheet June-2026",
+                        "documentUrl": "https://www.axismf.com/docs/axis-june-2026.pdf",
+                    },
+                    {
+                        "name": "Axis Passive Factsheet June-2026",
+                        "documentUrl": "https://www.axismf.com/docs/axis-passive-june-2026.pdf",
+                    },
+                ]
+            }
+        }
+    )
+
+    assert [link["title"] for link in links] == [
+        "Axis Fund Factsheet June-2026",
+        "Axis Passive Factsheet June-2026",
+    ]
+    assert all(link["file_ext"] == ".pdf" for link in links)
 
 
 def test_sbi_recent_factsheet_endpoint_is_discovered(monkeypatch) -> None:
@@ -235,6 +297,120 @@ def test_sbi_all_schemes_factsheet_outranks_passive_for_same_month(monkeypatch) 
     ).list_documents("factsheet")
 
     assert docs[0].title == "All SBIMF Schemes Factsheet June 2026"
+
+
+def test_motilal_official_api_uses_report_month_from_title(monkeypatch) -> None:
+    calls: list[dict[str, object]] = []
+    payload = {
+        "results": [
+            {
+                "path": "/content/dam/motilal-mf/downloads/mf/factsheet/2026/jun/Factsheet May 2026 Active.pdf",
+                "title": "Factsheet May 2026 Active",
+                "year": "2026",
+                "month": "jun",
+                "category": "factsheet",
+                "publishDate": "08-06-2026",
+                "mimeType": "application/pdf",
+            }
+        ]
+    }
+
+    def fake_request(*args, **kwargs):
+        calls.append(kwargs["params"])
+        return SimpleNamespace(json=lambda: payload)
+
+    monkeypatch.setattr(amc_downloader, "_request_with_retry", fake_request)
+    docs = AMCDownloader(
+        _source("motilal", "https://www.motilaloswalmf.com/downloads/factsheets"),
+        timeout_seconds=1,
+        user_agent="test",
+    ).list_documents("factsheet")
+
+    assert len(docs) == 1
+    assert docs[0].url == (
+        "https://www.motilaloswalmf.com/content/dam/motilal-mf/downloads/mf/"
+        "factsheet/2026/jun/Factsheet May 2026 Active.pdf"
+    )
+    assert docs[0].report_month == date(2026, 5, 1)
+    assert all(call["category"] == "factsheet" for call in calls)
+    assert len(calls) == amc_downloader.MOTILAL_DISCOVERY_LOOKBACK_MONTHS
+
+
+def test_motilal_official_api_maps_month_end_portfolio(monkeypatch) -> None:
+    payload = {
+        "results": [
+            {
+                "path": "/content/dam/motilal-mf/downloads/mf/month-end-portfolio/2026/jun/"
+                "ForthNightly report for 15th June 2026.xlsx",
+                "title": "ForthNightly report for 15th June 2026",
+                "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            },
+            {
+                "path": "/content/dam/motilal-mf/downloads/mf/month-end-portfolio/2026/jun/"
+                "Month End Portfolio June 2026.xlsx",
+                "title": "Month End Portfolio June 2026",
+                "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            }
+        ]
+    }
+    calls: list[dict[str, object]] = []
+
+    def fake_request(*args, **kwargs):
+        calls.append(kwargs["params"])
+        return SimpleNamespace(json=lambda: payload)
+
+    monkeypatch.setattr(amc_downloader, "_request_with_retry", fake_request)
+    docs = AMCDownloader(
+        get_source("motilal"),
+        timeout_seconds=1,
+        user_agent="test",
+    ).list_documents("portfolio_disclosure")
+
+    assert len(docs) == 1
+    assert docs[0].file_ext == ".xlsx"
+    assert docs[0].report_month == date(2026, 6, 1)
+    assert all(call["category"] == "month end portfolio" for call in calls)
+
+
+def test_absl_official_api_maps_june_portfolio_to_amc_host(monkeypatch) -> None:
+    payload = {
+        "AccordionList": [
+            {
+                "ResourceLink": "Monthly Portfolios as on June 30, 2026",
+                "pdfUrl": (
+                    "https://abcscprod.azureedge.net/-/media/bsl/files/resources/"
+                    "monthly-portfolio/2026/monthly-portfolio-30-june-2026.zip"
+                ),
+            },
+            {
+                "ResourceLink": "Fortnightly Portfolio as on June 15, 2026",
+                "pdfUrl": (
+                    "https://abcscprod.azureedge.net/-/media/bsl/files/resources/"
+                    "monthly-portfolio/2026/fortnightly-portfolio-15-june-2026.zip"
+                ),
+            },
+        ]
+    }
+    calls: list[dict[str, object]] = []
+
+    def fake_request(*args, **kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(json=lambda: payload)
+
+    monkeypatch.setattr(amc_downloader, "_request_with_retry", fake_request)
+    docs = AMCDownloader(
+        get_source("aditya_birla"),
+        timeout_seconds=1,
+        user_agent="test",
+    ).list_documents("portfolio_disclosure")
+
+    assert len(docs) == 1
+    assert docs[0].url == (
+        "https://mutualfund.adityabirlacapital.com/-/media/bsl/files/resources/"
+        "monthly-portfolio/2026/monthly-portfolio-30-june-2026.zip"
+    )
+    assert docs[0].report_month == date(2026, 6, 1)
+    assert calls[0]["params"]["id"] == amc_downloader.ABSL_PORTFOLIO_RESOURCE_ID
 
 
 def test_mirae_official_api_rejects_how_to_and_ranks_active(monkeypatch) -> None:
@@ -316,6 +492,40 @@ def test_dsp_official_json_endpoint_maps_latest_factsheet(monkeypatch) -> None:
     assert docs[0].url == "https://www.dspim.com/downloads/dsp-factsheet-june-2026.pdf"
 
 
+def test_dsp_official_portfolio_page_discovers_month_end_zip(monkeypatch) -> None:
+    page_url = "https://www.dspim.com/mandatory-disclosures/portfolio-disclosures"
+    zip_url = (
+        "https://www.dspim.com/media/pages/mandatory-disclosures/portfolio-disclosures/"
+        "ee5dc05630-1784285969/monthend-portfolios_30_june_2026.zip"
+    )
+    html = f"""
+    <a href="{zip_url}">Portfolio Details as on June 30, 2026</a>
+    <a href="/downloads/fortnightly-portfolio-june-2026.xlsx">
+      Fortnightly Portfolios as on June 30, 2026
+    </a>
+    <a href="/downloads/fund-performance-june-2026.xlsx">
+      Scheme Performance as on June 30, 2026
+    </a>
+    """
+    monkeypatch.setattr(
+        amc_downloader,
+        "_request_with_retry",
+        lambda *args, **kwargs: SimpleNamespace(text=html, url=page_url),
+    )
+
+    docs = AMCDownloader(
+        get_source("dsp"),
+        timeout_seconds=1,
+        user_agent="test",
+    ).list_documents("portfolio_disclosure")
+
+    assert len(docs) == 1
+    assert docs[0].title == "Portfolio Details as on June 30, 2026"
+    assert docs[0].url == zip_url
+    assert docs[0].file_ext == ".zip"
+    assert docs[0].report_month == date(2026, 6, 1)
+
+
 def test_uti_official_api_ranks_english_active_before_other_variants(monkeypatch) -> None:
     rows = [
         {
@@ -355,6 +565,165 @@ def test_uti_official_api_ranks_english_active_before_other_variants(monkeypatch
         "UTI Fund Watch(Active)-July 2026 Hindi",
     ]
     assert docs[0].report_month == date(2026, 7, 1)
+
+
+def test_uti_official_api_keeps_exact_prior_month_when_newer_rows_exist(monkeypatch) -> None:
+    july_rows = [
+        {
+            "name": "UTI Fund Watch(Active)-July 2026",
+            "doc": "https://d3ce1o48hc5oli.cloudfront.net/s3fs-public/active-july-2026.pdf",
+            "month": "July",
+            "year": "2026",
+        }
+    ]
+    june_rows = [
+        {
+            "name": "UTI Fund Watch(Active)-June 2026",
+            "doc": "https://d3ce1o48hc5oli.cloudfront.net/s3fs-public/active-june-2026.pdf",
+            "month": "June",
+            "year": "2026",
+        }
+    ]
+
+    def fake_request(*args, **kwargs):
+        month = kwargs["params"]["month"]
+        rows = july_rows if month == "July" else june_rows if month == "June" else []
+        return SimpleNamespace(json=lambda: {"rows": rows})
+
+    monkeypatch.setattr(amc_downloader, "_request_with_retry", fake_request)
+
+    docs = AMCDownloader(
+        _source("uti", "https://www.utimf.com/downloads/fact-sheet"),
+        timeout_seconds=1,
+        user_agent="test",
+    ).list_documents("factsheet")
+
+    assert [doc.report_month for doc in docs] == [
+        date(2026, 7, 1),
+        date(2026, 6, 1),
+    ]
+    assert docs[1].title == "UTI Fund Watch(Active)-June 2026"
+
+
+def test_nippon_discovery_excludes_inner_html_pages(monkeypatch) -> None:
+    listing_url = (
+        "https://mf.nipponindiaim.com/InvestorServices/"
+        "FactsheetsDocuments/Fundamentals-June-2026/index.html"
+    )
+    html = """
+    <a href="Nippon-FS-JUNE-2026.pdf">Nippon Fund Factsheet June 2026</a>
+    <a href="Innerpage/Large-Cap.html">Nippon Large Cap Fund</a>
+    """
+    monkeypatch.setattr(
+        amc_downloader,
+        "_request_with_retry",
+        lambda *args, **kwargs: SimpleNamespace(text=html, url=listing_url),
+    )
+
+    docs = AMCDownloader(
+        _source("nippon", listing_url),
+        timeout_seconds=1,
+        user_agent="test",
+    ).list_documents("factsheet")
+
+    assert len(docs) == 1
+    assert docs[0].url.endswith("Nippon-FS-JUNE-2026.pdf")
+
+
+def test_nippon_portfolio_uses_surrounding_month_label(monkeypatch) -> None:
+    listing_url = "https://mf.nipponindiaim.com/investor-service/downloads/disclosures"
+    html = """
+    <ul>
+      <li>Monthly portfolio for the month of June 2026
+        <a href="/InvestorServices/FactsheetsDocuments/monthly-portfolio.xls">Download</a>
+      </li>
+      <li>Debt Schemes Fortnightly Portfolio as on 15th June 2026
+        <a href="/InvestorServices/FactsheetsDocuments/fortnightly-portfolio.xls">Download</a>
+      </li>
+    </ul>
+    """
+    monkeypatch.setattr(
+        amc_downloader,
+        "_request_with_retry",
+        lambda *args, **kwargs: SimpleNamespace(text=html, url=listing_url),
+    )
+
+    docs = AMCDownloader(
+        get_source("nippon"),
+        timeout_seconds=1,
+        user_agent="test",
+    ).list_documents("portfolio_disclosure")
+
+    assert len(docs) == 1
+    assert docs[0].title == "Monthly portfolio for the month of June 2026 Download"
+    assert docs[0].report_month == date(2026, 6, 1)
+
+
+def test_nippon_factsheet_uses_publication_month_as_prior_report_month(monkeypatch) -> None:
+    listing_url = (
+        "https://mf.nipponindiaim.com/investor-service/downloads/"
+        "factsheet-portfolio-and-other-disclosures"
+    )
+    html = """
+    <ul>
+      <li>E- Factsheet: July 2026
+        <a href="/InvestorServices/FactSheetsDocuments/Nippon-FS-JULY-2026.pdf">
+          \u200bDownload\u200b
+        </a>
+      </li>
+      <li>E- Factsheet: June 2026
+        <a href="/InvestorServices/FactSheetsDocuments/Nippon-FS-JUNE-2026.pdf">
+          Download
+        </a>
+      </li>
+    </ul>
+    """
+    monkeypatch.setattr(
+        amc_downloader,
+        "_request_with_retry",
+        lambda *args, **kwargs: SimpleNamespace(text=html, url=listing_url),
+    )
+
+    docs = AMCDownloader(
+        get_source("nippon"),
+        timeout_seconds=1,
+        user_agent="test",
+    ).list_documents("factsheet")
+
+    assert [doc.report_month for doc in docs] == [
+        date(2026, 6, 1),
+        date(2026, 5, 1),
+    ]
+    assert docs[0].title == "E- Factsheet: July 2026 Download"
+    assert "\u200b" not in docs[0].title
+
+
+def test_nippon_mislabeled_openxml_workbook_is_normalized(monkeypatch) -> None:
+    source = get_source("nippon")
+    document = DiscoveredDocument(
+        amc_name=source.amc_name,
+        amc_code=source.amc_code,
+        document_type="portfolio_disclosure",
+        title="Monthly portfolio for the month of June 2026",
+        url="https://mf.nipponindiaim.com/docs/monthly-portfolio-june-2026.xls",
+        discovery_page_url=source.portfolio_disclosure_page_url or "",
+        file_ext=".xls",
+        report_month=date(2026, 6, 1),
+        priority_score=1,
+    )
+    monkeypatch.setattr(
+        amc_downloader,
+        "_request_with_retry",
+        lambda *args, **kwargs: SimpleNamespace(
+            content=b"PK\x03\x04" + b"\x00" * 64,
+            headers={"Content-Type": "application/vnd.ms-excel"},
+            url=document.url,
+        ),
+    )
+
+    downloaded = AMCDownloader(source, timeout_seconds=1, user_agent="test").probe_download(document)
+
+    assert downloaded.file_ext == ".xlsx"
 
 
 def test_ppfas_empty_form_action_posts_to_confirmation_page() -> None:

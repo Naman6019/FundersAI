@@ -1,12 +1,27 @@
 from __future__ import annotations
 
-SUPPORTED_MF_AMC_MARKERS: dict[str, tuple[str, ...]] = {
+from app.mf_ingestion.sources.registry import SOURCES
+
+
+ALL_MF_AMC_MARKERS: dict[str, tuple[str, ...]] = {
     "HDFC": ("hdfc",),
     "SBI": ("sbi",),
     "ICICI": ("icici",),
     "AXIS": ("axis",),
     "PPFAS": ("ppfas", "parag parikh", "parag", "parikh"),
     "NIPPON": ("nippon", "nippon india"),
+    "MOTILAL": ("motilal", "motilal oswal"),
+    "MIRAE": ("mirae", "mirae asset"),
+    "UTI": ("uti",),
+    "DSP": ("dsp",),
+    "KOTAK": ("kotak",),
+    "ABSL": ("aditya birla", "birla sun life", "absl"),
+}
+
+SUPPORTED_MF_AMC_MARKERS: dict[str, tuple[str, ...]] = {
+    source.amc_code: ALL_MF_AMC_MARKERS[source.amc_code]
+    for source in SOURCES.values()
+    if source.runtime_enabled
 }
 
 USER_FACING_SUPPORTED_AMCS = tuple(SUPPORTED_MF_AMC_MARKERS)
@@ -18,20 +33,21 @@ SUPPORTED_AMC_DISPLAY_NAMES: dict[str, str] = {
     "SBI": "SBI",
     "AXIS": "Axis",
     "NIPPON": "Nippon India",
+    "MOTILAL": "Motilal Oswal",
+    "MIRAE": "Mirae Asset",
+    "UTI": "UTI",
+    "DSP": "DSP",
+    "KOTAK": "Kotak",
+    "ABSL": "Aditya Birla Sun Life",
 }
 
 SUPPORTED_AMC_PIPELINE_COPY = ", ".join(
-    SUPPORTED_AMC_DISPLAY_NAMES[label] for label in ("PPFAS", "ICICI", "HDFC", "SBI", "AXIS", "NIPPON")
+    SUPPORTED_AMC_DISPLAY_NAMES[label] for label in USER_FACING_SUPPORTED_AMCS
 )
 
 UNSUPPORTED_MF_AMC_KEYWORDS = (
     "quant",
-    "kotak",
-    "mirae",
-    "uti",
-    "dsp",
     "tata",
-    "motilal",
     "canara",
     "groww",
     "zerodha",
@@ -58,6 +74,12 @@ UNSUPPORTED_MF_AMC_KEYWORDS = (
     "360 one",
     "iifl",
     "jm financial",
+    *(
+        marker
+        for source in SOURCES.values()
+        if not source.runtime_enabled
+        for marker in ALL_MF_AMC_MARKERS.get(source.amc_code, ())
+    ),
 )
 
 

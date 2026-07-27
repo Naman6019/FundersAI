@@ -125,7 +125,7 @@ def _build_holdings_overlap(comparison: dict[str, Any]) -> dict[str, Any]:
             "reason": "Holdings data is unavailable for one or both funds.",
             "entities": [name_a, name_b],
             "top_common_holdings": [],
-            "total_overlap_weight": 0,
+            "total_overlap_weight": None,
         }
     map_a = {_holding_key(row): row for row in holdings_a if isinstance(row, dict) and _holding_key(row)}
     map_b = {_holding_key(row): row for row in holdings_b if isinstance(row, dict) and _holding_key(row)}
@@ -409,8 +409,17 @@ class CompareDataService:
         benchmark_source = "fund_benchmark" if row.get("benchmark") else "nifty_fallback"
         missing_fields = [
             field
-            for field in ("nav", "nav_date", "expense_ratio", "aum")
-            if _is_missing(row.get(field))
+            for field, missing in (
+                ("nav", _is_missing(row.get("nav"))),
+                ("nav_date", _is_missing(row.get("nav_date"))),
+                ("expense_ratio", _is_missing(row.get("expense_ratio"))),
+                ("aum", _is_missing(row.get("aum"))),
+                ("benchmark", _is_missing(row.get("benchmark"))),
+                ("risk_level", _is_missing(row.get("risk_level"))),
+                ("holdings", not holdings_rows),
+                ("sectors", not sector_rows),
+            )
+            if missing
         ]
         limitations = []
         if benchmark_source == "nifty_fallback":
@@ -501,6 +510,8 @@ class CompareDataService:
                 "max_drawdown_1y",
                 "expense_ratio",
                 "aum",
+                "benchmark",
+                "risk_level",
             )
             if _is_missing(row.get(field))
         ]

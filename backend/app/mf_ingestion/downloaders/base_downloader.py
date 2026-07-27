@@ -30,6 +30,9 @@ class DownloadedDocument:
     content_type: str | None
     file_size_bytes: int
     file_bytes: bytes
+    etag: str | None = None
+    last_modified: str | None = None
+    not_modified: bool = False
 
 
 class BaseDownloader:

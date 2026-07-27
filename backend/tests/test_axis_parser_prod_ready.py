@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import inspect
 import re
 from datetime import date
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -11,8 +11,7 @@ from app.mf_ingestion.parsers.adapters.axis_adapter import AxisAdapter
 from app.mf_ingestion.parsers.base_parser import ParseContext
 from app.mf_ingestion.parsers.factsheet_parser import FactsheetParser
 from app.mf_ingestion.parsers.holdings_parser import HoldingsParser
-from app.mf_ingestion.services import parsing_service
-from app.mf_ingestion.services.parsing_service import AMC_DISCLOSURE_SOURCE, ParsingService
+from app.mf_ingestion.services.parsing_service import ParsingService
 
 AXIS_FACTSHEET = Path(__file__).resolve().parents[1] / "axis_factsheet.pdf"
 
@@ -188,74 +187,8 @@ def test_axis_holdings_parse_bounded_nav_blocks_without_isin():
     ]
 
 
-def test_axis_same_month_null_isin_holdings_are_replaced(monkeypatch):
-    fake_supabase = _FakeSupabase(
-        rows=[
-            {
-                "scheme_code": 123,
-                "family_id": None,
-                "as_of_date": "2026-03-01",
-                "source": AMC_DISCLOSURE_SOURCE,
-                "security_name": "Old Holding",
-            },
-            {
-                "scheme_code": 123,
-                "family_id": None,
-                "as_of_date": "2026-02-01",
-                "source": AMC_DISCLOSURE_SOURCE,
-                "security_name": "Stale Holding",
-            },
-        ]
-    )
-    monkeypatch.setattr(parsing_service, "supabase", fake_supabase)
+def test_parser_has_no_direct_runtime_holdings_mutation_path():
+    source = inspect.getsource(ParsingService)
 
-    service = object.__new__(ParsingService)
-    service.r2_store = SimpleNamespace(enabled=False)
-
-    service._archive_and_trim_holdings(
-        scheme_code=123,
-        family_id=None,
-        current_report_month="2026-03-01",
-        replace_current_month=True,
-    )
-
-    deleted_months = {filters["as_of_date"] for filters in fake_supabase.deletes}
-    assert deleted_months == {"2026-02-01", "2026-03-01"}
-
-
-class _FakeSupabase:
-    def __init__(self, rows: list[dict]) -> None:
-        self.rows = rows
-        self.deletes: list[dict] = []
-
-    def table(self, table_name: str):
-        return _FakeTable(self, table_name)
-
-
-class _FakeTable:
-    def __init__(self, root: _FakeSupabase, table_name: str) -> None:
-        self.root = root
-        self.table_name = table_name
-        self.filters: dict[str, object] = {}
-        self.is_delete = False
-
-    def select(self, _columns: str):
-        return self
-
-    def delete(self):
-        self.is_delete = True
-        return self
-
-    def eq(self, key: str, value):
-        self.filters[key] = value
-        return self
-
-    def execute(self):
-        if self.is_delete:
-            self.root.deletes.append(dict(self.filters))
-            return SimpleNamespace(data=[])
-
-        rows = list(self.root.rows)
-        for key, value in self.filters.items():
-            rows = [row for row in rows if row.get(key) == value]
-        return SimpleNamespace(data=rows)
+    assert "_archive_and_trim_holdings" not in source
+    assert "upsert_mutual_fund_core_snapshot_rows" not in source

@@ -90,3 +90,16 @@ test('comparison view syncs local ids when a new compare action arrives', () => 
   assert.doesNotMatch(chat, /variant="metrics_only"/);
   assert.match(comparison, /setIds\(newIds\);\s*store\.setIds\(newIds\);/);
 });
+
+test('chat-triggered comparison canvas has honest empty states and no Ask AI control', () => {
+  const comparison = readFileSync(new URL('../components/canvas/ComparisonView.tsx', import.meta.url), 'utf8');
+  const canvasStore = readFileSync(new URL('../store/useCanvasStore.ts', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(comparison, />\s*Ask AI\s*</);
+  assert.doesNotMatch(canvasStore, /comparisonMode|ComparisonMode/);
+  assert.match(comparison, /holdingsOverlap\.coverage_status === 'available'/);
+  assert.match(comparison, /Unavailable/);
+  assert.match(comparison, /showDecisionClarity/);
+  assert.match(comparison, /researchFrame/);
+  assert.match(comparison, /supportsFundPeriod\(f!\.cov, '1Y'\)/);
+});

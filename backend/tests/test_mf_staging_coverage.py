@@ -1,0 +1,108 @@
+from __future__ import annotations
+
+from scripts.report_mf_staging_coverage import build_staging_coverage
+
+
+def test_staging_coverage_uses_distinct_current_mapped_families():
+    report = build_staging_coverage(
+        report_month="2026-06-01",
+        amcs=["mirae"],
+        candidates=[
+            {
+                "amc_code": "mirae",
+                "report_month": "2026-06-01",
+                "normalized_scheme_name": "mirae asset one fund",
+                "mapped_family_id": "one",
+                "mapping_status": "mapped",
+                "aum": 1,
+                "expense_ratio": 1,
+                "benchmark": "Index",
+                "fund_manager": "Manager",
+                "risk_level": "High",
+            },
+            {
+                "amc_code": "mirae",
+                "report_month": "2026-06-01",
+                "normalized_scheme_name": "mirae asset two fund",
+                "mapped_family_id": None,
+                "mapping_status": "unmapped",
+            },
+        ],
+        holdings=[
+            {
+                "amc_code": "mirae",
+                "report_month": "2026-06-01",
+                "raw_scheme_name": "Mirae Asset One Fund",
+                "mapped_family_id": "one",
+                "mapping_status": "mapped",
+                "sector": "Banks",
+            },
+            {
+                "amc_code": "mirae",
+                "report_month": "2026-06-01",
+                "raw_scheme_name": "Mirae Asset Two Fund",
+                "mapped_family_id": None,
+                "mapping_status": "unmapped",
+                "sector": None,
+            },
+        ],
+        threshold=80.0,
+    )["mirae"]
+
+    assert report["mapped_core_families"] == 1
+    assert report["percentages"]["aum"] == 100.0
+    assert report["mapping_percentages"]["core"] == 50.0
+    assert report["mapping_percentages"]["portfolio"] == 50.0
+    assert report["passes_all_fields"] is False
+
+
+def test_staging_coverage_separates_non_applicable_sectors_from_missing_sectors():
+    candidates = [
+        {
+            "amc_code": "mirae",
+            "report_month": "2026-06-01",
+            "normalized_scheme_name": name.lower(),
+            "mapped_family_id": family,
+            "mapping_status": "mapped",
+            "aum": 1,
+            "expense_ratio": 1,
+            "benchmark": "Index",
+            "fund_manager": "Manager",
+            "risk_level": "High",
+        }
+        for name, family in (
+            ("Mirae Asset Equity Fund", "equity"),
+            ("Mirae Asset Gold ETF Fund of Fund", "gold-fof"),
+        )
+    ]
+    holdings = [
+        {
+            "amc_code": "mirae",
+            "report_month": "2026-06-01",
+            "raw_scheme_name": "Mirae Asset Equity Fund",
+            "mapped_family_id": "equity",
+            "mapping_status": "mapped",
+            "sector": None,
+        },
+        {
+            "amc_code": "mirae",
+            "report_month": "2026-06-01",
+            "raw_scheme_name": "Mirae Asset Gold ETF Fund of Fund",
+            "mapped_family_id": "gold-fof",
+            "mapping_status": "mapped",
+            "sector": None,
+        },
+    ]
+
+    report = build_staging_coverage(
+        report_month="2026-06-01",
+        amcs=["mirae"],
+        candidates=candidates,
+        holdings=holdings,
+        threshold=80.0,
+    )["mirae"]
+
+    assert report["sector_applicable_families"] == 1
+    assert report["sector_not_applicable_families"] == 1
+    assert report["percentages"]["sectors"] == 0.0
+    assert report["passes_all_fields"] is False

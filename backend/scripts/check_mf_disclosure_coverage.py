@@ -10,10 +10,11 @@ if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
 from app.database import supabase
-from app.services.supported_amcs import SUPPORTED_MF_AMC_MARKERS
+from app.mf_ingestion.sources.registry import PRODUCTION_TARGET_AMC_KEYS, get_source
+from app.services.supported_amcs import ALL_MF_AMC_MARKERS
 
 
-AMC_LABELS = {label.lower(): markers for label, markers in SUPPORTED_MF_AMC_MARKERS.items()}
+AMC_LABELS = {label.lower(): markers for label, markers in ALL_MF_AMC_MARKERS.items()}
 
 
 def _get_all(table: str, columns: str) -> list[dict[str, Any]]:
@@ -47,7 +48,7 @@ def _parse_amc_list(raw: str) -> list[str]:
 
 
 def _reporting_amcs() -> list[str]:
-    raw = os.getenv("MF_DISCLOSURE_COVERAGE_AMCS", "axis,hdfc,sbi,icici,ppfas,nippon")
+    raw = os.getenv("MF_DISCLOSURE_COVERAGE_AMCS", ",".join(PRODUCTION_TARGET_AMC_KEYS))
     return _parse_amc_list(raw)
 
 
@@ -59,7 +60,8 @@ def _strict_amcs(reporting_amcs: list[str]) -> list[str]:
 
 
 def _matches_amc(row: dict[str, Any], amc: str) -> bool:
-    labels = AMC_LABELS.get(amc, (amc,))
+    source = get_source(amc)
+    labels = AMC_LABELS.get(source.amc_code.lower(), (source.adapter_key,))
     text = " ".join(str(row.get(field) or "").lower() for field in ("amc_name", "scheme_name"))
     return any(label in text for label in labels)
 

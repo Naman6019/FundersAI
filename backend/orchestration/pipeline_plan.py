@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from typing import Any, Iterable
+from app.mf_ingestion.sources.registry import capability_keys
 
 
-SUPPORTED_AMCS = ("axis", "hdfc", "sbi", "icici", "ppfas", "nippon")
+SUPPORTED_AMCS = capability_keys("discovery_enabled")
 
 
 def normalize_amcs(values: Iterable[str]) -> list[str]:

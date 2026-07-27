@@ -1,23 +1,57 @@
 from __future__ import annotations
 
 import re
+from math import atan2, degrees
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
 
+import fitz
 from bs4 import BeautifulSoup
 
 from app.mf_ingestion.parsers.base_parser import ParseContext
 from app.mf_ingestion.parsers.pdf_text_parser import PDFTextParser
 
+AMC_SCHEME_PREFIX_PATTERN = (
+    r"(?:ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset|Axis|Motilal Oswal|"
+    r"Nippon India|UTI(?:\s*-\s*)?|DSP|Kotak|Aditya Birla Sun Life)"
+)
 SCHEME_NAME_PATTERN = re.compile(
-    r"(?im)^(?:\((?:Formerly|Erstwhile)[^\n]*\)\s*)?(?P<name>(?:ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset|Axis|Motilal Oswal|Nippon India)[^\n]{3,140}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{1,60}\))?\s*$"
+    rf"(?im)^(?:\((?:Formerly|Erstwhile)[^\n]*\)\s*)?(?P<name>{AMC_SCHEME_PREFIX_PATTERN}[^\n]{{3,140}}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{{1,60}}\))?(?:\s*[\*\^$#@~§]+)?\s*$"
 )
 ANCHORED_SCHEME_PATTERN = re.compile(
-    r"(?im)^Name\s+of\s+the\s+Fund\s*\n+\s*(?P<name>(?:ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset|Axis|Motilal Oswal|Nippon India)[^\n]{3,160}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{1,80}\))?\s*$"
+    rf"(?im)^Name\s+of\s+the\s+Fund\s*\n+\s*(?P<name>{AMC_SCHEME_PREFIX_PATTERN}[^\n]{{3,160}}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{{1,80}}\))?\s*$"
 )
-MANAGER_NAME_PATTERN = re.compile(r"\b(?:Mr|Ms|Mrs)\.?\s+[A-Z][A-Za-z' -]{1,80}")
+PAGE_NUMBERED_SCHEME_PATTERN = re.compile(
+    rf"(?im)^\s*\d{{1,3}}\s*\n+\s*(?P<name>{AMC_SCHEME_PREFIX_PATTERN}[^\n]{{3,160}}?(?:Fund|FOF|ETF))"
+    rf"(?:\s*\([^\n]{{1,120}}\)?)?(?:\s*[\*\^$#@~§]+)?\s*$"
+)
+MANAGER_NAME_PATTERN = re.compile(
+    r"\b(?:Mr|Ms|Mrs)\.?[ \t]+[A-Z][A-Za-z.'-]*"
+    r"(?:[ \t]+[A-Za-z][A-Za-z.'-]*){1,5}"
+)
+FACTSHEET_AMC_NAME_PREFIXES: dict[str, tuple[str, ...]] = {
+    "hdfc": ("hdfc",),
+    "sbi": ("sbi",),
+    "icici": ("icici prudential",),
+    "axis": ("axis",),
+    "ppfas": ("parag parikh",),
+    "nippon": ("nippon india",),
+    "motilal": ("motilal oswal",),
+    "mirae": ("mirae asset",),
+    "uti": ("uti ",),
+    "dsp": ("dsp ",),
+    "kotak": ("kotak ",),
+    "absl": ("aditya birla sun life",),
+}
+FACTSHEET_AMC_ALIASES = {
+    "aditya_birla": "absl",
+    "icici_prudential": "icici",
+    "nippon_india": "nippon",
+    "motilal_oswal": "motilal",
+    "mirae_asset": "mirae",
+}
 
 
 @dataclass
@@ -40,11 +74,37 @@ class FactsheetParser:
         extension = Path(file_path).suffix.lower()
         if extension in {".html", ".htm"}:
             text = _extract_html_text(file_path)
+            pages = None
+        else:
+            pages = self.pdf_text_parser.extract_pages(file_path)
+            text = "\n".join(pages)
+        records = self.parse_text(text=text, report_month=context.report_month, page_texts=pages)
+        if extension == ".pdf":
+            vector_risks = _extract_vector_riskometer_levels(
+                file_path,
+                allowed_scheme_names=[record.scheme_name for record in records],
+            )
+            for record in records:
+                vector_risk = vector_risks.get(_scheme_key(record.scheme_name))
+                if vector_risk:
+                    record.risk_level = vector_risk
+                    record.confidence_score = float(min(99.0, 60 + (_record_score(record) * 10)))
+        return records
+
+    def detect_report_month(self, file_path: str) -> date | None:
+        extension = Path(file_path).suffix.lower()
+        if extension in {".html", ".htm"}:
+            text = _extract_html_text(file_path)
         else:
             text = self.pdf_text_parser.extract_text(file_path)
-        return self.parse_text(text=text, report_month=context.report_month)
+        return detect_dominant_factsheet_month(text)
 
-    def parse_text(self, text: str, report_month: date | None) -> list[FactsheetRecord]:
+    def parse_text(
+        self,
+        text: str,
+        report_month: date | None,
+        page_texts: list[str] | None = None,
+    ) -> list[FactsheetRecord]:
         cleaned_text = _preprocess_factsheet_text(text)
         has_anchored_sections = bool(ANCHORED_SCHEME_PATTERN.search(cleaned_text or ""))
         sections = _find_scheme_sections(cleaned_text)
@@ -52,6 +112,8 @@ class FactsheetParser:
             return []
 
         risk_by_scheme = _extract_scheme_risk_levels(cleaned_text)
+        if page_texts:
+            risk_by_scheme.update(_extract_page_aligned_risk_levels(page_texts))
         axis_ter_by_scheme = _extract_axis_ter_ratios(cleaned_text)
         axis_manager_by_scheme = _extract_axis_manager_map(cleaned_text)
         best_by_scheme: dict[str, FactsheetRecord] = {}
@@ -102,11 +164,43 @@ class FactsheetParser:
         return records
 
 
+def filter_factsheet_records_for_amc(
+    records: list[FactsheetRecord],
+    amc_code: str,
+) -> list[FactsheetRecord]:
+    normalized_code = str(amc_code or "").strip().lower()
+    normalized_code = FACTSHEET_AMC_ALIASES.get(normalized_code, normalized_code)
+    prefixes = FACTSHEET_AMC_NAME_PREFIXES.get(normalized_code)
+    if not prefixes:
+        return []
+    kept: list[FactsheetRecord] = []
+    for record in records:
+        normalized_name = " ".join(
+            str(record.scheme_name or "").lower().replace("-", " ").split()
+        )
+        if any(normalized_name.startswith(prefix) for prefix in prefixes):
+            kept.append(record)
+    return kept
+
+
 def _find_scheme_sections(cleaned_text: str) -> list[tuple[str, int, int]]:
     text = cleaned_text or ""
     anchored_matches = list(ANCHORED_SCHEME_PATTERN.finditer(text))
     if anchored_matches:
         return _sections_from_matches(text, anchored_matches, use_anchor_start=True)
+    page_numbered_matches = list(PAGE_NUMBERED_SCHEME_PATTERN.finditer(text))
+    if len(page_numbered_matches) >= 5:
+        page_numbered_sections = _sections_from_matches(
+            text,
+            page_numbered_matches,
+            use_anchor_start=True,
+        )
+        informative_sections = sum(
+            _score_fields(_extract_fields(text[start:end])) >= 2
+            for _, start, end in page_numbered_sections
+        )
+        if page_numbered_sections and informative_sections / len(page_numbered_sections) >= 0.5:
+            return page_numbered_sections
     return _sections_from_matches(text, list(SCHEME_NAME_PATTERN.finditer(text)), use_anchor_start=False)
 
 
@@ -120,8 +214,11 @@ def _sections_from_matches(
     for index, match in enumerate(matches):
         start = match.start() if use_anchor_start else match.start()
         next_start = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        end = min(len(text), max(start + 2500, next_start))
-        sections.append((_clean_scheme_name(match.group("name")), start, end))
+        end = min(len(text), next_start, start + 12000)
+        scheme_name = _clean_scheme_name(match.group("name"))
+        if _is_generic_amc_heading(scheme_name):
+            continue
+        sections.append((scheme_name, start, end))
     return sections
 
 
@@ -129,8 +226,23 @@ def _preprocess_factsheet_text(text: str) -> str:
     if not text:
         return ""
     # Generalized line break fixes for scheme names
-    text = re.sub(r"(?i)\n+\s*(Fund|FOF|ETF)\b", r" \1", text)
-    text = re.sub(r"(?i)\b(ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset|Axis|Motilal Oswal|Nippon India)\s*\n+\s*", r"\1 ", text)
+    text = re.sub(
+        r"(?i)\n+\s*(Fund|FOF|ETF)(?=\s*(?:\([^)\n]*\))?\s*(?:\n|$))",
+        r" \1",
+        text,
+    )
+    text = re.sub(
+        rf"(?i)\b({AMC_SCHEME_PREFIX_PATTERN})\s*\n+\s*",
+        r"\1 ",
+        text,
+    )
+    text = re.sub(
+        rf"(?im)^({AMC_SCHEME_PREFIX_PATTERN}(?![^\n]*\b(?:Fund|FOF|ETF)\b)[^\n]{{3,120}})\n+\s*"
+        r"((?:[A-Za-z0-9&+/:.,'-]+\s+){0,5}(?:Fund|FOF|ETF)"
+        r"(?:\s*[\*\^$#@~]+)?)\s*$",
+        r"\1 \2",
+        text,
+    )
     text = re.sub(r"(?i)\b(Large|Mid|Small|Flexi|Multi|Micro|Value|Focused|Active)\s*\n+\s*Cap\b", r"\1 Cap", text)
     text = re.sub(r"(?i)\b(Equity|Debt|Liquid|Hybrid|Index|Savings)\s*\n+\s*(Fund|FOF|ETF)\b", r"\1 \2", text)
     
@@ -141,6 +253,66 @@ def _preprocess_factsheet_text(text: str) -> str:
     text = re.sub(r"(?i)\bHybrid\s*\n+\s*Fund\b", "Hybrid Fund", text)
     text = re.sub(r"(?i)\bAsset\s*\n+\s*Allocation\b", "Asset Allocation", text)
     return text
+
+
+def detect_dominant_factsheet_month(text: str) -> date | None:
+    anchors = re.compile(
+        r"(?i)\b(?:fund\s+details|details|closing\s+aum|month\s+end\s+aum|aum)"
+        r"\s+as\s+on\s+([^\n:]{4,36})"
+    )
+    counts: dict[date, int] = {}
+    for match in anchors.finditer(text or ""):
+        parsed = _month_from_date_text(match.group(1))
+        if parsed:
+            counts[parsed] = counts.get(parsed, 0) + 1
+    if not counts:
+        return None
+    dominant, count = max(counts.items(), key=lambda item: (item[1], item[0]))
+    total = sum(counts.values())
+    if count < 3 or count / total < 0.7:
+        return None
+    return dominant
+
+
+_detect_dominant_factsheet_month = detect_dominant_factsheet_month
+
+
+def _month_from_date_text(value: str) -> date | None:
+    text = " ".join(str(value or "").replace(",", " ").split())
+    named = re.search(
+        r"(?i)\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|"
+        r"jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|"
+        r"nov(?:ember)?|dec(?:ember)?)\b[\s/-]*(?:\d{1,2}[\s,/-]*)?(\d{2,4})\b",
+        text,
+    )
+    if named:
+        month_names = {
+            "jan": 1,
+            "feb": 2,
+            "mar": 3,
+            "apr": 4,
+            "may": 5,
+            "jun": 6,
+            "jul": 7,
+            "aug": 8,
+            "sep": 9,
+            "oct": 10,
+            "nov": 11,
+            "dec": 12,
+        }
+        year = int(named.group(2))
+        if year < 100:
+            year += 2000
+        return date(year, month_names[named.group(1)[:3].lower()], 1)
+    numeric = re.search(r"\b\d{1,2}[/-](\d{1,2})[/-](\d{2,4})\b", text)
+    if numeric:
+        month = int(numeric.group(1))
+        year = int(numeric.group(2))
+        if year < 100:
+            year += 2000
+        if 1 <= month <= 12:
+            return date(year, month, 1)
+    return None
 
 
 def _extract_html_text(file_path: str) -> str:
@@ -156,6 +328,15 @@ def _clean_scheme_name(raw: str) -> str:
     value = " ".join(str(raw or "").replace("\xa0", " ").split())
     value = re.sub(r"\s+\([^)]{1,40}\)\s*$", "", value)
     return value.strip()
+
+
+def _is_generic_amc_heading(value: str) -> bool:
+    key = _scheme_key(value)
+    return (
+        key.endswith("mutualfund")
+        or key.endswith("assetmanagementfund")
+        or ("investmentmanagers" in key and "fundfacts" in key)
+    )
 
 
 def _extract_fields(chunk: str) -> dict[str, Any]:
@@ -276,6 +457,235 @@ def _extract_scheme_risk_levels(text: str) -> dict[str, str]:
     return risk_by_scheme
 
 
+def _extract_page_aligned_risk_levels(page_texts: list[str]) -> dict[str, str]:
+    """Map columnar riskometer rows only when page order and counts align exactly."""
+    risk_by_scheme: dict[str, str] = {}
+    risk_pattern = re.compile(
+        r"(?i)\bThe\s+risk\s+of\s+the\s+scheme\s+is\s+"
+        r"(Low\s+to\s+Moderate|Moderately\s+High|Very\s+High|Moderate|High|Low)"
+        r"(?:\s+risk)?\b"
+    )
+    for raw_page in page_texts:
+        page = _preprocess_factsheet_text(raw_page)
+        scheme_names: list[str] = []
+        seen: set[str] = set()
+        for match in SCHEME_NAME_PATTERN.finditer(page):
+            scheme_name = _clean_scheme_name(match.group("name"))
+            scheme_key = _scheme_key(scheme_name)
+            if not scheme_key or scheme_key in seen or "mutualfund" in scheme_key:
+                continue
+            seen.add(scheme_key)
+            scheme_names.append(scheme_name)
+
+        risk_labels = [
+            label
+            for match in risk_pattern.finditer(page)
+            if (label := _normalize_risk_label(match.group(1)))
+        ]
+        if not risk_labels or len(scheme_names) != len(risk_labels) or len(scheme_names) > 8:
+            continue
+        for scheme_name, risk_label in zip(scheme_names, risk_labels):
+            risk_by_scheme[_scheme_key(scheme_name)] = risk_label
+    return risk_by_scheme
+
+
+def _extract_vector_riskometer_levels(
+    file_path: str,
+    diagnostics: list[dict[str, Any]] | None = None,
+    allowed_scheme_names: list[str] | None = None,
+) -> dict[str, str]:
+    """Read vector needles from official riskometer tables; abstain on any row-count mismatch."""
+    risk_by_scheme: dict[str, str] = {}
+    document_texts: list[str] = []
+    all_needles: list[str] = []
+    with fitz.open(file_path) as document:
+        for page in document:
+            raw_text = page.get_text("text")
+            document_texts.append(raw_text)
+            if "RISKOMETER OF SCHEME" not in raw_text.upper():
+                continue
+            page_text = _preprocess_factsheet_text(raw_text)
+            scheme_names: list[str] = []
+            seen: set[str] = set()
+            for match in SCHEME_NAME_PATTERN.finditer(page_text):
+                scheme_name = _clean_scheme_name(match.group("name"))
+                scheme_key = _scheme_key(scheme_name)
+                if not scheme_key or scheme_key in seen or _is_generic_amc_heading(scheme_name):
+                    continue
+                seen.add(scheme_key)
+                scheme_names.append(scheme_name)
+
+            needle_rows = _vector_riskometer_needles(page.get_drawings(), float(page.rect.width))
+            needles = [label for _, label in needle_rows]
+            all_needles.extend(needles)
+            row_scheme_names = _riskometer_row_scheme_names(
+                page.get_text("blocks"),
+                needle_rows,
+                page_height=float(page.rect.height),
+            )
+            if len(row_scheme_names) == len(needles):
+                risk_by_scheme.update(
+                    {
+                        _scheme_key(scheme_name): label
+                        for scheme_name, label in zip(row_scheme_names, needles)
+                    }
+                )
+            if diagnostics is not None:
+                diagnostics.append(
+                    {
+                        "page_number": page.number + 1,
+                        "scheme_count": len(scheme_names),
+                        "needle_count": len(needles),
+                        "schemes": scheme_names,
+                        "row_schemes": row_scheme_names,
+                        "labels": needles,
+                    }
+                )
+            if not scheme_names or len(scheme_names) != len(needles):
+                continue
+            for scheme_name, label in zip(scheme_names, needles):
+                risk_by_scheme[_scheme_key(scheme_name)] = label
+
+    allowed_by_key = {
+        _scheme_key(name): name
+        for name in (allowed_scheme_names or [])
+        if _scheme_key(name)
+    }
+    if allowed_by_key and all_needles:
+        ordered_names: list[str] = []
+        seen: set[str] = set()
+        document_text = _preprocess_factsheet_text("\n".join(document_texts))
+        for match in SCHEME_NAME_PATTERN.finditer(document_text):
+            key = _scheme_key(_clean_scheme_name(match.group("name")))
+            if key in allowed_by_key and key not in seen:
+                seen.add(key)
+                ordered_names.append(allowed_by_key[key])
+        ordered_mapping = _map_document_order_risk_labels(
+            ordered_names,
+            all_needles,
+            expected_scheme_count=len(allowed_by_key),
+        )
+        risk_by_scheme.update(ordered_mapping)
+        if diagnostics is not None:
+            diagnostics.append(
+                {
+                    "scope": "document_order_fallback",
+                    "allowed_scheme_count": len(allowed_by_key),
+                    "ordered_scheme_count": len(ordered_names),
+                    "needle_count": len(all_needles),
+                    "applied": bool(ordered_mapping),
+                }
+            )
+    return risk_by_scheme
+
+
+def _map_document_order_risk_labels(
+    ordered_scheme_names: list[str],
+    labels: list[str],
+    *,
+    expected_scheme_count: int,
+) -> dict[str, str]:
+    if not ordered_scheme_names or len(ordered_scheme_names) != len(labels) or len(labels) != expected_scheme_count:
+        return {}
+    return {
+        _scheme_key(scheme_name): label
+        for scheme_name, label in zip(ordered_scheme_names, labels)
+    }
+
+
+def _vector_riskometer_needles(
+    drawings: list[dict[str, Any]],
+    page_width: float,
+) -> list[tuple[float, str]]:
+    column_left = page_width * 0.43
+    column_right = page_width * 0.64
+    column_center = (column_left + column_right) / 2.0
+    needles: list[tuple[float, str]] = []
+    for drawing in drawings:
+        fill = drawing.get("fill")
+        rect = drawing.get("rect")
+        items = drawing.get("items") or []
+        if (
+            not fill
+            or max(float(value) for value in fill) >= 0.03
+            or rect is None
+            or not (column_left <= rect.x0 and rect.x1 <= column_right)
+            or not (20.0 <= rect.width <= 55.0 and 5.0 <= rect.height <= 30.0)
+            or len(items) != 7
+            or any(item[0] != "l" for item in items)
+        ):
+            continue
+        points = [point for item in items for point in item[1:] if hasattr(point, "x")]
+        if not points:
+            continue
+        pivot_x = column_center
+        pivot_y = float(rect.y1)
+        tip = max(
+            points,
+            key=lambda point: ((float(point.x) - pivot_x) ** 2) + ((float(point.y) - pivot_y) ** 2),
+        )
+        angle = degrees(atan2(pivot_y - float(tip.y), float(tip.x) - pivot_x))
+        label = _risk_label_from_needle_angle(angle)
+        if label:
+            needles.append((float(rect.y0), label))
+    return sorted(needles)
+
+
+def _riskometer_row_scheme_names(
+    text_blocks: list[tuple[Any, ...]],
+    needle_rows: list[tuple[float, str]],
+    *,
+    page_height: float,
+) -> list[str]:
+    if not needle_rows:
+        return []
+    del page_height  # Kept in the signature for compatibility with callers.
+    title_pattern = re.compile(
+        rf"(?i)^(?:\d{{1,3}}\s+)?(?P<name>{AMC_SCHEME_PREFIX_PATTERN}\s+.{{3,180}}?(?:Fund|FOF|ETF))\b"
+    )
+    title_rows: list[tuple[int, float, str]] = []
+    for block_index, block in enumerate(text_blocks):
+        if len(block) < 5 or not (20.0 <= float(block[0]) <= 130.0):
+            continue
+        match = title_pattern.search(" ".join(str(block[4] or "").split()))
+        if match:
+            title_rows.append(
+                (block_index, float(block[1]), _clean_scheme_name(match.group("name")))
+            )
+
+    names: list[str] = []
+    used_block_indexes: set[int] = set()
+    for row_y, _ in needle_rows:
+        candidates = [
+            candidate
+            for candidate in title_rows
+            if candidate[0] not in used_block_indexes
+            and candidate[1] <= row_y + 5.0
+            and row_y - candidate[1] <= 140.0
+        ]
+        if not candidates:
+            return []
+        block_index, _, scheme_name = max(candidates, key=lambda candidate: candidate[1])
+        used_block_indexes.add(block_index)
+        names.append(scheme_name)
+    return names
+
+
+def _risk_label_from_needle_angle(angle: float) -> str | None:
+    if not 0.0 <= angle <= 180.0:
+        return None
+    centers = (
+        (165.0, "Low"),
+        (135.0, "Low to Moderate"),
+        (105.0, "Moderate"),
+        (75.0, "Moderately High"),
+        (45.0, "High"),
+        (15.0, "Very High"),
+    )
+    center, label = min(centers, key=lambda item: abs(item[0] - angle))
+    return label if abs(center - angle) <= 20.0 else None
+
+
 def _last_scheme_name(text: str) -> str | None:
     matches = list(SCHEME_NAME_PATTERN.finditer(text or ""))
     if not matches:
@@ -304,6 +714,11 @@ def _normalize_risk_label(value: str) -> str | None:
 
 def _extract_aum(chunk: str) -> float | None:
     patterns = (
+        r"\bAUM\s+as\s+on\s+[^\n:]{3,45}\s*:\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|crs?\.?)\b",
+        r"\bMonth\s+end\s+AUM\s+(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\b",
+        r"\bNet\s+AUM\s*(?:\(\s*Cr\.?\s*\)|₹\s*Crores?)\s*\n+\s*([0-9][0-9,]*(?:\.[0-9]+)?)\b",
+        r"\bTOTAL\s+AUM\s*:?\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crs?\.?|crores?)\b",
+        r"\bAUM\s*:\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crs?\.?|crores?)\b",
         r"Assets\s+Under\s+Management[\s\S]{0,260}?(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|cr)\b",
         r"Assets\s+Under\s+Management[\s\S]{0,260}?(?:crores?|cr)\s*\n\s*([0-9][0-9,]*(?:\.[0-9]+)?)\b",
         r"Closing\s+AUM[\s\S]{0,120}?:\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|cr)\b",
@@ -329,6 +744,12 @@ def _extract_aum_from_scheme_occurrences(text: str, scheme_name: str) -> float |
     for match in pattern.finditer(text):
         start = max(0, match.start() - 400)
         end = min(len(text), match.start() + 7000)
+        following = text[match.end():end]
+        next_scheme = SCHEME_NAME_PATTERN.search(following)
+        if next_scheme:
+            next_name = _clean_scheme_name(next_scheme.group("name"))
+            if _scheme_key(next_name) != _scheme_key(scheme_name):
+                end = match.end() + next_scheme.start()
         value = _extract_aum(text[start:end])
         if value is not None:
             return value
@@ -337,6 +758,8 @@ def _extract_aum_from_scheme_occurrences(text: str, scheme_name: str) -> float |
 
 def _extract_expense_ratio(chunk: str) -> float | None:
     patterns = (
+        r"Expense\s+Ratio\s+Plan\s+Regular\s+Direct\s+TER\s+[0-9]+(?:\.[0-9]+)?\s+([0-9]+(?:\.[0-9]+)?)\b",
+        r"Total\s+Expense\s+Ratio\s*:\s*Regular\s+Plan\s+[0-9]+(?:\.[0-9]+)?\s+Direct\s+Plan\s+([0-9]+(?:\.[0-9]+)?)\b",
         r"Direct\s+Plan\s*:\s*(?:\*\s*)?([0-9]+(?:\.[0-9]+)?)\s*%\*?",
         r"Base\s+Expense\s+Ratio[\s\S]{0,220}?Direct(?:\s+Plan)?\s*[:\-]\s*([0-9]+(?:\.[0-9]+)?)\s*%",
         r"Base\s+Expense\s+Ratio[\s\S]{0,220}?Direct\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*%",
@@ -344,6 +767,10 @@ def _extract_expense_ratio(chunk: str) -> float | None:
         r"Expense\s+Ratio[\s\S]{0,200}?Direct[\sA-Za-z()\/-]{0,40}[:\-]?\s*([0-9]+(?:\.[0-9]+)?)\s*%",
         r"TER[\s\S]{0,160}?Direct(?:\s+Plan)?\s*[:\-]?\s*([0-9]+(?:\.[0-9]+)?)\s*%",
         r"Direct(?:\s+Plan)?[\s\S]{0,50}?Expense\s+Ratio[\s:=-]*([0-9]+(?:\.[0-9]+)?)\s*%",
+        r"Base\s+Expense\s+Ratio\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*%",
+        r"Total\s+Expense\s+Ratio(?:\s*\*+)?\s*[:\-]?\s*\n+\s*([0-9]+(?:\.[0-9]+)?)\s*%",
+        r"Month\s+End\s+Expense\s+Ratio[\s\S]{0,500}?\bDirect\s*\n+\s*([0-9]+(?:\.[0-9]+)?)\s*%",
+        r"Month\s+End\s+Expense\s+Ratio(?:\s*\*+)?\s*\n+\s*([0-9]+(?:\.[0-9]+)?)\s*%",
     )
     for pattern in patterns:
         match = re.search(pattern, chunk, flags=re.IGNORECASE)
@@ -494,6 +921,7 @@ def _clean_line(value: str) -> str:
 
 def _extract_benchmark(chunk: str) -> str | None:
     patterns = (
+        r"Riskometer\s*\(\s*([^) \n][^)\n]{2,90})\s*\)",
         r"AMFI\s+Tier\s+I\s+Benchmark\s+Index\s+([^\n]{3,90})",
         r"AMFI\s+Tier\s+I\s+Benchmark\s+Index\s*\n\s*([^\n]{3,90})",
         r"(?:Tier\s*I|Tier\s*1)\s+Benchmark(?:\s+Index)?\s*[:\-]\s*([^\n]{3,100})",
@@ -523,9 +951,8 @@ def _extract_benchmark(chunk: str) -> str | None:
 
 def _extract_fund_manager(chunk: str) -> str | None:
     block_patterns = (
-        r"Name\s+of\s+the\s+Fund\s+Managers?\s*[\s:]*([\s\S]{0,700})",
-        r"Fund\s+Managers?\s*:\s*([\s\S]{0,700})",
-        r"FUND MANAGER\s*[\s:]*([\s\S]{0,700})",
+        r"(?im)^Name\s+of\s+the\s+Fund\s+Managers?\s*[\s:]*([\s\S]{0,2200})",
+        r"(?im)^Fund\s+Manager(?:\(s\)|s)?\**\s*:?\s*([\s\S]{0,2200})",
     )
     for pattern in block_patterns:
         match = re.search(pattern, chunk, flags=re.IGNORECASE)
@@ -535,16 +962,56 @@ def _extract_fund_manager(chunk: str) -> str | None:
         names = _extract_manager_names(body)
         if names:
             return "; ".join(names)
+    managed_by = re.search(
+        r"(?im)^Fund[ \t]+managed[ \t]+by[ \t]+((?:(?:Mr|Ms|Mrs)\.?[ \t]+)?"
+        r"[A-Z][A-Za-z.'-]+(?:[ \t]+[A-Z][A-Za-z.'-]+){1,3})"
+        r"(?=[ \t]*(?:$|\())",
+        chunk,
+    )
+    if managed_by:
+        return " ".join(managed_by.group(1).split())
     return None
 
 
 def _extract_manager_names(text: str) -> list[str]:
+    normalized_text = re.sub(
+        r"\b(Mr|Ms|Mrs)\.?\s*(?:\n+\s*-\s*)?\n+\s*",
+        r"\1. ",
+        text or "",
+    )
     names: list[str] = []
-    for match in MANAGER_NAME_PATTERN.finditer(text or ""):
-        name = " ".join(match.group(0).split())
+    for match in MANAGER_NAME_PATTERN.finditer(normalized_text):
+        name = _clean_manager_name(match.group(0))
+        if name and name not in names:
+            names.append(name)
+    untitled_pattern = re.compile(
+        r"\b([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,3})"
+        r"(?=\s+Total\s+work\s+experience\b)"
+    )
+    for match in untitled_pattern.finditer(normalized_text):
+        name = " ".join(match.group(1).split())
+        if name not in names:
+            names.append(name)
+    managing_pattern = re.compile(
+        r"\b([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,3})"
+        r"(?=\s+(?:\([^)]*Fund\s+Manager[^)]*\)\s+)?"
+        r"\((?i:Managing\s+(?:this\s+fund\s+)?Since)\b)",
+    )
+    for match in managing_pattern.finditer(normalized_text):
+        name = " ".join(match.group(1).split())
         if name not in names:
             names.append(name)
     return names
+
+
+def _clean_manager_name(value: str) -> str:
+    name = " ".join(str(value or "").split())
+    name = re.split(
+        r"(?i)\s+(?:has|is|was|managing|overall|total|years?|since|w\.?e\.?f\.?)\b",
+        name,
+        maxsplit=1,
+    )[0]
+    return re.split(r"\s+-\s+|\s*\(", name, maxsplit=1)[0].strip(" ,;:-")
 
 
 def _parse_number(raw: str) -> float | None:
@@ -575,6 +1042,10 @@ def _is_plausible_benchmark(value: str) -> bool:
         "riskometer",
         "performance of the scheme",
         "the risk of",
+        "overweight/underweight",
+        "fund size",
+        "aum (rs",
+        "nav (rs",
         "notes",
     )
     lowered = clean.lower()

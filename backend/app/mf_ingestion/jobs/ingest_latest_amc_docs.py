@@ -25,7 +25,7 @@ DOC_TYPES = ("factsheet", "portfolio_disclosure")
 def _is_nonfatal_skip(item: dict[str, object]) -> bool:
     status = str(item.get("status") or "").strip().lower()
     reason = str(item.get("reason") or "").strip().lower()
-    return status == "skipped" and reason in {"duplicate_checksum"}
+    return status == "skipped" and reason in {"duplicate_checksum", "not_modified"}
 
 
 def _has_document_errors(result: dict[str, object]) -> bool:
@@ -47,6 +47,7 @@ def main() -> int:
     parser.add_argument("--document-type", choices=DOC_TYPES)
     parser.add_argument("--all-document-types", action="store_true")
     parser.add_argument("--max-documents", type=int, default=1)
+    parser.add_argument("--expected-month", help="Expected report month in YYYY-MM form.")
     parser.add_argument(
         "--allow-disabled-source",
         action="store_true",
@@ -69,6 +70,7 @@ def main() -> int:
             document_type=document_type,
             max_documents=args.max_documents,
             allow_disabled_source=args.allow_disabled_source,
+            expected_report_month=args.expected_month,
         )
         results[document_type] = result
         if not args.strict:

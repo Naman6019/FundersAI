@@ -14,6 +14,7 @@ from app.mf_ingestion.agents.discovery_agent import (
     build_discovery_agent,
 )
 from app.mf_ingestion.agents.supervisor import AMCDiscoverySupervisor
+from app.mf_ingestion.agents.validation import validate_factsheet_content_month
 from app.mf_ingestion.downloaders.base_downloader import DiscoveredDocument, DownloadedDocument
 from app.mf_ingestion.sources.registry import get_source
 
@@ -165,6 +166,52 @@ def test_agent_rejects_unknown_or_stale_month_when_expected_month_is_supplied() 
     assert all(document.readiness == "needs_review" for document in result.documents)
     assert any("report_month_unknown" in event.detail for event in result.trace)
     assert any("report_month_before_expected" in event.detail for event in result.trace)
+
+
+def test_discovery_content_month_gate_rejects_mislabeled_factsheet() -> None:
+    text = "\n".join(
+        [
+            "Fund Details as on May 31 2026",
+            "Closing AUM as on May 31 2026",
+            "Month End AUM as on May 31 2026",
+        ]
+    )
+
+    assert validate_factsheet_content_month(
+        text,
+        expected_report_month=date(2026, 6, 1),
+    ) == ["factsheet_content_report_month_mismatch:2026-05-01!=2026-06-01"]
+
+
+def test_discovery_uses_confirmed_content_month_for_next_month_publication(monkeypatch) -> None:
+    official = _discovered(
+        "aditya_birla",
+        "factsheet",
+        (
+            "https://mutualfund.adityabirlacapital.com/-/media/bsl/files/resources/"
+            "factsheets/2026/absl-factsheet_july-2026.pdf"
+        ),
+        report_month=date(2026, 7, 1),
+    )
+    agent = AGENT_CLASSES["aditya_birla"](
+        source=get_source("aditya_birla"),
+        downloader=_FakeDownloader(documents={"factsheet": [official]}),
+    )
+    monkeypatch.setattr(
+        "app.mf_ingestion.agents.discovery_agent.inspect_parser_smoke",
+        lambda *_args, **_kwargs: ([], date(2026, 6, 1)),
+    )
+
+    result = agent.run(
+        document_types=("factsheet",),
+        expected_month=date(2026, 6, 1),
+    )
+
+    assert result.status == "completed"
+    assert result.documents[0].readiness == "promotable"
+    assert result.documents[0].report_month == date(2026, 6, 1)
+    assert result.documents[0].month_confirmation == "content_confirmed"
+    assert not result.documents[0].warnings
 
 
 @pytest.mark.parametrize(

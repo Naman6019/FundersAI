@@ -8,7 +8,7 @@ on:
       amcs:
         description: 'Enabled AMCs to index'
         required: false
-        default: 'axis,hdfc,sbi,icici,ppfas,nippon'
+        default: ''
       limit:
         description: 'Maximum new parsed PDFs to index'
         required: false
@@ -81,7 +81,7 @@ jobs:
           limit="${{ inputs.limit }}"
           force="${{ inputs.force }}"
           require_embeddings="${{ inputs.require_embeddings }}"
-          amcs="${amcs:-axis,hdfc,sbi,icici,ppfas,nippon}"
+          amcs="${amcs:-$(python -c "from app.mf_ingestion.sources.registry import capability_keys; print(','.join(capability_keys('runtime_enabled')))")}"
           limit="${limit:-25}"
           force="${force:-false}"
           require_embeddings="${require_embeddings:-true}"

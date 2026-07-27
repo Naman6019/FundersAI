@@ -6,9 +6,9 @@ from typing import Callable
 from app.mf_ingestion.agents.contracts import AgentTraceEvent, DiscoveryAgentResult, ValidatedDiscovery
 from app.mf_ingestion.agents.validation import (
     content_sha256,
+    inspect_parser_smoke,
     validate_candidate,
     validate_download,
-    validate_parser_smoke,
 )
 from app.mf_ingestion.config import IngestionConfig, get_config
 from app.mf_ingestion.downloaders.amc_downloader import AMCDownloader
@@ -153,12 +153,15 @@ class AMCLinkDiscoveryAgent:
                         )
                     )
 
-            candidates = _dedupe_candidates([*manifest_documents, *dynamic_documents, *last_known_good_documents])
+            candidates = _dedupe_candidates(
+                [*manifest_documents, *dynamic_documents, *last_known_good_documents],
+                expected_month=expected_month,
+            )
             if not candidates and self.llm_recovery_loader and actions_used < self.max_actions:
                 actions_used += 1
                 try:
                     recovered = self.llm_recovery_loader(self.source, document_type)
-                    candidates = _dedupe_candidates(recovered)
+                    candidates = _dedupe_candidates(recovered, expected_month=expected_month)
                     trace.append(
                         AgentTraceEvent(
                             step="recover",
@@ -226,6 +229,8 @@ class AMCLinkDiscoveryAgent:
                 parser_smoke_status = "not_requested"
                 content_status = "not_requested"
                 checksum = None
+                confirmed_report_month = candidate.report_month
+                month_confirmation = "confirmed" if candidate.report_month else "unconfirmed"
                 if probe_downloads:
                     if actions_used >= self.max_actions:
                         trace.append(
@@ -287,7 +292,18 @@ class AMCLinkDiscoveryAgent:
                     content_status = "passed"
                     readiness = "content_validated"
                     checksum = content_sha256(downloaded)
-                    parser_errors = validate_parser_smoke(downloaded)
+                    parser_errors, content_report_month = inspect_parser_smoke(
+                        downloaded,
+                        expected_report_month=expected_month,
+                    )
+                    if content_report_month is not None:
+                        confirmed_report_month = content_report_month
+                        month_confirmation = "content_confirmed"
+                        warnings = [
+                            warning
+                            for warning in warnings
+                            if not warning.startswith("report_month_")
+                        ]
                     if parser_errors:
                         warnings.extend(parser_errors)
                         parser_smoke_status = "failed"
@@ -320,12 +336,12 @@ class AMCLinkDiscoveryAgent:
                         source_url=candidate.url,
                         discovery_page_url=candidate.discovery_page_url,
                         expected_file_type=candidate.file_ext,
-                        report_month=candidate.report_month,
+                        report_month=confirmed_report_month,
                         priority_score=int(candidate.priority_score),
                         warnings=tuple(warnings),
                         probe_status=probe_status,
                         readiness=readiness,
-                        month_confirmation="confirmed" if candidate.report_month else "unconfirmed",
+                        month_confirmation=month_confirmation,
                         content_sha256=checksum,
                         content_status=content_status,
                         parser_smoke_status=parser_smoke_status,
@@ -426,6 +442,26 @@ class DSPLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
     expected_adapter_key = "dsp"
 
 
+class MotilalLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "motilal"
+
+
+PRODUCTION_TARGET_AMC_AGENT_KEYS = (
+    "sbi",
+    "mirae",
+    "ppfas",
+    "icici",
+    "hdfc",
+    "nippon",
+    "axis",
+    "motilal",
+    "kotak",
+    "aditya_birla",
+    "uti",
+    "dsp",
+)
+
+# Compatibility roster retained for callers and reports that still mean ten AMCs.
 TOP_10_AMC_AGENT_KEYS = (
     "sbi",
     "mirae",
@@ -447,6 +483,7 @@ AGENT_CLASSES: dict[str, type[AMCLinkDiscoveryAgent]] = {
     "icici": ICICILinkDiscoveryAgent,
     "kotak": KotakLinkDiscoveryAgent,
     "mirae": MiraeLinkDiscoveryAgent,
+    "motilal": MotilalLinkDiscoveryAgent,
     "nippon": NipponLinkDiscoveryAgent,
     "ppfas": PPFASLinkDiscoveryAgent,
     "sbi": SBILinkDiscoveryAgent,
@@ -486,7 +523,11 @@ def build_discovery_agent(
     )
 
 
-def _dedupe_candidates(documents: list[DiscoveredDocument]) -> list[DiscoveredDocument]:
+def _dedupe_candidates(
+    documents: list[DiscoveredDocument],
+    *,
+    expected_month: date | None = None,
+) -> list[DiscoveredDocument]:
     best_by_url: dict[str, DiscoveredDocument] = {}
     for document in documents:
         key = str(document.url or "").strip().lower()
@@ -495,4 +536,13 @@ def _dedupe_candidates(documents: list[DiscoveredDocument]) -> list[DiscoveredDo
         existing = best_by_url.get(key)
         if existing is None or document.priority_score > existing.priority_score:
             best_by_url[key] = document
-    return sorted(best_by_url.values(), key=lambda item: item.priority_score, reverse=True)
+    return sorted(
+        best_by_url.values(),
+        key=lambda item: (
+            int(bool(expected_month and item.report_month == expected_month)),
+            int(item.report_month is not None),
+            item.report_month.toordinal() if item.report_month else 0,
+            item.priority_score,
+        ),
+        reverse=True,
+    )

@@ -147,8 +147,7 @@ def test_nippon_discovery_reads_html_and_portfolio_links(monkeypatch):
 
     assert portfolio_docs[0].file_ext == ".xls"
     assert portfolio_docs[0].report_month == date(2026, 5, 1)
-    assert factsheet_docs[0].file_ext == ".html"
-    assert "Small-Cap.html" in factsheet_docs[0].url
+    assert factsheet_docs == []
 
 
 def test_nippon_manual_urls_work_when_listing_fetch_fails(monkeypatch):

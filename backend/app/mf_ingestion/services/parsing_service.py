@@ -24,14 +24,19 @@ from app.mf_ingestion.parsers.adapters.sbi_adapter import SBIAdapter
 from app.mf_ingestion.parsers.adapters.axis_adapter import AxisAdapter
 from app.mf_ingestion.parsers.adapters.motilal_adapter import MotilalAdapter
 from app.mf_ingestion.parsers.adapters.nippon_adapter import NipponAdapter
+from app.mf_ingestion.parsers.adapters.uti_adapter import UTIAdapter
+from app.mf_ingestion.parsers.adapters.dsp_adapter import DSPAdapter
+from app.mf_ingestion.parsers.adapters.kotak_adapter import KotakAdapter
+from app.mf_ingestion.parsers.adapters.aditya_birla_adapter import AdityaBirlaAdapter
 from app.mf_ingestion.parsers.base_parser import ParseContext
-from app.mf_ingestion.parsers.factsheet_parser import FactsheetParser
+from app.mf_ingestion.parsers.factsheet_parser import FactsheetParser, filter_factsheet_records_for_amc
 from app.mf_ingestion.parsers.holdings_parser import HoldingsParser
 from app.mf_ingestion.config import get_config
 from app.mf_ingestion.storage.r2_store import R2Store, build_safe_key
 from app.repositories.stock_repository import StockRepository
 from app.mf_ingestion.services.document_classifier import DocumentClassification, classify_raw_document
 from app.mf_ingestion.services.review_service import ReviewService
+from app.mf_ingestion.sources.registry import get_source_by_code
 from app.mf_ingestion.validators.holdings_validator import validate_holdings
 
 logger = logging.getLogger(__name__)
@@ -66,6 +71,10 @@ class ParsingService:
             "axis": AxisAdapter(),
             "motilal": MotilalAdapter(),
             "nippon": NipponAdapter(),
+            "uti": UTIAdapter(),
+            "dsp": DSPAdapter(),
+            "kotak": KotakAdapter(),
+            "aditya_birla": AdityaBirlaAdapter(),
         }
         self.llm_extractor = StrictJSONLLMExtractor(
             enabled=self.config.llm_extractor_enabled,
@@ -140,6 +149,25 @@ class ParsingService:
                 {"source_document_id": document_id, "status": "skipped", "reason": issue},
                 classification,
             )
+        try:
+            source = get_source_by_code(amc_code)
+        except ValueError:
+            source = None
+        parser_enabled = bool(
+            source
+            and (
+                source.factsheet_parser_enabled
+                if document_type in FACTSHEET_SUPPORTED_DOCUMENT_TYPES
+                else source.portfolio_parser_enabled
+            )
+        )
+        if not parser_enabled:
+            issue = f"parser_disabled:{amc_code}:{document_type}"
+            self._mark_document(document_id, "skipped_not_supported", [issue])
+            return _attach_extraction_metadata(
+                {"source_document_id": document_id, "status": "skipped", "reason": issue},
+                classification,
+            )
 
         if not bypass_official_coverage:
             api_coverage_issue = self._api_coverage_issue(document)
@@ -167,6 +195,19 @@ class ParsingService:
             )
 
         try:
+            if document_type in FACTSHEET_SUPPORTED_DOCUMENT_TYPES:
+                content_month_issue = self._factsheet_content_month_issue(document, resolved_path)
+                if content_month_issue:
+                    self._mark_document(document_id, "needs_review", [content_month_issue])
+                    return _attach_extraction_metadata(
+                        {
+                            "source_document_id": document_id,
+                            "status": "needs_review",
+                            "reason": content_month_issue,
+                        },
+                        classification,
+                    )
+
             if self.config.extractor_mode == "llm_then_deterministic":
                 llm_primary_result = self._try_llm_primary(document=document, file_path=resolved_path)
                 if llm_primary_result:
@@ -174,8 +215,7 @@ class ParsingService:
 
             if document_type in FACTSHEET_SUPPORTED_DOCUMENT_TYPES:
                 factsheet_result = self._parse_factsheet_document(document, resolved_path, target_scheme_name=target_scheme_name)
-                # HDFC and Axis combined factsheets also contain portfolio tables.
-                if amc_code.lower() in {"hdfc", "axis"}:
+                if source and source.factsheet_contains_holdings:
                     adapter = self.adapters.get(amc_code.lower())
                     if adapter:
                         holdings_result = self._parse_holdings_document(document, adapter, resolved_path, target_scheme_name=target_scheme_name)
@@ -199,6 +239,30 @@ class ParsingService:
                     Path(temp_downloaded).unlink(missing_ok=True)
                 except Exception:
                     logger.warning("event=temp_file_cleanup_failed path=%s", temp_downloaded)
+
+    def _factsheet_content_month_issue(
+        self,
+        document: dict[str, Any],
+        file_path: str,
+    ) -> str | None:
+        expected = _to_date_or_none(document.get("report_month"))
+        if not expected:
+            return None
+        try:
+            observed = self.factsheet_parser.detect_report_month(file_path)
+        except Exception as exc:
+            logger.info(
+                "event=factsheet_content_month_detection_unavailable source_document_id=%s reason=%s",
+                document.get("id"),
+                type(exc).__name__,
+            )
+            return None
+        if not observed or observed == expected:
+            return None
+        return (
+            "factsheet_content_report_month_mismatch:"
+            f"{observed.isoformat()}!={expected.isoformat()}"
+        )
 
     def _r2_required_storage_issue(self, document: dict[str, Any]) -> str | None:
         if not self.config.require_r2_for_raw_storage:
@@ -234,7 +298,7 @@ class ParsingService:
 
         parser = HoldingsParser(adapter)
         try:
-            parsed_documents = parser.parse_many(
+            parse_batch = parser.parse_batch(
                 file_path,
                 ParseContext(
                     source_document_id=document_id,
@@ -242,12 +306,33 @@ class ParsingService:
                     report_month=_to_date_or_none(document.get("report_month")),
                 ),
             )
+            parsed_documents = parse_batch.records
         except Exception as exc:
             logger.exception("event=parse_failed source_document_id=%s reason=%s", document_id, exc)
             self._mark_document(document_id, "failed", [f"parse_exception:{type(exc).__name__}"])
             return {"source_document_id": document_id, "status": "failed", "reason": "parse_exception"}
 
+        parse_diagnostics = [diagnostic.to_dict() for diagnostic in parse_batch.diagnostics]
         if not parsed_documents:
+            if parse_batch.failed_sources > 0:
+                issue = "holdings_source_parse_failed"
+                self._upload_parse_debug_snapshot(
+                    document=document,
+                    artifact="holdings_parse_failure",
+                    payload={
+                        "reason": issue,
+                        "diagnostics": parse_diagnostics,
+                        "failed_sources": parse_batch.failed_sources,
+                        "empty_sources": parse_batch.empty_sources,
+                    },
+                )
+                self._mark_document(document_id, "failed", [issue])
+                return {
+                    "source_document_id": document_id,
+                    "status": "failed",
+                    "reason": issue,
+                    "diagnostics": parse_diagnostics,
+                }
             issue = "holdings_not_found_in_document"
             llm_result = self._try_llm_fallback(document=document, file_path=file_path, issues=[issue])
             if llm_result:
@@ -261,8 +346,8 @@ class ParsingService:
             return {"source_document_id": document_id, "status": "needs_review", "reason": issue}
 
         results: list[dict[str, Any]] = []
-        review_needed_overall = False
-        merged_issues: list[str] = []
+        review_needed_overall = parse_batch.has_failures
+        merged_issues: list[str] = ["partial_source_parse_failure"] if parse_batch.has_failures else []
         inserted_total = 0
         candidates = self._load_scheme_candidates(amc_code)
 
@@ -287,6 +372,10 @@ class ParsingService:
             )
             final_confidence = min(parsed.confidence_score, scheme_match.confidence)
             scheme_id = self._upsert_scheme(amc_code, scheme_match.canonical_name, scheme_match.confidence)
+            mapped_scheme_code, mapped_family_id, mapping_confidence, mapping_status = self._resolve_staged_mapping(
+                amc_code,
+                parsed.scheme_name,
+            )
 
             inserted_count = 0
             should_insert_holdings = validation.validation_status != VALIDATION_STATUS_INVALID
@@ -311,6 +400,11 @@ class ParsingService:
                             "parser_version": document.get("parser_version"),
                             "confidence_score": float(final_confidence),
                             "validation_status": validation.validation_status,
+                            "raw_scheme_name": parsed.scheme_name,
+                            "mapped_scheme_code": mapped_scheme_code,
+                            "mapped_family_id": mapped_family_id,
+                            "mapping_confidence": mapping_confidence,
+                            "mapping_status": mapping_status,
                         }
                     )
                 if rows:
@@ -338,7 +432,10 @@ class ParsingService:
                     on_conflict="scheme_id,report_month,metric_name,source_document_id",
                 ).execute()
 
-            review_needed = validation.validation_status in {VALIDATION_STATUS_REVIEW, VALIDATION_STATUS_INVALID}
+            review_needed = (
+                validation.validation_status in {VALIDATION_STATUS_REVIEW, VALIDATION_STATUS_INVALID}
+                or parse_batch.has_failures
+            )
             if review_needed:
                 self.review_service.enqueue_document_review(
                     source_document_id=document_id,
@@ -350,18 +447,6 @@ class ParsingService:
                     parser_version=str(document.get("parser_version") or ""),
                     sample_rows=parsed.holdings[:5],
                 )
-            else:
-                if parsed.report_month:
-                    self._sync_amc_derived_views(
-                        amc_code=amc_code,
-                        scheme_name=scheme_match.canonical_name,
-                        report_month=parsed.report_month,
-                        source_document_id=document_id,
-                        source_url=str(document.get("source_url") or ""),
-                        parser_version=str(document.get("parser_version") or ""),
-                        holdings=parsed.holdings,
-                    )
-
             review_needed_overall = review_needed_overall or review_needed
             merged_issues.extend(validation.issues)
             inserted_total += inserted_count
@@ -391,6 +476,10 @@ class ParsingService:
                     "parsed_schemes": len(results),
                     "inserted_holdings": inserted_total,
                     "validation_issues": dedup_issues,
+                    "diagnostics": parse_diagnostics,
+                    "successful_sources": parse_batch.successful_sources,
+                    "empty_sources": parse_batch.empty_sources,
+                    "failed_sources": parse_batch.failed_sources,
                     "schemes": results,
                 },
             )
@@ -406,6 +495,7 @@ class ParsingService:
                 "confidence_score": result["confidence_score"],
                 "inserted_holdings": result["inserted_holdings"],
                 "validation_issues": result["validation_issues"],
+                "diagnostics": parse_diagnostics,
             }
         return {
             "source_document_id": document_id,
@@ -414,6 +504,7 @@ class ParsingService:
             "parsed_schemes": len(results),
             "inserted_holdings": inserted_total,
             "validation_issues": dedup_issues,
+            "diagnostics": parse_diagnostics,
         }
 
     def _parse_factsheet_document(self, document: dict[str, Any], file_path: str, target_scheme_name: str | None = None) -> dict[str, Any]:
@@ -426,7 +517,10 @@ class ParsingService:
             report_month=report_month,
         )
         try:
-            records = self.factsheet_parser.parse(file_path, parse_context)
+            records = filter_factsheet_records_for_amc(
+                self.factsheet_parser.parse(file_path, parse_context),
+                amc_code,
+            )
         except Exception as exc:
             logger.exception("event=factsheet_parse_failed source_document_id=%s reason=%s", document_id, exc)
             self._mark_document(document_id, "failed", [f"factsheet_parse_exception:{type(exc).__name__}"])
@@ -448,7 +542,7 @@ class ParsingService:
                 if temp_match.confidence < 80.0:
                     continue
                     
-            matched = self._upsert_amc_core_fields(
+            matched = self._stage_amc_core_fields(
                 amc_code=amc_code,
                 scheme_name=record.scheme_name,
                 report_month=record.report_month or report_month,
@@ -569,7 +663,7 @@ class ParsingService:
                 rejected.append((record, issues))
                 continue
 
-            written = self._upsert_amc_core_fields(
+            written = self._stage_amc_core_fields(
                 amc_code=str(document.get("amc_code") or ""),
                 scheme_name=record.scheme_name,
                 report_month=_to_date_or_none(record.report_month),
@@ -818,64 +912,12 @@ class ParsingService:
             except Exception:
                 logger.warning("event=review_queue_cleanup_failed source_document_id=%s status=%s", source_document_id, status)
 
-    def _sync_amc_derived_views(
-        self,
-        amc_code: str,
-        scheme_name: str,
-        report_month: date,
-        source_document_id: str,
-        source_url: str,
-        parser_version: str,
-        holdings: list[dict[str, Any]],
-    ) -> None:
-        scheme_code = self._resolve_scheme_code_for_scheme(scheme_name)
-        if not scheme_code:
-            logger.info(
-                "event=amc_derived_sync_skipped reason=scheme_code_not_found scheme_name=%s amc_code=%s",
-                scheme_name,
-                amc_code,
-            )
-            return
-
-        family_id = self._resolve_family_id_for_scheme(scheme_code)
-        if not family_id:
-            logger.warning(
-                "event=amc_family_mapping_missing amc_code=%s scheme_code=%s scheme_name=%s source_document_id=%s",
-                amc_code,
-                scheme_code,
-                scheme_name,
-                source_document_id,
-            )
-        self._upsert_mutual_fund_holdings(
-            scheme_code,
-            report_month,
-            holdings,
-            source_document_id,
-            source_url,
-            parser_version,
-            family_id,
-        )
-        self._upsert_mutual_fund_sectors(
-            scheme_code,
-            holdings,
-            source_document_id,
-            source_url,
-            report_month,
-            family_id,
-        )
-        self._upsert_mutual_fund_core_trace(
-            scheme_code=scheme_code,
-            scheme_name=scheme_name,
-            source_document_id=source_document_id,
-            source_url=source_url,
-            report_month=report_month,
-        )
-
     def _resolve_scheme_code_for_scheme(self, scheme_name: str) -> str | None:
+        lookup_name = _scheme_name_for_matching(scheme_name)
         candidates: list[dict[str, Any]] = []
         patterns = [
-            _build_ilike_pattern(scheme_name),
-            _build_relaxed_ilike_pattern(scheme_name),
+            _build_ilike_pattern(lookup_name),
+            _build_relaxed_ilike_pattern(lookup_name),
         ]
         seen_patterns = {pattern for pattern in patterns if pattern and pattern != "%"}
         if not seen_patterns:
@@ -899,164 +941,13 @@ class ParsingService:
         if not candidates:
             return None
 
-        best = _select_best_scheme_candidate(scheme_name, candidates)
+        best = _select_best_scheme_candidate(lookup_name, candidates)
         if not best:
             return None
         code = str(best.get("scheme_code") or "").strip()
         return code or None
 
-    def _upsert_mutual_fund_holdings(
-        self,
-        scheme_code: str,
-        report_month: date,
-        holdings: list[dict[str, Any]],
-        source_document_id: str,
-        source_url: str,
-        parser_version: str,
-        family_id: str | None,
-    ) -> None:
-        if not holdings:
-            return
-        if not str(scheme_code).isdigit():
-            logger.info("event=amc_holdings_sync_skipped reason=non_numeric_scheme_code scheme_code=%s", scheme_code)
-            return
-
-        payload: list[dict[str, Any]] = []
-        as_of_date = report_month.isoformat()
-        for row in holdings:
-            security_name = str(row.get("instrument_name") or "").strip()
-            if not security_name:
-                continue
-            payload.append(
-                {
-                    "scheme_code": int(scheme_code),
-                    "as_of_date": as_of_date,
-                    "family_id": family_id,
-                    "security_name": security_name,
-                    "isin": row.get("isin"),
-                    "sector": row.get("sector"),
-                    "weight_pct": row.get("percent_aum"),
-                    "source": AMC_DISCLOSURE_SOURCE,
-                    "provider_payload": {
-                        "source_document_id": source_document_id,
-                        "source_url": source_url,
-                        "parser_version": parser_version,
-                    },
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                }
-            )
-        if not payload:
-            return
-        self._archive_and_trim_holdings(
-            scheme_code=int(scheme_code),
-            family_id=family_id,
-            current_report_month=as_of_date,
-            replace_current_month=any(not row.get("isin") for row in holdings),
-        )
-        supabase.table("mutual_fund_holdings").upsert(
-            payload,
-            on_conflict="scheme_code,as_of_date,security_name,isin",
-        ).execute()
-
-    def _upsert_mutual_fund_sectors(
-        self,
-        scheme_code: str,
-        holdings: list[dict[str, Any]],
-        source_document_id: str,
-        source_url: str,
-        report_month: date,
-        family_id: str | None,
-    ) -> None:
-        sector_totals: dict[str, float] = {}
-        sector_counts: dict[str, int] = {}
-        for row in holdings:
-            sector_name = str(row.get("sector") or "").strip()
-            weight = row.get("percent_aum")
-            if not sector_name or weight in (None, ""):
-                continue
-            try:
-                weight_value = float(weight)
-            except (TypeError, ValueError):
-                continue
-            sector_totals[sector_name] = sector_totals.get(sector_name, 0.0) + weight_value
-            sector_counts[sector_name] = sector_counts.get(sector_name, 0) + 1
-
-        if not sector_totals:
-            return
-
-        rows = []
-        for sector_name, total_weight in sector_totals.items():
-            rows.append(
-                {
-                    "scheme_code": str(scheme_code),
-                    "family_id": family_id,
-                    "sector": sector_name,
-                    "weight_pct": round(total_weight, 6),
-                    "stock_count": sector_counts.get(sector_name),
-                    "source": AMC_DISCLOSURE_SOURCE,
-                    "provider_payload": {
-                        "source_document_id": source_document_id,
-                        "source_url": source_url,
-                        "report_month": report_month.isoformat(),
-                    },
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                }
-            )
-        self._archive_and_replace_sectors(
-            scheme_code=str(scheme_code),
-            family_id=family_id,
-            report_month=report_month,
-        )
-        supabase.table("mutual_fund_sectors").upsert(rows, on_conflict="scheme_code,sector").execute()
-
-    def _upsert_mutual_fund_core_trace(
-        self,
-        scheme_code: str,
-        scheme_name: str,
-        source_document_id: str,
-        source_url: str,
-        report_month: date,
-    ) -> None:
-        existing: dict[str, Any] = {}
-        try:
-            response = (
-                supabase.table("mutual_fund_core_snapshot")
-                .select("scheme_code,data_source,provider_payload,scheme_name")
-                .eq("scheme_code", str(scheme_code))
-                .limit(1)
-                .execute()
-            )
-            existing = (response.data or [{}])[0] or {}
-        except Exception:
-            logger.exception("event=core_snapshot_lookup_failed scheme_code=%s", scheme_code)
-
-        provider_payload = existing.get("provider_payload") if isinstance(existing.get("provider_payload"), dict) else {}
-        amc_trace = provider_payload.get("amc_trace") if isinstance(provider_payload.get("amc_trace"), dict) else {}
-        amc_trace["holdings"] = {
-            "source_document_id": source_document_id,
-            "source_url": source_url,
-            "report_month": report_month.isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        amc_trace["sector_allocation"] = {
-            "source_document_id": source_document_id,
-            "source_url": source_url,
-            "report_month": report_month.isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        provider_payload["amc_trace"] = amc_trace
-
-        merged_source = _merge_sources(existing.get("data_source"), AMC_DISCLOSURE_SOURCE)
-        self._upsert_core_snapshot_row(
-            {
-                "scheme_code": str(scheme_code),
-                "scheme_name": existing.get("scheme_name") or scheme_name,
-                "data_source": merged_source,
-                "provider_payload": provider_payload,
-            }
-        )
-
-    def _upsert_amc_core_fields(
+    def _stage_amc_core_fields(
         self,
         amc_code: str,
         scheme_name: str,
@@ -1073,21 +964,6 @@ class ParsingService:
         extractor_model: str | None = None,
         confidence_score: float | None = None,
     ) -> bool:
-        scheme_code = self._resolve_scheme_code_for_scheme(scheme_name)
-        if not scheme_code:
-            logger.info(
-                "event=amc_core_field_sync_skipped reason=scheme_code_not_found scheme_name=%s amc_code=%s",
-                scheme_name,
-                amc_code,
-            )
-            return False
-
-        existing = self.repository.get_mutual_fund_core_snapshot(scheme_code) or {}
-        provider_payload = existing.get("provider_payload") if isinstance(existing.get("provider_payload"), dict) else {}
-        amc_trace = provider_payload.get("amc_trace") if isinstance(provider_payload.get("amc_trace"), dict) else {}
-        updated_at = datetime.now(timezone.utc).isoformat()
-        report_month_iso = report_month.isoformat() if report_month else None
-
         field_values: dict[str, Any] = {
             "aum": aum,
             "expense_ratio": expense_ratio,
@@ -1098,55 +974,55 @@ class ParsingService:
         parsed_fields = {key: value for key, value in field_values.items() if value not in (None, "")}
         if not parsed_fields:
             return False
-        # benchmark and fund_manager should always reflect the latest AMC document.
-        # aum and expense_ratio are also refreshed every run (they change monthly).
-        # Only risk_level has its own staleness logic.
-        ALWAYS_REFRESH = {"benchmark", "fund_manager", "aum", "expense_ratio"}
-        write_fields: dict[str, Any] = {}
-        for key, value in parsed_fields.items():
-            if key == "risk_level":
-                if _should_write_risk_level(existing, report_month):
-                    write_fields[key] = value
-            elif key in ALWAYS_REFRESH:
-                write_fields[key] = value  # always overwrite with fresh AMC data
-            elif existing.get(key) in (None, ""):
-                write_fields[key] = value  # write-once for anything else
-        if not write_fields:
-            return True
+        scheme_code, family_id, mapping_confidence, mapping_status = self._resolve_staged_mapping(
+            amc_code,
+            scheme_name,
+        )
+        issues: list[str] = []
+        if mapping_status != "mapped":
+            issues.append(f"scheme_mapping_{mapping_status}")
+        if not report_month:
+            issues.append("report_month_missing")
+        try:
+            raw_document = (
+                supabase.table("mf_raw_documents")
+                .select("storage_bucket,storage_key,checksum")
+                .eq("id", source_document_id)
+                .limit(1)
+                .execute()
+            )
+            source_meta = (raw_document.data or [{}])[0] or {}
+        except Exception:
+            source_meta = {}
 
-        for field_name, value in write_fields.items():
-            amc_trace[field_name] = {
-                "source_document_id": source_document_id,
-                "source_url": source_url,
-                "report_month": report_month_iso,
-                "parser_version": parser_version,
-                "extractor_type": extractor_type,
-                "extractor_model": extractor_model,
-                "confidence_score": confidence_score,
-                "value": value,
-                "updated_at": updated_at,
-            }
-        provider_payload["amc_trace"] = amc_trace
-
-        row: dict[str, Any] = {
-            "scheme_code": str(scheme_code),
-            "scheme_name": existing.get("scheme_name") or scheme_name,
-            "data_source": _merge_sources(existing.get("data_source"), AMC_DISCLOSURE_SOURCE),
-            "provider_payload": provider_payload,
+        payload: dict[str, Any] = {
+            "source_document_id": source_document_id,
+            "amc_code": amc_code,
+            "report_month": report_month.isoformat() if report_month else None,
+            "raw_scheme_name": scheme_name,
+            "normalized_scheme_name": _normalize_scheme_text(_scheme_name_for_matching(scheme_name)),
+            "mapped_scheme_code": scheme_code,
+            "mapped_family_id": family_id,
+            "mapping_confidence": mapping_confidence,
+            "mapping_status": mapping_status,
+            "validation_issues": issues,
+            "source_url": source_url,
+            "storage_bucket": source_meta.get("storage_bucket"),
+            "storage_key": source_meta.get("storage_key"),
+            "checksum": source_meta.get("checksum"),
+            "parser_version": parser_version,
+            "extractor_type": extractor_type,
+            "extractor_model": extractor_model,
+            "extractor_confidence": confidence_score,
+            "promotion_status": "staged" if mapping_status == "mapped" and report_month else "needs_review",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            **parsed_fields,
         }
-        for field_name, value in write_fields.items():
-            row[field_name] = value
-
-        self._upsert_core_snapshot_row(row)
-        return True
-
-    def _upsert_core_snapshot_row(self, row: dict[str, Any]) -> None:
-        if self.repository and self.repository.supabase:
-            self.repository.upsert_mutual_fund_core_snapshot_rows([row])
-            return
-        payload = dict(row)
-        payload["last_updated"] = datetime.now(timezone.utc).isoformat()
-        supabase.table("mutual_fund_core_snapshot").upsert(payload, on_conflict="scheme_code").execute()
+        supabase.table("mf_factsheet_candidates").upsert(
+            payload,
+            on_conflict="source_document_id,normalized_scheme_name",
+        ).execute()
+        return mapping_status == "mapped" and bool(report_month)
 
     def _resolve_document_path(self, document: dict[str, Any]) -> tuple[str | None, str | None]:
         storage_backend = str(document.get("storage_backend") or "local").strip().lower()
@@ -1166,6 +1042,18 @@ class ParsingService:
         return None, None
 
     def _resolve_family_id_for_scheme(self, scheme_code: str) -> str | None:
+        try:
+            mapping = (
+                supabase.table("mutual_fund_family_mapping")
+                .select("family_id")
+                .eq("scheme_code", str(scheme_code))
+                .limit(1)
+                .execute()
+            )
+            if mapping.data and mapping.data[0].get("family_id"):
+                return str(mapping.data[0]["family_id"])
+        except Exception:
+            logger.exception("event=family_mapping_lookup_failed scheme_code=%s", scheme_code)
         snapshot = self.repository.get_mutual_fund_core_snapshot(scheme_code) or {}
         provider_payload = snapshot.get("provider_payload") if isinstance(snapshot.get("provider_payload"), dict) else {}
         value = provider_payload.get("family_id") or snapshot.get("family_id")
@@ -1173,92 +1061,30 @@ class ParsingService:
             return None
         return str(value)
 
-    def _archive_and_trim_holdings(
+    def _resolve_staged_mapping(
         self,
-        *,
-        scheme_code: int,
-        family_id: str | None,
-        current_report_month: str,
-        replace_current_month: bool = False,
-    ) -> None:
-        query = supabase.table("mutual_fund_holdings").select("*").eq("source", AMC_DISCLOSURE_SOURCE).eq("scheme_code", scheme_code)
-        if family_id:
-            query = query.eq("family_id", family_id)
-        rows = query.execute().data or []
-        rows_to_archive = [
-            row
-            for row in rows
-            if str(row.get("as_of_date") or "") != current_report_month
-            or (replace_current_month and str(row.get("as_of_date") or "") == current_report_month)
-        ]
-        if rows_to_archive:
-            self._archive_portfolio_rows(
-                report_month=current_report_month,
-                family_id=family_id,
-                scheme_code=str(scheme_code),
-                payload={"table": "mutual_fund_holdings", "rows": rows_to_archive},
-            )
-            dates = sorted({str(row.get("as_of_date")) for row in rows_to_archive if row.get("as_of_date")})
-            for as_of_date in dates:
-                delete_query = (
-                    supabase.table("mutual_fund_holdings")
-                    .delete()
-                    .eq("source", AMC_DISCLOSURE_SOURCE)
-                    .eq("scheme_code", scheme_code)
-                    .eq("as_of_date", as_of_date)
-                )
-                if family_id:
-                    delete_query = delete_query.eq("family_id", family_id)
-                delete_query.execute()
+        amc_code: str,
+        raw_scheme_name: str,
+    ) -> tuple[str | None, str | None, float, str]:
+        scheme_code = self._resolve_scheme_code_for_scheme(raw_scheme_name)
+        if not scheme_code:
+            return None, None, 0.0, "unmapped"
 
-    def _archive_and_replace_sectors(self, *, scheme_code: str, family_id: str | None, report_month: date) -> None:
-        query = supabase.table("mutual_fund_sectors").select("*").eq("source", AMC_DISCLOSURE_SOURCE).eq("scheme_code", scheme_code)
-        if family_id:
-            query = query.eq("family_id", family_id)
-        existing = query.execute().data or []
-        if existing:
-            self._archive_portfolio_rows(
-                report_month=report_month.isoformat(),
-                family_id=family_id,
-                scheme_code=scheme_code,
-                payload={"table": "mutual_fund_sectors", "rows": existing},
-            )
-            delete_query = (
-                supabase.table("mutual_fund_sectors")
-                .delete()
-                .eq("source", AMC_DISCLOSURE_SOURCE)
-                .eq("scheme_code", scheme_code)
-            )
-            if family_id:
-                delete_query = delete_query.eq("family_id", family_id)
-            delete_query.execute()
+        snapshot = self.repository.get_mutual_fund_core_snapshot(scheme_code) or {}
+        snapshot_name = str(snapshot.get("scheme_name") or "").strip()
+        snapshot_amc = str(snapshot.get("amc_name") or "").strip()
+        if not snapshot_name or not _snapshot_matches_amc(amc_code, snapshot_amc):
+            return scheme_code, None, 0.0, "needs_review"
 
-    def _archive_portfolio_rows(self, *, report_month: str, family_id: str | None, scheme_code: str, payload: dict[str, Any]) -> None:
-        if not self.r2_store.enabled:
-            return
-        month_segment = str(report_month)[:7] if report_month else "unknown-month"
-        owner = family_id or f"scheme-{scheme_code}"
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        key = build_safe_key(
-            "cold",
-            "portfolio",
-            owner,
-            f"report_month={month_segment}",
-            f"part-{ts}.parquet",
+        match = match_scheme_name(
+            _normalize_family_scheme_name(raw_scheme_name),
+            candidates=[_normalize_family_scheme_name(snapshot_name)],
         )
-        data = payload.get("rows") if isinstance(payload.get("rows"), list) else []
-        content, content_type = _encode_archive_payload(data)
-        self.r2_store.upload_bytes(
-            key=key,
-            content=content,
-            bucket=self.config.r2_cold_bucket,
-            content_type=content_type,
-            metadata={
-                "report_month": month_segment,
-                "table": str(payload.get("table") or ""),
-                "rows": str(len(data)),
-            },
-        )
+        mapping_confidence = float(match.confidence)
+        family_id = self._resolve_family_id_for_scheme(scheme_code)
+        if not family_id or mapping_confidence < 90.0:
+            return scheme_code, family_id, mapping_confidence, "needs_review"
+        return scheme_code, family_id, mapping_confidence, "mapped"
 
     def _upload_parse_debug_snapshot(self, *, document: dict[str, Any], artifact: str, payload: dict[str, Any]) -> None:
         if not self.r2_store.enabled:
@@ -1413,7 +1239,7 @@ def _should_write_risk_level(existing: dict[str, Any], report_month: date | None
 
 
 def _build_ilike_pattern(text: str) -> str:
-    words = [word for word in str(text or "").lower().replace(".", " ").replace(",", " ").split() if word]
+    words = [word for word in _normalize_lookup_text(text).split() if word]
     return f"%{'%'.join(words)}%" if words else "%"
 
 
@@ -1421,8 +1247,43 @@ def _normalize_scheme_text(text: str) -> str:
     return " ".join(str(text or "").lower().replace(".", " ").replace(",", " ").split())
 
 
+def _normalize_lookup_text(text: object) -> str:
+    value = str(text or "").lower().replace("&", " and ")
+    value = re.sub(r"[.,’'()/_–—-]+", " ", value)
+    return " ".join(value.split())
+
+
+def _scheme_name_for_matching(text: str) -> str:
+    value = " ".join(str(text or "").replace("\xa0", " ").split()).strip()
+    value = re.sub(r"(?i)^scheme(?:\s+name)?\s*:\s*", "", value)
+    return value.rstrip(" .")
+
+
+def _snapshot_matches_amc(
+    amc_code: str,
+    snapshot_amc_name: str,
+) -> bool:
+    normalized = _normalize_lookup_text(snapshot_amc_name)
+    aliases = {
+        "hdfc": ("hdfc",),
+        "sbi": ("sbi",),
+        "icici": ("icici",),
+        "axis": ("axis",),
+        "ppfas": ("ppfas", "parag parikh"),
+        "nippon": ("nippon",),
+        "motilal": ("motilal",),
+        "mirae": ("mirae",),
+        "uti": ("uti",),
+        "dsp": ("dsp",),
+        "kotak": ("kotak",),
+        "aditya_birla": ("aditya birla", "birla sun life"),
+        "absl": ("aditya birla", "birla sun life"),
+    }.get(str(amc_code or "").strip().lower(), ())
+    return bool(normalized and aliases and any(alias in normalized for alias in aliases))
+
+
 def _build_relaxed_ilike_pattern(text: str) -> str:
-    tokens = [token for token in _normalize_scheme_text(text).split() if token]
+    tokens = [token for token in _normalize_lookup_text(text).split() if token]
     removable = {
         "fund",
         "plan",
@@ -1440,6 +1301,7 @@ def _build_relaxed_ilike_pattern(text: str) -> str:
         "half",
         "yearly",
         "annual",
+        "and",
     }
     filtered = [token for token in tokens if token not in removable]
     base = filtered if filtered else tokens
@@ -1487,14 +1349,43 @@ def _select_best_scheme_candidate(target_name: str, candidates: list[dict[str, A
     if not unique_candidates:
         return None
 
-    direct_growth_candidates = [candidate for candidate in unique_candidates if _is_direct_growth_name(candidate.get("scheme_name"))]
-    if direct_growth_candidates:
-        return _pick_best_scheme_candidate(target_name, direct_growth_candidates)
+    target_family = _normalize_family_scheme_name(target_name)
+    scored: list[tuple[float, dict[str, Any]]] = []
+    for candidate in unique_candidates:
+        candidate_family = _normalize_family_scheme_name(candidate.get("scheme_name"))
+        confidence = match_scheme_name(target_family, candidates=[candidate_family]).confidence
+        scored.append((confidence, candidate))
+    best_confidence = max(score for score, _candidate in scored)
+    family_candidates = [
+        candidate
+        for score, candidate in scored
+        if score >= best_confidence - 0.01
+    ]
+    return _pick_best_scheme_candidate(target_name, family_candidates)
 
-    has_variant_candidates = any(_has_plan_or_option_marker(candidate.get("scheme_name")) for candidate in unique_candidates)
-    if has_variant_candidates:
-        return _pick_best_scheme_candidate(target_name, unique_candidates)
-    return _pick_best_scheme_candidate(target_name, unique_candidates)
+
+def _normalize_family_scheme_name(value: object) -> str:
+    text = _normalize_lookup_text(value)
+    text = re.sub(r"\bfund\s+of\s+funds?\b", "fof", text)
+    text = re.sub(r"\bflexi\s+cap\b", "flexicap", text)
+    text = re.sub(r"\bmid\s+cap\b", "midcap", text)
+    text = re.sub(r"\bsmall\s+cap\b", "smallcap", text)
+    text = re.sub(r"\blarge\s+cap\b", "largecap", text)
+    removable = {
+        "plan",
+        "option",
+        "direct",
+        "regular",
+        "growth",
+        "idcw",
+        "dividend",
+        "cumulative",
+        "payout",
+        "reinvestment",
+        "bonus",
+    }
+    tokens = [token for token in text.split() if token not in removable]
+    return " ".join(tokens)
 
 
 def _is_direct_growth_name(name: object) -> bool:
@@ -1713,6 +1604,11 @@ def _source_month_from_text(text: str) -> date | None:
     today = datetime.now(timezone.utc).date()
     limit_date = date(today.year, today.month, 1)
 
+    for match in re.finditer(r"\b(0?[1-9]|[12]\d|3[01])[.\-/](0?[1-9]|1[0-2])[.\-/](20\d{2})\b", text):
+        year = int(match.group(3))
+        parsed = date(year, int(match.group(2)), 1)
+        if 2000 <= year and parsed <= limit_date:
+            return parsed
     for match in re.finditer(rf"\b\d{{1,2}}[-_\s]+({name_pattern})[-_\s]+(20\d{{2}})\b", text):
         year = int(match.group(2))
         parsed = date(year, month_names[match.group(1)], 1)
@@ -1744,22 +1640,3 @@ def _source_month_from_text(text: str) -> date | None:
         if 2000 <= year and parsed <= limit_date:
             return parsed
     return None
-
-
-def _encode_archive_payload(rows: list[dict[str, Any]]) -> tuple[bytes, str]:
-    if not rows:
-        return b"", "application/octet-stream"
-    try:
-        import pandas as pd  # type: ignore
-
-        frame = pd.DataFrame(rows)
-        with tempfile.NamedTemporaryFile(prefix="mf_archive_", suffix=".parquet", delete=False) as handle:
-            temp_path = Path(handle.name)
-        try:
-            frame.to_parquet(temp_path, index=False)
-            return temp_path.read_bytes(), "application/vnd.apache.parquet"
-        finally:
-            temp_path.unlink(missing_ok=True)
-    except Exception:
-        encoded = gzip.compress("\n".join(json.dumps(row, default=str) for row in rows).encode("utf-8"))
-        return encoded, "application/gzip"

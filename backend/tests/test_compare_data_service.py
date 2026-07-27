@@ -320,7 +320,9 @@ def test_compare_service_accepts_axis_percent_nav_holdings_without_isin():
 
     comparison = result["quant_data"]["comparison"]
     axis_item = comparison["Axis Flexi Cap Fund Direct Growth"]
-    assert result["coverage_status"] == "complete"
+    assert result["coverage_status"] == "partial"
+    assert "risk_level" in axis_item["data_quality"]["missing_fields"]
+    assert "sectors" in axis_item["data_quality"]["missing_fields"]
     assert axis_item["source_summary"]["holdings_as_of_date"] == "2026-03-01"
     assert axis_item["holdings"][0]["isin"] is None
     assert result["quant_data"]["asset_type"] == "mutual_fund"
@@ -416,6 +418,59 @@ def test_compare_service_summary_skips_history_holdings_and_sector_reads():
     assert result["quant_data"]["comparison_data_level"] == "summary"
     assert result["quant_data"]["why_better"]["winner"]["entity_name"] == "HDFC Flexi Cap Fund Direct Growth"
     assert {table for table, _action in fake.calls} == {"mutual_fund_core_snapshot"}
+
+
+def test_hdfc_118989_vs_nippon_118668_production_acceptance_contract():
+    rows = [
+        {
+            "scheme_code": "118989",
+            "scheme_name": "HDFC Mid-Cap Opportunities Fund - Direct Plan - Growth",
+            "amc_name": "HDFC Mutual Fund",
+            "category": "Mid Cap",
+            "nav": 210.0,
+            "nav_date": "2026-07-24",
+            "return_3y": 19.42,
+            "volatility_1y": 16.45,
+            "max_drawdown_1y": -39.51,
+            "expense_ratio": 0.72,
+            "aum": 79474.72,
+            "benchmark": "NIFTY Midcap 150 TRI",
+            "risk_level": "Very High",
+            "fund_manager": "Official AMC manager",
+        },
+        {
+            "scheme_code": "118668",
+            "scheme_name": "Nippon India Growth Mid Cap Fund - Direct Plan - Growth Option",
+            "amc_name": "Nippon India Mutual Fund",
+            "category": "Mid Cap",
+            "nav": 330.0,
+            "nav_date": "2026-07-24",
+            "return_3y": 21.54,
+            "volatility_1y": 17.15,
+            "max_drawdown_1y": -35.32,
+            "expense_ratio": 0.81,
+            "aum": 65994.88,
+            "benchmark": "NIFTY Midcap 150 TRI",
+            "risk_level": "Very High",
+            "fund_manager": "Official AMC manager",
+        },
+    ]
+    fake = _FakeSupabase({"mutual_fund_core_snapshot": rows})
+    result = asyncio.run(
+        CompareDataService(fake).build_mutual_fund_compare_summary(
+            [rows[0]["scheme_name"], rows[1]["scheme_name"]],
+            pre_resolutions=[
+                _resolution(rows[0]["scheme_name"], "118989", "HDFC"),
+                _resolution(rows[1]["scheme_name"], "118668", "NIPPON"),
+            ],
+        )
+    )
+
+    comparison = result["quant_data"]["comparison"]
+    assert set(comparison) == {rows[0]["scheme_name"], rows[1]["scheme_name"]}
+    assert comparison[rows[0]["scheme_name"]]["data_quality"]["missing_fields"] == []
+    assert comparison[rows[1]["scheme_name"]]["data_quality"]["missing_fields"] == []
+    assert result["coverage_status"] == "complete"
 
 
 def test_compare_service_uses_precomputed_metrics_without_history_or_benchmark(monkeypatch):

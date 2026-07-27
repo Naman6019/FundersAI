@@ -99,6 +99,8 @@ stitch_downloads/
 !.github/workflows/reacquire-mf-raw-to-r2.yml
 !.github/workflows/archive-mf-nav-history.yml
 !.github/workflows/discover-mf-documents.yml
+!.github/workflows/acquire-mf-documents.yml
+!.github/workflows/promote-mf-disclosures.yml
 !.github/workflows/index-mf-research.yml
 !.github/workflows/retry-mf-nav-sync.yml
 *.log

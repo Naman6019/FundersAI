@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from app.mf_ingestion.sources.registry import capability_keys
 
 PARSER_VERSION = "mf_ingestion_v1"
 
@@ -12,18 +13,13 @@ AMC_SBI = "sbi"
 AMC_AXIS = "axis"
 AMC_MOTILAL = "motilal"
 AMC_NIPPON = "nippon"
+AMC_UTI = "uti"
+AMC_DSP = "dsp"
+AMC_KOTAK = "kotak"
+AMC_ADITYA_BIRLA = "aditya_birla"
 
 
-SUPPORTED_AMCS = [
-    AMC_PPFAS,
-    AMC_MIRAE,
-    AMC_HDFC,
-    AMC_ICICI,
-    AMC_SBI,
-    AMC_AXIS,
-    AMC_MOTILAL,
-    AMC_NIPPON,
-]
+SUPPORTED_AMCS = list(capability_keys("portfolio_parser_enabled"))
 
 EXCEL_EXTENSIONS = {".xls", ".xlsx", ".xlsm"}
 PDF_EXTENSIONS = {".pdf"}

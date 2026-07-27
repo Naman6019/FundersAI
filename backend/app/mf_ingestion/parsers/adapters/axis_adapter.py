@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import List, Optional
@@ -452,27 +453,58 @@ class AxisAdapter(BaseAMCAdapter):
         page_url = source.factsheet_page_url if document_type == "factsheet" else source.portfolio_disclosure_page_url
         if not page_url:
             return []
-        render_url = _axis_render_url(page_url, document_type)
+        reuse_factsheet = (
+            document_type == "portfolio_disclosure"
+            and source.factsheet_contains_holdings
+        )
+        render_url = _axis_render_url(
+            page_url,
+            document_type,
+            factsheet_contains_holdings=source.factsheet_contains_holdings,
+        )
 
         try:
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
                 context = browser.new_context(user_agent=self.user_agent)
                 page = context.new_page()
-                
-                page.goto(render_url, wait_until="domcontentloaded", timeout=20000)
+
+                factsheet_payload: dict = {}
+                if document_type == "factsheet" or reuse_factsheet:
+                    try:
+                        with page.expect_response(
+                            lambda response: response.url.endswith("/cms/product/factsheet")
+                            and response.status == 200,
+                            timeout=20000,
+                        ) as response_info:
+                            page.goto(render_url, wait_until="domcontentloaded", timeout=20000)
+                        factsheet_payload = response_info.value.json()
+                    except Exception:
+                        logger.info(
+                            "Axis factsheet API response was unavailable; parsing rendered cards."
+                        )
+                else:
+                    page.goto(render_url, wait_until="domcontentloaded", timeout=20000)
                 try:
                     page.locator(".download-document-card").first.wait_for(timeout=15000)
                 except Exception:
                     logger.info("Axis Playwright download-card wait timed out; parsing current DOM.")
-                
-                links = _axis_download_links_from_cards(page) if document_type == "factsheet" else []
+
+                links = _axis_factsheet_links_from_payload(factsheet_payload)
+                if not links and (document_type == "factsheet" or reuse_factsheet):
+                    links = _axis_download_links_from_cards(page)
                 html = page.content()
                 browser.close()
                 
             links.extend(_axis_download_links_from_html(html, render_url))
-                    
-            docs = classify_documents(source, document_type, links, page_url)
+
+            classification_type = "factsheet" if reuse_factsheet else document_type
+            docs = classify_documents(source, classification_type, links, page_url)
+            if reuse_factsheet:
+                docs = [
+                    replace(document, document_type="portfolio_disclosure")
+                    for document in docs
+                ]
             docs.sort(key=lambda d: d.priority_score, reverse=True)
             return docs
             
@@ -481,8 +513,13 @@ class AxisAdapter(BaseAMCAdapter):
             return []
 
 
-def _axis_render_url(page_url: str, document_type: str) -> str:
-    if document_type != "factsheet":
+def _axis_render_url(
+    page_url: str,
+    document_type: str,
+    *,
+    factsheet_contains_holdings: bool = False,
+) -> str:
+    if document_type != "factsheet" and not factsheet_contains_holdings:
         return page_url
     return urljoin(page_url, "/downloads/products")
 
@@ -520,6 +557,19 @@ def _axis_download_links_from_cards(page) -> list[dict[str, str]]:
             continue
         before = int(page.evaluate("window.__fundersAxisOpened.length"))
         action.first.click()
+        try:
+            page.wait_for_function(
+                """
+                (start) => (window.__fundersAxisOpened || [])
+                    .slice(start)
+                    .some((value) => /\\.(?:pdf|xlsx?|xlsm)(?:\\?|$)/i.test(String(value || "")))
+                """,
+                arg=before,
+                timeout=2000,
+            )
+        except Exception:
+            # The immediate slice below still captures synchronous window.open calls.
+            pass
         opened = page.evaluate(f"window.__fundersAxisOpened.slice({before})") or []
         for value in reversed(opened):
             url = str(value or "").strip()
@@ -535,6 +585,37 @@ def _axis_download_links_from_cards(page) -> list[dict[str, str]]:
                 }
             )
             break
+    return links
+
+
+def _axis_factsheet_links_from_payload(payload: object) -> list[dict[str, str]]:
+    if not isinstance(payload, dict):
+        return []
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return []
+    rows = data.get("productFactSheetData")
+    if not isinstance(rows, list):
+        return []
+
+    links: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        title = str(row.get("name") or "").strip()
+        url = str(row.get("documentUrl") or "").strip()
+        if not _axis_is_download_url(url) or url in seen:
+            continue
+        seen.add(url)
+        links.append(
+            {
+                "title": title or Path(urlsplit(url).path).name,
+                "url": url,
+                "context_text": title,
+                "file_ext": detect_file_ext(url),
+            }
+        )
     return links
 
 

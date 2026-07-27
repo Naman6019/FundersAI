@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       amcs:
-        description: 'Comma-separated AMCs (axis,hdfc,sbi,icici,ppfas,nippon)'
+        description: 'Optional comma-separated parser-enabled AMCs; blank uses the registry'
         required: false
-        default: 'axis,hdfc,sbi,icici,ppfas,nippon'
+        default: ''
       max_documents:
         description: 'Max documents per AMC per document type'
         required: false
@@ -24,7 +24,7 @@ on:
       parse_only:
         description: 'Skip live AMC ingestion and only parse pending mf_raw_documents rows'
         required: false
-        default: 'false'
+        default: 'true'
       hdfc_factsheet_urls:
         description: 'Optional exact HDFC factsheet URLs, comma-separated'
         required: false
@@ -51,6 +51,10 @@ on:
         default: ''
       strict_coverage_amcs:
         description: 'Comma-separated AMCs enforced by strict coverage gate'
+        required: false
+        default: ''
+      report_month:
+        description: 'Optional staging coverage month (YYYY-MM); blank uses the previous calendar month'
         required: false
         default: ''
       allow_hdfc_factsheet_as_portfolio:
@@ -91,13 +95,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  registry-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      amcs: ${{ steps.registry.outputs.amcs }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: registry
+        shell: bash
+        run: |
+          matrix="$(PYTHONPATH=backend python -c "import json; from app.mf_ingestion.sources.registry import capability_keys; print(json.dumps(capability_keys('portfolio_parser_enabled')))")"
+          echo "amcs=$matrix" >> "$GITHUB_OUTPUT"
+
   sync-matrix:
+    needs: registry-matrix
     runs-on: ubuntu-latest
     timeout-minutes: 330
     strategy:
       fail-fast: false
       matrix:
-        amc: [axis, hdfc, sbi, icici, ppfas, nippon]
+        amc: ${{ fromJson(needs.registry-matrix.outputs.amcs) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -231,11 +248,14 @@ jobs:
           export MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO="${MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO:-$MF_ALLOW_FACTSHEET_AS_PORTFOLIO}"
 
           EVENT_NAME="${GITHUB_EVENT_NAME:-workflow_dispatch}"
-          AMCS="${DISPATCH_AMCS:-axis,hdfc,sbi,icici,ppfas,nippon,motilal}"
+          AMCS="${DISPATCH_AMCS:-$(PYTHONPATH=backend python -c "from app.mf_ingestion.sources.registry import capability_keys; print(','.join(capability_keys('portfolio_parser_enabled')))")}"
           GLOBAL_MAX_DOCS="${DISPATCH_MAX_DOCS:-5}"
           GLOBAL_PARSE_LIMIT="${DISPATCH_PARSE_LIMIT:-800}"
           PARSE_ROUNDS="${DISPATCH_PARSE_ROUNDS:-3}"
-          PARSE_ONLY="${DISPATCH_PARSE_ONLY:-false}"
+          if [ "${DISPATCH_PARSE_ONLY:-true}" != "true" ]; then
+            echo "Acquisition is separated. Use Acquire MF Documents, then rerun this parser workflow."
+          fi
+          PARSE_ONLY="true"
 
           # Check if the matrix amc is in the AMCS list
           # We add commas around both sides to ensure exact matching (e.g. ,axis, against ,axis,hdfc,)
@@ -271,7 +291,7 @@ jobs:
           fi
 
           echo "Processing AMC=$amc max_docs=$max_docs parse_limit=$parse_limit parse_rounds=$PARSE_ROUNDS parse_only=$PARSE_ONLY edge_acquired=$EDGE_ACQUIRED event=$EVENT_NAME"
-          if [ "$EDGE_ACQUIRED" = "true" ]; then
+          if [ "$EDGE_ACQUIRED" = "true" ] && [ "$PARSE_ONLY" != "true" ]; then
             echo "Skipping GitHub runner link preflight for $amc; Supabase Edge acquisition validates and downloads official links."
           else
             python backend/scripts/preflight_mf_document_links.py \
@@ -557,12 +577,22 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          MF_DISCLOSURE_COVERAGE_AMCS: axis,hdfc,sbi,icici,ppfas,nippon
-          MF_DISCLOSURE_STRICT_COVERAGE_AMCS: ${{ github.event.inputs.strict_coverage_amcs || 'axis,hdfc,sbi,icici,ppfas,nippon' }}
+          MF_DISCLOSURE_STRICT_COVERAGE_AMCS: ${{ github.event.inputs.strict_coverage_amcs || '' }}
+          STAGING_REPORT_MONTH: ${{ github.event.inputs.report_month || '' }}
           MF_DISCLOSURE_MIN_FIELD_COUNT: "1"
           MF_DISCLOSURE_MIN_CORE_FIELD_RATIO: "0.80"
           MF_DISCLOSURE_MIN_PORTFOLIO_FAMILY_RATIO: "0.80"
         run: |
+          export MF_DISCLOSURE_COVERAGE_AMCS="$(PYTHONPATH=backend python -c "from app.mf_ingestion.sources.registry import capability_keys; print(','.join(capability_keys('portfolio_parser_enabled')))")"
+          if [ -z "$MF_DISCLOSURE_STRICT_COVERAGE_AMCS" ]; then
+            export MF_DISCLOSURE_STRICT_COVERAGE_AMCS="$(PYTHONPATH=backend python -c "from app.mf_ingestion.sources.registry import capability_keys; print(','.join(capability_keys('runtime_enabled')))")"
+          fi
+          if [ -z "$STAGING_REPORT_MONTH" ]; then
+            STAGING_REPORT_MONTH="$(date -d '1 month ago' +%Y-%m)"
+          fi
           python backend/scripts/report_mf_disclosure_diagnostics.py
+          python backend/scripts/report_mf_staging_coverage.py \
+            --report-month "${STAGING_REPORT_MONTH}-01" \
+            --amcs "$MF_DISCLOSURE_COVERAGE_AMCS"
           python backend/scripts/check_coverage.py
           python backend/scripts/check_mf_disclosure_coverage.py

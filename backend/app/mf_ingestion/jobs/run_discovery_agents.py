@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 from app.database import supabase
-from app.mf_ingestion.agents.discovery_agent import TOP_10_AMC_AGENT_KEYS
+from app.mf_ingestion.agents.discovery_agent import PRODUCTION_TARGET_AMC_AGENT_KEYS
 from app.mf_ingestion.agents.history import (
     build_discovery_diff,
     build_source_configuration_candidates,
@@ -41,8 +41,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run bounded official AMC link-discovery agents.")
     parser.add_argument(
         "--amcs",
-        default=",".join(TOP_10_AMC_AGENT_KEYS),
-        help="Comma-separated specialist agent keys; defaults to the configured top ten AMCs.",
+        default=",".join(PRODUCTION_TARGET_AMC_AGENT_KEYS),
+        help="Comma-separated specialist agent keys; defaults to the twelve-AMC production target.",
     )
     parser.add_argument("--document-type", choices=DOCUMENT_TYPES)
     parser.add_argument("--all-document-types", action="store_true")

@@ -1,0 +1,105 @@
+name: Acquire MF Documents
+
+on:
+  workflow_dispatch:
+    inputs:
+      amc:
+        description: AMC approved for this acquisition run
+        required: true
+        type: choice
+        options:
+          - hdfc
+          - sbi
+          - icici
+          - axis
+          - ppfas
+          - nippon
+          - motilal
+          - mirae
+          - uti
+          - dsp
+          - kotak
+          - aditya_birla
+      document_scope:
+        description: Document type to acquire
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - factsheet
+          - portfolio_disclosure
+      expected_month:
+        description: Exact reporting month (YYYY-MM)
+        required: true
+        default: "2026-06"
+        type: string
+      max_documents:
+        description: Maximum documents per selected type
+        required: true
+        default: "3"
+        type: string
+      approval_phrase:
+        description: Enter ACQUIRE YYYY-MM amc (for example, ACQUIRE 2026-06 hdfc)
+        required: true
+        type: string
+
+concurrency:
+  group: acquire-mf-documents-${{ inputs.amc }}
+  cancel-in-progress: false
+
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production-data
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Acquire approved official documents
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_RAW_BUCKET: ${{ secrets.R2_RAW_BUCKET }}
+          R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
+          SELECTED_AMC: ${{ inputs.amc }}
+          DOCUMENT_SCOPE: ${{ inputs.document_scope }}
+          EXPECTED_MONTH: ${{ inputs.expected_month }}
+          MAX_DOCUMENTS: ${{ inputs.max_documents }}
+          APPROVAL_PHRASE: ${{ inputs.approval_phrase }}
+          MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_approval="ACQUIRE ${EXPECTED_MONTH} ${SELECTED_AMC}"
+          if [ "$APPROVAL_PHRASE" != "$expected_approval" ]; then
+            echo "Approval phrase mismatch. Expected: $expected_approval"
+            exit 1
+          fi
+          args=(
+            --amc "$SELECTED_AMC"
+            --max-documents "$MAX_DOCUMENTS"
+            --expected-month "$EXPECTED_MONTH"
+            --allow-disabled-source
+            --strict
+          )
+          if [ "$DOCUMENT_SCOPE" = "all" ]; then
+            args+=(--all-document-types)
+          else
+            args+=(--document-type "$DOCUMENT_SCOPE")
+          fi
+          python backend/app/mf_ingestion/jobs/ingest_latest_amc_docs.py "${args[@]}"

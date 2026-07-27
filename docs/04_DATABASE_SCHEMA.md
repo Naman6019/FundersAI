@@ -52,6 +52,12 @@ FundersAI uses Supabase PostgreSQL for structured application data and authentic
 - `mf_discovery_documents`
   - Server-only checksum/readiness observations keyed to one discovery run and monthly document identity.
   - Retains last-known-good candidates and evidence without invoking raw-document ingestion.
+- `mf_factsheet_candidates` (`20260727_add_mf_extraction_staging_and_promotion.sql`, production presence verified 2026-07-27)
+  - Preserves raw and normalized AMC scheme names, reviewed scheme/family mappings, extracted fields, source/R2/checksum evidence, parser version, and per-scope promotion state.
+- `mf_promotion_runs` (`20260727_add_mf_extraction_staging_and_promotion.sql`, production presence verified 2026-07-27)
+  - Service-role-only audit rows for dry-run validation and applied, scoped promotions.
+- `promote_mf_factsheet_candidate(...)` and `promote_mf_holdings_document(...)`
+  - Revalidate reviewed mappings and promote only requested scopes. Rejected or partial candidates do not clear last-known-good runtime rows.
 
 Raw document bytes belong in Cloudflare R2. Supabase stores the object location and query-critical structured output.
 
@@ -130,5 +136,6 @@ The Next.js proxy uses the service role only after authenticating the user and c
 7. `20260721_ensure_user_feedback_storage.sql` (idempotently creates the table, reapplies least-privilege grants, and reloads the PostgREST schema cache)
 8. `20260722_repair_flexi_cap_comparison_metadata.sql`
 9. `20260723_add_discovery_v2_history.sql`
+10. `20260727_add_mf_extraction_staging_and_promotion.sql` (production schema presence verified 2026-07-27; no promotion was applied during verification)
 
 Equivalent production SQL is not a substitute for keeping the migration in version control.

@@ -1,0 +1,86 @@
+name: Promote MF Disclosures
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_document_id:
+        description: Reviewed mf_raw_documents UUID
+        required: true
+        type: string
+      scopes:
+        description: Comma-separated scopes (risk,ter_aum,benchmark,manager,holdings,sectors)
+        required: true
+        type: string
+      expected_month:
+        description: Exact reviewed reporting month (YYYY-MM)
+        required: true
+        default: "2026-06"
+        type: string
+      apply:
+        description: Apply the validated promotion
+        required: true
+        default: false
+        type: boolean
+      approval_phrase:
+        description: For apply only, enter PROMOTE source-document-id YYYY-MM
+        required: false
+        default: ""
+        type: string
+
+concurrency:
+  group: promote-mf-disclosures
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production-data
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Validate and promote
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SOURCE_DOCUMENT_ID: ${{ inputs.source_document_id }}
+          PROMOTION_SCOPES: ${{ inputs.scopes }}
+          EXPECTED_MONTH: ${{ inputs.expected_month }}
+          APPLY_PROMOTION: ${{ inputs.apply }}
+          APPROVAL_PHRASE: ${{ inputs.approval_phrase }}
+          REQUESTED_BY: ${{ github.actor }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "Missing existing Supabase production secrets."
+            exit 1
+          fi
+          if [ "$APPLY_PROMOTION" = "true" ]; then
+            expected_approval="PROMOTE ${SOURCE_DOCUMENT_ID} ${EXPECTED_MONTH}"
+            if [ "$APPROVAL_PHRASE" != "$expected_approval" ]; then
+              echo "Approval phrase mismatch. Expected: $expected_approval"
+              exit 1
+            fi
+          fi
+          args=(
+            --source-document-id "$SOURCE_DOCUMENT_ID"
+            --scopes "$PROMOTION_SCOPES"
+            --expected-report-month "$EXPECTED_MONTH"
+            --requested-by "$REQUESTED_BY"
+          )
+          if [ "$APPLY_PROMOTION" = "true" ]; then
+            args+=(--apply)
+          fi
+          python backend/app/mf_ingestion/jobs/promote_mf_disclosures.py "${args[@]}"

@@ -11,11 +11,12 @@ if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
 from app.database import supabase
-from app.services.supported_amcs import SUPPORTED_MF_AMC_MARKERS
+from app.mf_ingestion.sources.registry import PRODUCTION_TARGET_AMC_KEYS, get_source
+from app.services.supported_amcs import ALL_MF_AMC_MARKERS
 
 
-AMC_LABELS = {label.lower(): markers for label, markers in SUPPORTED_MF_AMC_MARKERS.items()}
-DEFAULT_AMCS = "axis,hdfc,sbi,icici,ppfas,nippon"
+AMC_LABELS = {label.lower(): markers for label, markers in ALL_MF_AMC_MARKERS.items()}
+DEFAULT_AMCS = ",".join(PRODUCTION_TARGET_AMC_KEYS)
 
 
 def _get_all(table: str, columns: str) -> list[dict[str, Any]]:
@@ -35,9 +36,18 @@ def _parse_amc_list(raw: str | None) -> list[str]:
 
 
 def _matches_amc(row: dict[str, Any], amc: str) -> bool:
-    labels = AMC_LABELS.get(amc, (amc,))
+    source = get_source(amc)
+    labels = AMC_LABELS.get(source.amc_code.lower(), (source.adapter_key,))
     text = " ".join(str(row.get(field) or "").lower() for field in ("amc_name", "scheme_name"))
     return any(label in text for label in labels)
+
+
+def _adapter_key(amc_code: object) -> str:
+    normalized = str(amc_code or "").strip().lower()
+    for source in (get_source(key) for key in PRODUCTION_TARGET_AMC_KEYS):
+        if normalized in {source.amc_code.lower(), source.adapter_key.lower()}:
+            return source.adapter_key
+    return normalized
 
 
 def _issues(value: Any) -> list[str]:
@@ -65,7 +75,7 @@ def build_diagnostics(amcs: list[str] | None = None) -> dict[str, Any]:
         "scheme_code,scheme_name,amc_name,aum,expense_ratio,benchmark,fund_manager,risk_level",
     )
 
-    scheme_to_amc = {str(row.get("id")): str(row.get("amc_code") or "").lower() for row in schemes if row.get("id")}
+    scheme_to_amc = {str(row.get("id")): _adapter_key(row.get("amc_code")) for row in schemes if row.get("id")}
     parsed_scheme_counts: Counter[str] = Counter(
         scheme_to_amc[str(row.get("scheme_id"))]
         for row in scheme_holdings
@@ -97,7 +107,7 @@ def build_diagnostics(amcs: list[str] | None = None) -> dict[str, Any]:
         doc_type_status: dict[str, Counter[str]] = defaultdict(Counter)
         issue_counts: Counter[str] = Counter()
         for doc in raw_docs:
-            if str(doc.get("amc_code") or "").lower() != amc:
+            if _adapter_key(doc.get("amc_code")) != amc:
                 continue
             status = str(doc.get("parse_status") or "unknown")
             document_type = str(doc.get("document_type") or doc.get("source_document_type") or "unknown")
