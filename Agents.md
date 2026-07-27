@@ -111,9 +111,17 @@ When the user types `/graphify`, invoke the `graphify` skill before doing anythi
 
 Rules:
 
-- Always use `uvx` to access and run Graphify commands, for example `uvx graphify`.
-- For codebase questions, first run `uvx graphify query "<question>"` when `graphify-out/graph.json` exists. Use `uvx graphify path "<A>" "<B>"` for relationships and `uvx graphify explain "<concept>"` for focused concepts.
+- Always use the published `graphifyy` distribution through `uvx`; it exposes the `graphify` command. The correct form is `uvx --from graphifyy graphify`, not `uvx graphify`.
+- In sandboxed Windows sessions, point uv at a writable temporary cache before invoking Graphify:
+
+  ```powershell
+  $env:UV_CACHE_DIR = Join-Path ([System.IO.Path]::GetTempPath()) 'fundersai-uv-cache'
+  uvx --from graphifyy graphify --version
+  ```
+
+  If the first run cannot download the package because network access is restricted, rerun the exact `uvx --from graphifyy graphify ...` command with the required sandbox escalation. Do not treat the misleading global-cache `os error 183` as graph corruption.
+- For codebase questions, first run `uvx --from graphifyy graphify query "<question>"` when `graphify-out/graph.json` exists. Use `uvx --from graphifyy graphify path "<A>" "<B>"` for relationships and `uvx --from graphifyy graphify explain "<concept>"` for focused concepts.
 - Dirty `graphify-out/` files are expected after hooks or incremental updates and are not a reason to skip Graphify.
 - If Graphify cannot run, report the tooling error and continue with direct source inspection.
 - Use `graphify-out/wiki/index.md` for broad navigation when it exists. Read `graphify-out/GRAPH_REPORT.md` only for broad architecture review or when targeted queries are insufficient.
-- After modifying code, run `uvx graphify update .` to keep the graph current. Documentation-only changes do not require an AST graph refresh.
+- After modifying code, run `uvx --from graphifyy graphify update .` to keep the graph current. Documentation-only changes do not require an AST graph refresh.

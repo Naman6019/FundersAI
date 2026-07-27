@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, Sparkles, Trash2 } from 'lucide-react';
+import { CircleHelp, ExternalLink, FileSearch, RefreshCw, Send, Sparkles, Trash2 } from 'lucide-react';
 import { useCanvasStore } from '@/store/useCanvasStore';
 import { AssetType, ComparisonViewMode, ConversationContext, ExplanationMode, Message, ResearchDepth, useChatStore } from '@/store/useChatStore';
 import { hasSupabaseBrowserEnv, supabaseBrowser } from '@/lib/supabaseBrowser';
@@ -135,6 +135,188 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' ? value as Record<string, unknown> : null;
 }
 
+function sourceUrl(value: unknown): string | null {
+  const row = asRecord(value);
+  const candidate = row?.source_url || row?.url;
+  if (typeof candidate !== 'string' || !/^https:\/\//i.test(candidate)) return null;
+  return candidate;
+}
+
+function responseWithCitationLinks(content: string, metadata?: Record<string, unknown> | null): string {
+  const sources = Array.isArray(metadata?.sources) ? metadata.sources : [];
+  if (!sources.length) return content;
+  return content.replace(/\[(\d+)]/g, (marker, rawIndex) => {
+    const url = sourceUrl(sources[Number(rawIndex) - 1]);
+    if (!url) return marker;
+    return `[[${rawIndex}]](${url.replaceAll('(', '%28').replaceAll(')', '%29')})`;
+  });
+}
+
+function isFundResponse(
+  metadata: Record<string, unknown> | null | undefined,
+  query: string,
+  selectedAssetType: AssetType,
+): boolean {
+  if (metadata?.answer_mode === 'official_fund_research') return true;
+  if (selectedAssetType === 'mutual_fund') return true;
+  const freshness = asRecord(metadata?.source_freshness);
+  if (freshness && Object.values(freshness).some((value) => {
+    const row = asRecord(value);
+    return Boolean(row?.nav_date || row?.expected_nav_date);
+  })) return true;
+  const resolution = Array.isArray(metadata?.resolution) ? metadata.resolution : [];
+  if (resolution.some((value) => asRecord(value)?.asset_type === 'mutual_fund')) return true;
+  return /\b(mutual fund|fund|nav|factsheet|amc)\b/i.test(query);
+}
+
+function previousUserQuery(messages: Message[], messageIndex: number): string {
+  for (let index = messageIndex - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === 'user') return messages[index].content;
+  }
+  return '';
+}
+
+function ResponseSources({ metadata }: { metadata?: Record<string, unknown> | null }) {
+  const sources = Array.isArray(metadata?.sources) ? metadata.sources : [];
+  if (!sources.length) return null;
+  const validation = asRecord(metadata?.claim_validation);
+  const supported = Number(validation?.supported_claims || 0);
+  const claims = Number(validation?.claim_count || 0);
+
+  return (
+    <div className="mt-3 rounded-xl border border-[#66a3ff]/15 bg-[#66a3ff]/[0.04] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#cce0ff]">Claim sources</p>
+        {claims ? <span className="text-[10px] text-slate-400">{supported}/{claims} claims supported</span> : null}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {sources.slice(0, 5).map((raw, index) => {
+          const row = asRecord(raw) || {};
+          const url = sourceUrl(row);
+          const label = String(row.title || row.source || row.amc_code || row.document_type || `Source ${index + 1}`);
+          const context = [row.report_month, row.page ? `page ${String(row.page)}` : null].filter(Boolean).join(' · ');
+          return url ? (
+            <a
+              key={`${url}-${index}`}
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-[11px] text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white"
+              title={context || undefined}
+            >
+              [{index + 1}] {label}<ExternalLink className="h-3 w-3" />
+            </a>
+          ) : null;
+        })}
+      </div>
+    </div>
+  );
+}
+
+type DataHealthMetric = {
+  label?: string;
+  status?: string;
+  note?: string;
+  last_updated?: string | null;
+};
+
+function FundAnswerActions({
+  metadata,
+  query,
+  onFindEvidence,
+}: {
+  metadata?: Record<string, unknown> | null;
+  query: string;
+  onFindEvidence: (query: string) => void;
+}) {
+  const [showLagDetails, setShowLagDetails] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState('');
+  const [navHealth, setNavHealth] = useState<DataHealthMetric | null>(null);
+  const asOf = asRecord(metadata?.as_of);
+  const lagDetails = asRecord(metadata?.lag_details);
+  const lagItems = Array.isArray(lagDetails?.items)
+    ? lagDetails.items.map(asRecord).filter((item): item is Record<string, unknown> => Boolean(item))
+    : [];
+
+  const refreshStatus = async () => {
+    setRefreshing(true);
+    setRefreshError('');
+    try {
+      const response = await fetch('/api/data-health', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Status check failed.');
+      const payload = await response.json();
+      const metrics = Array.isArray(payload?.metrics) ? payload.metrics : [];
+      const metric = metrics.find((value: unknown) => asRecord(value)?.label === 'MF NAV');
+      setNavHealth((asRecord(metric) || { label: 'MF NAV', status: 'Unknown', note: 'No NAV status was returned.' }) as DataHealthMetric);
+    } catch (error) {
+      setRefreshError(error instanceof Error ? error.message : 'Status check failed.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 space-y-2 rounded-xl border border-white/10 bg-black/15 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <p className="m-0 text-slate-300">
+          <span className="font-semibold text-slate-100">As of:</span>{' '}
+          {String(asOf?.date || 'date unavailable')} · {String(asOf?.source || 'FundersAI data')}
+        </p>
+        {asOf?.source_count ? <span className="text-[10px] text-slate-500">{String(asOf.source_count)} official source(s)</span> : null}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setShowLagDetails((value) => !value)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-amber-100 transition hover:border-amber-300/40"
+          aria-expanded={showLagDetails}
+        >
+          <CircleHelp className="h-3.5 w-3.5" /> Why is this lagging?
+        </button>
+        <button
+          type="button"
+          onClick={() => void refreshStatus()}
+          disabled={refreshing}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[#66a3ff]/20 bg-[#66a3ff]/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-[#cce0ff] transition hover:border-[#66a3ff]/45 disabled:opacity-60"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? 'Checking status…' : 'Refresh data status'}
+        </button>
+        <button
+          type="button"
+          onClick={() => onFindEvidence(query)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-emerald-100 transition hover:border-emerald-300/40"
+        >
+          <FileSearch className="h-3.5 w-3.5" /> Find official evidence
+        </button>
+      </div>
+      <p className="m-0 text-[10px] text-slate-500">Refresh is a read-only health check. It never starts ingestion or a sync.</p>
+      {showLagDetails ? (
+        <div className="rounded-lg border border-white/10 bg-black/20 p-2.5 text-[11px] leading-5 text-slate-300">
+          {lagItems.length ? lagItems.map((item) => {
+            const missing = Array.isArray(item.missing_fields) ? item.missing_fields : [];
+            return (
+              <p key={String(item.entity)} className="m-0">
+                <span className="font-semibold text-slate-100">{String(item.entity)}:</span>{' '}
+                {String(item.status || 'unknown')} · observed {String(item.observed_date || 'unavailable')} · expected {String(item.expected_date || 'unavailable')}
+                {missing.length ? ` · missing ${missing.join(', ')}` : ''}
+              </p>
+            );
+          }) : <p className="m-0">No fund-level lag details were returned for this answer.</p>}
+        </div>
+      ) : null}
+      {navHealth ? (
+        <p className="m-0 rounded-lg border border-white/10 bg-black/20 px-2.5 py-2 text-[11px] text-slate-300" aria-live="polite">
+          <span className="font-semibold text-slate-100">Live MF NAV status: {navHealth.status || 'Unknown'}.</span>{' '}
+          {navHealth.note || ''}
+        </p>
+      ) : null}
+      {refreshError ? <p className="m-0 text-[11px] text-rose-200" aria-live="polite">{refreshError}</p> : null}
+    </div>
+  );
+}
+
 function MessageMetadataBadges({ metadata, content }: { metadata?: Record<string, unknown> | null; content: string }) {
   const sourceFreshness = asRecord(metadata?.source_freshness);
   const confidence = asRecord(metadata?.confidence);
@@ -192,17 +374,29 @@ function MessageMetadataBadges({ metadata, content }: { metadata?: Record<string
       {sourceRows.map(([entity, raw]) => {
         const row = asRecord(raw) || {};
         const stale = Boolean(row.stale);
+        const freshnessStatus = typeof row.status === 'string' ? row.status : stale ? 'stale' : 'fresh';
         const lastUpdated = row.snapshot_last_updated || row.price_date || row.nav_date;
+        const expectedNavDate = row.expected_nav_date;
+        const label = freshnessStatus === 'lagging'
+          ? 'NAV lagging'
+          : freshnessStatus === 'stale'
+            ? 'NAV stale'
+            : freshnessStatus === 'missing'
+              ? 'NAV missing'
+              : 'Fresh';
         return (
           <span
             key={entity}
             className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${
-              stale
-                ? 'border-amber-400/20 bg-amber-400/10 text-amber-200'
-                : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
+              freshnessStatus === 'fresh'
+                ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
+                : freshnessStatus === 'stale' || freshnessStatus === 'missing'
+                  ? 'border-rose-300/20 bg-rose-300/10 text-rose-100'
+                  : 'border-amber-400/20 bg-amber-400/10 text-amber-200'
             }`}
+            title={expectedNavDate ? `Latest expected NAV date: ${String(expectedNavDate)}` : undefined}
           >
-            {stale ? 'Stale' : 'Fresh'} {lastUpdated ? String(lastUpdated) : entity}
+            {label} {lastUpdated ? String(lastUpdated) : entity}
           </span>
         );
       })}
@@ -474,6 +668,10 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
           answer_mode: data.answer_mode || null,
           news_context_status: data.news_context_status || null,
           sources: data.sources || null,
+          claim_validation: data.claim_validation || null,
+          as_of: data.as_of || null,
+          lag_details: data.lag_details || null,
+          grounded: data.grounded ?? null,
           reasoning_summary: data.reasoning_summary || null,
           system_action_type: data.system_action?.type || null,
           system_action_ids: data.system_action?.ids || null,
@@ -629,7 +827,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
         {!isEmpty && (
           <div ref={scrollRef} className="custom-scroll flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-4 sm:px-6 w-full">
             <div ref={contentRef} className="flex flex-col gap-5 pb-8 w-full max-w-3xl mx-auto">
-              {messages.map((msg) => (
+              {messages.map((msg, messageIndex) => (
                 <div
                   key={msg.id}
                   className={
@@ -641,8 +839,9 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
                   {msg.role === 'system' ? (
                     <div className="chat-markdown text-sm">
                       <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                        {msg.content}
+                        {responseWithCitationLinks(msg.content, msg.metadata)}
                       </ReactMarkdown>
+                      <ResponseSources metadata={msg.metadata} />
                       {msg.id !== '1' && <ReasoningSummary metadata={msg.metadata} />}
                       {msg.metadata?.system_action_type === 'COMPARE' && comparisonViewMode === 'chat' && Array.isArray(msg.metadata?.system_action_ids) && (
                         <div className="mt-4 -mx-2 sm:-mx-4 h-[600px] border border-white/10 rounded-2xl overflow-hidden bg-[#050505]/50">
@@ -659,6 +858,17 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
                           <MessageMetadataBadges metadata={msg.metadata} content={msg.content} />
                         </div>
                       )}
+                      {msg.id !== '1' && isFundResponse(msg.metadata, previousUserQuery(messages, messageIndex), assetType) ? (
+                        <FundAnswerActions
+                          metadata={msg.metadata}
+                          query={previousUserQuery(messages, messageIndex)}
+                          onFindEvidence={(query) => {
+                            setAssetType('mutual_fund');
+                            setInput(`Find official-document evidence for: ${query || 'this mutual fund question'}`);
+                            textareaRef.current?.focus();
+                          }}
+                        />
+                      ) : null}
                     </div>
                   ) : (
                     msg.content

@@ -26,7 +26,9 @@ The supported browser boundary is the Next.js `/api/*` surface. Browser code mus
   - Returns `text/event-stream` events: `{type:"status",message}`, `{type:"final",payload}`, or `{type:"error",message}`.
   - Persists the owned session and finalizes token accounting before emitting the final event. Browser cancellation does not cancel the proxy's upstream accounting/persistence pump.
   - Removes the server-only `_usage` field before the final payload reaches browser clients.
-  - The final payload contains synthesized markdown plus structured `quant_data`, trace/coverage/model metadata, and optional `system_action`.
+  - The final payload contains synthesized markdown plus structured `quant_data`, trace/coverage/model metadata, optional `system_action`, and additive `as_of`, `lag_details`, `sources`, and `claim_validation` trust metadata when available.
+  - Explicit official-document fund questions use the indexed official AMC research workflow. Supported factual lines contain numbered citations whose source URLs and claim-validation result are persisted with the owned response.
+  - `Refresh data status` remains a separate read-only `GET /api/data-health` call; chat does not trigger ingestion or sync implicitly.
 - `GET /api/chat/history`: returns the authenticated user's legacy saved chat messages.
 - `DELETE /api/chat/history`: clears the authenticated user's legacy saved chat messages.
 - `GET /api/chat/sessions`: lists owned chat sessions, newest first.

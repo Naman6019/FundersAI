@@ -70,7 +70,12 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - standard mutual-fund canvas requests now return a snapshot-only Trend Observation from chat, so full NAV history, holdings, and sector reads occur once in the canvas rather than before it opens; deep or follow-up comparisons retain the full comparison path.
   - locally implemented comparison-latency hardening adds a nightly cache-backed metric refresh for returns, volatility, drawdown, Sharpe, alpha, and beta; versioned snapshot metrics bypass request-time history/benchmark math, holdings and sector reads run concurrently after one family lookup, and MF detail requests skip the benchmark when precomputed alpha/beta are present. Deployment and the first hosted workflow run remain pending.
 - Source-neutral stock data model and scheduled stock workflows.
-- Mutual-fund NAV sync and metadata pipelines.
+- Mutual-fund NAV sync and metadata pipelines:
+  - NAV freshness uses the last expected IST business day (with an optional `MF_NAV_MARKET_HOLIDAYS` override), rather than a fixed 24-hour cache age;
+  - primary NAV sync records a post-sync verification artifact, and a conditional 02:00 IST follow-up workflow retries AMFI sync only when the expected NAV date is missing;
+  - comparison-chat metadata carries `fresh`, `lagging`, `stale`, or `missing` NAV status and the latest expected NAV date. Deployment remains pending.
+  - locally implemented chat trust controls keep an `As of` source/date line, `Why is this lagging?`, read-only `Refresh data status`, and `Find official evidence` actions visible on fund answers;
+  - the explicit official-evidence action prefills chat instead of auto-sending, routes the submitted query through the existing official AMC corpus workflow, links each numbered claim citation, and persists source/claim-validation metadata. Deployment remains pending.
 - AMC disclosure ingestion registry enabled for `ppfas`, `hdfc`, `icici`, `sbi`, `axis`, `motilal`, and `nippon`:
   - raw document ingestion
   - parsing

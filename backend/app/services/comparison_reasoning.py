@@ -227,6 +227,9 @@ def _freshness_snapshot(comparison: dict[str, dict[str, Any]]) -> dict[str, Any]
         snapshot[entity] = {
             "source": summary.get("metadata") or payload.get("source"),
             "stale": bool(summary.get("stale")),
+            "status": summary.get("status"),
+            "expected_nav_date": summary.get("expected_nav_date"),
+            "missed_business_days": summary.get("missed_business_days"),
             "price_date": summary.get("price_date"),
             "snapshot_last_updated": summary.get("snapshot_last_updated"),
             "nav_date": payload.get("nav_date"),

@@ -1,0 +1,54 @@
+name: Verify and Retry Mutual Fund NAV Sync
+
+on:
+  schedule:
+    # 02:00 AM IST Tuesday-Saturday, after each Mon-Fri AMFI business day.
+    - cron: '30 20 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutual-fund-data-sync
+  cancel-in-progress: false
+
+jobs:
+  verify_and_retry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Check latest expected NAV date
+        id: nav_health
+        run: python backend/scripts/verify_mf_nav_sync.py --output mf-nav-sync-health-before.json --github-output "$GITHUB_OUTPUT"
+
+      - name: Retry AMFI NAV sync when needed
+        if: steps.nav_health.outputs.needs_retry == 'true'
+        run: python backend/scripts/sync_mf.py
+
+      - name: Verify retried NAV sync
+        if: steps.nav_health.outputs.needs_retry == 'true'
+        run: python backend/scripts/verify_mf_nav_sync.py --output mf-nav-sync-health-after.json --require-fresh
+
+      - name: Upload NAV sync verification
+        if: always() && hashFiles('mf-nav-sync-health-*.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: mf-nav-sync-verification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: mf-nav-sync-health-*.json
+          if-no-files-found: error
+          retention-days: 30

@@ -144,7 +144,7 @@ export function AppSidebar({
             Data health
           </SidebarGroupLabel>
           <SidebarGroupContent className="px-3 py-2 space-y-2">
-            {dataHealth.slice(0, 3).map(({ label, status, note }) => (
+            {dataHealth.slice(0, 4).map(({ label, status, note }) => (
               <div key={label} className="rounded-lg border border-white/5 bg-white/[0.045] backdrop-blur-md px-2.5 py-1.5 text-[11px]">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400" title={note || ""}>{label}</span>

@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from app.repositories.mutual_fund_repository import MutualFundRepository
-from app.services import cache_policy
+from app.services.mf_nav_freshness import assess_nav_freshness
 from app.services.asset_resolver import AssetResolution, AssetResolver, HIGH_CONFIDENCE
 from app.services.comparison_reasoning import build_mf_why_better
 from app.services.mf_holdings_quality import is_holding_summary_or_noise
@@ -418,6 +418,7 @@ class CompareDataService:
 
         provider_payload = row.get("provider_payload") or {}
         qualitative = provider_payload.get("qualitative_insights") or {}
+        nav_freshness = assess_nav_freshness(row.get("nav_date") or row.get("last_updated"))
 
         item = {
             "scheme_code": str(scheme_code) if scheme_code is not None else None,
@@ -454,7 +455,10 @@ class CompareDataService:
             "source": "FundersAI DB",
             "source_summary": {
                 "metadata": "FundersAI DB",
-                "stale": not cache_policy.is_fresh(row.get("nav_date") or row.get("last_updated"), "mutual_fund_nav"),
+                "stale": nav_freshness["status"] == "stale",
+                "status": nav_freshness["status"],
+                "expected_nav_date": nav_freshness["expected_nav_date"],
+                "missed_business_days": nav_freshness["missed_business_days"],
                 "nav_date": row.get("nav_date"),
                 "holdings_as_of_date": holdings_as_of,
                 "benchmark_source": benchmark_source,
@@ -500,6 +504,7 @@ class CompareDataService:
             )
             if _is_missing(row.get(field))
         ]
+        nav_freshness = assess_nav_freshness(row.get("nav_date") or row.get("last_updated"))
         return {
             "scheme_code": str(scheme_code) if scheme_code is not None else None,
             "name": row.get("scheme_name") or resolution.resolved_name,
@@ -524,7 +529,10 @@ class CompareDataService:
             "source": "FundersAI DB",
             "source_summary": {
                 "metadata": "FundersAI DB",
-                "stale": not cache_policy.is_fresh(row.get("nav_date") or row.get("last_updated"), "mutual_fund_nav"),
+                "stale": nav_freshness["status"] == "stale",
+                "status": nav_freshness["status"],
+                "expected_nav_date": nav_freshness["expected_nav_date"],
+                "missed_business_days": nav_freshness["missed_business_days"],
                 "nav_date": row.get("nav_date"),
             },
             "data_quality": {

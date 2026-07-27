@@ -34,6 +34,7 @@ from app.services import cache_policy, indianapi_service
 from app.services.asset_resolver import AssetResolver
 from app.services.auto_heal import trigger_mf_auto_heal
 from app.services.compare_data_service import CompareDataService
+from app.services.document_retrieval_service import DocumentRetrievalService
 from app.services.fund_service import FundService
 from app.services.indianapi_quota_guard import evaluate as evaluate_indianapi_quota
 from app.services.market_current_events_service import (
@@ -44,6 +45,7 @@ from app.services.market_current_events_service import (
     merge_market_sources,
     normalize_market_evidence,
 )
+from app.services.mf_nav_freshness import assess_nav_freshness
 from app.services.mfapi_service import (
     get_latest_nav as mfapi_get_latest_nav,
     get_nav_cache_summary,
@@ -54,6 +56,7 @@ from app.services.quant_service import build_stock_compare, build_stock_profile,
 from app.services.supported_amcs import SUPPORTED_AMC_PIPELINE_COPY, SUPPORTED_MF_AMC_MARKERS
 from app.stock_universe import resolve_stock_symbol
 from app.utils.date_helpers import to_utc_datetime as _to_utc_datetime
+from app.workflows.fund_research_graph import run_fund_research_workflow
 
 logger = logging.getLogger(__name__)
 langfuse = get_client()
@@ -4295,6 +4298,139 @@ async def get_mutual_fund_details(scheme_code: int, background_tasks: Background
         logger.error(f"Failed to fetch MF details for {scheme_code}: {e}")
         raise DataUnavailableError(str(e))
 
+def _is_official_fund_research_query(query: str, asset_type: str) -> bool:
+    normalized = re.sub(r"\s+", " ", str(query or "")).strip().casefold()
+    explicit_request = normalized.startswith((
+        "find official-document evidence for:",
+        "find official document evidence for:",
+    ))
+    official_markers = ("official document", "official-document", "official factsheet", "amc factsheet")
+    fund_markers = ("fund", "nav", "expense ratio", "benchmark", "riskometer", "portfolio", "holding")
+    return explicit_request or (
+        any(marker in normalized for marker in official_markers)
+        and (asset_type == "mutual_fund" or any(marker in normalized for marker in fund_markers))
+    )
+
+
+def _official_research_query(query: str) -> str:
+    return re.sub(
+        r"^find\s+official(?:-|\s+)document\s+evidence\s+for:\s*",
+        "",
+        str(query or "").strip(),
+        flags=re.IGNORECASE,
+    ).strip()
+
+
+def _build_response_as_of(
+    source_freshness: dict[str, Any] | None = None,
+    sources: list[dict[str, Any]] | None = None,
+    *,
+    label: str = "Fund data",
+) -> dict[str, Any] | None:
+    dates: list[str] = []
+    source_names: list[str] = []
+    entity_dates: dict[str, str] = {}
+
+    for entity, raw in (source_freshness or {}).items():
+        row = raw if isinstance(raw, dict) else {}
+        raw_date = row.get("nav_date") or row.get("price_date") or row.get("snapshot_last_updated")
+        if raw_date:
+            value = str(raw_date)[:10]
+            dates.append(value)
+            entity_dates[str(entity)] = value
+        source = row.get("source")
+        if source:
+            source_names.append(str(source))
+
+    for raw in sources or []:
+        if not isinstance(raw, dict):
+            continue
+        raw_date = raw.get("report_month") or raw.get("published") or raw.get("date")
+        if raw_date:
+            dates.append(str(raw_date)[:10])
+        source = raw.get("source") or raw.get("amc_code") or raw.get("document_type")
+        if source:
+            source_names.append(str(source))
+
+    if not dates and not source_names:
+        return None
+    unique_sources = list(dict.fromkeys(source_names))
+    return {
+        "label": label,
+        "date": min(dates) if dates else None,
+        "source": ", ".join(unique_sources[:3]) or "FundersAI",
+        "entity_dates": entity_dates,
+        "source_count": len(sources or []),
+    }
+
+
+def _build_nav_lag_details(
+    source_freshness: dict[str, Any] | None,
+    data_quality: dict[str, Any] | None,
+) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    for entity, raw in (source_freshness or {}).items():
+        row = raw if isinstance(raw, dict) else {}
+        status = str(row.get("status") or ("stale" if row.get("stale") else "fresh"))
+        quality = (data_quality or {}).get(entity)
+        quality_row = quality if isinstance(quality, dict) else {}
+        missing_fields = quality_row.get("missing_fields")
+        items.append({
+            "entity": str(entity),
+            "status": status,
+            "observed_date": row.get("nav_date") or row.get("price_date") or row.get("snapshot_last_updated"),
+            "expected_date": row.get("expected_nav_date"),
+            "missed_business_days": row.get("missed_business_days"),
+            "missing_fields": missing_fields if isinstance(missing_fields, list) else [],
+        })
+    return {
+        "has_lag": any(item["status"] in {"lagging", "stale", "missing"} for item in items),
+        "items": items,
+        "refresh_scope": "read_only_data_health",
+    }
+
+
+def _build_official_research_chat_response(query: str, result: dict[str, Any]) -> dict[str, Any]:
+    grounded = bool(result.get("grounded")) and not bool(result.get("abstain"))
+    sources = result.get("sources") if isinstance(result.get("sources"), list) else []
+    validation = result.get("claim_validation") if isinstance(result.get("claim_validation"), dict) else {}
+    as_of = _build_response_as_of(sources=sources, label="Official AMC documents")
+    return {
+        "answer": result.get("answer") or "I could not find enough matching official-document evidence to answer this question.",
+        "debug_intent": {
+            "intent": "official_fund_research",
+            "answer_mode": "official_fund_research",
+            "source_query": query,
+        },
+        "quant_data": {},
+        "coverage_status": "complete" if grounded else "partial",
+        "model_status": "retrieval_pipeline",
+        "status_flag": None if grounded else "insufficient_official_evidence",
+        "answer_mode": "official_fund_research",
+        "sources": sources,
+        "claim_validation": validation,
+        "grounded": grounded,
+        "as_of": as_of,
+        "reasoning_summary": {
+            "steps": [
+                {
+                    "label": "Official evidence",
+                    "detail": f"Checked the indexed official AMC corpus and found {len(sources)} citable source(s).",
+                    "status": "ok" if sources else "limited",
+                },
+                {
+                    "label": "Claim support",
+                    "detail": f"Validated {validation.get('supported_claims', 0)} of {validation.get('claim_count', 0)} factual claim(s).",
+                    "status": "ok" if validation.get("valid") else "limited",
+                },
+            ],
+            "data_used": ["Indexed official AMC documents"],
+            "limits": [] if grounded else ["The available official-document evidence was insufficient for a supported answer."],
+        },
+        "retrieval_trace_id": result.get("trace_id"),
+    }
+
+
 async def chat_endpoint(
     req: ChatRequest,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
@@ -4348,6 +4484,23 @@ async def chat_endpoint(
         if trusted_proxy:
             deferred_response["_usage"] = _summarize_openrouter_usage(usage_collector)
         return deferred_response
+
+    if _is_official_fund_research_query(req.query, asset_type):
+        await _emit_status("Searching indexed official AMC documents...")
+        official_query = _official_research_query(req.query) or req.query
+        retrieval_service = DocumentRetrievalService.configured(get_mf_repository())
+        official_result = await asyncio.to_thread(
+            run_fund_research_workflow,
+            retrieval_service,
+            query=official_query,
+            filters={},
+            limit=5,
+        )
+        official_response = _build_official_research_chat_response(official_query, official_result)
+        _attach_runtime_meta(official_response)
+        if trusted_proxy:
+            official_response["_usage"] = _summarize_openrouter_usage(usage_collector)
+        return official_response
 
     deterministic_compare = _deterministic_compare_intent(req.query, asset_type)
     followup_compare = None if deterministic_compare else _followup_compare_intent(
@@ -4535,14 +4688,37 @@ To experience FundersAI's advanced research capabilities, please try:
                         min_history_points=MF_COMPARE_MIN_NAV_POINTS if intent == "compare" else 0,
                     )
                     scheme_code = fund['scheme_code']
+                    fund_name = fund['scheme_name']
+                    nav_freshness = assess_nav_freshness(fund.get('nav_date'))
+                    missing_fields = [
+                        field
+                        for field in ('nav', 'nav_date', 'aum', 'expense_ratio')
+                        if fund.get(field) in (None, '', 'N/A')
+                    ]
                     quant_data = {
-                        "name": fund['scheme_name'],
+                        "name": fund_name,
                         "price": fund['nav'],
                         "date": fund['nav_date'],
                         "fund_house": fund.get('amc_name') or fund.get('fund_house'),
                         "aum": fund.get('aum', "N/A"),
                         "expense_ratio": fund.get('expense_ratio', "N/A"),
-                        "source": "FundersAI DB"
+                        "source": "FundersAI DB",
+                        "source_freshness": {
+                            fund_name: {
+                                "source": "FundersAI DB",
+                                "stale": nav_freshness["status"] == "stale",
+                                "status": nav_freshness["status"],
+                                "nav_date": fund.get('nav_date'),
+                                "expected_nav_date": nav_freshness["expected_nav_date"],
+                                "missed_business_days": nav_freshness["missed_business_days"],
+                            }
+                        },
+                        "data_quality": {
+                            fund_name: {
+                                "missing_fields": missing_fields,
+                                "coverage_status": "incomplete" if missing_fields else "complete",
+                            }
+                        },
                     }
 
                     # Compute risk metrics locally for single entity too!
@@ -4613,6 +4789,9 @@ To experience FundersAI's advanced research capabilities, please try:
     news_context_status = synthesis_meta.get("news_context_status")
     sources = synthesis_meta.get("sources")
     why_better_payload = quant_data.get("why_better") if isinstance(quant_data, dict) and isinstance(quant_data.get("why_better"), dict) else {}
+    source_freshness = quant_data.get("source_freshness") if isinstance(quant_data, dict) and isinstance(quant_data.get("source_freshness"), dict) else None
+    response_data_quality = quant_data.get("data_quality") if isinstance(quant_data, dict) and isinstance(quant_data.get("data_quality"), dict) else None
+    source_list = sources if isinstance(sources, list) else []
     response_json = {
         "answer": final_answer,
         "debug_intent": intent_info,
@@ -4623,14 +4802,17 @@ To experience FundersAI's advanced research capabilities, please try:
         "status_flag": status_flag,
         "resolution": resolution_payload or (quant_data.get("resolution") if isinstance(quant_data, dict) else []),
         "data_status": data_status,
-        "source_freshness": quant_data.get("source_freshness") if isinstance(quant_data, dict) else None,
-        "data_quality": quant_data.get("data_quality") if isinstance(quant_data, dict) else None,
+        "source_freshness": source_freshness,
+        "data_quality": response_data_quality,
         "risk_analysis": quant_data.get("risk_analysis") if isinstance(quant_data, dict) else None,
         "confidence": why_better_payload.get("confidence"),
         "explanation_mode": req.explanation_mode or ("advanced" if req.research_depth == "deep" else "beginner"),
         "answer_mode": answer_mode,
         "news_context_status": news_context_status,
         "sources": sources,
+        "claim_validation": synthesis_meta.get("claim_validation"),
+        "as_of": _build_response_as_of(source_freshness, source_list),
+        "lag_details": _build_nav_lag_details(source_freshness, response_data_quality) if source_freshness else None,
     }
     response_json["reasoning_summary"] = _build_reasoning_summary(
         intent_info=intent_info,

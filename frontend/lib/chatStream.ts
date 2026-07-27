@@ -20,6 +20,10 @@ export interface ChatApiResponse extends CanvasPayload {
   answer_mode?: unknown;
   news_context_status?: unknown;
   sources?: unknown;
+  claim_validation?: unknown;
+  as_of?: unknown;
+  lag_details?: unknown;
+  grounded?: unknown;
   reasoning_summary?: unknown;
   response_message_id?: string;
 }

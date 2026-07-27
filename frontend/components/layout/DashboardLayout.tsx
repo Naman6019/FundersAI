@@ -51,7 +51,7 @@ const DEFAULT_DATA_HEALTH: DataHealthItem[] = [
   { label: 'MF NAV', status: 'Checking' },
   { label: 'AUM / TER', status: 'Checking' },
   { label: 'Risk metrics', status: 'Checking' },
-  { label: 'Factsheets', status: 'Checking' },
+  { label: 'AMC docs', status: 'Checking' },
 ];
 
 const HEADER_HEIGHT = 64;
@@ -76,6 +76,10 @@ function statusColorClass(status: string): string {
   if (['lagging', 'partial', 'processing', 'checking'].includes(normalized)) return 'text-amber-300';
   if (['stale', 'missing', 'error'].includes(normalized)) return 'text-rose-300';
   return 'text-slate-300';
+}
+
+function isLaggingMfDataStatus(status: string): boolean {
+  return ['lagging', 'partial', 'processing', 'stale', 'missing', 'error'].includes((status || '').toLowerCase());
 }
 
 function CanvasPlaceholder() {
@@ -143,6 +147,10 @@ export default function DashboardLayout() {
 
   const setPendingQuery = useChatStore((state) => state.setPendingQuery);
   const navStatus = dataHealth.find((item) => item.label === 'MF NAV')?.status || 'Checking';
+  const laggingMfData = healthCheckedAt
+    ? dataHealth.filter((item) => item.label !== 'MF NAV' && isLaggingMfDataStatus(item.status))
+    : [];
+  const laggingMfDataTitle = laggingMfData.map((item) => item.label).join(', ');
 
   const getCanvasBounds = () => {
     const shellPadding = MAIN_PADDING * 2;
@@ -803,6 +811,15 @@ export default function DashboardLayout() {
             </div>
 
             <div className="flex items-center gap-2">
+              {laggingMfData.length > 0 && (
+                <div
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300/30 bg-amber-300/10 px-2.5 py-1.5 text-xs font-semibold text-amber-100"
+                  title={`MF data lagging: ${laggingMfDataTitle}. Check Data health for details.`}
+                >
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  <span>MF data lagging</span>
+                </div>
+              )}
               {activeTab === 'research' && (
                 <button
                   type="button"

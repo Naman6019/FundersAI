@@ -47,3 +47,18 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           ENABLE_MF_SNAPSHOT_METRICS_REFRESH: "true"
         run: python -m backend.app.jobs.refresh_mf_snapshot_metrics
+
+      - name: Record expected NAV-date verification
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python backend/scripts/verify_mf_nav_sync.py --output mf-nav-sync-health.json
+
+      - name: Upload NAV sync verification
+        if: always() && hashFiles('mf-nav-sync-health.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: mf-nav-sync-verification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: mf-nav-sync-health.json
+          if-no-files-found: error
+          retention-days: 30

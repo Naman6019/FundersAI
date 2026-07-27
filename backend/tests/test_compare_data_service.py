@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from app.services.asset_resolver import AssetResolution
 from app.services.compare_data_service import CompareDataService
@@ -243,6 +244,31 @@ def test_compare_service_loads_family_id_holdings_and_sectors():
     assert item["source_summary"]["holdings_as_of_date"] == "2026-05-31"
     assert item["holdings"][0]["security_name"] == "BSE Limited"
     assert item["sector_allocation"][0]["sector"] == "Capital Markets"
+
+
+def test_compare_summary_carries_business_day_nav_freshness():
+    service = CompareDataService(_FakeSupabase({}))
+    row = {
+        "scheme_code": "301",
+        "scheme_name": "Nippon India Small Cap Fund - Direct Plan - Growth",
+        "nav": 180.0,
+        "nav_date": "2026-07-24",
+    }
+
+    with patch(
+        "app.services.compare_data_service.assess_nav_freshness",
+        return_value={"status": "lagging", "expected_nav_date": "2026-07-27", "missed_business_days": 1},
+    ):
+        item = service._summary_item(row, _resolution(row["scheme_name"], "301", "NIPPON"))
+
+    assert item["source_summary"] == {
+        "metadata": "FundersAI DB",
+        "stale": False,
+        "status": "lagging",
+        "expected_nav_date": "2026-07-27",
+        "missed_business_days": 1,
+        "nav_date": "2026-07-24",
+    }
 
 
 def test_compare_service_accepts_axis_percent_nav_holdings_without_isin():

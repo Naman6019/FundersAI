@@ -15,6 +15,7 @@ from app.exceptions import AuthorizationError, ConflictError, DataUnavailableErr
 from app.repositories.admin_ops_repository import AdminOpsRepository
 from app.services.review_priority_service import ReviewPriorityService
 from app.services import cache_policy
+from app.services.mf_nav_freshness import assess_nav_freshness
 from app.services.chat_service import (
     _normalize_fund_text,
     _pick_best_fund_match,
@@ -85,6 +86,24 @@ def _count_mf_raw_documents(*, status: str | None = None) -> int:
 
 def _has_metric_value(value: Any) -> bool:
     return value not in (None, "")
+
+
+def _latest_core_snapshot_nav_date() -> datetime | None:
+    """Read the actual latest NAV date instead of inferring it from a recent-write sample."""
+    try:
+        rows = (
+            get_admin_repository().table("mutual_fund_core_snapshot")
+            .select("nav_date")
+            .order("nav_date", desc=True, nullsfirst=False)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:
+        logger.warning("Data health latest NAV date read failed: %s", exc)
+        return None
+    return _to_utc_datetime(rows[0].get("nav_date")) if rows else None
 
 
 def _supported_amc_label(value: Any) -> str | None:
@@ -432,19 +451,21 @@ def data_health():
         logger.warning("Data health enrichment coverage read failed: %s", exc)
         enrichment_rows = core_rows
 
-    latest_nav_dt = max(
+    latest_nav_dt = _latest_core_snapshot_nav_date() or max(
         [dt for dt in (_to_utc_datetime(row.get("nav_date")) for row in core_rows) if dt is not None],
         default=None,
     )
     nav_age_days = _age_days(latest_nav_dt, now_utc)
     if latest_nav_dt:
-        nav_is_fresh = cache_policy.is_fresh(latest_nav_dt.isoformat(), "mutual_fund_nav", now=now_utc)
-        if nav_is_fresh:
-            metrics[0].update(status="Fresh", note=f"Latest NAV age {_fmt_age(nav_age_days)}.", last_updated=latest_nav_dt.isoformat())
-        elif nav_age_days is not None and nav_age_days <= 7:
-            metrics[0].update(status="Lagging", note=f"Latest NAV age {_fmt_age(nav_age_days)}.", last_updated=latest_nav_dt.isoformat())
+        nav_freshness = assess_nav_freshness(latest_nav_dt, now=now_utc)
+        expected_nav_date = nav_freshness["expected_nav_date"]
+        missed_business_days = nav_freshness["missed_business_days"]
+        if nav_freshness["status"] == "fresh":
+            metrics[0].update(status="Fresh", note=f"Latest NAV date {latest_nav_dt.date().isoformat()} matches the last expected business day {expected_nav_date}.", last_updated=latest_nav_dt.isoformat())
+        elif nav_freshness["status"] == "lagging":
+            metrics[0].update(status="Lagging", note=f"Latest NAV date {latest_nav_dt.date().isoformat()} is {missed_business_days} business day behind expected {expected_nav_date}.", last_updated=latest_nav_dt.isoformat())
         else:
-            metrics[0].update(status="Stale", note=f"Latest NAV age {_fmt_age(nav_age_days)}.", last_updated=latest_nav_dt.isoformat())
+            metrics[0].update(status="Stale", note=f"Latest NAV date {latest_nav_dt.date().isoformat()} is {missed_business_days} business days behind expected {expected_nav_date}.", last_updated=latest_nav_dt.isoformat())
 
     enrichment = _core_snapshot_enrichment_summary(enrichment_rows)
     latest_aum_ter_dt = enrichment["latest_updated_at"]

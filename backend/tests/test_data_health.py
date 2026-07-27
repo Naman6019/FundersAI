@@ -21,7 +21,7 @@ class _FakeQuery:
         self.eq_filters[key] = value
         return self
 
-    def order(self, field: str, desc: bool = False):
+    def order(self, field: str, desc: bool = False, nullsfirst=None):
         self.order_field = field
         self.order_desc = desc
         return self
