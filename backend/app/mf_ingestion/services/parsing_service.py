@@ -372,6 +372,7 @@ class ParsingService:
         merged_issues: list[str] = ["partial_source_parse_failure"] if parse_batch.has_failures else []
         inserted_total = 0
         candidates = self._load_scheme_candidates(amc_code)
+        document_report_month = _to_date_or_none(document.get("report_month"))
 
         for parsed in parsed_documents:
             parsed_scheme_name = str(parsed.scheme_name or "").strip()
@@ -382,7 +383,40 @@ class ParsingService:
                 temp_match = match_scheme_name(parsed_scheme_name, candidates=[target_scheme_name])
                 if temp_match.confidence < 80.0:
                     continue
-                    
+
+            report_month_issue = _parsed_record_report_month_issue(
+                parsed.report_month,
+                document_report_month,
+            )
+            if report_month_issue:
+                review_needed_overall = True
+                merged_issues.append(report_month_issue)
+                self.review_service.enqueue_document_review(
+                    source_document_id=document_id,
+                    amc_code=amc_code,
+                    report_month=(
+                        parsed.report_month.isoformat()
+                        if parsed.report_month
+                        else None
+                    ),
+                    source_url=document.get("source_url"),
+                    validation_issues=[report_month_issue],
+                    confidence_score=float(parsed.confidence_score),
+                    parser_version=str(document.get("parser_version") or ""),
+                    sample_rows=parsed.holdings[:5],
+                )
+                results.append(
+                    {
+                        "scheme_name": parsed_scheme_name,
+                        "scheme_match_confidence": 0.0,
+                        "confidence_score": float(parsed.confidence_score),
+                        "inserted_holdings": 0,
+                        "inserted_sector_allocations": 0,
+                        "validation_issues": [report_month_issue],
+                    }
+                )
+                continue
+
             if parsed_scheme_name and parsed_scheme_name not in candidates:
                 candidates.append(parsed_scheme_name)
             scheme_match = match_scheme_name(parsed.scheme_name, candidates=candidates)
@@ -1308,6 +1342,22 @@ def _to_date_or_none(value: Any) -> date | None:
         return datetime.fromisoformat(raw[:10]).date()
     except ValueError:
         return None
+
+
+def _parsed_record_report_month_issue(
+    parsed_report_month: Any,
+    document_report_month: Any,
+) -> str | None:
+    parsed = _to_date_or_none(parsed_report_month)
+    expected = _to_date_or_none(document_report_month)
+    if not parsed or not expected:
+        return None
+    if (parsed.year, parsed.month) == (expected.year, expected.month):
+        return None
+    return (
+        "parsed_record_report_month_mismatch:"
+        f"{parsed.replace(day=1).isoformat()}!={expected.replace(day=1).isoformat()}"
+    )
 
 
 def _should_write_risk_level(existing: dict[str, Any], report_month: date | None) -> bool:

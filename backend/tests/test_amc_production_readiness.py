@@ -705,6 +705,35 @@ def test_new_adapters_keep_multi_field_official_rows_separate(adapter, scheme_na
     assert records[0].metrics["total_percent_aum"] == 100.0
 
 
+@pytest.mark.parametrize(
+    "adapter",
+    [MiraeAdapter(), DSPAdapter(), AdityaBirlaAdapter()],
+)
+def test_fractional_excel_percentages_are_normalized_for_known_amcs(adapter):
+    frame = pd.DataFrame(
+        [
+            [f"{adapter.scheme_markers[0]} Equity Fund", None, None, None],
+            ["As on 30 June 2026", None, None, None],
+            ["Name of the Instrument", "ISIN", "Industry", "% to NAV"],
+            ["HDFC Bank Limited", "INE040A01034", "Banks", 0.60],
+            ["Infosys Limited", "INE009A01021", "IT - Software", 0.40],
+        ]
+    )
+
+    records = adapter.parse_excel_frame_many(
+        frame,
+        ParseContext(
+            source_document_id="fractional-percent",
+            source_url="official",
+            report_month=None,
+        ),
+    )
+
+    assert len(records) == 1
+    assert [row["percent_aum"] for row in records[0].holdings] == [60.0, 40.0]
+    assert records[0].metrics["total_percent_aum"] == 100.0
+
+
 def test_uti_adapter_ignores_total_rows_when_locating_scheme_name():
     frame = pd.DataFrame(
         [

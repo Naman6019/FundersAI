@@ -166,6 +166,62 @@ def test_hdfc_parse_holdings_ignores_full_text_when_multiple_schemes_present():
     assert parsed.metrics["total_percent_aum"] == 100.0
 
 
+def test_hdfc_word_column_rows_are_not_merged_with_sector_summary_text():
+    frame = pd.DataFrame(
+        [
+            ["HDFC Large Cap Fund", None, None],
+            ["PORTFOLIO", None, None],
+            ["Company/Instrument", "Industry+ /Rating", "% to NAV"],
+            ["Incorrect Table Row", "Banks", 100.0],
+        ]
+    )
+    frame.attrs["page_words"] = [
+        {"text": "HDFC", "x0": 200, "x1": 225, "top": 150},
+        {"text": "Bank", "x0": 228, "x1": 255, "top": 150},
+        {"text": "Banks", "x0": 280, "x1": 320, "top": 150},
+        {"text": "60.00", "x0": 350, "x1": 375, "top": 150},
+        {"text": "Infosys", "x0": 200, "x1": 240, "top": 165},
+        {"text": "Limited", "x0": 243, "x1": 280, "top": 165},
+        {"text": "IT", "x0": 282, "x1": 294, "top": 165},
+        {"text": "40.00", "x0": 350, "x1": 375, "top": 165},
+        {"text": "Small", "x0": 200, "x1": 225, "top": 180},
+        {"text": "One", "x0": 228, "x1": 250, "top": 180},
+        {"text": "Banks", "x0": 280, "x1": 320, "top": 180},
+        {"text": "0.01", "x0": 350, "x1": 375, "top": 180},
+        {"text": "Small", "x0": 200, "x1": 225, "top": 195},
+        {"text": "Two", "x0": 228, "x1": 250, "top": 195},
+        {"text": "Banks", "x0": 280, "x1": 320, "top": 195},
+        {"text": "0.01", "x0": 350, "x1": 375, "top": 195},
+        {"text": "Small", "x0": 200, "x1": 225, "top": 210},
+        {"text": "Three", "x0": 228, "x1": 260, "top": 210},
+        {"text": "Banks", "x0": 280, "x1": 320, "top": 210},
+        {"text": "0.01", "x0": 350, "x1": 375, "top": 210},
+        {"text": "Small", "x0": 200, "x1": 225, "top": 225},
+        {"text": "Four", "x0": 228, "x1": 255, "top": 225},
+        {"text": "Banks", "x0": 280, "x1": 320, "top": 225},
+        {"text": "0.01", "x0": 350, "x1": 375, "top": 225},
+    ]
+    frame.attrs["page_text_full"] = (
+        "HDFC Large Cap Fund\nPORTFOLIO\nCompany/Instrument\n"
+        "HDFC Bank Limited Banks 60.00\nInfosys Limited IT - Software 40.00\n"
+        "Insurance 96.76\n"
+    )
+
+    parsed = HDFCAdapter().parse_holdings(
+        excel_frames=[],
+        pdf_table_frames=[frame],
+        pdf_text="",
+        context=SimpleNamespace(
+            source_document_id="hdfc-word-column",
+            source_url="local",
+            report_month=date(2026, 6, 1),
+        ),
+    )
+
+    assert parsed.metrics["total_percent_aum"] == 100.04
+    assert all(row["instrument_name"] != "Insurance" for row in parsed.holdings)
+
+
 def test_hdfc_dedupe_removes_fragmented_subtotal_rows():
     holdings = _dedupe_holdings([
         {"instrument_name": "HDFC Bank Ltd.", "percent_aum": 7.0},

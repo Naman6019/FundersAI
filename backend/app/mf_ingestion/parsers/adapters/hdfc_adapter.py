@@ -159,7 +159,7 @@ def _parse_hdfc_frame(frame: pd.DataFrame, context: ParseContext, fallback_schem
     holdings, total_percent = _extract_holdings(data_rows, instrument_idx, percent_idx, sector_idx)
     
     word_holdings = _extract_holdings_from_page_words(frame.attrs.get("page_words") or [])
-    if len(word_holdings) > len(holdings) and len(word_holdings) > 5:
+    if len(word_holdings) > 5:
         holdings = word_holdings
         total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in holdings), 6)
         
@@ -168,8 +168,12 @@ def _parse_hdfc_frame(frame: pd.DataFrame, context: ParseContext, fallback_schem
         holdings = _extract_holdings_from_blob(blob)
         total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in holdings), 6)
 
-    if page_text_full and _page_text_scoped_to_scheme(page_text_full, scheme_name):
-        holdings.extend(_extract_holdings_from_page_text(page_text_full))
+    if (
+        not holdings
+        and page_text_full
+        and _page_text_scoped_to_scheme(page_text_full, scheme_name)
+    ):
+        holdings = _extract_holdings_from_page_text(page_text_full)
         holdings = _dedupe_holdings(holdings)
         total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in holdings), 6)
     

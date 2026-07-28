@@ -7,3 +7,4 @@ from app.mf_ingestion.parsers.adapters.generic_portfolio_adapter import GenericP
 class MiraeAdapter(GenericPortfolioAdapter):
     amc_code = AMC_MIRAE
     scheme_markers = ("mirae asset",)
+    fractional_percent_cells = True

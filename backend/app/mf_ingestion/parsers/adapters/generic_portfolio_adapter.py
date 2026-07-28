@@ -40,6 +40,7 @@ class GenericPortfolioAdapter(BaseAMCAdapter):
 
     amc_code = ""
     scheme_markers: tuple[str, ...] = ()
+    fractional_percent_cells = False
 
     def parse_excel_frame_many(self, frame: pd.DataFrame, context: ParseContext) -> list[ParsedDocument]:
         return self._parse_frame_many(frame, context)
@@ -90,6 +91,8 @@ class GenericPortfolioAdapter(BaseAMCAdapter):
             holdings = _extract_rows(rows[header_index + 1:next_header], columns)
             if not holdings:
                 continue
+            if self.fractional_percent_cells:
+                holdings = _normalize_fractional_percent_cells(holdings)
             total_percent = round(sum(float(row["percent_aum"]) for row in holdings), 6)
             warnings: list[str] = []
             if report_month is None:
@@ -192,6 +195,21 @@ def _extract_rows(rows: list[list[object]], columns: dict[str, int]) -> list[dic
         if not previous or float(item["percent_aum"]) > float(previous["percent_aum"]):
             holdings[key] = item
     return list(holdings.values())
+
+
+def _normalize_fractional_percent_cells(
+    holdings: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    total = sum(float(row.get("percent_aum") or 0.0) for row in holdings)
+    if not holdings or not 0 < total <= 2.0:
+        return holdings
+    return [
+        {
+            **row,
+            "percent_aum": round(float(row.get("percent_aum") or 0.0) * 100.0, 6),
+        }
+        for row in holdings
+    ]
 
 
 def _find_report_month(rows: list[list[object]]) -> date | None:

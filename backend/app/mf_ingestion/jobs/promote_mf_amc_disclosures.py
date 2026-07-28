@@ -92,6 +92,84 @@ def _build_target_scopes(
     }
 
 
+def _source_recency_key(document: dict[str, Any]) -> tuple[str, str]:
+    return (
+        str(document.get("parsed_at") or document.get("downloaded_at") or ""),
+        str(document.get("id") or ""),
+    )
+
+
+def _preferred_document_type(scope: str) -> str:
+    return "factsheet" if scope in CORE_SCOPES else "portfolio_disclosure"
+
+
+def _dedupe_target_scopes(
+    targets: dict[str, list[str]],
+    documents: list[dict[str, Any]],
+    requested_scopes: list[str],
+) -> dict[str, list[str]]:
+    metadata = {str(row.get("id")): row for row in documents if row.get("id")}
+    selected: dict[str, set[str]] = defaultdict(set)
+
+    for scope in requested_scopes:
+        source_ids = [
+            source_document_id
+            for source_document_id, scopes in targets.items()
+            if scope in scopes
+        ]
+
+        checksum_groups: dict[str, list[str]] = defaultdict(list)
+        for source_document_id in source_ids:
+            document = metadata.get(source_document_id, {})
+            checksum = str(document.get("checksum") or "").strip()
+            checksum_groups[checksum or f"missing:{source_document_id}"].append(
+                source_document_id
+            )
+
+        checksum_winners: list[str] = []
+        preferred_type = _preferred_document_type(scope)
+        for group in checksum_groups.values():
+            checksum_winners.append(
+                max(
+                    group,
+                    key=lambda source_document_id: (
+                        str(
+                            metadata.get(source_document_id, {}).get("document_type")
+                            or ""
+                        )
+                        == preferred_type,
+                        _source_recency_key(metadata.get(source_document_id, {})),
+                    ),
+                )
+            )
+
+        url_groups: dict[tuple[str, str], list[str]] = defaultdict(list)
+        for source_document_id in checksum_winners:
+            document = metadata.get(source_document_id, {})
+            document_type = str(document.get("document_type") or "").strip().lower()
+            source_url = str(document.get("source_url") or "").strip()
+            key = (
+                document_type,
+                source_url or f"missing:{source_document_id}",
+            )
+            url_groups[key].append(source_document_id)
+
+        for group in url_groups.values():
+            winner = max(
+                group,
+                key=lambda source_document_id: _source_recency_key(
+                    metadata.get(source_document_id, {})
+                ),
+            )
+            selected[winner].add(scope)
+
+    requested_order = {scope: index for index, scope in enumerate(requested_scopes)}
+    return {
+        source_document_id: sorted(scopes, key=requested_order.__getitem__)
+        for source_document_id, scopes in sorted(selected.items())
+    }
+
+
 def _split_scope_groups(scopes: list[str]) -> list[list[str]]:
     groups: list[list[str]] = []
     core_scopes = [scope for scope in scopes if scope in CORE_SCOPES]
@@ -127,13 +205,24 @@ def collect_promotion_targets(
     )
     holdings = _compact_rows("mf_staging_holding_coverage_rows", report_month)
     sector_allocations = _compact_rows("mf_staging_sector_coverage_rows", report_month)
-    return _build_target_scopes(
+    targets = _build_target_scopes(
         amc=amc,
         requested_scopes=requested_scopes,
         candidates=candidates,
         holdings=holdings,
         sector_allocations=sector_allocations,
     )
+    if not targets:
+        return {}
+    documents = (
+        supabase.table("mf_raw_documents")
+        .select("id,document_type,checksum,source_url,downloaded_at,parsed_at")
+        .in_("id", list(targets))
+        .execute()
+        .data
+        or []
+    )
+    return _dedupe_target_scopes(targets, documents, requested_scopes)
 
 
 def build_amc_dry_run(

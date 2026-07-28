@@ -5,3 +5,4 @@ from app.mf_ingestion.parsers.adapters.generic_portfolio_adapter import GenericP
 class AdityaBirlaAdapter(GenericPortfolioAdapter):
     amc_code = AMC_ADITYA_BIRLA
     scheme_markers = ("aditya birla", "birla sun life", "absl ")
+    fractional_percent_cells = True

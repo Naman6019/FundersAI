@@ -2,6 +2,7 @@ from pathlib import Path
 
 from app.mf_ingestion.jobs.promote_mf_amc_disclosures import (
     _build_target_scopes,
+    _dedupe_target_scopes,
     _split_scope_groups,
 )
 
@@ -73,6 +74,95 @@ def test_amc_batch_promotion_validates_portfolio_scopes_independently() -> None:
         ["holdings"],
         ["sectors"],
     ]
+
+
+def test_amc_batch_promotion_keeps_newest_document_for_same_type_and_url() -> None:
+    targets = {
+        "old": ["holdings", "sectors"],
+        "new": ["holdings", "sectors"],
+    }
+    documents = [
+        {
+            "id": "old",
+            "document_type": "portfolio_disclosure",
+            "checksum": "old-checksum",
+            "source_url": "https://official.example/portfolio.xlsx",
+            "parsed_at": "2026-07-01T00:00:00+00:00",
+        },
+        {
+            "id": "new",
+            "document_type": "portfolio_disclosure",
+            "checksum": "new-checksum",
+            "source_url": "https://official.example/portfolio.xlsx",
+            "parsed_at": "2026-07-15T00:00:00+00:00",
+        },
+    ]
+
+    assert _dedupe_target_scopes(
+        targets,
+        documents,
+        ["holdings", "sectors"],
+    ) == {"new": ["holdings", "sectors"]}
+
+
+def test_amc_batch_promotion_uses_document_role_for_shared_checksum() -> None:
+    targets = {
+        "factsheet": ["risk", "holdings", "sectors"],
+        "portfolio": ["risk", "holdings", "sectors"],
+    }
+    documents = [
+        {
+            "id": "factsheet",
+            "document_type": "factsheet",
+            "checksum": "shared",
+            "source_url": "https://official.example/combined.pdf",
+            "parsed_at": "2026-07-15T00:00:00+00:00",
+        },
+        {
+            "id": "portfolio",
+            "document_type": "portfolio_disclosure",
+            "checksum": "shared",
+            "source_url": "https://official.example/combined.pdf",
+            "parsed_at": "2026-07-15T00:00:00+00:00",
+        },
+    ]
+
+    assert _dedupe_target_scopes(
+        targets,
+        documents,
+        ["risk", "holdings", "sectors"],
+    ) == {
+        "factsheet": ["risk"],
+        "portfolio": ["holdings", "sectors"],
+    }
+
+
+def test_amc_batch_promotion_retains_distinct_portfolio_documents() -> None:
+    targets = {
+        "active": ["holdings"],
+        "passive": ["holdings"],
+    }
+    documents = [
+        {
+            "id": "active",
+            "document_type": "portfolio_disclosure",
+            "checksum": "active-checksum",
+            "source_url": "https://official.example/active.xlsx",
+            "parsed_at": "2026-07-15T00:00:00+00:00",
+        },
+        {
+            "id": "passive",
+            "document_type": "portfolio_disclosure",
+            "checksum": "passive-checksum",
+            "source_url": "https://official.example/passive.xlsx",
+            "parsed_at": "2026-07-15T00:00:00+00:00",
+        },
+    ]
+
+    assert _dedupe_target_scopes(targets, documents, ["holdings"]) == {
+        "active": ["holdings"],
+        "passive": ["holdings"],
+    }
 
 
 def test_amc_batch_promotion_workflow_is_bounded_and_protected() -> None:

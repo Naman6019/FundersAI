@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
+from app.mf_ingestion.parsers.base_parser import ParsedDocument
+from app.mf_ingestion.parsers.holdings_parser import ParseBatchResult
 from app.mf_ingestion.services import parsing_service
-from app.mf_ingestion.services.parsing_service import ParsingService, _source_month_from_text
-from datetime import date
+from app.mf_ingestion.services.parsing_service import (
+    ParsingService,
+    _parsed_record_report_month_issue,
+    _source_month_from_text,
+)
 
 
 class _FakeSupabase:
@@ -252,3 +258,98 @@ def test_source_month_prefers_dotted_file_date_over_publication_folder():
     )
 
     assert _source_month_from_text(text) == date(2026, 6, 1)
+
+
+def test_parsed_record_month_mismatch_issue_compares_month_not_day():
+    assert _parsed_record_report_month_issue(
+        date(2026, 5, 31),
+        date(2026, 6, 1),
+    ) == "parsed_record_report_month_mismatch:2026-05-01!=2026-06-01"
+    assert _parsed_record_report_month_issue(
+        date(2026, 6, 30),
+        date(2026, 6, 1),
+    ) is None
+
+
+def test_parsed_record_month_mismatch_is_queued_without_staging(monkeypatch):
+    operations: list[tuple[str, str]] = []
+    reviews: list[dict] = []
+
+    class RecordingTable:
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self.operation = "select"
+
+        def delete(self):
+            self.operation = "delete"
+            return self
+
+        def upsert(self, *_args, **_kwargs):
+            self.operation = "upsert"
+            return self
+
+        def eq(self, *_args, **_kwargs):
+            return self
+
+        def execute(self):
+            operations.append((self.name, self.operation))
+            return SimpleNamespace(data=[])
+
+    class FakeHoldingsParser:
+        def __init__(self, _adapter) -> None:
+            pass
+
+        def parse_batch(self, *_args, **_kwargs):
+            return ParseBatchResult(
+                records=[
+                    ParsedDocument(
+                        scheme_name="DSP Old Month Fund",
+                        report_month=date(2026, 5, 1),
+                        holdings=[
+                            {
+                                "instrument_name": "HDFC Bank Limited",
+                                "percent_aum": 100.0,
+                            }
+                        ],
+                        metrics={"total_percent_aum": 100.0},
+                        confidence_score=95.0,
+                    )
+                ],
+                successful_sources=1,
+            )
+
+    monkeypatch.setattr(
+        parsing_service,
+        "supabase",
+        SimpleNamespace(table=lambda name: RecordingTable(name)),
+    )
+    monkeypatch.setattr(parsing_service, "HoldingsParser", FakeHoldingsParser)
+
+    service = object.__new__(ParsingService)
+    service._already_parsed = lambda _document_id: False
+    service._load_scheme_candidates = lambda _amc_code: []
+    service._mark_document = lambda *_args, **_kwargs: None
+    service._upload_parse_debug_snapshot = lambda *_args, **_kwargs: None
+    service.review_service = SimpleNamespace(
+        enqueue_document_review=lambda **payload: reviews.append(payload)
+    )
+
+    result = service._parse_holdings_document(
+        {
+            "id": "dsp-current-document",
+            "amc_code": "DSP",
+            "report_month": "2026-06-01",
+            "parse_status": "needs_reparse",
+            "source_url": "https://www.dspim.com/official.zip",
+            "parser_version": "test",
+        },
+        adapter=object(),
+        file_path="ignored.zip",
+    )
+
+    assert result["status"] == "needs_review"
+    assert result["inserted_holdings"] == 0
+    assert reviews[0]["validation_issues"] == [
+        "parsed_record_report_month_mismatch:2026-05-01!=2026-06-01"
+    ]
+    assert all(operation != "upsert" for _, operation in operations)
