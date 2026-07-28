@@ -7,7 +7,11 @@ import pytest
 
 from app.mf_ingestion.parsers.factsheet_parser import (
     FactsheetParser,
+    _axis_vector_riskometer_needles,
     _detect_dominant_factsheet_month,
+    _extract_absl_page_vector_riskometer_level,
+    _extract_axis_page_vector_riskometer_levels,
+    _extract_axis_ter_ratios,
     _extract_page_aligned_risk_levels,
     _extract_uti_ter_map,
     _map_document_order_risk_labels,
@@ -19,6 +23,143 @@ from app.mf_ingestion.parsers.factsheet_parser import (
     _vector_riskometer_needles,
     filter_factsheet_records_for_amc,
 )
+
+
+def _axis_very_high_drawings():
+    return [
+        {
+            "fill": (0.129, 0.118, 0.122),
+            "rect": fitz.Rect(50.8, 212.2, 106.4, 216.9),
+            "items": [
+                ("l", fitz.Point(50.8, 212.2), fitz.Point(106.4, 212.2)),
+                ("l", fitz.Point(106.4, 212.2), fitz.Point(106.4, 216.9)),
+                ("l", fitz.Point(106.4, 216.9), fitz.Point(50.8, 216.9)),
+                ("l", fitz.Point(50.8, 216.9), fitz.Point(50.8, 212.2)),
+            ],
+        },
+        {
+            "fill": (0.129, 0.118, 0.122),
+            "rect": fitz.Rect(78.4, 208.2, 91.3, 212.9),
+            "items": [
+                ("l", fitz.Point(78.4, 212.9), fitz.Point(91.3, 208.2)),
+                ("l", fitz.Point(91.3, 208.2), fitz.Point(89.0, 210.0)),
+                ("l", fitz.Point(89.0, 210.0), fitz.Point(91.0, 211.0)),
+                ("l", fitz.Point(91.0, 211.0), fitz.Point(79.0, 212.9)),
+                ("l", fitz.Point(79.0, 212.9), fitz.Point(80.0, 211.5)),
+                ("l", fitz.Point(80.0, 211.5), fitz.Point(78.4, 212.9)),
+                ("l", fitz.Point(78.4, 212.9), fitz.Point(91.3, 208.2)),
+            ],
+        },
+    ]
+
+
+def test_axis_ter_table_accepts_bare_numbers_wrapped_names_and_retail_columns():
+    text = """
+Discloser of Total Expenses Ratio as on 30th June, 2026
+Axis Large Cap Fund
+1.34
+0.67
+1.76
+0.98
+Axis NIFTY Bank ETF
+0.17
+0.20
+Axis CRISIL-IBX AAA Bond Financial Services - Sep
+2027 Index Fund
+0.68
+0.60
+0.80
+0.71
+Axis Liquid Fund
+0.18
+0.10
+0.11
+0.60
+0.21
+0.70
+Statutory Details
+"""
+
+    ratios = _extract_axis_ter_ratios(text)
+
+    assert ratios["axislargecapfund"] == 0.98
+    assert ratios["axisniftybanketf"] == 0.20
+    assert ratios["axiscrisilibxaaabondfinancialservicessep2027indexfund"] == 0.71
+    assert ratios["axisliquidfund"] == 0.21
+
+
+def test_axis_product_label_vector_maps_only_fund_needle():
+    drawings = _axis_very_high_drawings()
+
+    needles = _axis_vector_riskometer_needles(drawings)
+    assert len(needles) == 1
+    assert needles[0][0] == pytest.approx(78.6)
+    assert needles[0][1] == pytest.approx(208.2)
+    assert needles[0][2] == "Very High"
+    levels = _extract_axis_page_vector_riskometer_levels(
+        page_text="PRODUCT LABELLING\nAxis Large Cap Fund",
+        drawings=drawings,
+        text_blocks=[
+            (24.6, 49.7, 115.1, 61.5, "Axis Large Cap Fund", 0, 0),
+            (76.5, 168.2, 91.3, 176.5, "Fund", 0, 0),
+        ],
+        page_width=552.24,
+        page_height=750.96,
+        product_header_rects=[],
+    )
+
+    assert levels == {"axislargecapfund": "Very High"}
+
+
+def test_absl_vector_uses_scheme_riskometer_not_benchmark():
+    drawings = [
+        {
+            "fill": (0.137, 0.122, 0.126),
+            "rect": fitz.Rect(366.6, 783.6, 380.2, 788.6),
+            "items": [
+                ("l", fitz.Point(380.2, 784.0), fitz.Point(366.6, 788.6)),
+                ("l", fitz.Point(366.6, 788.6), fitz.Point(377.0, 783.6)),
+                ("l", fitz.Point(377.0, 783.6), fitz.Point(380.2, 784.0)),
+            ],
+        }
+    ]
+
+    levels = _extract_absl_page_vector_riskometer_level(
+        page_text=(
+            "Aditya Birla Sun Life Mutual Fund\n"
+            "This product is suitable for investors who are seeking*:\n"
+            "Aditya Birla Sun Life Large Cap Fund\n"
+        ),
+        drawings=drawings,
+        header_rects=[
+            fitz.Rect(346.3, 733.8, 393.0, 742.6),
+            fitz.Rect(511.1, 729.0, 557.8, 737.8),
+        ],
+    )
+
+    assert levels == {"adityabirlasunlifelargecapfund": "Very High"}
+
+
+def test_absl_closing_aum_uses_last_day_value():
+    text = """
+Aditya Birla Sun Life Large Cap Fund
+AUM as on June 30, 2026 (in ₹Crore)
+Monthly Average AUM
+71.92
+AUM as on last day
+71.68
+Base Expense Ratio
+Direct Plan: 0.74%
+Benchmark: NIFTY 100 TRI
+Fund Manager: Mr. Sample Manager
+"""
+
+    record = FactsheetParser().parse_text(
+        text,
+        report_month=date(2026, 6, 1),
+    )[0]
+
+    assert record.aum == 71.68
 
 
 def test_factsheet_parser_extracts_ppfas_core_fields_from_text():

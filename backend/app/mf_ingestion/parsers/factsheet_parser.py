@@ -756,6 +756,23 @@ def _extract_vector_riskometer_levels(
         for page in document:
             raw_text = page.get_text("text")
             document_texts.append(raw_text)
+            risk_by_scheme.update(
+                _extract_axis_page_vector_riskometer_levels(
+                    page_text=raw_text,
+                    drawings=page.get_drawings(),
+                    text_blocks=page.get_text("blocks"),
+                    page_width=float(page.rect.width),
+                    page_height=float(page.rect.height),
+                    product_header_rects=page.search_for("Product Riskometer"),
+                )
+            )
+            risk_by_scheme.update(
+                _extract_absl_page_vector_riskometer_level(
+                    page_text=raw_text,
+                    drawings=page.get_drawings(),
+                    header_rects=page.search_for("Risk-o-meter"),
+                )
+            )
             if "ALL PRODUCT LABELLING DISCLOSURES" in raw_text.upper():
                 uti_risks = _uti_vector_riskometer_rows(
                     page.get_drawings(),
@@ -1036,6 +1053,204 @@ def _single_scheme_vector_risk_level(
     return scheme_name, next(iter(labels))
 
 
+def _extract_axis_page_vector_riskometer_levels(
+    *,
+    page_text: str,
+    drawings: list[dict[str, Any]],
+    text_blocks: list[tuple[Any, ...]],
+    page_width: float,
+    page_height: float,
+    product_header_rects: list[Any],
+) -> dict[str, str]:
+    upper_text = str(page_text or "").upper()
+    if "AXIS" not in upper_text:
+        return {}
+    needles = _axis_vector_riskometer_needles(drawings)
+    if not needles:
+        return {}
+
+    # Debt pages use a row table with Product and Benchmark riskometer columns.
+    if product_header_rects:
+        product_rows = sorted(
+            {
+                (row_y, label)
+                for pivot_x, row_y, label in needles
+                if any(
+                    float(header.x0) - 20.0 <= pivot_x <= float(header.x1) + 20.0
+                    for header in product_header_rects
+                )
+            }
+        )
+        scheme_names = _riskometer_row_scheme_names(
+            text_blocks,
+            product_rows,
+            page_height=page_height,
+        )
+        if len(scheme_names) != len(product_rows):
+            return {}
+        return {
+            _scheme_key(scheme_name): label
+            for scheme_name, (_, label) in zip(scheme_names, product_rows)
+        }
+
+    if "PRODUCT LABELLING" not in upper_text:
+        return {}
+
+    # Equity/hybrid pages place two cards per row. Each card has an exact "Fund"
+    # label above the scheme needle and a separate benchmark needle.
+    scheme_blocks: list[tuple[float, float, float, str]] = []
+    fund_headers: list[tuple[float, float, float, float]] = []
+    for block in text_blocks:
+        if len(block) < 5:
+            continue
+        block_text = " ".join(str(block[4] or "").split())
+        if block_text.lower() == "fund":
+            fund_headers.append(
+                tuple(float(value) for value in block[:4])
+            )
+            continue
+        scheme_name = _first_scheme_name(_preprocess_factsheet_text(str(block[4] or "")))
+        if scheme_name and scheme_name.lower().startswith("axis "):
+            scheme_blocks.append(
+                (float(block[0]), float(block[1]), float(block[3]), scheme_name)
+            )
+
+    risk_by_scheme: dict[str, str] = {}
+    for x0, _, scheme_bottom, scheme_name in scheme_blocks:
+        is_left_column = x0 < page_width / 2.0
+        next_scheme_y = min(
+            (
+                other_y
+                for other_x, other_y, _, _ in scheme_blocks
+                if (other_x < page_width / 2.0) == is_left_column
+                and other_y > scheme_bottom
+            ),
+            default=page_height,
+        )
+        headers = [
+            header
+            for header in fund_headers
+            if (header[0] < page_width / 2.0) == is_left_column
+            and header[1] >= scheme_bottom - 2.0
+            and header[1] < next_scheme_y
+        ]
+        candidate_needles = [
+            (pivot_x, label)
+            for pivot_x, row_y, label in needles
+            if (pivot_x < page_width / 2.0) == is_left_column
+            and row_y > scheme_bottom
+            and row_y < next_scheme_y
+        ]
+        if len(headers) == 1:
+            header = headers[0]
+            header_center = (header[0] + header[2]) / 2.0
+            candidate_needles = [
+                candidate
+                for candidate in candidate_needles
+                if abs(candidate[0] - header_center) <= 25.0
+            ]
+        elif len(candidate_needles) == 2:
+            # The card's scheme riskometer is left of its benchmark riskometer.
+            candidate_needles = [min(candidate_needles, key=lambda value: value[0])]
+        if len(candidate_needles) == 1:
+            risk_by_scheme[_scheme_key(scheme_name)] = candidate_needles[0][1]
+    return risk_by_scheme
+
+
+def _axis_vector_riskometer_needles(
+    drawings: list[dict[str, Any]],
+) -> list[tuple[float, float, str]]:
+    needles: list[tuple[float, float, str]] = []
+    for drawing in drawings:
+        fill = drawing.get("fill")
+        rect = drawing.get("rect")
+        items = drawing.get("items") or []
+        if (
+            not fill
+            or rect is None
+            or max(float(value) for value in fill) >= 0.2
+            or len(items) != 7
+            or any(item[0] != "l" for item in items)
+            or not (5.0 <= float(rect.width) <= 30.0)
+            or not (2.0 <= float(rect.height) <= 15.0)
+        ):
+            continue
+
+        baselines = []
+        for baseline in drawings:
+            baseline_fill = baseline.get("fill")
+            baseline_rect = baseline.get("rect")
+            if (
+                not baseline_fill
+                or baseline_rect is None
+                or max(float(value) for value in baseline_fill) >= 0.2
+                or not (40.0 <= float(baseline_rect.width) <= 70.0)
+                or not (1.0 <= float(baseline_rect.height) <= 8.0)
+                or abs(float(baseline_rect.y0) - float(rect.y1)) > 8.0
+                or float(rect.x0) < float(baseline_rect.x0) - 2.0
+                or float(rect.x1) > float(baseline_rect.x1) + 2.0
+            ):
+                continue
+            baselines.append(baseline_rect)
+        if not baselines:
+            continue
+
+        baseline_rect = min(
+            baselines,
+            key=lambda value: abs(float(value.y0) - float(rect.y1)),
+        )
+        pivot_x = (float(baseline_rect.x0) + float(baseline_rect.x1)) / 2.0
+        pivot_y = float(rect.y1)
+        points = [
+            point
+            for item in items
+            for point in item[1:]
+            if hasattr(point, "x")
+        ]
+        if not points:
+            continue
+        tip = max(
+            points,
+            key=lambda point: (
+                ((float(point.x) - pivot_x) ** 2)
+                + ((float(point.y) - pivot_y) ** 2)
+            ),
+        )
+        angle = degrees(
+            atan2(
+                pivot_y - float(tip.y),
+                float(tip.x) - pivot_x,
+            )
+        )
+        label = _risk_label_from_needle_angle(angle)
+        if label:
+            needles.append((pivot_x, float(rect.y0), label))
+    return sorted(set(needles), key=lambda value: (value[1], value[0]))
+
+
+def _extract_absl_page_vector_riskometer_level(
+    *,
+    page_text: str,
+    drawings: list[dict[str, Any]],
+    header_rects: list[Any],
+) -> dict[str, str]:
+    if "ADITYA BIRLA SUN LIFE" not in str(page_text or "").upper() or not header_rects:
+        return {}
+    # The left riskometer is the scheme; the right one is the benchmark.
+    scheme_header = min(header_rects, key=lambda rect: float(rect.x0))
+    result = _single_scheme_vector_risk_level(
+        page_text,
+        drawings,
+        [scheme_header],
+    )
+    if not result:
+        return {}
+    scheme_name, risk_level = result
+    if not scheme_name.lower().startswith("aditya birla sun life "):
+        return {}
+    return {_scheme_key(scheme_name): risk_level}
+
+
 def _product_label_scheme_name(page_text: str) -> str | None:
     text = str(page_text or "")
     marker = re.search(r"(?i)This\s+product\s+is\s+suitable", text)
@@ -1227,6 +1442,7 @@ def _normalize_risk_label(value: str) -> str | None:
 
 def _extract_aum(chunk: str) -> float | None:
     patterns = (
+        r"\bAUM\s+as\s+on\s+last\s+day\s*\n+\s*([0-9][0-9,]*(?:\.[0-9]+)?)\b",
         r"\bAUM\s+as\s+on\s+[^\n:]{3,45}\s*:\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|crs?\.?)\b",
         r"\bMonth\s+end\s+AUM\s+(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\b",
         r"\bNet\s+AUM\s*(?:\(\s*Cr\.?\s*\)|₹\s*Crores?)\s*\n+\s*([0-9][0-9,]*(?:\.[0-9]+)?)\b",
@@ -1324,33 +1540,72 @@ def _extract_axis_ter_ratios(text: str) -> dict[str, float]:
     ratios: dict[str, float] = {}
     in_ter_section = False
 
-    for idx, line in enumerate(lines):
+    idx = 0
+    while idx < len(lines):
+        line = lines[idx]
         low = line.lower()
         if "discloser of total expenses ratio" in low or "disclosure of total expenses ratio" in low:
             in_ter_section = True
+            idx += 1
             continue
         if not in_ter_section:
+            idx += 1
             continue
         if _axis_ter_stop_line(line):
             in_ter_section = False
+            idx += 1
             continue
-        if not _looks_like_axis_table_scheme_name(line):
+        if not low.startswith("axis "):
+            idx += 1
+            continue
+
+        name_parts = [line]
+        cursor = idx + 1
+        while cursor < len(lines):
+            tail = lines[cursor]
+            if tail.lower().startswith("axis "):
+                break
+            if _parse_axis_ter_number(tail) is not None:
+                break
+            if _axis_ter_stop_line(tail):
+                break
+            if tail:
+                name_parts.append(tail)
+            cursor += 1
+        scheme_name = _clean_line(" ".join(name_parts))
+        if not _looks_like_axis_table_scheme_name(scheme_name):
+            idx += 1
             continue
 
         percentages: list[float] = []
-        for tail in lines[idx + 1 : idx + 8]:
-            if _axis_ter_stop_line(tail) or _looks_like_axis_table_scheme_name(tail):
+        while cursor < len(lines):
+            tail = lines[cursor]
+            if tail.lower().startswith("axis ") or _axis_ter_stop_line(tail):
                 break
-            value = _parse_percent_text(tail)
-            if value is not None:
-                percentages.append(value)
-        if not percentages:
+            value = _parse_axis_ter_number(tail)
+            if value is None:
+                if tail:
+                    break
+                cursor += 1
+                continue
+            percentages.append(value)
+            cursor += 1
+        if len(percentages) not in {2, 4, 6}:
+            idx = max(cursor, idx + 1)
             continue
 
-        direct_ratio = percentages[1] if len(percentages) >= 2 else percentages[0]
+        direct_ratio = percentages[-2] if len(percentages) == 6 else percentages[-1]
         if _valid_expense_ratio(direct_ratio):
-            ratios[_scheme_key(line)] = direct_ratio
+            ratios[_scheme_key(scheme_name)] = direct_ratio
+        idx = max(cursor, idx + 1)
     return ratios
+
+
+def _parse_axis_ter_number(value: str) -> float | None:
+    match = re.fullmatch(r"\s*([0-9]+(?:\.[0-9]+)?)\s*%?\s*", str(value or ""))
+    if not match:
+        return None
+    return _parse_number(match.group(1))
 
 
 def _extract_axis_manager_map(text: str) -> dict[str, str]:
@@ -1401,8 +1656,6 @@ def _axis_scheme_names_from_text(text: str) -> list[str]:
 def _looks_like_axis_table_scheme_name(line: str) -> bool:
     text = _clean_line(line)
     if not text.lower().startswith("axis "):
-        return False
-    if " - " in text and not text.lower().endswith("plan"):
         return False
     return bool(re.search(r"\b(Fund|ETF|FOF|FoF|Plan)\b", text, flags=re.IGNORECASE))
 
