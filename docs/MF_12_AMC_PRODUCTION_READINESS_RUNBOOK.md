@@ -53,6 +53,16 @@ The following rules always apply:
 - `20260727_add_mf_extraction_staging_and_promotion.sql` is present in production. Its staging tables are being queried and written successfully.
 - `20260728_allow_content_confirmed_discovery_month.sql` is applied in production.
 - Production verification on 2026-07-28 confirmed that `month_confirmation` accepts `confirmed`, `content_confirmed`, and `unconfirmed`.
+- Kotak core dry-run `30346969848` succeeded. Apply run `30347133742` failed before its first mutation because production exposes only the legacy three-argument promotion RPC.
+- `20260728_harden_mf_promotion_rpc_contract.sql` is prepared but not applied. It adds the report-month-bound four-argument RPCs, revalidates source/mapping/AMC/R2 evidence, rejects portfolio documents containing non-promotable rows, and revokes direct service-role access to the legacy signatures.
+
+Approval is required to apply:
+
+```text
+backend/migrations/20260728_harden_mf_promotion_rpc_contract.sql
+```
+
+After application, verify the REST schema lists `p_expected_report_month` for both promotion RPCs, rerun the Kotak dry-run, then retry the same core apply. Do not retry promotion before that verification.
 
 Applied migration:
 

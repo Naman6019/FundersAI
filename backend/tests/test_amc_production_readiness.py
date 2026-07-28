@@ -430,6 +430,27 @@ def test_holdings_promotion_reports_each_rejection_reason():
     ]
 
 
+def test_promotion_contract_migration_binds_month_and_revokes_legacy_rpcs():
+    sql = (
+        Path(__file__).parents[1]
+        / "migrations"
+        / "20260728_harden_mf_promotion_rpc_contract.sql"
+    ).read_text(encoding="utf-8")
+
+    assert sql.count("p_expected_report_month date") == 2
+    assert "candidate.report_month is distinct from p_expected_report_month" in sql
+    assert "source_row.report_month is distinct from p_expected_report_month" in sql
+    assert "h.validation_status <> 'valid'" in sql
+    assert (
+        "promote_mf_factsheet_candidate(uuid, text, text[]) "
+        "from public, anon, authenticated, service_role"
+    ) in sql
+    assert (
+        "promote_mf_holdings_document(uuid, text, text[]) "
+        "from public, anon, authenticated, service_role"
+    ) in sql
+
+
 def test_read_only_parser_smoke_aggregates_field_and_document_coverage():
     summary = _aggregate_results(
         [
