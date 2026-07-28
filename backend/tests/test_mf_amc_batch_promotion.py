@@ -1,10 +1,49 @@
 from pathlib import Path
+from types import SimpleNamespace
 
+from app.mf_ingestion.jobs import promote_mf_disclosures
 from app.mf_ingestion.jobs.promote_mf_amc_disclosures import (
     _build_target_scopes,
     _dedupe_target_scopes,
     _split_scope_groups,
 )
+
+
+class _PagedRpc:
+    def __init__(self, rows: list[dict]) -> None:
+        self.rows = rows
+        self.start = 0
+        self.end = len(rows) - 1
+
+    def range(self, start: int, end: int):
+        self.start = start
+        self.end = end
+        return self
+
+    def execute(self):
+        return SimpleNamespace(data=self.rows[self.start : self.end + 1])
+
+
+class _PagedRpcSupabase:
+    def __init__(self, rows: list[dict]) -> None:
+        self.rows = rows
+
+    def rpc(self, _function_name: str, _params: dict):
+        return _PagedRpc(self.rows)
+
+
+def test_rpc_rows_are_paginated_past_supabase_default_limit(monkeypatch) -> None:
+    rows = [{"id": index} for index in range(2_005)]
+    monkeypatch.setattr(
+        promote_mf_disclosures,
+        "supabase",
+        _PagedRpcSupabase(rows),
+    )
+
+    assert promote_mf_disclosures._fetch_all_rpc_rows(
+        "coverage_rows",
+        {"p_report_month": "2026-06-01"},
+    ) == rows
 
 
 def test_amc_batch_promotion_assigns_only_available_source_scopes() -> None:

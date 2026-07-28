@@ -22,6 +22,7 @@ from app.database import supabase
 from app.mf_ingestion.jobs.promote_mf_disclosures import (
     CORE_SCOPES,
     _fetch_all_rows,
+    _fetch_all_rpc_rows,
     _parse_report_month,
     _parse_scopes,
     apply_promotable_report,
@@ -183,12 +184,9 @@ def _split_scope_groups(scopes: list[str]) -> list[list[str]]:
 
 
 def _compact_rows(function_name: str, report_month: date) -> list[dict[str, Any]]:
-    return (
-        supabase.rpc(
-            function_name,
-            {"p_report_month": report_month.isoformat()},
-        ).execute().data
-        or []
+    return _fetch_all_rpc_rows(
+        function_name,
+        {"p_report_month": report_month.isoformat()},
     )
 
 

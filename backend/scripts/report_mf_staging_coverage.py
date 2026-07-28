@@ -12,6 +12,7 @@ if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
 from app.database import supabase
+from app.mf_ingestion.jobs.promote_mf_disclosures import _fetch_all_rpc_rows
 from app.mf_ingestion.sources.registry import PRODUCTION_TARGET_AMC_KEYS
 
 CORE_FIELDS = ("aum", "expense_ratio", "benchmark", "fund_manager", "risk_level")
@@ -73,12 +74,9 @@ def _get_filtered(
 
 
 def _get_compact_coverage_rows(function_name: str, report_month: str) -> list[dict[str, Any]]:
-    return (
-        supabase.rpc(
-            function_name,
-            {"p_report_month": report_month},
-        ).execute().data
-        or []
+    return _fetch_all_rpc_rows(
+        function_name,
+        {"p_report_month": report_month},
     )
 
 

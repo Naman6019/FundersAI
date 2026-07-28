@@ -63,6 +63,28 @@ def _fetch_all_rows(
         start += page_size
 
 
+def _fetch_all_rpc_rows(
+    function_name: str,
+    params: dict[str, Any],
+    *,
+    page_size: int = PAGE_SIZE,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    start = 0
+    while True:
+        page = (
+            supabase.rpc(function_name, params)
+            .range(start, start + page_size - 1)
+            .execute()
+            .data
+            or []
+        )
+        rows.extend(page)
+        if len(page) < page_size:
+            return rows
+        start += page_size
+
+
 def _available_core_scopes(candidate: dict[str, Any], requested_scopes: list[str]) -> list[str]:
     available: list[str] = []
     for scope in requested_scopes:
