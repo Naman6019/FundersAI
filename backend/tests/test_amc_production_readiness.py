@@ -484,6 +484,28 @@ def test_promotion_provider_payload_repair_preserves_scalar_evidence_atomically(
     assert "promote_mf_factsheet_candidate(uuid, text[], text, date)" in sql
 
 
+def test_atomic_factsheet_promotion_does_not_delegate_to_legacy_rpc():
+    sql = (
+        Path(__file__).parents[1]
+        / "migrations"
+        / "20260728_make_mf_factsheet_promotion_atomic.sql"
+    ).read_text(encoding="utf-8").lower()
+
+    assert "candidate.report_month is distinct from p_expected_report_month" in sql
+    assert "candidate.mapping_status <> 'mapped'" in sql
+    assert "candidate.checksum is distinct from source_row.checksum" in sql
+    assert "jsonb_typeof(snapshot_before->'provider_payload') = 'object'" in sql
+    assert "trace := trace || jsonb_build_object(" in sql
+    assert "insert into public.mf_promotion_runs" in sql
+    assert (
+        "return public.promote_mf_factsheet_candidate(\n"
+        "    p_candidate_id,\n"
+        "    requested_scopes,\n"
+        "    p_requested_by\n"
+        "  );"
+    ) not in sql
+
+
 def test_read_only_parser_smoke_aggregates_field_and_document_coverage():
     summary = _aggregate_results(
         [
