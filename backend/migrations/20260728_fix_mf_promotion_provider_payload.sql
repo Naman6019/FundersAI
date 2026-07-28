@@ -1,4 +1,6 @@
--- Add report-month-bound promotion RPCs without trusting the legacy three-argument entry points.
+-- Keep the bounded four-argument promotion contract compatible with legacy
+-- snapshots whose provider_payload is a JSON scalar rather than an object.
+-- The normalization and delegated promotion run in one RPC transaction.
 
 create or replace function public.promote_mf_factsheet_candidate(
   p_candidate_id uuid,
@@ -110,89 +112,7 @@ begin
 end;
 $$;
 
-create or replace function public.promote_mf_holdings_document(
-  p_source_document_id uuid,
-  p_scopes text[],
-  p_requested_by text,
-  p_expected_report_month date
-) returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  source_row public.mf_raw_documents%rowtype;
-  requested_scopes text[];
-  staged_count integer;
-  invalid_count integer;
-begin
-  select * into source_row
-  from public.mf_raw_documents
-  where id = p_source_document_id
-  for update;
-  if source_row.id is null then
-    raise exception 'source_document_not_found';
-  end if;
-  if p_expected_report_month is null
-     or source_row.report_month is distinct from p_expected_report_month then
-    raise exception 'source_report_month_mismatch';
-  end if;
-  if lower(coalesce(source_row.storage_backend, '')) <> 'r2'
-     or source_row.storage_key is null
-     or source_row.checksum is null then
-    raise exception 'source_r2_evidence_missing';
-  end if;
-
-  select coalesce(array_agg(distinct scope), '{}')
-  into requested_scopes
-  from unnest(coalesce(p_scopes, '{}')) scope
-  where scope in ('holdings', 'sectors');
-  if cardinality(requested_scopes) = 0 then
-    raise exception 'promotion_scope_required';
-  end if;
-
-  select count(*) into staged_count
-  from public.mf_scheme_holdings
-  where source_document_id = p_source_document_id;
-  if staged_count = 0 then
-    raise exception 'staged_holdings_missing';
-  end if;
-
-  select count(*) into invalid_count
-  from public.mf_scheme_holdings h
-  left join public.mutual_fund_family_mapping m
-    on m.scheme_code = h.mapped_scheme_code
-  left join public.mutual_fund_core_snapshot s
-    on s.scheme_code = h.mapped_scheme_code
-  where h.source_document_id = p_source_document_id
-    and (
-      h.validation_status <> 'valid'
-      or h.mapping_status <> 'mapped'
-      or h.mapped_scheme_code is null
-      or h.mapped_family_id is null
-      or coalesce(h.mapping_confidence, 0) < 90
-      or m.family_id is distinct from h.mapped_family_id
-      or not public.mf_snapshot_matches_amc(source_row.amc_code, s.amc_name)
-      or h.report_month is distinct from source_row.report_month
-      or h.mapped_scheme_code !~ '^[0-9]+$'
-    );
-  if invalid_count > 0 then
-    raise exception 'staged_holdings_contain_non_promotable_rows';
-  end if;
-
-  return public.promote_mf_holdings_document(
-    p_source_document_id,
-    requested_scopes,
-    p_requested_by
-  );
-end;
-$$;
-
-revoke all on function public.promote_mf_factsheet_candidate(uuid, text[], text) from public, anon, authenticated, service_role;
-revoke all on function public.promote_mf_holdings_document(uuid, text[], text) from public, anon, authenticated, service_role;
-
-revoke all on function public.promote_mf_factsheet_candidate(uuid, text[], text, date) from public, anon, authenticated;
-grant execute on function public.promote_mf_factsheet_candidate(uuid, text[], text, date) to service_role;
-
-revoke all on function public.promote_mf_holdings_document(uuid, text[], text, date) from public, anon, authenticated;
-grant execute on function public.promote_mf_holdings_document(uuid, text[], text, date) to service_role;
+revoke all on function public.promote_mf_factsheet_candidate(uuid, text[], text, date)
+  from public, anon, authenticated;
+grant execute on function public.promote_mf_factsheet_candidate(uuid, text[], text, date)
+  to service_role;

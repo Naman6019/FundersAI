@@ -465,6 +465,25 @@ def test_promotion_contract_migration_binds_month_and_revokes_legacy_rpcs():
     ) in sql
 
 
+def test_promotion_provider_payload_repair_preserves_scalar_evidence_atomically():
+    sql = (
+        Path(__file__).parents[1]
+        / "migrations"
+        / "20260728_fix_mf_promotion_provider_payload.sql"
+    ).read_text(encoding="utf-8").lower()
+
+    assert "jsonb_typeof(provider_payload) = 'object'" in sql
+    assert "jsonb_build_object('legacy_provider_payload', provider_payload)" in sql
+    assert (
+        "promote_mf_factsheet_candidate(\n"
+        "    p_candidate_id,\n"
+        "    requested_scopes,\n"
+        "    p_requested_by\n"
+        "  )"
+    ) in sql
+    assert "promote_mf_factsheet_candidate(uuid, text[], text, date)" in sql
+
+
 def test_read_only_parser_smoke_aggregates_field_and_document_coverage():
     summary = _aggregate_results(
         [

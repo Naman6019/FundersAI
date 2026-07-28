@@ -215,7 +215,17 @@ begin
     raise exception 'candidate_amc_mismatch';
   end if;
 
-  trace := coalesce(snapshot_before->'provider_payload', '{}'::jsonb);
+  trace := case
+    when snapshot_before->'provider_payload' is null
+      or jsonb_typeof(snapshot_before->'provider_payload') = 'null'
+      then '{}'::jsonb
+    when jsonb_typeof(snapshot_before->'provider_payload') = 'object'
+      then snapshot_before->'provider_payload'
+    else jsonb_build_object(
+      'legacy_provider_payload',
+      snapshot_before->'provider_payload'
+    )
+  end;
   trace := jsonb_set(
     trace,
     '{amc_staged_promotion}',
