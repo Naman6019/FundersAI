@@ -77,7 +77,7 @@ def _get_by_source_document_ids(
     columns: str,
     source_document_ids: list[str],
     *,
-    chunk_size: int = 20,
+    chunk_size: int = 1,
     page_size: int = 1000,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
@@ -85,11 +85,13 @@ def _get_by_source_document_ids(
         chunk = source_document_ids[chunk_start : chunk_start + chunk_size]
         start = 0
         while True:
+            query = supabase.table(table).select(columns)
+            if len(chunk) == 1:
+                query = query.eq("source_document_id", chunk[0])
+            else:
+                query = query.in_("source_document_id", chunk)
             page = (
-                supabase.table(table)
-                .select(columns)
-                .in_("source_document_id", chunk)
-                .order("id")
+                query.order("id")
                 .range(start, start + page_size - 1)
                 .execute()
                 .data

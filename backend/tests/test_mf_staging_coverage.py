@@ -27,6 +27,11 @@ class _FakeQuery:
         self.source_ids = values
         return self
 
+    def eq(self, column, value):
+        assert column == "source_document_id"
+        self.source_ids = [value]
+        return self
+
     def order(self, column):
         assert column == "id"
         return self
