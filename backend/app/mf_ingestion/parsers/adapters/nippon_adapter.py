@@ -37,6 +37,14 @@ SUMMARY_ROW_MARKERS = (
     "index",
 )
 
+BALANCE_COMPONENT_MARKERS = (
+    "cash",
+    "net current assets",
+    "net receivables",
+    "triparty repo",
+    "treps",
+)
+
 
 class NipponAdapter(BaseAMCAdapter):
     amc_code = AMC_NIPPON
@@ -109,11 +117,12 @@ def _parse_nippon_frame(frame: pd.DataFrame, context: ParseContext) -> dict[str,
     raw_components: list[dict[str, Any]] = []
     for row in rows[header_idx + 1 :]:
         percent = _parse_percent(_safe_get(row, columns.get("percent_aum")))
-        if percent is None or percent <= 0.0 or percent > 100.0:
-            continue
-
         instrument_name = normalize_instrument_name(_safe_get(row, columns.get("instrument_name")))
         if not instrument_name or _is_summary_or_noise_row(instrument_name):
+            continue
+        if percent is None or percent > 100.0 or percent < -100.0:
+            continue
+        if percent <= 0.0 and not _is_balance_component(instrument_name):
             continue
 
         isin = _normalize_isin(_safe_get(row, columns.get("isin")))
@@ -144,7 +153,17 @@ def _parse_nippon_frame(frame: pd.DataFrame, context: ParseContext) -> dict[str,
     if not holdings:
         return None
 
-    total_percent = round(sum(float(row.get("percent_aum") or 0.0) for row in unique_components), 6)
+    balance_components = [
+        row
+        for row in unique_components
+        if not row.get("isin")
+        and _is_balance_component(str(row.get("instrument_name") or ""))
+    ]
+    total_percent = round(
+        sum(float(row.get("percent_aum") or 0.0) for row in holdings)
+        + sum(float(row.get("percent_aum") or 0.0) for row in balance_components),
+        6,
+    )
     report_month = _extract_report_month(rows) or context.report_month
     warnings: list[str] = []
     if report_month is None:
@@ -276,7 +295,7 @@ def _parse_percent(value: object) -> float | None:
     parsed = _parse_number(value)
     if parsed is None:
         return None
-    if 0.0 < parsed <= 1.0:
+    if 0.0 < abs(parsed) <= 1.0:
         parsed *= 100.0
     return round(parsed, 6)
 
@@ -306,7 +325,18 @@ def _is_summary_or_noise_row(instrument_name: str) -> bool:
         return True
     if len(text) <= 2:
         return True
-    return any(marker in text for marker in SUMMARY_ROW_MARKERS)
+    compact = " ".join(text.split())
+    return any(
+        compact == marker
+        or compact.startswith(f"{marker} -")
+        or compact.startswith(f"{marker}:")
+        for marker in SUMMARY_ROW_MARKERS
+    )
+
+
+def _is_balance_component(instrument_name: str) -> bool:
+    text = _clean_text(instrument_name).lower()
+    return any(marker in text for marker in BALANCE_COMPONENT_MARKERS)
 
 
 def _dedupe_components(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -318,7 +348,16 @@ def _dedupe_components(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not key.strip("|"):
             continue
         existing = deduped.get(key)
-        if not existing or float(row.get("percent_aum") or 0.0) > float(existing.get("percent_aum") or 0.0):
+        if not existing:
+            deduped[key] = row
+            continue
+        row_percent = float(row.get("percent_aum") or 0.0)
+        existing_percent = float(existing.get("percent_aum") or 0.0)
+        if not isin_key and _is_balance_component(name_key):
+            # Some official sheets repeat the balance label on the 100% total row.
+            if row_percent < existing_percent:
+                deduped[key] = row
+        elif row_percent > existing_percent:
             deduped[key] = row
     return list(deduped.values())
 

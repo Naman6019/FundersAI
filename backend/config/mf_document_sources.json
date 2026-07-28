@@ -6,11 +6,22 @@
       "amc": "HDFC",
       "document_type": "factsheet",
       "report_month": "2026-06-01",
-      "source_url": "https://files.hdfcfund.com/s3fs-public/2026-07/HDFC%20MF%20Index%20Solutions%20Factsheet%20-%20June%202026.pdf",
+      "source_url": "https://files.hdfcfund.com/s3fs-public/2026-07/HDFC%20MF%20Factsheet%20-%20June%202026_1.pdf",
       "discovery_page_url": "https://www.hdfcfund.com/mutual-funds/factsheets",
       "expected_file_type": ".pdf",
-      "title": "HDFC MF Index Solutions Factsheet - June 2026",
+      "title": "HDFC MF Factsheet - June 2026 revision 1",
       "priority_score": 8000000,
+      "discovery_agent_status": "promotable"
+    },
+    {
+      "amc": "HDFC",
+      "document_type": "factsheet",
+      "report_month": "2026-06-01",
+      "source_url": "https://files.hdfcfund.com/s3fs-public/2026-07/HDFC%20MF%20Index%20Solutions%20Factsheet%20-%20June%202026_1.pdf",
+      "discovery_page_url": "https://www.hdfcfund.com/mutual-funds/factsheets",
+      "expected_file_type": ".pdf",
+      "title": "HDFC MF Index Solutions Factsheet - June 2026 revision 1",
+      "priority_score": 7999999,
       "discovery_agent_status": "promotable"
     },
     {

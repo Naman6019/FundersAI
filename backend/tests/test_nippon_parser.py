@@ -36,7 +36,7 @@ def test_nippon_real_workbook_parses_equity_and_debt_sheets():
     growth = by_name["nippon india growth mid cap fund"]
     assert growth.report_month == date(2026, 5, 1)
     assert len(growth.holdings) >= 50
-    assert growth.metrics["total_percent_aum"] == pytest.approx(100.45)
+    assert growth.metrics["total_percent_aum"] == pytest.approx(100.0)
     assert growth.holdings[0]["instrument_name"] == "BSE Limited"
     assert growth.holdings[0]["isin"] == "INE118H01025"
     assert growth.holdings[0]["sector"] == "Capital Markets"
@@ -45,7 +45,7 @@ def test_nippon_real_workbook_parses_equity_and_debt_sheets():
     corporate_bond = by_name["nippon india corporate bond fund"]
     assert corporate_bond.report_month == date(2026, 5, 1)
     assert len(corporate_bond.holdings) >= 50
-    assert corporate_bond.metrics["total_percent_aum"] == pytest.approx(93.38)
+    assert corporate_bond.metrics["total_percent_aum"] == pytest.approx(100.0)
     assert any(row["sector"] == "CRISIL AAA" for row in corporate_bond.holdings)
 
 
@@ -69,6 +69,29 @@ def test_nippon_synthetic_frame_scales_percent_and_uses_non_isin_rows_for_total_
     assert parsed.holdings[0]["percent_aum"] == pytest.approx(5.12)
     assert parsed.metrics["total_percent_aum"] == pytest.approx(100.0)
     assert all(row["isin"] for row in parsed.holdings)
+
+
+def test_nippon_keeps_government_securities_and_excludes_derivative_notional_from_total():
+    frame = pd.DataFrame(
+        [
+            ["RLMF002", "Nippon India Debt Fund", None, None, None, None, None],
+            [None, "Monthly Portfolio Statement as on June 30,2026", None, None, None, None, None],
+            [None, "ISIN", "Name of the Instrument", "Industry / Rating", "Quantity", "Market/Fair Value", "% to NAV"],
+            ["GOI1", "IN2220250483", "7.48% State Government Securities", "SOVEREIGN", 1000, 5000.0, 0.60],
+            ["BOND1", "INE040A01034", "Sample Bond Limited", "CRISIL AAA", 1000, 5000.0, 0.38],
+            [None, None, "Triparty Repo", None, None, 100.0, 0.03],
+            [None, None, "Net Current Assets", None, None, -50.0, -0.01],
+            [None, None, "Sample Bond Limited_28/07/2026", None, None, 100.0, 0.25],
+            [None, None, "Net Current Assets", None, None, 10000.0, 1.0],
+        ]
+    )
+
+    parsed = NipponAdapter().parse_holdings([frame], [], "", _context())
+
+    assert len(parsed.holdings) == 2
+    assert parsed.holdings[0]["instrument_name"] == "7.48% State Government Securities"
+    assert parsed.metrics["total_percent_aum"] == pytest.approx(100.0)
+    assert "percent_aum_total_out_of_band" not in parsed.warnings
 
 
 def test_nippon_workbook_emits_each_valid_scheme_sheet():

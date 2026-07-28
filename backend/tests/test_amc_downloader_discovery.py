@@ -118,11 +118,14 @@ def test_hdfc_official_bucket_fallback_builds_prior_month_combined_factsheet() -
     assert factsheets[0].report_month == date(2026, 6, 1)
     assert factsheets[0].url == (
         "https://files.hdfcfund.com/s3fs-public/2026-07/"
-        "HDFC%20MF%20Factsheet%20-%20June%202026.pdf"
+        "HDFC%20MF%20Factsheet%20-%20June%202026_1.pdf"
     )
     assert factsheets[1].url == (
         "https://files.hdfcfund.com/s3fs-public/2026-07/"
-        "HDFC%20MF%20Index%20Solutions%20Factsheet%20-%20June%202026.pdf"
+        "HDFC%20MF%20Index%20Solutions%20Factsheet%20-%20June%202026_1.pdf"
+    )
+    assert factsheets[2].url.endswith(
+        "HDFC%20MF%20Factsheet%20-%20June%202026.pdf"
     )
     assert portfolios[0].url == factsheets[0].url
     assert portfolios[1].url == factsheets[1].url

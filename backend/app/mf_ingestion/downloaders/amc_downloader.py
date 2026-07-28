@@ -721,11 +721,18 @@ def _guess_hdfc_combined_factsheets(
         else:
             publication_month = date(report_month.year, report_month.month + 1, 1)
         recency_score = (report_month.year * 12 + report_month.month) * 10
-        file_names = (
-            f"HDFC MF Factsheet - {report_month.strftime('%B %Y')}.pdf",
-            f"HDFC MF Index Solutions Factsheet - {report_month.strftime('%B %Y')}.pdf",
+        base_file_names = (
+            f"HDFC MF Factsheet - {report_month.strftime('%B %Y')}",
+            f"HDFC MF Index Solutions Factsheet - {report_month.strftime('%B %Y')}",
         )
-        for file_name in file_names:
+        # HDFC may publish a corrected monthly revision with an `_1` suffix.
+        # Validate the revision first, then retain the original as a fallback.
+        file_names = tuple(
+            f"{base_name}{suffix}.pdf"
+            for suffix in ("_1", "")
+            for base_name in base_file_names
+        )
+        for revision_rank, file_name in enumerate(file_names):
             url = (
                 "https://files.hdfcfund.com/s3fs-public/"
                 f"{publication_month:%Y-%m}/{quote(file_name)}"
@@ -745,9 +752,12 @@ def _guess_hdfc_combined_factsheets(
                     or "https://www.hdfcfund.com/",
                     file_ext=".pdf",
                     report_month=report_month,
+                    # Preserve deterministic order within the same report month:
+                    # `_1` revisions must outrank the original upload.
                     priority_score=_generic_base_score(ext=".pdf", document_type=doc_type)
                     + recency_score
-                    + 60,
+                    + 60
+                    - revision_rank,
                 )
             )
     return documents

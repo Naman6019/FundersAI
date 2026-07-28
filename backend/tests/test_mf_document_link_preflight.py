@@ -14,8 +14,10 @@ import preflight_mf_document_links as preflight
 class _FakeSession:
     def __init__(self, response):
         self.response = response
+        self.last_kwargs = {}
 
-    def get(self, *_args, **_kwargs):
+    def get(self, *_args, **kwargs):
+        self.last_kwargs = kwargs
         return self.response
 
 
@@ -91,6 +93,40 @@ def test_validate_link_warns_on_stale_report_month():
 
     assert result["status"] == "ok"
     assert result["warnings"] == ["stale_report_month:2026-01-01"]
+
+
+def test_validate_hdfc_link_uses_browser_compatible_ranged_get():
+    response = SimpleNamespace(
+        status_code=206,
+        content=b"%PDF-1.7 official",
+        headers={"Content-Type": "application/pdf"},
+    )
+    session = _FakeSession(response)
+    candidate = preflight.LinkCandidate(
+        amc="HDFC",
+        document_type="factsheet",
+        source_url=(
+            "https://files.hdfcfund.com/s3fs-public/2026-07/"
+            "HDFC%20MF%20Factsheet%20-%20June%202026_1.pdf"
+        ),
+        expected_file_type=".pdf",
+        report_month=date(2026, 6, 1),
+        source="manifest",
+    )
+
+    result = preflight.validate_link(
+        candidate,
+        session=session,
+        timeout_seconds=1,
+        max_stale_months=2,
+        today=date(2026, 7, 28),
+    )
+
+    headers = session.last_kwargs["headers"]
+    assert result["status"] == "ok"
+    assert headers["Range"] == "bytes=0-65535"
+    assert headers["User-Agent"].startswith("Mozilla/5.0")
+    assert headers["Referer"] == "https://www.hdfcfund.com/mutual-funds/factsheets"
 
 
 def test_preflight_missing_link_gate_uses_registry_amc_code_alias(tmp_path: Path):

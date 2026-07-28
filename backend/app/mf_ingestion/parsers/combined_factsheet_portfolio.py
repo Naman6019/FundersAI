@@ -38,6 +38,13 @@ HEADER_MARKERS = (
     "weightage (%)",
     "portfolio",
 )
+PORTFOLIO_STOP_MARKERS = (
+    "base expense ratio",
+    "scheme performance",
+    "sip performance",
+    "systematic investment plan",
+    "performance -",
+)
 
 
 def parse_combined_factsheet_pdf(
@@ -49,8 +56,7 @@ def parse_combined_factsheet_pdf(
     extract_sector_allocations: bool = False,
 ) -> list[ParsedDocument]:
     pages = PDFTextParser().extract_pages(file_path)
-    records: list[ParsedDocument] = []
-    seen: set[str] = set()
+    records_by_scheme: dict[str, ParsedDocument] = {}
     for page_text in pages:
         parsed = parse_combined_factsheet_page(
             page_text,
@@ -62,11 +68,10 @@ def parse_combined_factsheet_pdf(
         if not parsed or not parsed.holdings:
             continue
         key = _scheme_key(parsed.scheme_name)
-        if key in seen:
-            continue
-        seen.add(key)
-        records.append(parsed)
-    return records
+        existing = records_by_scheme.get(key)
+        if existing is None or _record_quality(parsed) > _record_quality(existing):
+            records_by_scheme[key] = parsed
+    return list(records_by_scheme.values())
 
 
 def parse_combined_factsheet_page(
@@ -80,25 +85,79 @@ def parse_combined_factsheet_page(
     lines = [_clean(line) for line in str(page_text or "").splitlines()]
     lines = [line for line in lines if line]
     scheme_name = _find_scheme_name(lines, scheme_prefixes)
-    portfolio_start = _find_portfolio_start(lines)
-    if not scheme_name or portfolio_start is None:
+    portfolio_starts = _find_portfolio_starts(lines)
+    if not scheme_name or not portfolio_starts:
         return None
-    body_start = portfolio_start
-    if continue_after_grand_total:
-        equity_starts = [
-            index
-            for index, line in enumerate(lines[:portfolio_start])
-            if line.lower() in {"equity & equity related", "equity and equity related"}
-        ]
-        if equity_starts:
-            body_start = equity_starts[-1]
 
+    body_starts = list(portfolio_starts)
+    if continue_after_grand_total:
+        body_starts.extend(
+            index
+            for index, line in enumerate(lines[: max(portfolio_starts) + 1])
+            if line.lower() in {"equity & equity related", "equity and equity related"}
+        )
+        body_starts.extend(
+            index
+            for index, line in enumerate(lines[: max(portfolio_starts) + 1])
+            if line.lower().startswith("scan to invest now")
+        )
+
+    candidates = [
+        _extract_portfolio_candidate(
+            lines,
+            body_start,
+            continue_after_grand_total=continue_after_grand_total,
+        )
+        for body_start in sorted(set(body_starts))
+    ]
+    candidates = [candidate for candidate in candidates if candidate[0]]
+    if not candidates:
+        return None
+    rows, total_percent = max(
+        candidates,
+        key=lambda candidate: _portfolio_quality(candidate[1], len(candidate[0])),
+    )
+
+    warnings: list[str] = []
+    if not 70.0 <= total_percent <= 115.0:
+        warnings.append("percent_aum_total_out_of_band")
+    sector_allocations: list[dict] = []
+    if extract_sector_allocations:
+        sector_allocations, sector_issue = _extract_sector_allocations(lines)
+        if sector_issue:
+            warnings.append(sector_issue)
+    metrics = {"total_percent_aum": total_percent}
+    if sector_allocations:
+        metrics["sector_allocations"] = sector_allocations
+        metrics["sector_allocation_total"] = round(
+            sum(float(row["weight_pct"]) for row in sector_allocations),
+            6,
+        )
+    return ParsedDocument(
+        scheme_name=scheme_name,
+        report_month=context.report_month or _find_report_month(lines),
+        holdings=rows,
+        metrics=metrics,
+        warnings=warnings,
+        confidence_score=_confidence(rows, context.report_month, total_percent),
+    )
+
+
+def _extract_portfolio_candidate(
+    lines: list[str],
+    body_start: int,
+    *,
+    continue_after_grand_total: bool,
+) -> tuple[list[dict], float]:
     holdings: dict[str, dict] = {}
     current_sector: str | None = None
     pending: list[str] = []
     for line in lines[body_start + 1 :]:
         low = line.lower()
         if low.startswith("sector allocation"):
+            pending.clear()
+            continue
+        if low.startswith(PORTFOLIO_STOP_MARKERS):
             break
         if low.startswith("grand total") and not continue_after_grand_total:
             break
@@ -140,32 +199,8 @@ def parse_combined_factsheet_page(
             current_sector = normalized
 
     rows = list(holdings.values())
-    if not rows:
-        return None
     total_percent = round(sum(float(row["percent_aum"]) for row in rows), 6)
-    warnings: list[str] = []
-    if not 70.0 <= total_percent <= 115.0:
-        warnings.append("percent_aum_total_out_of_band")
-    sector_allocations: list[dict] = []
-    if extract_sector_allocations:
-        sector_allocations, sector_issue = _extract_sector_allocations(lines)
-        if sector_issue:
-            warnings.append(sector_issue)
-    metrics = {"total_percent_aum": total_percent}
-    if sector_allocations:
-        metrics["sector_allocations"] = sector_allocations
-        metrics["sector_allocation_total"] = round(
-            sum(float(row["weight_pct"]) for row in sector_allocations),
-            6,
-        )
-    return ParsedDocument(
-        scheme_name=scheme_name,
-        report_month=context.report_month or _find_report_month(lines),
-        holdings=rows,
-        metrics=metrics,
-        warnings=warnings,
-        confidence_score=_confidence(rows, context.report_month, total_percent),
-    )
+    return rows, total_percent
 
 
 def _find_scheme_name(lines: list[str], prefixes: tuple[str, ...]) -> str:
@@ -182,12 +217,32 @@ def _find_scheme_name(lines: list[str], prefixes: tuple[str, ...]) -> str:
     return ""
 
 
-def _find_portfolio_start(lines: list[str]) -> int | None:
+def _find_portfolio_starts(lines: list[str]) -> list[int]:
+    starts: list[int] = []
     for index, line in enumerate(lines):
         low = line.lower()
-        if low == "portfolio" or low.startswith("portfolio (as on") or low.startswith("portfolio (as of"):
-            return index
-    return None
+        if low.startswith("portfolio (as on") or low.startswith("portfolio (as of"):
+            starts.append(index)
+            continue
+        if low != "portfolio":
+            continue
+        evidence = " ".join(candidate.lower() for candidate in lines[index + 1 : index + 10])
+        if "issuer/instrument" in evidence or "% to net assets" in evidence:
+            starts.append(index)
+    return starts
+
+
+def _portfolio_quality(total_percent: float, holding_count: int) -> tuple[int, float, int]:
+    return (
+        int(85.0 <= total_percent <= 115.0),
+        -abs(total_percent - 100.0),
+        holding_count,
+    )
+
+
+def _record_quality(record: ParsedDocument) -> tuple[int, float, int]:
+    total_percent = float(record.metrics.get("total_percent_aum") or 0.0)
+    return _portfolio_quality(total_percent, len(record.holdings))
 
 
 def _candidate_name(pending: list[str]) -> str:

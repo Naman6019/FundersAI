@@ -21,7 +21,11 @@ from app.mf_ingestion.parsers.adapters.mirae_adapter import MiraeAdapter
 from app.mf_ingestion.parsers.adapters.motilal_adapter import MotilalAdapter
 from app.mf_ingestion.parsers.adapters.uti_adapter import UTIAdapter
 from app.mf_ingestion.parsers.base_parser import ParseContext
-from app.mf_ingestion.parsers.combined_factsheet_portfolio import parse_combined_factsheet_page
+from app.mf_ingestion.parsers.combined_factsheet_portfolio import (
+    parse_combined_factsheet_page,
+    parse_combined_factsheet_pdf,
+)
+from app.mf_ingestion.parsers.pdf_text_parser import PDFTextParser
 from app.mf_ingestion.services.ingestion_service import (
     IngestionService,
     _canonicalize_document_url,
@@ -241,10 +245,19 @@ def test_reviewed_source_manifest_keeps_exact_june_combined_factsheets():
         for row in documents
         if row["amc"] == "KOTAK" and row["report_month"] == "2026-06-01"
     }
+    hdfc_factsheets = [
+        row
+        for row in documents
+        if row["amc"] == "HDFC"
+        and row["document_type"] == "factsheet"
+        and row["report_month"] == "2026-06-01"
+    ]
 
     assert axis_scopes == {"factsheet", "portfolio_disclosure"}
     assert motilal_scopes == {"factsheet", "portfolio_disclosure"}
     assert kotak_scopes == {"factsheet", "portfolio_disclosure"}
+    assert len(hdfc_factsheets) == 2
+    assert all(row["source_url"].endswith("_1.pdf") for row in hdfc_factsheets)
     assert len(absl_factsheets) == 1
     assert absl_factsheets[0]["source_url"].endswith("/absl-factsheet_july-2026.pdf")
     assert get_source("motilal").factsheet_contains_holdings is True
@@ -319,6 +332,91 @@ def test_combined_factsheet_text_extracts_holdings_without_slow_table_scan(
     assert parsed.report_month == date(2026, 6, 1)
     assert parsed.metrics["total_percent_aum"] == 100.0
     assert len(parsed.holdings) == 2
+
+
+def test_kotak_two_column_page_selects_the_complete_portfolio_candidate():
+    parsed = parse_combined_factsheet_page(
+        """
+        KOTAK NIFTY200 QUALITY 30 ETF
+        Scan to Invest Now
+        Industrial Products
+        40.0
+        Cummins India Ltd.
+        40.0
+        Grand Total
+        100.0
+        PORTFOLIO
+        Issuer/Instrument
+        % to Net Assets
+        IT - Software
+        60.0
+        Infosys Ltd.
+        60.0
+        SECTOR ALLOCATION (%)
+        Banks
+        40.0
+        Systematic Investment Plan (SIP)
+        """,
+        ParseContext(
+            source_document_id="kotak-two-column",
+            source_url="https://www.kotakmf.com/official.pdf",
+            report_month=date(2026, 6, 1),
+        ),
+        scheme_prefixes=("kotak",),
+        continue_after_grand_total=True,
+    )
+
+    assert parsed is not None
+    assert parsed.metrics["total_percent_aum"] == 100.0
+    assert {row["instrument_name"] for row in parsed.holdings} == {
+        "Cummins India Ltd.",
+        "Infosys Ltd.",
+    }
+
+
+def test_combined_factsheet_pdf_keeps_best_duplicate_official_page(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setattr(
+        PDFTextParser,
+        "extract_pages",
+        lambda _self, _path: [
+            """
+            KOTAK NIFTY 50 ETF
+            PORTFOLIO
+            Issuer/Instrument
+            % to Net Assets
+            HDFC Bank Ltd.
+            20.0
+            """,
+            """
+            KOTAK NIFTY 50 ETF
+            PORTFOLIO
+            Issuer/Instrument
+            % to Net Assets
+            HDFC Bank Ltd.
+            60.0
+            Infosys Ltd.
+            40.0
+            """,
+        ],
+    )
+
+    records = parse_combined_factsheet_pdf(
+        str(tmp_path / "official.pdf"),
+        ParseContext(
+            source_document_id="kotak-duplicate-pages",
+            source_url="https://www.kotakmf.com/official.pdf",
+            report_month=date(2026, 6, 1),
+        ),
+        scheme_prefixes=("kotak",),
+        continue_after_grand_total=True,
+    )
+
+    assert len(records) == 1
+    assert records[0].metrics["total_percent_aum"] == 100.0
+    assert len(records[0].holdings) == 2
 
 
 def test_motilal_combined_factsheet_extracts_official_sector_allocation():

@@ -409,6 +409,9 @@ Current production-staging blockers before reacquisition and reparse:
 
 Locally implemented and verified:
 
+- prefer the official corrected June 2026 `_1.pdf` revisions for both the main
+  and Index Solutions consolidated factsheets, while retaining the original
+  filenames only as probed fallbacks;
 - parse the `FUND MANAGER / Name / Since / Total Exp` table;
 - extract the first dated month-end AUM value from `ASSETS UNDER MANAGEMENT`;
 - handle `Regular:` and `Direct:` rows under `EXPENSE RATIO`;
@@ -416,6 +419,13 @@ Locally implemented and verified:
 - map only the Scheme Riskometer needle, not the benchmark needle;
 - abstain on row-count or scheme-order mismatch;
 - combine the main and Index Solutions factsheets, reaching local raw-field coverage of AUM 100%, TER 81.44%, benchmark 100%, manager 87.63%, and risk 100% across 97 unique scheme keys.
+
+The consolidated PDFs are factsheet sources, not a complete replacement for
+the monthly portfolio files. Acquire the official June per-scheme XLSX files
+from HDFC's Monthly Portfolio page for complete holdings and sectors. In
+particular, the Index Solutions factsheet can publish top holdings plus an
+aggregate residual such as `Other Equity`; never promote that aggregate as a
+complete constituent portfolio.
 
 Verify against:
 

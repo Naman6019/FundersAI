@@ -21,6 +21,7 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 from app.mf_ingestion.services.source_manifest import load_source_manifest_documents
 from app.mf_ingestion.sources.registry import get_source
+from app.mf_ingestion.downloaders.amc_downloader import HDFC_PUBLIC_DOWNLOAD_USER_AGENT
 
 DOCUMENT_TYPES = ("factsheet", "portfolio_disclosure")
 DEFAULT_MANIFEST_PATH = "backend/config/mf_document_sources.json"
@@ -109,7 +110,7 @@ def validate_link(
     try:
         response = session.get(
             candidate.source_url,
-            headers={"User-Agent": os.getenv("MF_INGESTION_USER_AGENT", "FundersAIResearchBot/1.0")},
+            headers=_request_headers(candidate),
             timeout=timeout_seconds,
         )
     except Exception as exc:
@@ -141,6 +142,35 @@ def validate_link(
     if stale_warning:
         result["warnings"].append(stale_warning)
     return result
+
+
+def _request_headers(candidate: LinkCandidate) -> dict[str, str]:
+    headers = {
+        "User-Agent": os.getenv(
+            "MF_INGESTION_USER_AGENT",
+            "FundersAIResearchBot/1.0",
+        )
+    }
+    if candidate.amc.strip().upper() == "HDFC":
+        source = get_source("hdfc")
+        headers.update(
+            {
+                "User-Agent": HDFC_PUBLIC_DOWNLOAD_USER_AGENT,
+                "Referer": (
+                    source.factsheet_page_url
+                    if candidate.document_type == "factsheet"
+                    else source.portfolio_disclosure_page_url
+                )
+                or "https://www.hdfcfund.com/",
+                "Accept": (
+                    "application/pdf,application/vnd.ms-excel,"
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,"
+                    "*/*;q=0.8"
+                ),
+                "Range": "bytes=0-65535",
+            }
+        )
+    return headers
 
 
 def run_preflight(
