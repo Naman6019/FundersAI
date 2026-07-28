@@ -46,7 +46,7 @@ def test_amc_batch_promotion_assigns_only_available_source_scopes() -> None:
         "aggregate-sectors": ["sectors"],
         "core": ["risk", "ter_aum", "benchmark", "manager"],
         "debt-portfolio": ["holdings"],
-        "equity-portfolio": ["holdings", "sectors"],
+        "equity-portfolio": ["holdings"],
     }
 
 

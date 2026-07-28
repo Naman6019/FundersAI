@@ -237,6 +237,8 @@ def build_dry_run(
     rejected_holdings_rows = 0
     valid_sector_rows = 0
     rejected_sector_rows = 0
+    rejected_holding_examples: list[dict[str, Any]] = []
+    rejected_sector_examples: list[dict[str, Any]] = []
     holdings_rejection_reasons: Counter[str] = Counter()
     sector_rejection_reasons: Counter[str] = Counter()
     if CORE_SCOPES.intersection(scopes):
@@ -279,6 +281,17 @@ def build_dry_run(
                 warnings.extend(row_issues)
                 rejected_holdings_rows += 1
                 holdings_rejection_reasons.update(set(row_issues))
+                if len(rejected_holding_examples) < 20:
+                    rejected_holding_examples.append(
+                        {
+                            "id": row.get("id"),
+                            "raw_scheme_name": row.get("raw_scheme_name"),
+                            "mapped_scheme_code": row.get("mapped_scheme_code"),
+                            "mapped_family_id": row.get("mapped_family_id"),
+                            "validation_status": row.get("validation_status"),
+                            "issues": row_issues,
+                        }
+                    )
             else:
                 valid_holdings_rows += 1
         if valid_holdings_rows:
@@ -309,6 +322,18 @@ def build_dry_run(
                 warnings.extend(row_issues)
                 rejected_sector_rows += 1
                 sector_rejection_reasons.update(set(row_issues))
+                if len(rejected_sector_examples) < 20:
+                    rejected_sector_examples.append(
+                        {
+                            "id": row.get("id"),
+                            "raw_scheme_name": row.get("raw_scheme_name"),
+                            "mapped_scheme_code": row.get("mapped_scheme_code"),
+                            "mapped_family_id": row.get("mapped_family_id"),
+                            "validation_status": row.get("validation_status"),
+                            "sector_name": row.get("sector_name") or row.get("sector"),
+                            "issues": row_issues,
+                        }
+                    )
             else:
                 valid_sector_rows += 1
         if valid_sector_rows:
@@ -331,10 +356,12 @@ def build_dry_run(
         "promotable_holdings_rows": valid_holdings_rows,
         "rejected_holdings_rows": rejected_holdings_rows,
         "holdings_rejection_reasons": dict(sorted(holdings_rejection_reasons.items())),
+        "rejected_holding_examples": rejected_holding_examples,
         "staged_sector_rows": len(sector_allocations),
         "promotable_sector_rows": valid_sector_rows,
         "rejected_sector_rows": rejected_sector_rows,
         "sector_rejection_reasons": dict(sorted(sector_rejection_reasons.items())),
+        "rejected_sector_examples": rejected_sector_examples,
         "warnings": sorted(set(warnings)),
         "issues": sorted(set(issues)),
     }

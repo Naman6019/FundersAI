@@ -65,20 +65,25 @@ def _build_target_scopes(
                 targets[str(row["source_document_id"])].add("holdings")
 
     if "sectors" in requested_scopes:
-        for row in holdings:
-            if (
-                _normalize_amc(row.get("amc_code")) == normalized_amc
-                and row.get("source_document_id")
-                and row.get("sector") not in (None, "")
-            ):
-                targets[str(row["source_document_id"])].add("sectors")
-        for row in sector_allocations:
-            if (
-                _normalize_amc(row.get("amc_code")) == normalized_amc
-                and row.get("source_document_id")
-                and row.get("sector_name") not in (None, "")
-            ):
-                targets[str(row["source_document_id"])].add("sectors")
+        current_direct_sectors = [
+            row
+            for row in sector_allocations
+            if _normalize_amc(row.get("amc_code")) == normalized_amc
+            and row.get("source_document_id")
+            and row.get("sector_name") not in (None, "")
+        ]
+        # Official aggregate sector allocations supersede holdings-derived
+        # fallback sectors for an AMC/report month.
+        if not current_direct_sectors:
+            for row in holdings:
+                if (
+                    _normalize_amc(row.get("amc_code")) == normalized_amc
+                    and row.get("source_document_id")
+                    and row.get("sector") not in (None, "")
+                ):
+                    targets[str(row["source_document_id"])].add("sectors")
+        for row in current_direct_sectors:
+            targets[str(row["source_document_id"])].add("sectors")
 
     requested_order = {scope: index for index, scope in enumerate(requested_scopes)}
     return {
