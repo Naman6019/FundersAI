@@ -28,7 +28,10 @@ from app.mf_ingestion.services.ingestion_service import (
     _filter_expected_month_documents,
     _rank_discovered_documents,
 )
-from app.mf_ingestion.services.parsing_service import ParsingService
+from app.mf_ingestion.services.parsing_service import (
+    ParsingService,
+    _normalize_sector_allocations,
+)
 from app.mf_ingestion.jobs.promote_mf_disclosures import (
     _available_core_scopes,
     _fetch_all_rows,
@@ -361,6 +364,27 @@ def test_motilal_combined_factsheet_extracts_official_sector_allocation():
         {"sector": "Banks", "weight_pct": 20.0},
         {"sector": "IT - Software", "weight_pct": 30.0},
         {"sector": "Finance", "weight_pct": 50.0},
+    ]
+
+
+def test_sector_staging_aggregates_duplicate_names_before_upsert():
+    assert _normalize_sector_allocations(
+        [
+            {"sector": "Banks", "weight_pct": 20.0},
+            {"sector": " banks ", "weight_pct": 5.5},
+            {"sector": "IT - Software", "weight_pct": 30.0},
+        ]
+    ) == [
+        {
+            "sector": "Banks",
+            "sector_normalized": "banks",
+            "weight_pct": 25.5,
+        },
+        {
+            "sector": "IT - Software",
+            "sector_normalized": "it - software",
+            "weight_pct": 30.0,
+        },
     ]
 
 

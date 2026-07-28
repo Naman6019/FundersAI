@@ -444,18 +444,19 @@ class ParsingService:
                 and sector_allocations
                 and parsed.report_month
             ):
+                normalized_sector_allocations = _normalize_sector_allocations(
+                    sector_allocations
+                )
                 sector_rows = [
                     {
                         "scheme_id": scheme_id,
                         "report_month": parsed.report_month.isoformat(),
-                        "sector_name": str(row.get("sector") or "").strip(),
-                        "sector_name_normalized": str(row.get("sector") or "").strip().lower(),
+                        "sector_name": row["sector"],
+                        "sector_name_normalized": row["sector_normalized"],
                         "weight_pct": row.get("weight_pct"),
                         "source_document_id": document_id,
                         "source_url": document.get("source_url"),
-                        "source_row_hash": (
-                            f"{scheme_id}|sector|{_source_hash(row)}"
-                        ),
+                        "source_row_hash": f"{scheme_id}|sector|{row['sector_normalized']}",
                         "parser_version": document.get("parser_version"),
                         "confidence_score": float(final_confidence),
                         "validation_status": "valid",
@@ -465,9 +466,7 @@ class ParsingService:
                         "mapping_confidence": mapping_confidence,
                         "mapping_status": mapping_status,
                     }
-                    for row in sector_allocations
-                    if str(row.get("sector") or "").strip()
-                    and row.get("weight_pct") is not None
+                    for row in normalized_sector_allocations
                 ]
                 if sector_rows:
                     sector_resp = (
@@ -1275,6 +1274,28 @@ def _source_hash(row: dict[str, Any]) -> str:
             str(row.get("percent_aum") or ""),
         ]
     )
+
+
+def _normalize_sector_allocations(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    aggregated: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        sector = " ".join(str(row.get("sector") or "").split())
+        if not sector or row.get("weight_pct") is None:
+            continue
+        normalized = sector.casefold()
+        current = aggregated.setdefault(
+            normalized,
+            {
+                "sector": sector,
+                "sector_normalized": normalized,
+                "weight_pct": 0.0,
+            },
+        )
+        current["weight_pct"] = round(
+            float(current["weight_pct"]) + float(row["weight_pct"]),
+            6,
+        )
+    return [aggregated[key] for key in sorted(aggregated)]
 
 
 def _to_date_or_none(value: Any) -> date | None:
