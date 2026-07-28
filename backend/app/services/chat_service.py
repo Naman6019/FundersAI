@@ -273,6 +273,8 @@ async def function_ollama_chat(
     timeout_seconds: float = 60.0,
     enable_web_search: bool = False,
     citation_collector: list[dict[str, Any]] | None = None,
+    provider_override: str | None = None,
+    model_override: str | None = None,
 ):
     openrouter_key = str(os.environ.get("OPENROUTER_API_KEY") or OPENROUTER_API_KEY or "").strip()
     groq_key = str(os.environ.get("GROQ_API_KEY") or "").strip()
@@ -292,8 +294,11 @@ async def function_ollama_chat(
             "model": GROQ_MODEL,
         })
 
+    if provider_override:
+        providers = [p for p in providers if p["name"] == provider_override]
+
     if not providers:
-        logger.error("Missing OPENROUTER_API_KEY and GROQ_API_KEY in environment.")
+        logger.error("Missing API Keys or invalid provider_override in environment.")
         return None
 
     req_messages = [dict(m) for m in messages]
@@ -305,7 +310,7 @@ async def function_ollama_chat(
         for attempt_index in range(attempt_budget):
             provider = providers[attempt_index % len(providers)]
             provider_name = provider["name"]
-            model = provider["model"]
+            model = model_override if model_override else provider["model"]
             payload: dict[str, Any] = {"model": model, "messages": req_messages}
             if format == "json":
                 payload["response_format"] = {"type": "json_object"}
@@ -446,7 +451,13 @@ Default downside_focus to false unless user explicitly asks downside/fall/crash/
         {"role": "user", "content": query}
     ]
 
-    result = await function_ollama_chat(messages, format="json", usage_collector=usage_collector)
+    result = await function_ollama_chat(
+        messages, 
+        format="json", 
+        usage_collector=usage_collector,
+        provider_override="groq",
+        model_override="llama-3.1-8b-instant"
+    )
     if result:
         try:
             payload = json.loads(result)
