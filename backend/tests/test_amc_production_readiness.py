@@ -734,6 +734,78 @@ def test_fractional_excel_percentages_are_normalized_for_known_amcs(adapter):
     assert records[0].metrics["total_percent_aum"] == 100.0
 
 
+def test_generic_portfolio_context_month_wins_over_maturity_date():
+    frame = pd.DataFrame(
+        [
+            ["DSP Short Term Fund", None, None, None],
+            ["Maturity February 2029", None, None, None],
+            ["Name of the Instrument", "ISIN", "Industry", "% to NAV"],
+            ["HDFC Bank Limited", "INE040A01034", "Banks", 60.0],
+            ["Infosys Limited", "INE009A01021", "IT - Software", 40.0],
+        ]
+    )
+
+    records = DSPAdapter().parse_excel_frame_many(
+        frame,
+        ParseContext(
+            source_document_id="dsp-maturity",
+            source_url="official",
+            report_month=date(2026, 6, 1),
+        ),
+    )
+
+    assert records[0].report_month == date(2026, 6, 1)
+
+
+def test_generic_portfolio_explicit_scheme_month_overrides_document_month():
+    frame = pd.DataFrame(
+        [
+            ["DSP Overseas Fund as of 31-May-2026", None, None, None],
+            ["Name of the Instrument", "ISIN", "Industry", "% to NAV"],
+            ["Overseas Security", None, "Overseas", 100.0],
+        ]
+    )
+
+    records = DSPAdapter().parse_excel_frame_many(
+        frame,
+        ParseContext(
+            source_document_id="dsp-stale-scheme",
+            source_url="official",
+            report_month=date(2026, 6, 1),
+        ),
+    )
+
+    assert records[0].report_month == date(2026, 5, 1)
+
+
+def test_generic_portfolio_rejects_disclosure_footnote_as_scheme_name():
+    frame = pd.DataFrame(
+        [
+            [
+                "Pursuant to the SEBI master circular, below are the details of "
+                "securities in case of which DSP Regular Savings Fund received "
+                "an interim distribution. This disclosure is not a scheme title.",
+                None,
+                None,
+                None,
+            ],
+            ["Name of the Instrument", "ISIN", "Industry", "% to NAV"],
+            ["HDFC Bank Limited", "INE040A01034", "Banks", 100.0],
+        ]
+    )
+
+    records = DSPAdapter().parse_excel_frame_many(
+        frame,
+        ParseContext(
+            source_document_id="dsp-footnote",
+            source_url="official",
+            report_month=date(2026, 6, 1),
+        ),
+    )
+
+    assert records == []
+
+
 def test_uti_adapter_ignores_total_rows_when_locating_scheme_name():
     frame = pd.DataFrame(
         [

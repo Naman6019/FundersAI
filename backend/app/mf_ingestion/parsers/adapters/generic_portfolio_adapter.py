@@ -78,16 +78,26 @@ class GenericPortfolioAdapter(BaseAMCAdapter):
         if not headers:
             return []
 
-        report_month = _find_report_month([list(frame.columns), *rows]) or context.report_month
+        report_month = context.report_month or _find_report_month(
+            [list(frame.columns), *rows]
+        )
         records: list[ParsedDocument] = []
         for header_position, (header_index, columns) in enumerate(headers):
             next_header = headers[header_position + 1][0] if header_position + 1 < len(headers) else len(rows)
             preceding_start = headers[header_position - 1][0] + 1 if header_position else 0
-            scheme_name = self._find_scheme_name(
-                [list(frame.columns), *rows[max(preceding_start, header_index - 15):header_index]]
-            )
+            scheme_context_rows = [
+                list(frame.columns),
+                *rows[max(preceding_start, header_index - 15):header_index],
+            ]
+            scheme_name = self._find_scheme_name(scheme_context_rows)
             if not scheme_name:
                 continue
+            record_report_month = (
+                _find_explicit_report_month(
+                    [[scheme_name], *scheme_context_rows]
+                )
+                or report_month
+            )
             holdings = _extract_rows(rows[header_index + 1:next_header], columns)
             if not holdings:
                 continue
@@ -95,18 +105,22 @@ class GenericPortfolioAdapter(BaseAMCAdapter):
                 holdings = _normalize_fractional_percent_cells(holdings)
             total_percent = round(sum(float(row["percent_aum"]) for row in holdings), 6)
             warnings: list[str] = []
-            if report_month is None:
+            if record_report_month is None:
                 warnings.append("report_month_not_detected")
             if not 85.0 <= total_percent <= 115.0:
                 warnings.append("percent_aum_total_out_of_band")
             records.append(
                 ParsedDocument(
                     scheme_name=scheme_name,
-                    report_month=report_month,
+                    report_month=record_report_month,
                     holdings=holdings,
                     metrics={"total_percent_aum": total_percent},
                     warnings=warnings,
-                    confidence_score=_confidence(holdings, report_month, total_percent),
+                    confidence_score=_confidence(
+                        holdings,
+                        record_report_month,
+                        total_percent,
+                    ),
                 )
             )
         return records
@@ -118,11 +132,23 @@ class GenericPortfolioAdapter(BaseAMCAdapter):
                 low = text.lower()
                 if not text or not any(marker in low for marker in self.scheme_markers):
                     continue
+                if len(text) > 180:
+                    continue
                 if not any(token in low for token in ("fund", "fof", "etf", "plan")):
                     continue
                 if re.match(r"^(?:grand\s+|sub\s*)?total\s*:", low):
                     continue
-                if any(token in low for token in ("asset management", "mutual fund portfolio", "monthly portfolio")):
+                if any(
+                    token in low
+                    for token in (
+                        "asset management",
+                        "mutual fund portfolio",
+                        "monthly portfolio",
+                        "master circular",
+                        "pursuant to",
+                        "securities in case of which",
+                    )
+                ):
                     continue
                 return re.sub(r"\s+\([^)]{1,180}\)\s*$", "", text).strip()
         return ""
@@ -223,6 +249,40 @@ def _find_report_month(rows: list[list[object]]) -> date | None:
             if match:
                 return date(int(match.group("year")), months[match.group("month").lower()[:3]], 1)
     return None
+
+
+def _find_explicit_report_month(rows: list[list[object]]) -> date | None:
+    for row in rows:
+        for cell in row:
+            text = _clean(cell)
+            if not re.search(r"\bas\s+(?:on|of)\b", text, re.IGNORECASE):
+                continue
+            match = DATE_PATTERN.search(text)
+            if match:
+                return _date_from_match(match)
+    return None
+
+
+def _date_from_match(match: re.Match[str]) -> date:
+    months = {
+        "jan": 1,
+        "feb": 2,
+        "mar": 3,
+        "apr": 4,
+        "may": 5,
+        "jun": 6,
+        "jul": 7,
+        "aug": 8,
+        "sep": 9,
+        "oct": 10,
+        "nov": 11,
+        "dec": 12,
+    }
+    return date(
+        int(match.group("year")),
+        months[match.group("month").lower()[:3]],
+        1,
+    )
 
 
 def _find_column(normalized: list[str], lowered: list[str], predicate: Any) -> int | None:

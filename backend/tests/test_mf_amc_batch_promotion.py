@@ -7,6 +7,10 @@ from app.mf_ingestion.jobs.promote_mf_amc_disclosures import (
     _dedupe_target_scopes,
     _split_scope_groups,
 )
+from app.mf_ingestion.jobs.promote_mf_disclosures import (
+    MIN_PORTFOLIO_FAMILY_COVERAGE,
+    _portfolio_family_coverage,
+)
 
 
 class _PagedRpc:
@@ -44,6 +48,53 @@ def test_rpc_rows_are_paginated_past_supabase_default_limit(monkeypatch) -> None
         "coverage_rows",
         {"p_report_month": "2026-06-01"},
     ) == rows
+
+
+def _holding_row(index: int, *, valid: bool) -> dict:
+    return {
+        "mapped_scheme_code": str(100000 + index),
+        "mapped_family_id": f"family-{index}",
+        "mapping_status": "mapped",
+        "mapping_confidence": 100,
+        "report_month": "2026-06-01",
+        "raw_scheme_name": f"Fund {index}",
+        "validation_status": "valid" if valid else "needs_review",
+        "sector": "Banks",
+    }
+
+
+def test_portfolio_family_gate_accepts_exactly_eighty_percent_valid_families() -> None:
+    rows = [_holding_row(index, valid=index < 8) for index in range(10)]
+    mapping = {
+        row["mapped_scheme_code"]: row["mapped_family_id"]
+        for row in rows
+    }
+
+    coverage = _portfolio_family_coverage(
+        rows,
+        mapping,
+        {"report_month": "2026-06-01"},
+    )
+
+    assert coverage["mapping_percentage"] == 100.0
+    assert coverage["validation_percentage"] == MIN_PORTFOLIO_FAMILY_COVERAGE
+
+
+def test_portfolio_family_gate_rejects_below_eighty_percent_valid_families() -> None:
+    rows = [_holding_row(index, valid=index < 7) for index in range(10)]
+    mapping = {
+        row["mapped_scheme_code"]: row["mapped_family_id"]
+        for row in rows
+    }
+
+    coverage = _portfolio_family_coverage(
+        rows,
+        mapping,
+        {"report_month": "2026-06-01"},
+    )
+
+    assert coverage["mapping_percentage"] == 100.0
+    assert coverage["validation_percentage"] == 70.0
 
 
 def test_amc_batch_promotion_assigns_only_available_source_scopes() -> None:
@@ -223,3 +274,32 @@ def test_amc_batch_promotion_workflow_is_bounded_and_protected() -> None:
     assert "--max-source-documents" in workflow
     assert "DEFAULT_MAX_SOURCE_DOCUMENTS = 150" in job
     assert "Revalidate every target immediately before the first mutation." in job
+
+
+def test_thresholded_portfolio_promotion_is_indexed_and_valid_only() -> None:
+    root = Path(__file__).resolve().parents[2]
+    migration = (
+        root
+        / "backend"
+        / "migrations"
+        / "20260728_add_mf_thresholded_portfolio_promotion_v2.sql"
+    ).read_text(encoding="utf-8")
+    job = (
+        root
+        / "backend"
+        / "app"
+        / "mf_ingestion"
+        / "jobs"
+        / "promote_mf_disclosures.py"
+    ).read_text(encoding="utf-8")
+
+    assert "mf_scheme_holdings (source_document_id, id)" in migration
+    assert "mf_scheme_sector_allocations (source_document_id, id)" in migration
+    assert "promote_mf_holdings_document_v2" in migration
+    assert "staged_holdings_below_family_coverage_threshold" in migration
+    assert "staged_sectors_below_family_coverage_threshold" in migration
+    assert "staged_holdings_contain_non_promotable_rows" not in migration
+    assert "h.validation_status = 'valid'" in migration
+    assert "a.validation_status = 'valid'" in migration
+    assert "to service_role" in migration
+    assert '"promote_mf_holdings_document_v2"' in job

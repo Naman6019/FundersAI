@@ -4,7 +4,7 @@ import argparse
 import json
 import os
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date
 from typing import Any
 
@@ -23,6 +23,27 @@ CORE_SCOPES = {"risk", "ter_aum", "benchmark", "manager"}
 PORTFOLIO_SCOPES = {"holdings", "sectors"}
 ALLOWED_SCOPES = CORE_SCOPES | PORTFOLIO_SCOPES
 PAGE_SIZE = 1000
+MIN_PORTFOLIO_FAMILY_COVERAGE = 80.0
+NON_SECTOR_SCHEME_MARKERS = (
+    "fund of fund",
+    " fof",
+    "gold etf",
+    "silver etf",
+    "liquid etf",
+    "overnight fund",
+    "money market fund",
+    "short duration fund",
+    "low duration fund",
+    "ultra short duration fund",
+    "medium duration fund",
+    "long duration fund",
+    "corporate bond fund",
+    "credit risk fund",
+    "banking and psu debt fund",
+    "banking & psu debt fund",
+    "gilt fund",
+    "floater fund",
+)
 
 
 def _parse_scopes(value: str) -> list[str]:
@@ -191,6 +212,108 @@ def _validate_sector_allocation(
     return sorted(set(issues))
 
 
+def _coverage_ratio(count: int, total: int) -> float:
+    return round((count / total) * 100.0, 2) if total else 0.0
+
+
+def _portfolio_family_coverage(
+    rows: list[dict[str, Any]],
+    mapping_by_code: dict[str, str],
+    document: dict[str, Any],
+    *,
+    sector_rows: bool = False,
+) -> dict[str, Any]:
+    observed_keys: set[str] = set()
+    mapped_family_ids: set[str] = set()
+    promotable_family_ids: set[str] = set()
+
+    for row in rows:
+        family_id = str(row.get("mapped_family_id") or "").strip()
+        raw_name = str(row.get("raw_scheme_name") or "").strip().lower()
+        observed_keys.add(f"family:{family_id}" if family_id else f"raw:{raw_name}")
+        issues = (
+            _validate_sector_allocation(row, mapping_by_code, document)
+            if sector_rows
+            else _validate_holding(row, mapping_by_code, document)
+        )
+        non_validation_issues = [
+            issue
+            for issue in issues
+            if issue not in {"holdings_validation_not_valid", "sector_validation_not_valid"}
+        ]
+        if family_id and not non_validation_issues:
+            mapped_family_ids.add(family_id)
+        if family_id and not issues:
+            promotable_family_ids.add(family_id)
+
+    return {
+        "observed_keys": sorted(observed_keys),
+        "mapped_family_ids": sorted(mapped_family_ids),
+        "promotable_family_ids": sorted(promotable_family_ids),
+        "mapping_percentage": _coverage_ratio(
+            len(mapped_family_ids),
+            len(observed_keys),
+        ),
+        "validation_percentage": _coverage_ratio(
+            len(promotable_family_ids),
+            len(mapped_family_ids),
+        ),
+    }
+
+
+def _sector_not_applicable(raw_scheme_name: object) -> bool:
+    normalized = f" {str(raw_scheme_name or '').strip().lower()} "
+    return any(marker in normalized for marker in NON_SECTOR_SCHEME_MARKERS)
+
+
+def _sector_family_coverage(
+    holdings: list[dict[str, Any]],
+    sector_rows: list[dict[str, Any]],
+    mapping_by_code: dict[str, str],
+    document: dict[str, Any],
+    *,
+    direct_sector_rows: bool,
+) -> dict[str, Any]:
+    holding_coverage = _portfolio_family_coverage(
+        holdings,
+        mapping_by_code,
+        document,
+    )
+    mapped_holding_families = set(holding_coverage["mapped_family_ids"])
+    applicable_families: set[str] = set()
+    holdings_by_family: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in holdings:
+        family_id = str(row.get("mapped_family_id") or "").strip()
+        if family_id in mapped_holding_families:
+            holdings_by_family[family_id].append(row)
+    for family_id, rows in holdings_by_family.items():
+        if any(str(row.get("sector") or "").strip() for row in rows) or any(
+            not _sector_not_applicable(row.get("raw_scheme_name"))
+            for row in rows
+        ):
+            applicable_families.add(family_id)
+
+    source_coverage = _portfolio_family_coverage(
+        sector_rows,
+        mapping_by_code,
+        document,
+        sector_rows=direct_sector_rows,
+    )
+    promotable_families = set(source_coverage["promotable_family_ids"])
+    return {
+        **source_coverage,
+        "applicable_family_ids": sorted(applicable_families),
+        "validation_percentage": (
+            _coverage_ratio(
+                len(promotable_families.intersection(applicable_families)),
+                len(applicable_families),
+            )
+            if applicable_families
+            else 100.0
+        ),
+    }
+
+
 def build_dry_run(
     source_document_id: str,
     scopes: list[str],
@@ -263,6 +386,8 @@ def build_dry_run(
     rejected_sector_examples: list[dict[str, Any]] = []
     holdings_rejection_reasons: Counter[str] = Counter()
     sector_rejection_reasons: Counter[str] = Counter()
+    holdings_family_coverage: dict[str, Any] = {}
+    sector_family_coverage: dict[str, Any] = {}
     if CORE_SCOPES.intersection(scopes):
         if not candidates:
             issues.append("factsheet_candidates_missing")
@@ -320,8 +445,20 @@ def build_dry_run(
             operation_count += 1
         elif holdings:
             issues.append("staged_holdings_have_no_promotable_rows")
-        if rejected_holdings_rows:
-            issues.append("staged_holdings_contain_non_promotable_rows")
+        holdings_family_coverage = _portfolio_family_coverage(
+            holdings,
+            mapping_by_code,
+            document,
+        )
+        if (
+            holdings_family_coverage["mapping_percentage"]
+            < MIN_PORTFOLIO_FAMILY_COVERAGE
+            or holdings_family_coverage["validation_percentage"]
+            < MIN_PORTFOLIO_FAMILY_COVERAGE
+        ):
+            issues.append("staged_holdings_below_family_coverage_threshold")
+        elif rejected_holdings_rows:
+            warnings.append("staged_holdings_excludes_non_promotable_rows")
 
     if "sectors" in scopes:
         if sector_allocations:
@@ -362,8 +499,22 @@ def build_dry_run(
             operation_count += 1
         elif sector_source_rows:
             issues.append("staged_sectors_have_no_promotable_rows")
-        if rejected_sector_rows:
-            issues.append("staged_sectors_contain_non_promotable_rows")
+        sector_family_coverage = _sector_family_coverage(
+            holdings,
+            sector_source_rows,
+            mapping_by_code,
+            document,
+            direct_sector_rows=bool(sector_allocations),
+        )
+        if (
+            sector_family_coverage["mapping_percentage"]
+            < MIN_PORTFOLIO_FAMILY_COVERAGE
+            or sector_family_coverage["validation_percentage"]
+            < MIN_PORTFOLIO_FAMILY_COVERAGE
+        ):
+            issues.append("staged_sectors_below_family_coverage_threshold")
+        elif rejected_sector_rows:
+            warnings.append("staged_sectors_excludes_non_promotable_rows")
 
     if operation_count == 0 and not issues:
         issues.append("no_promotable_operations")
@@ -379,11 +530,13 @@ def build_dry_run(
         "rejected_holdings_rows": rejected_holdings_rows,
         "holdings_rejection_reasons": dict(sorted(holdings_rejection_reasons.items())),
         "rejected_holding_examples": rejected_holding_examples,
+        "holdings_family_coverage": holdings_family_coverage,
         "staged_sector_rows": len(sector_allocations),
         "promotable_sector_rows": valid_sector_rows,
         "rejected_sector_rows": rejected_sector_rows,
         "sector_rejection_reasons": dict(sorted(sector_rejection_reasons.items())),
         "rejected_sector_examples": rejected_sector_examples,
+        "sector_family_coverage": sector_family_coverage,
         "warnings": sorted(set(warnings)),
         "issues": sorted(set(issues)),
     }
@@ -423,7 +576,7 @@ def apply_promotable_report(
     if portfolio_scopes:
         source_document_id = str(report["source_document"]["id"])
         result = supabase.rpc(
-            "promote_mf_holdings_document",
+            "promote_mf_holdings_document_v2",
             {
                 "p_source_document_id": source_document_id,
                 "p_scopes": portfolio_scopes,
