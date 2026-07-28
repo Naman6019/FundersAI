@@ -442,11 +442,25 @@ def test_promotion_contract_migration_binds_month_and_revokes_legacy_rpcs():
     assert "source_row.report_month is distinct from p_expected_report_month" in sql
     assert "h.validation_status <> 'valid'" in sql
     assert (
-        "promote_mf_factsheet_candidate(uuid, text, text[]) "
+        "promote_mf_factsheet_candidate(\n"
+        "    p_candidate_id,\n"
+        "    requested_scopes,\n"
+        "    p_requested_by\n"
+        "  )"
+    ) in sql
+    assert (
+        "promote_mf_holdings_document(\n"
+        "    p_source_document_id,\n"
+        "    requested_scopes,\n"
+        "    p_requested_by\n"
+        "  )"
+    ) in sql
+    assert (
+        "promote_mf_factsheet_candidate(uuid, text[], text) "
         "from public, anon, authenticated, service_role"
     ) in sql
     assert (
-        "promote_mf_holdings_document(uuid, text, text[]) "
+        "promote_mf_holdings_document(uuid, text[], text) "
         "from public, anon, authenticated, service_role"
     ) in sql
 

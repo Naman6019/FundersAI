@@ -94,8 +94,8 @@ begin
 
   return public.promote_mf_factsheet_candidate(
     p_candidate_id,
-    p_requested_by,
-    requested_scopes
+    requested_scopes,
+    p_requested_by
   );
 end;
 $$;
@@ -172,14 +172,14 @@ begin
 
   return public.promote_mf_holdings_document(
     p_source_document_id,
-    p_requested_by,
-    requested_scopes
+    requested_scopes,
+    p_requested_by
   );
 end;
 $$;
 
-revoke all on function public.promote_mf_factsheet_candidate(uuid, text, text[]) from public, anon, authenticated, service_role;
-revoke all on function public.promote_mf_holdings_document(uuid, text, text[]) from public, anon, authenticated, service_role;
+revoke all on function public.promote_mf_factsheet_candidate(uuid, text[], text) from public, anon, authenticated, service_role;
+revoke all on function public.promote_mf_holdings_document(uuid, text[], text) from public, anon, authenticated, service_role;
 
 revoke all on function public.promote_mf_factsheet_candidate(uuid, text[], text, date) from public, anon, authenticated;
 grant execute on function public.promote_mf_factsheet_candidate(uuid, text[], text, date) to service_role;
