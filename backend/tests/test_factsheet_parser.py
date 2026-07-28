@@ -748,6 +748,20 @@ Published in June 2026.
     assert _detect_dominant_factsheet_month(text) == date(2026, 5, 1)
 
 
+def test_dominant_factsheet_month_detects_uti_fund_aum_folio_anchor():
+    text = """
+UTI Large Cap Fund
+Fund AUM/Folio as on 30th June, 2026
+UTI Flexi Cap Fund
+Fund AUM / Folio as on 30th June, 2026
+UTI Value Fund
+Fund AUM/Folio as on 30th June, 2026
+Published in July 2026.
+"""
+
+    assert _detect_dominant_factsheet_month(text) == date(2026, 6, 1)
+
+
 def test_dominant_factsheet_month_abstains_on_ambiguous_dates():
     text = """
 SBI Large Cap Fund

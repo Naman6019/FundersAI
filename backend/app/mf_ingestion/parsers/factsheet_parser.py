@@ -485,7 +485,8 @@ def _preprocess_factsheet_text(text: str) -> str:
 
 def detect_dominant_factsheet_month(text: str) -> date | None:
     anchors = re.compile(
-        r"(?i)\b(?:fund\s+details|details|closing\s+aum|month\s+end\s+aum|aum)"
+        r"(?i)\b(?:fund\s+details|details|closing\s+aum|month\s+end\s+aum|"
+        r"fund\s+aum(?:\s*/\s*folio)?|aum)"
         r"\s+as\s+on\s+([^\n:]{4,36})"
     )
     counts: dict[date, int] = {}
