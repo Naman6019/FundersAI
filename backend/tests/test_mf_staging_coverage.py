@@ -27,6 +27,7 @@ def test_staging_coverage_uses_distinct_current_mapped_families():
         amcs=["mirae"],
         candidates=[
             {
+                "source_document_id": "mirae-core",
                 "amc_code": "mirae",
                 "report_month": "2026-06-01",
                 "normalized_scheme_name": "mirae asset one fund",
@@ -39,6 +40,7 @@ def test_staging_coverage_uses_distinct_current_mapped_families():
                 "risk_level": "High",
             },
             {
+                "source_document_id": "mirae-core",
                 "amc_code": "mirae",
                 "report_month": "2026-06-01",
                 "normalized_scheme_name": "mirae asset two fund",
@@ -48,6 +50,7 @@ def test_staging_coverage_uses_distinct_current_mapped_families():
         ],
         holdings=[
             {
+                "source_document_id": "mirae-portfolio",
                 "amc_code": "mirae",
                 "report_month": "2026-06-01",
                 "raw_scheme_name": "Mirae Asset One Fund",
@@ -56,6 +59,7 @@ def test_staging_coverage_uses_distinct_current_mapped_families():
                 "sector": "Banks",
             },
             {
+                "source_document_id": "mirae-portfolio",
                 "amc_code": "mirae",
                 "report_month": "2026-06-01",
                 "raw_scheme_name": "Mirae Asset Two Fund",
@@ -71,6 +75,8 @@ def test_staging_coverage_uses_distinct_current_mapped_families():
     assert report["percentages"]["aum"] == 100.0
     assert report["mapping_percentages"]["core"] == 50.0
     assert report["mapping_percentages"]["portfolio"] == 50.0
+    assert report["core_source_document_ids"] == ["mirae-core"]
+    assert report["portfolio_source_document_ids"] == ["mirae-portfolio"]
     assert report["passes_all_fields"] is False
 
 

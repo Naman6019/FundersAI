@@ -190,6 +190,29 @@ def build_staging_coverage(
             "portfolio": _ratio(portfolio_total, len(observed_portfolio_groups)),
         }
         report[normalized_amc] = {
+            "core_source_document_ids": sorted(
+                {
+                    str(row["source_document_id"])
+                    for row in current_candidates
+                    if row.get("source_document_id")
+                }
+            ),
+            "portfolio_source_document_ids": sorted(
+                {
+                    str(row["source_document_id"])
+                    for row in current_holdings
+                    if row.get("source_document_id")
+                }
+            ),
+            "direct_sector_source_document_ids": sorted(
+                {
+                    str(row["source_document_id"])
+                    for row in sector_allocations
+                    if _normalize_amc_key(row.get("amc_code")) == normalized_amc
+                    and str(row.get("report_month") or "") == report_month
+                    and row.get("source_document_id")
+                }
+            ),
             "observed_core_groups": len(observed_core_groups),
             "mapped_core_families": core_total,
             "observed_portfolio_groups": len(observed_portfolio_groups),
@@ -219,7 +242,7 @@ def main() -> int:
     amcs = [value.strip().lower() for value in args.amcs.split(",") if value.strip()]
     candidates = _get_filtered(
         "mf_factsheet_candidates",
-        "id,amc_code,report_month,raw_scheme_name,normalized_scheme_name,"
+        "id,source_document_id,amc_code,report_month,raw_scheme_name,normalized_scheme_name,"
         "mapped_family_id,mapping_status,"
         "aum,expense_ratio,benchmark,fund_manager,risk_level",
         filters={"report_month": args.report_month},
