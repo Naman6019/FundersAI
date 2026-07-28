@@ -18,6 +18,7 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 from app.database import supabase
 from app.mf_ingestion.services.parsing_service import ParsingService
+from app.mf_ingestion.sources.registry import get_source
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -85,7 +86,20 @@ def load_retry_documents(
 
     query = supabase_client.table("mf_raw_documents").select("*").in_("parse_status", normalized_statuses)
     if amc:
-        query = query.in_("amc_code", [amc.lower(), amc.upper(), amc])
+        amc_values = {amc.lower(), amc.upper(), amc}
+        try:
+            source = get_source(amc)
+            amc_values.update(
+                {
+                    source.amc_code,
+                    source.amc_code.lower(),
+                    source.adapter_key,
+                    source.adapter_key.upper(),
+                }
+            )
+        except ValueError:
+            pass
+        query = query.in_("amc_code", sorted(amc_values))
     if source_document_ids:
         query = query.in_("id", source_document_ids)
     rows = query.limit(query_limit).execute().data or []

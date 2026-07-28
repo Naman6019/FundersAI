@@ -157,6 +157,26 @@ def test_load_retry_documents_can_filter_exact_source_ids():
     assert [doc["id"] for doc in docs] == ["doc-2"]
 
 
+def test_load_retry_documents_resolves_aditya_birla_registry_code():
+    fake_supabase = _FakeSupabase(
+        [
+            {"id": "absl-june", "amc_code": "ABSL", "parse_status": "pending"},
+            {"id": "other", "amc_code": "HDFC", "parse_status": "pending"},
+        ]
+    )
+
+    docs = reparse_needs_review.load_retry_documents(
+        supabase_client=fake_supabase,
+        statuses=["pending"],
+        amc="aditya_birla",
+        source_document_ids=["absl-june"],
+        limit=10,
+        min_age_hours=0,
+    )
+
+    assert [doc["id"] for doc in docs] == ["absl-june"]
+
+
 def test_reparse_distinct_document_when_same_amc_month_is_already_parsed(monkeypatch):
     fake_supabase = _FakeSupabase(
         [

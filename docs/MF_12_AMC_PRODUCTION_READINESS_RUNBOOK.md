@@ -149,6 +149,17 @@ A staging pass is necessary but not sufficient. These five AMCs still need revie
 | UTI | `30306027002` | Success | Factsheets `b461d757-f0cc-422f-9f93-ae901e02f3b9`, `2d14d3ce-bf13-4c81-ae02-7a679310e68a`, `902d3b93-0f91-4de5-9705-0c0c699b726e`; portfolio `55de0678-55c3-4cb5-806e-635f1d14909c` |
 | DSP | `30306027038` | Success | Factsheet `b2d2e47e-dd42-4269-913a-7344af2c1900`; portfolio `5a1f155b-9682-41ba-8792-7b2f5cd50054` |
 | Aditya Birla | `30306027790` | Partial | Portfolio `6f7605ce-94fd-4e34-a615-6bd4d4cc1bda`; factsheet not acquired |
+| Motilal | `30343045400` | Success | Factsheet `c9672b76-3d3b-40c1-82c1-2c8332b2b5ed`; combined-factsheet portfolio scope `b4cd5573-86de-435e-b1a4-8e69bbbeac94`; checksum `775df336…8187e2` |
+| Kotak | `30343047236` | Success | Exact factsheet reused as `c5a4caa8-9333-47b3-b3ef-6818b83499b3`; combined-factsheet portfolio scope `2be39e47-a388-43c4-8247-4c53a7849d5f`; checksum `caac224b…1ff7b0` |
+| Aditya Birla | `30343049424` | Success | Exact June factsheet `9c59868e-f45a-489b-9663-2803e8b11599`; checksum `f24c7d81…509738` |
+
+Exact deterministic parser run `30343289910` produced:
+
+- Motilal: 20 schemes and 685 holdings rows per scope; 675 rows valid and 10 held for review.
+- Kotak: 76 schemes and 3,571 holdings rows per scope; 2,869 rows valid and 702 held for review.
+- Aditya Birla: no mutation; the document stayed `pending` because retry filtering did not resolve `aditya_birla` to database code `ABSL`.
+
+The retry alias fix must be pushed before retrying only ABSL source document `9c59868e-f45a-489b-9663-2803e8b11599`.
 
 ### Failed reruns after the reviewed fallback was pushed
 
