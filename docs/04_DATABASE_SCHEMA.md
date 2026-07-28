@@ -46,6 +46,8 @@ FundersAI uses Supabase PostgreSQL for structured application data and authentic
   - Stores official aggregate sector weights separately from security holdings, with raw scheme names, reviewed scheme/family mappings, source-document evidence, and validation state.
 - `mf_report_month_corrections` (`20260728_add_mf_report_month_reconciliation.sql`, locally verified; migration pending)
   - Append-only service-role audit records for body- and checksum-verified raw-document month corrections. The correction clears only that document's stale staging rows and queues it for reparse.
+- `mf_staging_holding_coverage_rows` and `mf_staging_sector_coverage_rows` (`20260728_add_mf_staging_coverage_rpc.sql`, locally verified; migration pending)
+  - Read-only, service-role-only RPCs that collapse large security-level staging tables to one coverage-evidence row per scheme/family.
 - `mf_scheme_monthly_metrics`
 - `mf_parse_review_queue`
 - `mf_r2_archive_manifests`

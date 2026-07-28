@@ -1,76 +1,24 @@
 from __future__ import annotations
 
-import scripts.report_mf_staging_coverage as staging_coverage
-from scripts.report_mf_staging_coverage import (
-    _get_by_source_document_ids,
-    build_staging_coverage,
-)
+from pathlib import Path
+
+from scripts.report_mf_staging_coverage import build_staging_coverage
 
 
-class _FakeResponse:
-    def __init__(self, data):
-        self.data = data
+def test_staging_coverage_rpc_is_read_only_and_service_role_only():
+    root = Path(__file__).resolve().parents[2]
+    sql = (
+        root / "backend" / "migrations" / "20260728_add_mf_staging_coverage_rpc.sql"
+    ).read_text(encoding="utf-8")
 
-
-class _FakeQuery:
-    def __init__(self, rows):
-        self.rows = rows
-        self.source_ids = []
-        self.start = 0
-        self.end = 999
-
-    def select(self, _columns):
-        return self
-
-    def in_(self, column, values):
-        assert column == "source_document_id"
-        self.source_ids = values
-        return self
-
-    def eq(self, column, value):
-        assert column == "source_document_id"
-        self.source_ids = [value]
-        return self
-
-    def order(self, column):
-        assert column == "id"
-        return self
-
-    def range(self, start, end):
-        self.start = start
-        self.end = end
-        return self
-
-    def execute(self):
-        filtered = [
-            row for row in self.rows if row["source_document_id"] in self.source_ids
-        ]
-        return _FakeResponse(filtered[self.start : self.end + 1])
-
-
-class _FakeSupabase:
-    def __init__(self, rows):
-        self.rows = rows
-
-    def table(self, _table):
-        return _FakeQuery(self.rows)
-
-
-def test_staging_coverage_reads_holdings_by_indexed_source_document(monkeypatch):
-    rows = [
-        {"id": "1", "source_document_id": "doc-a"},
-        {"id": "2", "source_document_id": "doc-b"},
-        {"id": "3", "source_document_id": "doc-c"},
-    ]
-    monkeypatch.setattr(staging_coverage, "supabase", _FakeSupabase(rows))
-
-    assert _get_by_source_document_ids(
-        "mf_scheme_holdings",
-        "id,source_document_id",
-        ["doc-a", "doc-c"],
-        chunk_size=1,
-        page_size=1,
-    ) == [rows[0], rows[2]]
+    assert "language sql" in sql
+    assert "stable" in sql
+    assert "security definer" in sql
+    assert "grant execute" in sql
+    assert "to service_role" in sql
+    assert "insert " not in sql.lower()
+    assert "update " not in sql.lower()
+    assert "delete " not in sql.lower()
 
 
 def test_staging_coverage_uses_distinct_current_mapped_families():

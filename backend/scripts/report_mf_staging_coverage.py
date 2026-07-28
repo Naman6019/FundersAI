@@ -72,36 +72,14 @@ def _get_filtered(
         start += page_size
 
 
-def _get_by_source_document_ids(
-    table: str,
-    columns: str,
-    source_document_ids: list[str],
-    *,
-    chunk_size: int = 1,
-    page_size: int = 1000,
-) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for chunk_start in range(0, len(source_document_ids), chunk_size):
-        chunk = source_document_ids[chunk_start : chunk_start + chunk_size]
-        start = 0
-        while True:
-            query = supabase.table(table).select(columns)
-            if len(chunk) == 1:
-                query = query.eq("source_document_id", chunk[0])
-            else:
-                query = query.in_("source_document_id", chunk)
-            page = (
-                query.order("id")
-                .range(start, start + page_size - 1)
-                .execute()
-                .data
-                or []
-            )
-            rows.extend(page)
-            if len(page) < page_size:
-                break
-            start += page_size
-    return rows
+def _get_compact_coverage_rows(function_name: str, report_month: str) -> list[dict[str, Any]]:
+    return (
+        supabase.rpc(
+            function_name,
+            {"p_report_month": report_month},
+        ).execute().data
+        or []
+    )
 
 
 def build_staging_coverage(
@@ -246,33 +224,14 @@ def main() -> int:
         "aum,expense_ratio,benchmark,fund_manager,risk_level",
         filters={"report_month": args.report_month},
     )
-    raw_document_rows = _get_filtered(
-        "mf_raw_documents",
-        "id,amc_code",
-        filters={"report_month": args.report_month},
+    holdings = _get_compact_coverage_rows(
+        "mf_staging_holding_coverage_rows",
+        args.report_month,
     )
-    raw_documents = {
-        str(row["id"]): _normalize_amc_key(row.get("amc_code"))
-        for row in raw_document_rows
-        if row.get("id")
-    }
-    source_document_ids = sorted(raw_documents)
-    holdings = _get_by_source_document_ids(
-        "mf_scheme_holdings",
-        "id,source_document_id,report_month,raw_scheme_name,"
-        "mapped_family_id,mapping_status,sector",
-        source_document_ids,
+    sector_allocations = _get_compact_coverage_rows(
+        "mf_staging_sector_coverage_rows",
+        args.report_month,
     )
-    for row in holdings:
-        row["amc_code"] = raw_documents.get(str(row.get("source_document_id") or ""), "")
-    sector_allocations = _get_by_source_document_ids(
-        "mf_scheme_sector_allocations",
-        "id,source_document_id,report_month,raw_scheme_name,sector_name,"
-        "mapped_family_id,mapping_status,validation_status",
-        source_document_ids,
-    )
-    for row in sector_allocations:
-        row["amc_code"] = raw_documents.get(str(row.get("source_document_id") or ""), "")
 
     report = build_staging_coverage(
         report_month=args.report_month,
