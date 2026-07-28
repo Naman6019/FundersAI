@@ -72,6 +72,36 @@ def _get_filtered(
         start += page_size
 
 
+def _get_by_source_document_ids(
+    table: str,
+    columns: str,
+    source_document_ids: list[str],
+    *,
+    chunk_size: int = 20,
+    page_size: int = 1000,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for chunk_start in range(0, len(source_document_ids), chunk_size):
+        chunk = source_document_ids[chunk_start : chunk_start + chunk_size]
+        start = 0
+        while True:
+            page = (
+                supabase.table(table)
+                .select(columns)
+                .in_("source_document_id", chunk)
+                .order("id")
+                .range(start, start + page_size - 1)
+                .execute()
+                .data
+                or []
+            )
+            rows.extend(page)
+            if len(page) < page_size:
+                break
+            start += page_size
+    return rows
+
+
 def build_staging_coverage(
     *,
     report_month: str,
@@ -214,28 +244,30 @@ def main() -> int:
         "aum,expense_ratio,benchmark,fund_manager,risk_level",
         filters={"report_month": args.report_month},
     )
+    raw_document_rows = _get_filtered(
+        "mf_raw_documents",
+        "id,amc_code",
+        filters={"report_month": args.report_month},
+    )
     raw_documents = {
         str(row["id"]): _normalize_amc_key(row.get("amc_code"))
-        for row in _get_filtered(
-            "mf_raw_documents",
-            "id,amc_code",
-            filters={"report_month": args.report_month},
-        )
+        for row in raw_document_rows
         if row.get("id")
     }
-    holdings = _get_filtered(
+    source_document_ids = sorted(raw_documents)
+    holdings = _get_by_source_document_ids(
         "mf_scheme_holdings",
         "id,source_document_id,report_month,raw_scheme_name,"
         "mapped_family_id,mapping_status,sector",
-        filters={"report_month": args.report_month},
+        source_document_ids,
     )
     for row in holdings:
         row["amc_code"] = raw_documents.get(str(row.get("source_document_id") or ""), "")
-    sector_allocations = _get_filtered(
+    sector_allocations = _get_by_source_document_ids(
         "mf_scheme_sector_allocations",
         "id,source_document_id,report_month,raw_scheme_name,sector_name,"
         "mapped_family_id,mapping_status,validation_status",
-        filters={"report_month": args.report_month},
+        source_document_ids,
     )
     for row in sector_allocations:
         row["amc_code"] = raw_documents.get(str(row.get("source_document_id") or ""), "")
