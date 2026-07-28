@@ -73,6 +73,7 @@ def load_retry_documents(
     supabase_client: Any,
     statuses: list[str],
     amc: str | None,
+    source_document_ids: list[str] | None,
     limit: int,
     min_age_hours: float,
     now: datetime | None = None,
@@ -85,6 +86,8 @@ def load_retry_documents(
     query = supabase_client.table("mf_raw_documents").select("*").in_("parse_status", normalized_statuses)
     if amc:
         query = query.in_("amc_code", [amc.lower(), amc.upper(), amc])
+    if source_document_ids:
+        query = query.in_("id", source_document_ids)
     rows = query.limit(query_limit).execute().data or []
 
     eligible = [
@@ -101,8 +104,6 @@ def reparse_documents(documents: list[dict[str, Any]], service: ParsingService) 
     success_count = 0
     still_actionable_count = 0
     runtime_error_count = 0
-    skipped_duplicate_count = 0
-
     for doc in documents:
         doc_id = doc.get("id")
         amc_code = doc.get("amc_code")
@@ -110,15 +111,6 @@ def reparse_documents(documents: list[dict[str, Any]], service: ParsingService) 
         logger.info("Processing doc %s (AMC: %s, Month: %s)", doc_id, amc_code, report_month)
 
         try:
-            if amc_code and report_month:
-                existing_parsed = supabase.table("mf_raw_documents").select("id").eq("amc_code", amc_code).eq("report_month", report_month).eq("parse_status", "parsed").limit(1).execute()
-                if existing_parsed.data:
-                    logger.info("Skipping doc %s as duplicate. AMC %s, Month %s already successfully parsed.", doc_id, amc_code, report_month)
-                    supabase.table("mf_raw_documents").update({"parse_status": "skipped_duplicate"}).eq("id", doc_id).execute()
-                    supabase.table("mf_parse_review_queue").delete().eq("source_document_id", doc_id).execute()
-                    skipped_duplicate_count += 1
-                    continue
-
             supabase.table("mf_raw_documents").update({"parse_status": "needs_reparse"}).eq("id", doc_id).execute()
 
             doc_to_parse = dict(doc)
@@ -141,7 +133,7 @@ def reparse_documents(documents: list[dict[str, Any]], service: ParsingService) 
         "success_count": success_count,
         "still_actionable_count": still_actionable_count,
         "runtime_error_count": runtime_error_count,
-        "skipped_duplicate_count": skipped_duplicate_count,
+        "skipped_duplicate_count": 0,
     }
 
 
@@ -156,6 +148,11 @@ def retry_exit_code(summary: dict[str, int], *, fail_on_still_actionable: bool =
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--amc", default=None, help="Filter by AMC code (e.g., ppfas, icici)")
+    parser.add_argument(
+        "--source-document-ids",
+        default="",
+        help="Optional comma-separated mf_raw_documents UUIDs to reparse.",
+    )
     parser.add_argument("--limit", type=int, default=50, help="Max docs to retry.")
     parser.add_argument("--min-age-hours", type=float, default=6.0, help="Retry only docs older than this many hours.")
     parser.add_argument("--statuses", default="needs_review,failed,parsed_partial", help="Comma-separated parse statuses to retry.")
@@ -172,10 +169,16 @@ def main() -> int:
 
     service = ParsingService()
     statuses = _parse_statuses(args.statuses)
+    source_document_ids = [
+        value.strip()
+        for value in str(args.source_document_ids or "").split(",")
+        if value.strip()
+    ]
     documents = load_retry_documents(
         supabase_client=supabase,
         statuses=statuses,
         amc=args.amc,
+        source_document_ids=source_document_ids,
         limit=max(args.limit, 1),
         min_age_hours=max(args.min_age_hours, 0.0),
     )

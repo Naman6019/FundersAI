@@ -21,6 +21,10 @@ on:
         description: 'Comma-separated statuses to retry'
         required: false
         default: 'needs_review,failed,parsed_partial'
+      source_document_ids:
+        description: 'Optional comma-separated mf_raw_documents UUIDs for an exact bounded retry'
+        required: false
+        default: ''
       extractor_mode:
         description: 'Parser mode: deterministic, deterministic_then_llm, llm_then_deterministic'
         required: false
@@ -113,6 +117,7 @@ jobs:
           DISPATCH_LIMIT: ${{ inputs.limit }}
           DISPATCH_MIN_AGE_HOURS: ${{ inputs.min_age_hours }}
           DISPATCH_STATUSES: ${{ inputs.statuses }}
+          DISPATCH_SOURCE_DOCUMENT_IDS: ${{ inputs.source_document_ids }}
           DISPATCH_FAIL_ON_STILL_ACTIONABLE: ${{ inputs.fail_on_still_actionable }}
         run: |
           set -euo pipefail
@@ -143,16 +148,23 @@ jobs:
           fi
           MIN_AGE_HOURS="${DISPATCH_MIN_AGE_HOURS:-6}"
           STATUSES="${DISPATCH_STATUSES:-needs_review,failed,parsed_partial}"
+          SOURCE_DOCUMENT_IDS="${DISPATCH_SOURCE_DOCUMENT_IDS:-}"
           STRICT_RETRY_FLAG=""
           if [ "$EVENT_NAME" = "schedule" ] || [ "${DISPATCH_FAIL_ON_STILL_ACTIONABLE:-false}" = "true" ]; then
             STRICT_RETRY_FLAG="--fail-on-still-actionable"
           fi
           amc="${{ matrix.amc }}"
 
-          echo "Retrying parser actions for AMC=$amc limit=$LIMIT min_age_hours=$MIN_AGE_HOURS statuses=$STATUSES"
+          echo "Retrying parser actions for AMC=$amc limit=$LIMIT min_age_hours=$MIN_AGE_HOURS statuses=$STATUSES source_document_ids=$SOURCE_DOCUMENT_IDS"
+          args=(
+            --amc "$amc"
+            --limit "$LIMIT"
+            --min-age-hours "$MIN_AGE_HOURS"
+            --statuses "$STATUSES"
+          )
+          if [ -n "$SOURCE_DOCUMENT_IDS" ]; then
+            args+=(--source-document-ids "$SOURCE_DOCUMENT_IDS")
+          fi
           timeout 45m python -m backend.app.mf_ingestion.jobs.reparse_needs_review \
-            --amc "$amc" \
-            --limit "$LIMIT" \
-            --min-age-hours "$MIN_AGE_HOURS" \
-            --statuses "$STATUSES" \
+            "${args[@]}" \
             $STRICT_RETRY_FLAG

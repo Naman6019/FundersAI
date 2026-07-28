@@ -124,6 +124,7 @@ def test_load_retry_documents_filters_by_amc_status_age_and_limit():
         supabase_client=fake_supabase,
         statuses=["needs_review", "failed"],
         amc="sbi",
+        source_document_ids=None,
         limit=1,
         min_age_hours=6,
         now=now,
@@ -134,6 +135,57 @@ def test_load_retry_documents_filters_by_amc_status_age_and_limit():
 
 def test_default_retry_statuses_include_parsed_partial():
     assert reparse_needs_review._parse_statuses(None) == ["needs_review", "failed", "parsed_partial"]
+
+
+def test_load_retry_documents_can_filter_exact_source_ids():
+    fake_supabase = _FakeSupabase(
+        [
+            {"id": "doc-1", "amc_code": "HDFC", "parse_status": "parsed_partial"},
+            {"id": "doc-2", "amc_code": "HDFC", "parse_status": "parsed_partial"},
+        ]
+    )
+
+    docs = reparse_needs_review.load_retry_documents(
+        supabase_client=fake_supabase,
+        statuses=["parsed_partial"],
+        amc="hdfc",
+        source_document_ids=["doc-2"],
+        limit=10,
+        min_age_hours=0,
+    )
+
+    assert [doc["id"] for doc in docs] == ["doc-2"]
+
+
+def test_reparse_distinct_document_when_same_amc_month_is_already_parsed(monkeypatch):
+    fake_supabase = _FakeSupabase(
+        [
+            {
+                "id": "main-factsheet",
+                "amc_code": "HDFC",
+                "document_type": "factsheet",
+                "report_month": "2026-06-01",
+                "parse_status": "parsed",
+            },
+            {
+                "id": "index-factsheet",
+                "amc_code": "HDFC",
+                "document_type": "factsheet",
+                "report_month": "2026-06-01",
+                "parse_status": "parsed_partial",
+            },
+        ]
+    )
+    monkeypatch.setattr(reparse_needs_review, "supabase", fake_supabase)
+
+    summary = reparse_needs_review.reparse_documents(
+        [fake_supabase.tables["mf_raw_documents"][1]],
+        _FakeService({"index-factsheet": "parsed"}),
+    )
+
+    assert summary["success_count"] == 1
+    assert summary["skipped_duplicate_count"] == 0
+    assert fake_supabase.tables["mf_raw_documents"][1]["parse_status"] == "needs_reparse"
 
 
 def test_reparse_documents_returns_zero_runtime_errors_for_still_review(monkeypatch):
@@ -195,3 +247,5 @@ def test_retry_workflow_enables_strict_scheduled_retries():
 
     assert "fail_on_still_actionable" in workflow
     assert "--fail-on-still-actionable" in workflow
+    assert "source_document_ids" in workflow
+    assert "--source-document-ids" in workflow
