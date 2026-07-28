@@ -17,8 +17,10 @@ from app.mf_ingestion.parsers.adapters.aditya_birla_adapter import AdityaBirlaAd
 from app.mf_ingestion.parsers.adapters.dsp_adapter import DSPAdapter
 from app.mf_ingestion.parsers.adapters.kotak_adapter import KotakAdapter
 from app.mf_ingestion.parsers.adapters.mirae_adapter import MiraeAdapter
+from app.mf_ingestion.parsers.adapters.motilal_adapter import MotilalAdapter
 from app.mf_ingestion.parsers.adapters.uti_adapter import UTIAdapter
 from app.mf_ingestion.parsers.base_parser import ParseContext
+from app.mf_ingestion.parsers.combined_factsheet_portfolio import parse_combined_factsheet_page
 from app.mf_ingestion.services.ingestion_service import (
     IngestionService,
     _canonicalize_document_url,
@@ -207,7 +209,7 @@ def test_staging_migration_and_workflows_keep_acquisition_and_promotion_separate
     assert 'supabase.table("mutual_fund_core_snapshot").update' not in parsing_service
 
 
-def test_reviewed_source_manifest_keeps_exact_june_axis_and_absl_fallbacks():
+def test_reviewed_source_manifest_keeps_exact_june_combined_factsheets():
     manifest = json.loads(
         Path("backend/config/mf_document_sources.json").read_text(encoding="utf-8")
     )
@@ -225,10 +227,94 @@ def test_reviewed_source_manifest_keeps_exact_june_axis_and_absl_fallbacks():
         and row["document_type"] == "factsheet"
         and row["report_month"] == "2026-06-01"
     ]
+    motilal_scopes = {
+        row["document_type"]
+        for row in documents
+        if row["amc"] == "MOTILAL" and row["report_month"] == "2026-06-01"
+    }
+    kotak_scopes = {
+        row["document_type"]
+        for row in documents
+        if row["amc"] == "KOTAK" and row["report_month"] == "2026-06-01"
+    }
 
     assert axis_scopes == {"factsheet", "portfolio_disclosure"}
+    assert motilal_scopes == {"factsheet", "portfolio_disclosure"}
+    assert kotak_scopes == {"factsheet", "portfolio_disclosure"}
     assert len(absl_factsheets) == 1
-    assert "adityabirlacapital.com" in absl_factsheets[0]["source_url"]
+    assert absl_factsheets[0]["source_url"].endswith("/empower-factsheet---june-2026.pdf")
+    assert get_source("motilal").factsheet_contains_holdings is True
+    assert get_source("kotak").factsheet_contains_holdings is True
+
+
+@pytest.mark.parametrize(
+    ("adapter", "page_text", "expected_scheme", "continue_after_grand_total"),
+    [
+        (
+            MotilalAdapter(),
+            """
+            Motilal Oswal Midcap Fund
+            Portfolio (as on 30-June-2026)
+            Scrip
+            Weightage (%)
+            Equity & Equity Related
+            HDFC Bank Ltd.
+            60.0
+            Infosys Limited
+            40.0
+            Grand Total
+            100.0
+            """,
+            "Motilal Oswal Midcap Fund",
+            False,
+        ),
+        (
+            KotakAdapter(),
+            """
+            KOTAK LARGE CAP FUND
+            PORTFOLIO
+            Cement and Cement Products
+            20.0
+            UltraTech Cement Ltd.
+            20.0
+            Grand Total
+            100.0
+            Issuer/Instrument
+            % to Net Assets
+            Banks
+            80.0
+            HDFC Bank Ltd.
+            80.0
+            SECTOR ALLOCATION (%)
+            """,
+            "KOTAK LARGE CAP FUND",
+            True,
+        ),
+    ],
+)
+def test_combined_factsheet_text_extracts_holdings_without_slow_table_scan(
+    adapter,
+    page_text,
+    expected_scheme,
+    continue_after_grand_total,
+):
+    prefixes = ("motilal oswal",) if isinstance(adapter, MotilalAdapter) else ("kotak",)
+    parsed = parse_combined_factsheet_page(
+        page_text,
+        ParseContext(
+            source_document_id="june-combined",
+            source_url="https://official.example/factsheet.pdf",
+            report_month=date(2026, 6, 1),
+        ),
+        scheme_prefixes=prefixes,
+        continue_after_grand_total=continue_after_grand_total,
+    )
+
+    assert parsed is not None
+    assert parsed.scheme_name == expected_scheme
+    assert parsed.report_month == date(2026, 6, 1)
+    assert parsed.metrics["total_percent_aum"] == 100.0
+    assert len(parsed.holdings) == 2
 
 
 def test_promotion_validation_requires_exact_r2_evidence_and_only_available_scopes():
@@ -329,6 +415,7 @@ def test_holdings_promotion_reports_each_rejection_reason():
             "mapped_scheme_code": "118989",
             "mapped_family_id": "old-family",
             "report_month": "2026-05-01",
+            "validation_status": "needs_review",
         },
         {"118989": "current-family"},
         {"report_month": "2026-06-01"},
@@ -339,6 +426,7 @@ def test_holdings_promotion_reports_each_rejection_reason():
         "holdings_mapping_confidence_below_90",
         "holdings_mapping_not_reviewed",
         "holdings_report_month_mismatch",
+        "holdings_validation_not_valid",
     ]
 
 

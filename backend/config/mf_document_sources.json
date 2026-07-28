@@ -58,13 +58,57 @@
       "discovery_agent_status": "promotable"
     },
     {
+      "amc": "MOTILAL",
+      "document_type": "factsheet",
+      "report_month": "2026-06-01",
+      "source_url": "https://www.motilaloswalmf.com/content/dam/motilal-mf/downloads/mf/factsheet/2026/july/Most%20Factsheet%20June%202026%20Active.pdf",
+      "discovery_page_url": "https://www.motilaloswalmf.com/downloads/factsheets",
+      "expected_file_type": ".pdf",
+      "title": "Factsheet June 2026 Active",
+      "priority_score": 8000000,
+      "discovery_agent_status": "promotable"
+    },
+    {
+      "amc": "MOTILAL",
+      "document_type": "portfolio_disclosure",
+      "report_month": "2026-06-01",
+      "source_url": "https://www.motilaloswalmf.com/content/dam/motilal-mf/downloads/mf/factsheet/2026/july/Most%20Factsheet%20June%202026%20Active.pdf",
+      "discovery_page_url": "https://www.motilaloswalmf.com/downloads/factsheets",
+      "expected_file_type": ".pdf",
+      "title": "Factsheet June 2026 Active",
+      "priority_score": 8000000,
+      "discovery_agent_status": "promotable"
+    },
+    {
+      "amc": "KOTAK",
+      "document_type": "factsheet",
+      "report_month": "2026-06-01",
+      "source_url": "https://vatseelabs-s3.kotakmf.com/FormsDownloads/Factsheet/Factsheet-for-June-2026/KotakMFFactsheetJune2026.pdf",
+      "discovery_page_url": "https://www.kotakmf.com/Information/forms-and-downloads",
+      "expected_file_type": ".pdf",
+      "title": "Kotak MF Factsheet June 2026",
+      "priority_score": 8000000,
+      "discovery_agent_status": "promotable"
+    },
+    {
+      "amc": "KOTAK",
+      "document_type": "portfolio_disclosure",
+      "report_month": "2026-06-01",
+      "source_url": "https://vatseelabs-s3.kotakmf.com/FormsDownloads/Factsheet/Factsheet-for-June-2026/KotakMFFactsheetJune2026.pdf",
+      "discovery_page_url": "https://www.kotakmf.com/Information/forms-and-downloads",
+      "expected_file_type": ".pdf",
+      "title": "Kotak MF Factsheet June 2026",
+      "priority_score": 8000000,
+      "discovery_agent_status": "promotable"
+    },
+    {
       "amc": "ABSL",
       "document_type": "factsheet",
       "report_month": "2026-06-01",
-      "source_url": "https://mutualfund.adityabirlacapital.com/-/media/bsl/files/resources/factsheets/2026/absl-factsheet_july-2026.pdf",
+      "source_url": "https://mutualfund.adityabirlacapital.com/-/media/bsl/files/resources/factsheets/2026/empower-factsheet---june-2026.pdf",
       "discovery_page_url": "https://mutualfund.adityabirlacapital.com/forms-and-downloads/factsheets",
       "expected_file_type": ".pdf",
-      "title": "Empower - Monthly Factsheet",
+      "title": "Empower Factsheet - June 2026",
       "priority_score": 8000000,
       "discovery_agent_status": "promotable"
     }

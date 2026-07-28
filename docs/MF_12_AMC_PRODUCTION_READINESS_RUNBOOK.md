@@ -297,15 +297,13 @@ gh workflow run "Acquire MF Documents" --ref main `
   -f "approval_phrase=ACQUIRE 2026-06 axis"
 ```
 
-Rerun after the manifest workflow fix:
+Next bounded acquisitions:
 
-- Axis: factsheet and embedded portfolio scopes.
-- Aditya Birla: June-content factsheet. Its existing portfolio should return `not_modified` and reuse the stored row.
+- Motilal: exact official `Factsheet June 2026 Active`, reused for factsheet and embedded portfolio scopes.
+- Kotak: exact official `KotakMFFactsheetJune2026.pdf`, reused for factsheet and embedded portfolio scopes.
+- Aditya Birla: exact official `Empower Factsheet - June 2026`; the existing portfolio row should remain separate.
 
-Do not force acquisition for:
-
-- Motilal while the official API exposes only May factsheet and April portfolio data.
-- Kotak from a third-party mirror. Its official portfolio path remains the blocker.
+Do not use third-party fund data or relabel stale files. All three reviewed URLs are official AMC-hosted sources and must still pass checksum, report-month, R2, parser, mapping, and promotion gates.
 
 Verify every acquired row:
 
@@ -450,14 +448,13 @@ Required order:
 
 #### Aditya Birla
 
-Current blocker: portfolio coverage passes, but the factsheet has not been acquired.
+Current blocker: portfolio coverage passes, but the exact June factsheet has not yet been acquired and its local AUM/risk extraction is below the gate.
 
 Required order:
 
-1. Push the manifest workflow fix.
-2. Acquire the official July-published, June-content factsheet.
-3. Parse the factsheet.
-4. Review mappings and field coverage.
+1. Acquire the exact official `empower-factsheet---june-2026.pdf`.
+2. Parse the factsheet.
+3. Harden AUM/risk extraction, then review mappings and field coverage.
 
 Current portfolio evidence:
 
@@ -469,15 +466,15 @@ Current portfolio evidence:
 
 #### Kotak
 
-Current blocker: no official June portfolio evidence in staging.
+Current blocker: the exact official combined factsheet is locally verified but not yet acquired or staged.
 
-Do not promote holdings or sectors until the official listing/download path works. Core factsheet scopes may be considered independently only after dry-run validation.
+The June PDF contains factsheet fields, holdings, and sector allocation per fund. Local deterministic extraction yields 76 portfolio records, with 64 inside the valid allocation band. Acquire it once for each document scope, stage out-of-band records for review, and promote only rows whose `validation_status` is `valid`.
 
 #### Motilal
 
-Current blocker: the official bounded API exposes stale source data.
+Current blocker: the exact official active factsheet is locally verified but not yet acquired or staged.
 
-Do not relabel May/April data as June. Keep June runtime activation blocked until an exact June official document appears.
+The July-published `Factsheet June 2026 Active` PDF contains June 30 factsheet, holdings, and sector data. Local deterministic extraction yields 20 portfolio records, with 19 inside the valid allocation band. The remaining record must stay in review; do not promote it as complete.
 
 ### Step 7: Reconcile mappings
 

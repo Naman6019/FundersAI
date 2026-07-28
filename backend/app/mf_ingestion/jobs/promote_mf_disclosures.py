@@ -130,6 +130,8 @@ def _validate_holding(
     document: dict[str, Any],
 ) -> list[str]:
     issues: list[str] = []
+    if row.get("validation_status") != "valid":
+        issues.append("holdings_validation_not_valid")
     if row.get("mapping_status") != "mapped":
         issues.append("holdings_mapping_not_reviewed")
     if float(row.get("mapping_confidence") or 0.0) < 90.0:
@@ -173,7 +175,7 @@ def build_dry_run(
     holdings = _fetch_all_rows(
         "mf_scheme_holdings",
         "id,mapped_scheme_code,mapped_family_id,mapping_status,mapping_confidence,"
-        "report_month,raw_scheme_name",
+        "report_month,raw_scheme_name,validation_status",
         filters={"source_document_id": source_document_id},
     )
     codes = sorted(

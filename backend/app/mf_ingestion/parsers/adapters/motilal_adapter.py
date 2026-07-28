@@ -11,6 +11,7 @@ from app.mf_ingestion.normalizers.column_normalizer import normalize_column_name
 from app.mf_ingestion.normalizers.instrument_normalizer import normalize_instrument_name
 from app.mf_ingestion.parsers.adapters.base_adapter import BaseAMCAdapter
 from app.mf_ingestion.parsers.base_parser import ParseContext, ParsedDocument
+from app.mf_ingestion.parsers.combined_factsheet_portfolio import parse_combined_factsheet_pdf
 
 SCHEME_PATTERN = re.compile(r"\b(Motilal\s+Oswal\s+[A-Za-z0-9&,'\-\.\(\) ]{2,100})\b", re.IGNORECASE)
 AS_ON_DATE_PATTERN = re.compile(
@@ -36,6 +37,13 @@ SUMMARY_ROW_MARKERS = (
 
 class MotilalAdapter(BaseAMCAdapter):
     amc_code = AMC_MOTILAL
+
+    def parse_pdf_file_many(self, file_path: str, context: ParseContext) -> list[ParsedDocument]:
+        return parse_combined_factsheet_pdf(
+            file_path,
+            context,
+            scheme_prefixes=("motilal oswal",),
+        )
 
     def parse_holdings(
         self,
