@@ -760,6 +760,41 @@ def test_nippon_mislabeled_openxml_workbook_is_normalized(monkeypatch) -> None:
     assert downloaded.file_ext == ".xlsx"
 
 
+def test_hdfc_file_probe_uses_public_browser_user_agent(monkeypatch) -> None:
+    source = get_source("hdfc")
+    document = DiscoveredDocument(
+        amc_name=source.amc_name,
+        amc_code=source.amc_code,
+        document_type="factsheet",
+        title="HDFC MF Factsheet - June 2026",
+        url=(
+            "https://files.hdfcfund.com/s3fs-public/2026-07/"
+            "HDFC%20MF%20Factsheet%20-%20June%202026.pdf"
+        ),
+        discovery_page_url=source.factsheet_page_url or "",
+        file_ext=".pdf",
+        report_month=date(2026, 6, 1),
+        priority_score=1,
+    )
+    captured: dict[str, object] = {}
+
+    def fake_request(*_args, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            content=b"%PDF-1.7 official",
+            headers={"Content-Type": "application/pdf"},
+            url=document.url,
+        )
+
+    monkeypatch.setattr(amc_downloader, "_request_with_retry", fake_request)
+
+    AMCDownloader(source, timeout_seconds=1, user_agent="FundersAIResearchBot/1.0").probe_download(
+        document
+    )
+
+    assert str(captured["headers"]["User-Agent"]).startswith("Mozilla/5.0")
+
+
 def test_ppfas_empty_form_action_posts_to_confirmation_page() -> None:
     assert _ppfas_confirmation_url("https://amc.ppfas.com/downloads/index.php") == "/downloads/ConfirmCitizenship.php"
     assert (

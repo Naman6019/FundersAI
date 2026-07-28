@@ -21,6 +21,26 @@ def test_staging_coverage_rpc_is_read_only_and_service_role_only():
     assert "delete " not in sql.lower()
 
 
+def test_promotion_eligible_coverage_rpc_is_read_only_and_exposes_gate_fields():
+    root = Path(__file__).resolve().parents[2]
+    sql = (
+        root
+        / "backend"
+        / "migrations"
+        / "20260728_add_mf_promotion_eligible_coverage_rpc.sql"
+    ).read_text(encoding="utf-8")
+
+    assert sql.count("language sql") == 2
+    assert sql.count("stable") == 2
+    assert sql.count("security definer") == 2
+    assert sql.count("to service_role") == 2
+    assert "mapping_confidence numeric" in sql
+    assert "validation_status text" in sql
+    assert "insert " not in sql.lower()
+    assert "update " not in sql.lower()
+    assert "delete " not in sql.lower()
+
+
 def test_staging_coverage_uses_distinct_current_mapped_families():
     report = build_staging_coverage(
         report_month="2026-06-01",
@@ -32,7 +52,10 @@ def test_staging_coverage_uses_distinct_current_mapped_families():
                 "report_month": "2026-06-01",
                 "normalized_scheme_name": "mirae asset one fund",
                 "mapped_family_id": "one",
+                "mapped_scheme_code": "1001",
+                "mapping_confidence": 100.0,
                 "mapping_status": "mapped",
+                "promotion_status": "staged",
                 "aum": 1,
                 "expense_ratio": 1,
                 "benchmark": "Index",
@@ -55,7 +78,10 @@ def test_staging_coverage_uses_distinct_current_mapped_families():
                 "report_month": "2026-06-01",
                 "raw_scheme_name": "Mirae Asset One Fund",
                 "mapped_family_id": "one",
+                "mapped_scheme_code": "1001",
+                "mapping_confidence": 100.0,
                 "mapping_status": "mapped",
+                "validation_status": "valid",
                 "sector": "Banks",
             },
             {
@@ -87,7 +113,10 @@ def test_staging_coverage_separates_non_applicable_sectors_from_missing_sectors(
             "report_month": "2026-06-01",
             "normalized_scheme_name": name.lower(),
             "mapped_family_id": family,
+            "mapped_scheme_code": f"code-{family}",
+            "mapping_confidence": 100.0,
             "mapping_status": "mapped",
+            "promotion_status": "staged",
             "aum": 1,
             "expense_ratio": 1,
             "benchmark": "Index",
@@ -105,7 +134,10 @@ def test_staging_coverage_separates_non_applicable_sectors_from_missing_sectors(
             "report_month": "2026-06-01",
             "raw_scheme_name": "Mirae Asset Equity Fund",
             "mapped_family_id": "equity",
+            "mapped_scheme_code": "code-equity",
+            "mapping_confidence": 100.0,
             "mapping_status": "mapped",
+            "validation_status": "valid",
             "sector": None,
         },
         {
@@ -113,7 +145,10 @@ def test_staging_coverage_separates_non_applicable_sectors_from_missing_sectors(
             "report_month": "2026-06-01",
             "raw_scheme_name": "Mirae Asset Gold ETF Fund of Fund",
             "mapped_family_id": "gold-fof",
+            "mapped_scheme_code": "code-gold-fof",
+            "mapping_confidence": 100.0,
             "mapping_status": "mapped",
+            "validation_status": "valid",
             "sector": None,
         },
     ]
@@ -139,7 +174,11 @@ def test_staging_coverage_maps_absl_database_code_to_aditya_birla_registry_key()
         "normalized_scheme_name": "aditya birla sun life equity fund",
         "raw_scheme_name": "Aditya Birla Sun Life Equity Fund",
         "mapped_family_id": "absl-equity",
+        "mapped_scheme_code": "1001",
+        "mapping_confidence": 100.0,
         "mapping_status": "mapped",
+        "promotion_status": "staged",
+        "validation_status": "valid",
         "aum": 1,
         "expense_ratio": 1,
         "benchmark": "Index",
@@ -166,7 +205,10 @@ def test_staging_coverage_counts_official_aggregate_sector_rows():
         "report_month": "2026-06-01",
         "normalized_scheme_name": "motilal oswal midcap fund",
         "mapped_family_id": "motilal-midcap",
+        "mapped_scheme_code": "1001",
+        "mapping_confidence": 100.0,
         "mapping_status": "mapped",
+        "promotion_status": "staged",
         "aum": 1,
         "expense_ratio": 1,
         "benchmark": "Index",
@@ -178,7 +220,10 @@ def test_staging_coverage_counts_official_aggregate_sector_rows():
         "report_month": "2026-06-01",
         "raw_scheme_name": "Motilal Oswal Midcap Fund",
         "mapped_family_id": "motilal-midcap",
+        "mapped_scheme_code": "1001",
+        "mapping_confidence": 100.0,
         "mapping_status": "mapped",
+        "validation_status": "valid",
         "sector": None,
     }
     sector = {
@@ -186,6 +231,8 @@ def test_staging_coverage_counts_official_aggregate_sector_rows():
         "report_month": "2026-06-01",
         "raw_scheme_name": "Motilal Oswal Midcap Fund",
         "mapped_family_id": "motilal-midcap",
+        "mapped_scheme_code": "1001",
+        "mapping_confidence": 100.0,
         "mapping_status": "mapped",
         "validation_status": "valid",
         "sector_name": "Banks",
@@ -203,3 +250,45 @@ def test_staging_coverage_counts_official_aggregate_sector_rows():
     assert report["counts"]["sectors"] == 1
     assert report["percentages"]["sectors"] == 100.0
     assert report["passes_all_fields"] is True
+
+
+def test_staging_coverage_excludes_holdings_that_are_not_promotion_eligible():
+    candidate = {
+        "amc_code": "mirae",
+        "report_month": "2026-06-01",
+        "normalized_scheme_name": "mirae asset equity fund",
+        "mapped_family_id": "equity",
+        "mapped_scheme_code": "1001",
+        "mapping_confidence": 100.0,
+        "mapping_status": "mapped",
+        "promotion_status": "staged",
+        "aum": 1,
+        "expense_ratio": 1,
+        "benchmark": "Index",
+        "fund_manager": "Manager",
+        "risk_level": "High",
+    }
+    holding = {
+        "amc_code": "mirae",
+        "report_month": "2026-06-01",
+        "raw_scheme_name": "Mirae Asset Equity Fund",
+        "mapped_family_id": "equity",
+        "mapped_scheme_code": "1001",
+        "mapping_confidence": 100.0,
+        "mapping_status": "mapped",
+        "validation_status": "needs_review",
+        "sector": "Banks",
+    }
+
+    report = build_staging_coverage(
+        report_month="2026-06-01",
+        amcs=["mirae"],
+        candidates=[candidate],
+        holdings=[holding],
+        threshold=80.0,
+    )["mirae"]
+
+    assert report["mapping_percentages"]["portfolio"] == 100.0
+    assert report["percentages"]["holdings"] == 0.0
+    assert report["percentages"]["sectors"] == 0.0
+    assert report["passes_all_fields"] is False

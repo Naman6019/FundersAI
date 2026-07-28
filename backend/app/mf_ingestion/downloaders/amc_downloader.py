@@ -47,6 +47,11 @@ MOTILAL_CATEGORY_BY_DOCUMENT_TYPE = {
     "portfolio_disclosure": "month end portfolio",
 }
 MOTILAL_DISCOVERY_LOOKBACK_MONTHS = 6
+HDFC_PUBLIC_DOWNLOAD_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/138.0.0.0 Safari/537.36"
+)
 UTI_ENDPOINT_BY_DOCUMENT_TYPE = {
     "factsheet": "https://www.utimf.com/api/get-fact-sheet",
     "portfolio_disclosure": "https://www.utimf.com/api/get-consolidate-portfolio-disclosure",
@@ -328,7 +333,7 @@ class AMCDownloader(BaseDownloader):
                 discovered.url,
                 timeout_seconds=self.timeout_seconds,
                 headers={
-                    "User-Agent": self.user_agent,
+                    "User-Agent": _download_user_agent(self.source, self.user_agent),
                     "Referer": referer,
                     **(conditional_headers or {}),
                 },
@@ -405,7 +410,7 @@ class AMCDownloader(BaseDownloader):
             discovered.url,
             timeout_seconds=self.timeout_seconds,
             headers={
-                "User-Agent": self.user_agent,
+                "User-Agent": _download_user_agent(self.source, self.user_agent),
                 "Referer": referer,
                 "Accept": "application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*;q=0.8",
                 "Range": f"bytes=0-{max(int(max_bytes), 1024) - 1}",
@@ -427,6 +432,12 @@ class AMCDownloader(BaseDownloader):
             file_size_bytes=len(body),
             file_bytes=body,
         )
+
+
+def _download_user_agent(source: AMCDocumentSource, configured_user_agent: str) -> str:
+    if (source.adapter_key or "").strip().lower() == "hdfc":
+        return HDFC_PUBLIC_DOWNLOAD_USER_AGENT
+    return configured_user_agent
 
 
 def _derive_file_name(url: str, fallback_title: str) -> str:
