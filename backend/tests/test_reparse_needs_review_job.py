@@ -124,6 +124,7 @@ def test_load_retry_documents_filters_by_amc_status_age_and_limit():
         supabase_client=fake_supabase,
         statuses=["needs_review", "failed"],
         amc="sbi",
+        report_month=None,
         source_document_ids=None,
         limit=1,
         min_age_hours=6,
@@ -149,12 +150,56 @@ def test_load_retry_documents_can_filter_exact_source_ids():
         supabase_client=fake_supabase,
         statuses=["parsed_partial"],
         amc="hdfc",
+        report_month=None,
         source_document_ids=["doc-2"],
         limit=10,
         min_age_hours=0,
     )
 
     assert [doc["id"] for doc in docs] == ["doc-2"]
+
+
+def test_load_retry_documents_can_filter_exact_report_month():
+    fake_supabase = _FakeSupabase(
+        [
+            {
+                "id": "june",
+                "amc_code": "MIRAE",
+                "report_month": "2026-06-01",
+                "parse_status": "parsed_partial",
+            },
+            {
+                "id": "may",
+                "amc_code": "MIRAE",
+                "report_month": "2026-05-01",
+                "parse_status": "parsed_partial",
+            },
+        ]
+    )
+
+    docs = reparse_needs_review.load_retry_documents(
+        supabase_client=fake_supabase,
+        statuses=["parsed_partial"],
+        amc="mirae",
+        report_month="2026-06-01",
+        source_document_ids=None,
+        limit=100,
+        min_age_hours=0,
+    )
+
+    assert [doc["id"] for doc in docs] == ["june"]
+
+
+def test_parse_report_month_accepts_month_and_rejects_non_month_start():
+    assert reparse_needs_review._parse_report_month("2026-06") == "2026-06-01"
+    assert reparse_needs_review._parse_report_month("") is None
+
+    try:
+        reparse_needs_review._parse_report_month("2026-06-30")
+    except ValueError as exc:
+        assert "first day" in str(exc)
+    else:
+        raise AssertionError("non-month-start date must be rejected")
 
 
 def test_load_retry_documents_resolves_aditya_birla_registry_code():
@@ -169,6 +214,7 @@ def test_load_retry_documents_resolves_aditya_birla_registry_code():
         supabase_client=fake_supabase,
         statuses=["pending"],
         amc="aditya_birla",
+        report_month=None,
         source_document_ids=["absl-june"],
         limit=10,
         min_age_hours=0,
@@ -269,3 +315,5 @@ def test_retry_workflow_enables_strict_scheduled_retries():
     assert "--fail-on-still-actionable" in workflow
     assert "source_document_ids" in workflow
     assert "--source-document-ids" in workflow
+    assert "report_month" in workflow
+    assert "--report-month" in workflow

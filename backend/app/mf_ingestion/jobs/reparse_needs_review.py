@@ -35,6 +35,18 @@ def _parse_statuses(raw: str | None) -> list[str]:
     return values or list(DEFAULT_RETRY_STATUSES)
 
 
+def _parse_report_month(raw: str | None) -> str | None:
+    value = str(raw or "").strip()
+    if not value:
+        return None
+    if len(value) == 7:
+        value = f"{value}-01"
+    parsed = datetime.strptime(value, "%Y-%m-%d")
+    if parsed.day != 1:
+        raise ValueError("report_month must be the first day of a month")
+    return parsed.date().isoformat()
+
+
 def _to_utc_datetime(value: Any) -> datetime | None:
     if value in (None, ""):
         return None
@@ -74,6 +86,7 @@ def load_retry_documents(
     supabase_client: Any,
     statuses: list[str],
     amc: str | None,
+    report_month: str | None,
     source_document_ids: list[str] | None,
     limit: int,
     min_age_hours: float,
@@ -102,6 +115,8 @@ def load_retry_documents(
         query = query.in_("amc_code", sorted(amc_values))
     if source_document_ids:
         query = query.in_("id", source_document_ids)
+    if report_month:
+        query = query.eq("report_month", report_month)
     rows = query.limit(query_limit).execute().data or []
 
     eligible = [
@@ -167,6 +182,11 @@ def main() -> int:
         default="",
         help="Optional comma-separated mf_raw_documents UUIDs to reparse.",
     )
+    parser.add_argument(
+        "--report-month",
+        default="",
+        help="Optional exact report month in YYYY-MM or YYYY-MM-01 format.",
+    )
     parser.add_argument("--limit", type=int, default=50, help="Max docs to retry.")
     parser.add_argument("--min-age-hours", type=float, default=6.0, help="Retry only docs older than this many hours.")
     parser.add_argument("--statuses", default="needs_review,failed,parsed_partial", help="Comma-separated parse statuses to retry.")
@@ -188,10 +208,16 @@ def main() -> int:
         for value in str(args.source_document_ids or "").split(",")
         if value.strip()
     ]
+    try:
+        report_month = _parse_report_month(args.report_month)
+    except ValueError as exc:
+        logger.error("Invalid report month: %s", exc)
+        return 2
     documents = load_retry_documents(
         supabase_client=supabase,
         statuses=statuses,
         amc=args.amc,
+        report_month=report_month,
         source_document_ids=source_document_ids,
         limit=max(args.limit, 1),
         min_age_hours=max(args.min_age_hours, 0.0),
@@ -199,9 +225,10 @@ def main() -> int:
 
     if not documents:
         logger.info(
-            "No eligible parser action documents found. statuses=%s amc=%s min_age_hours=%s",
+            "No eligible parser action documents found. statuses=%s amc=%s report_month=%s min_age_hours=%s",
             statuses,
             args.amc,
+            report_month,
             args.min_age_hours,
         )
         return 0

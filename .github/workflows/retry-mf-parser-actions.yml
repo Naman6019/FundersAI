@@ -25,6 +25,10 @@ on:
         description: 'Optional comma-separated mf_raw_documents UUIDs for an exact bounded retry'
         required: false
         default: ''
+      report_month:
+        description: 'Optional exact report month in YYYY-MM format'
+        required: false
+        default: ''
       extractor_mode:
         description: 'Parser mode: deterministic, deterministic_then_llm, llm_then_deterministic'
         required: false
@@ -118,6 +122,7 @@ jobs:
           DISPATCH_MIN_AGE_HOURS: ${{ inputs.min_age_hours }}
           DISPATCH_STATUSES: ${{ inputs.statuses }}
           DISPATCH_SOURCE_DOCUMENT_IDS: ${{ inputs.source_document_ids }}
+          DISPATCH_REPORT_MONTH: ${{ inputs.report_month }}
           DISPATCH_FAIL_ON_STILL_ACTIONABLE: ${{ inputs.fail_on_still_actionable }}
         run: |
           set -euo pipefail
@@ -149,13 +154,14 @@ jobs:
           MIN_AGE_HOURS="${DISPATCH_MIN_AGE_HOURS:-6}"
           STATUSES="${DISPATCH_STATUSES:-needs_review,failed,parsed_partial}"
           SOURCE_DOCUMENT_IDS="${DISPATCH_SOURCE_DOCUMENT_IDS:-}"
+          REPORT_MONTH="${DISPATCH_REPORT_MONTH:-}"
           STRICT_RETRY_FLAG=""
           if [ "$EVENT_NAME" = "schedule" ] || [ "${DISPATCH_FAIL_ON_STILL_ACTIONABLE:-false}" = "true" ]; then
             STRICT_RETRY_FLAG="--fail-on-still-actionable"
           fi
           amc="${{ matrix.amc }}"
 
-          echo "Retrying parser actions for AMC=$amc limit=$LIMIT min_age_hours=$MIN_AGE_HOURS statuses=$STATUSES source_document_ids=$SOURCE_DOCUMENT_IDS"
+          echo "Retrying parser actions for AMC=$amc report_month=$REPORT_MONTH limit=$LIMIT min_age_hours=$MIN_AGE_HOURS statuses=$STATUSES source_document_ids=$SOURCE_DOCUMENT_IDS"
           args=(
             --amc "$amc"
             --limit "$LIMIT"
@@ -164,6 +170,9 @@ jobs:
           )
           if [ -n "$SOURCE_DOCUMENT_IDS" ]; then
             args+=(--source-document-ids "$SOURCE_DOCUMENT_IDS")
+          fi
+          if [ -n "$REPORT_MONTH" ]; then
+            args+=(--report-month "$REPORT_MONTH")
           fi
           timeout 45m python -m backend.app.mf_ingestion.jobs.reparse_needs_review \
             "${args[@]}" \
