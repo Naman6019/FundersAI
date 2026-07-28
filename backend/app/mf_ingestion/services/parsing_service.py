@@ -309,6 +309,10 @@ class ParsingService:
         if supabase:
             try:
                 supabase.table("mf_scheme_holdings").delete().eq("source_document_id", document_id).execute()
+                supabase.table("mf_scheme_sector_allocations").delete().eq(
+                    "source_document_id",
+                    document_id,
+                ).execute()
                 supabase.table("mf_scheme_monthly_metrics").delete().eq("source_document_id", document_id).execute()
                 supabase.table("mf_parse_review_queue").delete().eq("source_document_id", document_id).execute()
             except Exception as e:
@@ -396,6 +400,7 @@ class ParsingService:
             )
 
             inserted_count = 0
+            inserted_sector_count = 0
             should_insert_holdings = validation.validation_status != VALIDATION_STATUS_INVALID
             if amc_code.lower() == "axis" and "percent_aum_out_of_band" in validation.issues:
                 should_insert_holdings = False
@@ -432,6 +437,48 @@ class ParsingService:
                         .execute()
                     )
                     inserted_count = len(upsert_resp.data or [])
+
+            sector_allocations = parsed.metrics.get("sector_allocations")
+            if (
+                isinstance(sector_allocations, list)
+                and sector_allocations
+                and parsed.report_month
+            ):
+                sector_rows = [
+                    {
+                        "scheme_id": scheme_id,
+                        "report_month": parsed.report_month.isoformat(),
+                        "sector_name": str(row.get("sector") or "").strip(),
+                        "sector_name_normalized": str(row.get("sector") or "").strip().lower(),
+                        "weight_pct": row.get("weight_pct"),
+                        "source_document_id": document_id,
+                        "source_url": document.get("source_url"),
+                        "source_row_hash": (
+                            f"{scheme_id}|sector|{_source_hash(row)}"
+                        ),
+                        "parser_version": document.get("parser_version"),
+                        "confidence_score": float(final_confidence),
+                        "validation_status": "valid",
+                        "raw_scheme_name": parsed.scheme_name,
+                        "mapped_scheme_code": mapped_scheme_code,
+                        "mapped_family_id": mapped_family_id,
+                        "mapping_confidence": mapping_confidence,
+                        "mapping_status": mapping_status,
+                    }
+                    for row in sector_allocations
+                    if str(row.get("sector") or "").strip()
+                    and row.get("weight_pct") is not None
+                ]
+                if sector_rows:
+                    sector_resp = (
+                        supabase.table("mf_scheme_sector_allocations")
+                        .upsert(
+                            sector_rows,
+                            on_conflict="source_document_id,source_row_hash",
+                        )
+                        .execute()
+                    )
+                    inserted_sector_count = len(sector_resp.data or [])
 
             metrics_payload = {
                 "scheme_id": scheme_id,
@@ -474,6 +521,7 @@ class ParsingService:
                     "scheme_match_confidence": scheme_match.confidence,
                     "confidence_score": final_confidence,
                     "inserted_holdings": inserted_count,
+                    "inserted_sector_allocations": inserted_sector_count,
                     "validation_issues": validation.issues,
                 }
             )
@@ -512,6 +560,7 @@ class ParsingService:
                 "scheme_match_confidence": result["scheme_match_confidence"],
                 "confidence_score": result["confidence_score"],
                 "inserted_holdings": result["inserted_holdings"],
+                "inserted_sector_allocations": result["inserted_sector_allocations"],
                 "validation_issues": result["validation_issues"],
                 "diagnostics": parse_diagnostics,
             }
@@ -521,6 +570,9 @@ class ParsingService:
             "extractor_type": "deterministic",
             "parsed_schemes": len(results),
             "inserted_holdings": inserted_total,
+            "inserted_sector_allocations": sum(
+                int(result["inserted_sector_allocations"]) for result in results
+            ),
             "validation_issues": dedup_issues,
             "diagnostics": parse_diagnostics,
         }

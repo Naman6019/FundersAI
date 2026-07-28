@@ -78,8 +78,10 @@ def build_staging_coverage(
     amcs: list[str],
     candidates: list[dict[str, Any]],
     holdings: list[dict[str, Any]],
+    sector_allocations: list[dict[str, Any]] | None = None,
     threshold: float,
 ) -> dict[str, Any]:
+    sector_allocations = sector_allocations or []
     report: dict[str, Any] = {}
     for amc in amcs:
         normalized_amc = _normalize_amc_key(amc)
@@ -135,6 +137,17 @@ def build_staging_coverage(
             for row in holding_rows
             if row.get("sector") not in (None, "")
         }
+        direct_sector_families = {
+            str(row["mapped_family_id"])
+            for row in sector_allocations
+            if _normalize_amc_key(row.get("amc_code")) == normalized_amc
+            and str(row.get("report_month") or "") == report_month
+            and row.get("mapping_status") == "mapped"
+            and row.get("mapped_family_id")
+            and row.get("validation_status") == "valid"
+            and row.get("sector_name") not in (None, "")
+        }
+        sector_families.update(direct_sector_families)
         holding_rows_by_family: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for row in holding_rows:
             holding_rows_by_family[str(row["mapped_family_id"])].append(row)
@@ -144,6 +157,7 @@ def build_staging_coverage(
             if family_id in sector_families
             or any(not _sector_not_applicable(row.get("raw_scheme_name")) for row in rows)
         }
+        sector_applicable_families.update(direct_sector_families)
         sector_not_applicable_families = holding_families - sector_applicable_families
         counts = {
             **{field: len(core_families[field]) for field in CORE_FIELDS},
@@ -217,12 +231,21 @@ def main() -> int:
     )
     for row in holdings:
         row["amc_code"] = raw_documents.get(str(row.get("source_document_id") or ""), "")
+    sector_allocations = _get_filtered(
+        "mf_scheme_sector_allocations",
+        "id,source_document_id,report_month,raw_scheme_name,sector_name,"
+        "mapped_family_id,mapping_status,validation_status",
+        filters={"report_month": args.report_month},
+    )
+    for row in sector_allocations:
+        row["amc_code"] = raw_documents.get(str(row.get("source_document_id") or ""), "")
 
     report = build_staging_coverage(
         report_month=args.report_month,
         amcs=amcs,
         candidates=candidates,
         holdings=holdings,
+        sector_allocations=sector_allocations,
         threshold=args.threshold,
     )
     print(

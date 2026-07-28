@@ -134,3 +134,48 @@ def test_staging_coverage_maps_absl_database_code_to_aditya_birla_registry_key()
 
     assert report["mapping_percentages"] == {"core": 100.0, "portfolio": 100.0}
     assert report["passes_all_fields"] is True
+
+
+def test_staging_coverage_counts_official_aggregate_sector_rows():
+    candidate = {
+        "amc_code": "motilal",
+        "report_month": "2026-06-01",
+        "normalized_scheme_name": "motilal oswal midcap fund",
+        "mapped_family_id": "motilal-midcap",
+        "mapping_status": "mapped",
+        "aum": 1,
+        "expense_ratio": 1,
+        "benchmark": "Index",
+        "fund_manager": "Manager",
+        "risk_level": "Very High",
+    }
+    holding = {
+        "amc_code": "motilal",
+        "report_month": "2026-06-01",
+        "raw_scheme_name": "Motilal Oswal Midcap Fund",
+        "mapped_family_id": "motilal-midcap",
+        "mapping_status": "mapped",
+        "sector": None,
+    }
+    sector = {
+        "amc_code": "motilal",
+        "report_month": "2026-06-01",
+        "raw_scheme_name": "Motilal Oswal Midcap Fund",
+        "mapped_family_id": "motilal-midcap",
+        "mapping_status": "mapped",
+        "validation_status": "valid",
+        "sector_name": "Banks",
+    }
+
+    report = build_staging_coverage(
+        report_month="2026-06-01",
+        amcs=["motilal"],
+        candidates=[candidate],
+        holdings=[holding],
+        sector_allocations=[sector],
+        threshold=80.0,
+    )["motilal"]
+
+    assert report["counts"]["sectors"] == 1
+    assert report["percentages"]["sectors"] == 100.0
+    assert report["passes_all_fields"] is True

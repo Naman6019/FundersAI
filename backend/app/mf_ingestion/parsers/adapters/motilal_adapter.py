@@ -43,6 +43,7 @@ class MotilalAdapter(BaseAMCAdapter):
             file_path,
             context,
             scheme_prefixes=("motilal oswal",),
+            extract_sector_allocations=True,
         )
 
     def parse_holdings(

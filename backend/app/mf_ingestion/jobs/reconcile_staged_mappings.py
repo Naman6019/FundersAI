@@ -71,8 +71,10 @@ def reconcile_staged_mappings(
     cache: dict[str, tuple[str | None, str | None, float, str]] = {}
     proposed_candidates = 0
     proposed_holdings_groups = 0
+    proposed_sector_groups = 0
     applied_candidates = 0
     applied_holdings_groups = 0
+    applied_sector_groups = 0
     unresolved: list[dict[str, Any]] = []
 
     for document in documents:
@@ -98,8 +100,22 @@ def reconcile_staged_mappings(
                 .eq("source_document_id", document_id)
             )
         )
+        sector_allocations = _page_rows(
+            lambda: (
+                supabase.table("mf_scheme_sector_allocations")
+                .select(
+                    "id,raw_scheme_name,mapped_scheme_code,mapped_family_id,"
+                    "mapping_confidence,mapping_status"
+                )
+                .eq("source_document_id", document_id)
+            )
+        )
 
-        for row_type, rows in (("candidate", candidates), ("holdings", holdings)):
+        for row_type, rows in (
+            ("candidate", candidates),
+            ("holdings", holdings),
+            ("sector", sector_allocations),
+        ):
             unique_rows: dict[str, dict[str, Any]] = {}
             for row in rows:
                 raw_name = str(row.get("raw_scheme_name") or "").strip()
@@ -142,7 +158,7 @@ def reconcile_staged_mappings(
                             "id", row["id"]
                         ).execute()
                         applied_candidates += 1
-                else:
+                elif row_type == "holdings":
                     proposed_holdings_groups += 1
                     if apply:
                         (
@@ -153,6 +169,17 @@ def reconcile_staged_mappings(
                             .execute()
                         )
                         applied_holdings_groups += 1
+                else:
+                    proposed_sector_groups += 1
+                    if apply:
+                        (
+                            supabase.table("mf_scheme_sector_allocations")
+                            .update(payload)
+                            .eq("source_document_id", document_id)
+                            .eq("raw_scheme_name", raw_name)
+                            .execute()
+                        )
+                        applied_sector_groups += 1
 
     return {
         "status": "applied" if apply else "dry_run",
@@ -161,8 +188,10 @@ def reconcile_staged_mappings(
         "documents": len(documents),
         "proposed_candidates": proposed_candidates,
         "proposed_holdings_groups": proposed_holdings_groups,
+        "proposed_sector_groups": proposed_sector_groups,
         "applied_candidates": applied_candidates,
         "applied_holdings_groups": applied_holdings_groups,
+        "applied_sector_groups": applied_sector_groups,
         "unresolved_count": len(unresolved),
         "unresolved_sample": unresolved[:50],
     }

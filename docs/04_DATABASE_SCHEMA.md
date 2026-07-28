@@ -42,6 +42,8 @@ FundersAI uses Supabase PostgreSQL for structured application data and authentic
   - Active states include `pending`, `downloaded`, `needs_reparse`, `parsed`, `parsed_partial`, `needs_review`, `failed`, and `skipped_not_supported`.
 - `mf_schemes`
 - `mf_scheme_holdings`
+- `mf_scheme_sector_allocations` (`20260728_add_mf_sector_allocation_staging.sql`, locally verified; migration pending)
+  - Stores official aggregate sector weights separately from security holdings, with raw scheme names, reviewed scheme/family mappings, source-document evidence, and validation state.
 - `mf_scheme_monthly_metrics`
 - `mf_parse_review_queue`
 - `mf_r2_archive_manifests`
@@ -59,6 +61,7 @@ FundersAI uses Supabase PostgreSQL for structured application data and authentic
   - Service-role-only audit rows for dry-run validation and applied, scoped promotions.
 - `promote_mf_factsheet_candidate(...)` and `promote_mf_holdings_document(...)`
   - Revalidate reviewed mappings and promote only requested scopes. Rejected or partial candidates do not clear last-known-good runtime rows.
+  - The four-argument factsheet function is atomic and does not delegate to the legacy RPC. The pending sector-staging migration makes holdings and aggregate-sector promotion independently validated.
 
 Raw document bytes belong in Cloudflare R2. Supabase stores the object location and query-critical structured output.
 

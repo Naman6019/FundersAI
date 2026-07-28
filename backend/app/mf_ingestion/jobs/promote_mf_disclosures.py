@@ -145,6 +145,30 @@ def _validate_holding(
     return sorted(set(issues))
 
 
+def _validate_sector_allocation(
+    row: dict[str, Any],
+    mapping_by_code: dict[str, str],
+    document: dict[str, Any],
+) -> list[str]:
+    issues: list[str] = []
+    if row.get("validation_status") != "valid":
+        issues.append("sector_validation_not_valid")
+    if row.get("mapping_status") != "mapped":
+        issues.append("sector_mapping_not_reviewed")
+    if float(row.get("mapping_confidence") or 0.0) < 90.0:
+        issues.append("sector_mapping_confidence_below_90")
+    code = str(row.get("mapped_scheme_code") or "")
+    family = str(row.get("mapped_family_id") or "")
+    if mapping_by_code.get(code) != family:
+        issues.append("sector_mapping_changed")
+    if str(row.get("report_month") or "") != str(document.get("report_month") or ""):
+        issues.append("sector_report_month_mismatch")
+    weight = float(row.get("weight_pct") or 0.0)
+    if not 0 < weight <= 100:
+        issues.append("sector_weight_invalid")
+    return sorted(set(issues))
+
+
 def build_dry_run(
     source_document_id: str,
     scopes: list[str],
@@ -175,13 +199,19 @@ def build_dry_run(
     holdings = _fetch_all_rows(
         "mf_scheme_holdings",
         "id,mapped_scheme_code,mapped_family_id,mapping_status,mapping_confidence,"
-        "report_month,raw_scheme_name,validation_status",
+        "report_month,raw_scheme_name,validation_status,sector",
+        filters={"source_document_id": source_document_id},
+    )
+    sector_allocations = _fetch_all_rows(
+        "mf_scheme_sector_allocations",
+        "id,mapped_scheme_code,mapped_family_id,mapping_status,mapping_confidence,"
+        "report_month,raw_scheme_name,validation_status,sector_name,weight_pct",
         filters={"source_document_id": source_document_id},
     )
     codes = sorted(
         {
             str(row.get("mapped_scheme_code"))
-            for row in [*candidates, *holdings]
+            for row in [*candidates, *holdings, *sector_allocations]
             if row.get("mapped_scheme_code")
         }
     )
@@ -205,7 +235,10 @@ def build_dry_run(
     operation_count = 0
     valid_holdings_rows = 0
     rejected_holdings_rows = 0
+    valid_sector_rows = 0
+    rejected_sector_rows = 0
     holdings_rejection_reasons: Counter[str] = Counter()
+    sector_rejection_reasons: Counter[str] = Counter()
     if CORE_SCOPES.intersection(scopes):
         if not candidates:
             issues.append("factsheet_candidates_missing")
@@ -237,7 +270,7 @@ def build_dry_run(
             warnings.extend(candidate_issues)
             warnings.extend(f"{candidate.get('id')}:{scope}_unavailable" for scope in unavailable_scopes)
 
-    if PORTFOLIO_SCOPES.intersection(scopes):
+    if "holdings" in scopes:
         if not holdings:
             issues.append("staged_holdings_missing")
         for row in holdings:
@@ -255,6 +288,36 @@ def build_dry_run(
         if rejected_holdings_rows:
             issues.append("staged_holdings_contain_non_promotable_rows")
 
+    if "sectors" in scopes:
+        if sector_allocations:
+            sector_source_rows = sector_allocations
+        else:
+            sector_source_rows = [
+                {**row, "sector_name": row.get("sector"), "weight_pct": 1.0}
+                for row in holdings
+                if str(row.get("sector") or "").strip()
+            ]
+        if not sector_source_rows:
+            issues.append("staged_sectors_missing")
+        for row in sector_source_rows:
+            row_issues = (
+                _validate_sector_allocation(row, mapping_by_code, document)
+                if sector_allocations
+                else _validate_holding(row, mapping_by_code, document)
+            )
+            if row_issues:
+                warnings.extend(row_issues)
+                rejected_sector_rows += 1
+                sector_rejection_reasons.update(set(row_issues))
+            else:
+                valid_sector_rows += 1
+        if valid_sector_rows:
+            operation_count += 1
+        elif sector_source_rows:
+            issues.append("staged_sectors_have_no_promotable_rows")
+        if rejected_sector_rows:
+            issues.append("staged_sectors_contain_non_promotable_rows")
+
     if operation_count == 0 and not issues:
         issues.append("no_promotable_operations")
 
@@ -268,6 +331,10 @@ def build_dry_run(
         "promotable_holdings_rows": valid_holdings_rows,
         "rejected_holdings_rows": rejected_holdings_rows,
         "holdings_rejection_reasons": dict(sorted(holdings_rejection_reasons.items())),
+        "staged_sector_rows": len(sector_allocations),
+        "promotable_sector_rows": valid_sector_rows,
+        "rejected_sector_rows": rejected_sector_rows,
+        "sector_rejection_reasons": dict(sorted(sector_rejection_reasons.items())),
         "warnings": sorted(set(warnings)),
         "issues": sorted(set(issues)),
     }

@@ -46,6 +46,7 @@ def parse_combined_factsheet_pdf(
     *,
     scheme_prefixes: tuple[str, ...],
     continue_after_grand_total: bool = False,
+    extract_sector_allocations: bool = False,
 ) -> list[ParsedDocument]:
     pages = PDFTextParser().extract_pages(file_path)
     records: list[ParsedDocument] = []
@@ -56,6 +57,7 @@ def parse_combined_factsheet_pdf(
             context,
             scheme_prefixes=scheme_prefixes,
             continue_after_grand_total=continue_after_grand_total,
+            extract_sector_allocations=extract_sector_allocations,
         )
         if not parsed or not parsed.holdings:
             continue
@@ -73,6 +75,7 @@ def parse_combined_factsheet_page(
     *,
     scheme_prefixes: tuple[str, ...],
     continue_after_grand_total: bool = False,
+    extract_sector_allocations: bool = False,
 ) -> ParsedDocument | None:
     lines = [_clean(line) for line in str(page_text or "").splitlines()]
     lines = [line for line in lines if line]
@@ -143,11 +146,23 @@ def parse_combined_factsheet_page(
     warnings: list[str] = []
     if not 70.0 <= total_percent <= 115.0:
         warnings.append("percent_aum_total_out_of_band")
+    sector_allocations: list[dict] = []
+    if extract_sector_allocations:
+        sector_allocations, sector_issue = _extract_sector_allocations(lines)
+        if sector_issue:
+            warnings.append(sector_issue)
+    metrics = {"total_percent_aum": total_percent}
+    if sector_allocations:
+        metrics["sector_allocations"] = sector_allocations
+        metrics["sector_allocation_total"] = round(
+            sum(float(row["weight_pct"]) for row in sector_allocations),
+            6,
+        )
     return ParsedDocument(
         scheme_name=scheme_name,
         report_month=context.report_month or _find_report_month(lines),
         holdings=rows,
-        metrics={"total_percent_aum": total_percent},
+        metrics=metrics,
         warnings=warnings,
         confidence_score=_confidence(rows, context.report_month, total_percent),
     )
@@ -236,6 +251,126 @@ def _find_report_month(lines: list[str]) -> date | None:
     return None
 
 
+def _extract_sector_allocations(
+    lines: list[str],
+) -> tuple[list[dict], str | None]:
+    marker = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if line.lower().startswith("sector allocation")
+            and any(
+                "industry classification as recommended by amfi" in candidate.lower()
+                for candidate in lines[index : index + 15]
+            )
+        ),
+        None,
+    )
+    if marker is None:
+        return [], None
+
+    evidence_window = lines[marker : marker + 15]
+    industry_index = next(
+        (
+            marker + offset
+            for offset, line in enumerate(evidence_window)
+            if "industry classification as recommended by amfi" in line.lower()
+        ),
+        None,
+    )
+    if industry_index is None:
+        return [], None
+
+    index = industry_index + 1
+    while index < len(lines) and not _is_percent_line(lines[index]):
+        index += 1
+
+    weights: list[float] = []
+    while index < len(lines) and _is_percent_line(lines[index]):
+        value = _number(lines[index])
+        if value is not None and 0 < value <= 100:
+            weights.append(round(value, 6))
+        index += 1
+
+    raw_names: list[str] = []
+    stop_markers = (
+        "base expense ratio",
+        "total ter",
+        "exit load",
+        "minimum application amount",
+        "scheme performance",
+        "sip performance",
+        "performance -",
+    )
+    while index < len(lines):
+        line = lines[index]
+        low = line.lower()
+        if low.startswith(stop_markers):
+            break
+        if line and not _is_percent_line(line):
+            raw_names.append(line)
+            merged_names = _merge_sector_name_lines(raw_names)
+            next_line = lines[index + 1] if index + 1 < len(lines) else ""
+            if (
+                len(merged_names) == len(weights)
+                and not _is_sector_name_continuation(merged_names[-1], next_line)
+            ):
+                break
+            if len(merged_names) > len(weights):
+                break
+        index += 1
+
+    names = _merge_sector_name_lines(raw_names)
+    if not weights or len(names) != len(weights):
+        return [], "sector_allocation_count_mismatch"
+
+    total = round(sum(weights), 6)
+    if not 5.0 <= total <= 105.0:
+        return [], "sector_allocation_total_out_of_band"
+
+    return [
+        {"sector": normalize_instrument_name(_repair_sector_name(name)), "weight_pct": weight}
+        for name, weight in zip(names, weights)
+        if normalize_instrument_name(_repair_sector_name(name))
+    ], None
+
+
+def _is_percent_line(value: str) -> bool:
+    return str(value or "").strip().endswith("%") and _number(value) is not None
+
+
+def _merge_sector_name_lines(lines: list[str]) -> list[str]:
+    merged: list[str] = []
+    for line in lines:
+        cleaned = _clean(line)
+        if not cleaned:
+            continue
+        if merged and _is_sector_name_continuation(merged[-1], cleaned):
+            separator = " " if merged[-1].endswith("&") else (
+                "" if merged[-1][-1:].isalnum() else " "
+            )
+            merged[-1] = f"{merged[-1]}{separator}{cleaned}"
+        else:
+            merged.append(cleaned)
+    return merged
+
+
+def _is_sector_name_continuation(previous: str, current: str) -> bool:
+    cleaned = _clean(current)
+    return bool(cleaned) and (cleaned[:1].islower() or previous.endswith("&"))
+
+
+def _repair_sector_name(value: str) -> str:
+    repaired = re.sub(r"\bSo(?:ti)?ware\b", "Software", value, flags=re.IGNORECASE)
+    repaired = re.sub(
+        r"\bPharmaceu(?:ti)?cals\b",
+        "Pharmaceuticals",
+        repaired,
+        flags=re.IGNORECASE,
+    )
+    return repaired
+
+
 def _confidence(holdings: list[dict], report_month: date | None, total_percent: float) -> float:
     score = 55.0 + min(25.0, len(holdings) * 0.5)
     if report_month:
@@ -246,7 +381,16 @@ def _confidence(holdings: list[dict], report_month: date | None, total_percent: 
 
 
 def _clean(value: object) -> str:
-    return " ".join(str(value or "").replace("\u001f", "f").split())
+    return " ".join(
+        str(value or "")
+        .replace("\u001f", "ti")
+        .replace("\u008f", "ti")
+        .replace("\u008b", "ft")
+        .replace("\u008e", "ft")
+        .replace("\ufb01", "fi")
+        .replace("\ufb02", "fl")
+        .split()
+    )
 
 
 def _scheme_key(value: str) -> str:

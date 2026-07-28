@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 from dataclasses import replace
 from datetime import date
@@ -317,6 +318,52 @@ def test_combined_factsheet_text_extracts_holdings_without_slow_table_scan(
     assert len(parsed.holdings) == 2
 
 
+def test_motilal_combined_factsheet_extracts_official_sector_allocation():
+    parsed = parse_combined_factsheet_page(
+        """
+        Motilal Oswal Midcap Fund
+        Portfolio (as on 30-June-2026)
+        Scrip
+        Weightage (%)
+        Equity & Equity Related
+        HDFC Bank Ltd.
+        60.0
+        Infosys Limited
+        40.0
+        Grand Total
+        100.0
+        Sector Allocation (Equity)
+        Style Box Analysis
+        (Data as on 30-June-2026) Industry classification as recommended by AMFI
+        Growth
+        Large Cap
+        20.0%
+        30.0%
+        50.0%
+        Banks
+        IT - So
+        ware
+        Finance
+        Base Expense Ratio
+        """,
+        ParseContext(
+            source_document_id="motilal-june-combined",
+            source_url="https://www.motilaloswalmf.com/official.pdf",
+            report_month=date(2026, 6, 1),
+        ),
+        scheme_prefixes=("motilal oswal",),
+        extract_sector_allocations=True,
+    )
+
+    assert parsed is not None
+    assert parsed.metrics["sector_allocation_total"] == 100.0
+    assert parsed.metrics["sector_allocations"] == [
+        {"sector": "Banks", "weight_pct": 20.0},
+        {"sector": "IT - Software", "weight_pct": 30.0},
+        {"sector": "Finance", "weight_pct": 50.0},
+    ]
+
+
 def test_promotion_validation_requires_exact_r2_evidence_and_only_available_scopes():
     expected_month = _parse_report_month("2026-06")
     document = {
@@ -504,6 +551,25 @@ def test_atomic_factsheet_promotion_does_not_delegate_to_legacy_rpc():
         "    p_requested_by\n"
         "  );"
     ) not in sql
+
+
+def test_sector_allocation_staging_is_separate_and_promoted_atomically():
+    sql = (
+        Path(__file__).parents[1]
+        / "migrations"
+        / "20260728_add_mf_sector_allocation_staging.sql"
+    ).read_text(encoding="utf-8").lower()
+    service_source = inspect.getsource(ParsingService._parse_holdings_document)
+
+    assert "create table if not exists public.mf_scheme_sector_allocations" in sql
+    assert "raw_scheme_name text not null" in sql
+    assert "mapped_scheme_code text" in sql
+    assert "a.validation_status <> 'valid'" in sql
+    assert "'official_sector_allocation'" in sql
+    assert "'derived_from_official_holdings'" in sql
+    assert "insert into public.mf_promotion_runs" in sql
+    assert "return public.promote_mf_holdings_document(" not in sql
+    assert 'supabase.table("mf_scheme_sector_allocations")' in service_source
 
 
 def test_read_only_parser_smoke_aggregates_field_and_document_coverage():
