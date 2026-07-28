@@ -81,6 +81,7 @@ jobs:
           EXPECTED_MONTH: ${{ inputs.expected_month }}
           MAX_DOCUMENTS: ${{ inputs.max_documents }}
           APPROVAL_PHRASE: ${{ inputs.approval_phrase }}
+          MF_SOURCE_MANIFEST_PATH: backend/config/mf_document_sources.json
           MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
         shell: bash
         run: |

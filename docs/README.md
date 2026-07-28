@@ -21,6 +21,8 @@ Read these in order for current implementation work:
 
 `jobs.md`, `providers.md`, `12_INTERVIEW_GUIDE.md`, `13_DISCOVERY_AGENTS.md`, `14_BUILD_WEEK_DEMO_VIDEO.md`, and `MF_COMPARISON_COVERAGE_REPAIR.md` are maintained supporting references.
 
+Use `MF_12_AMC_PRODUCTION_READINESS_RUNBOOK.md` for the current June 2026 twelve-AMC execution order, approval boundaries, coverage gates, and production verification steps.
+
 ## Evidence Snapshots
 
 These files describe a specific test or implementation stage. Their dates and tested commit take precedence over generic words such as “current” inside the report:

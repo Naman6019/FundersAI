@@ -80,12 +80,32 @@ class FactsheetParser:
             text = "\n".join(pages)
         records = self.parse_text(text=text, report_month=context.report_month, page_texts=pages)
         if extension == ".pdf":
+            uti_records = _extract_uti_pdf_records(file_path, context.report_month)
+            if uti_records:
+                records_by_scheme = {
+                    _scheme_key(record.scheme_name): record
+                    for record in records
+                }
+                for record in uti_records:
+                    key = _scheme_key(record.scheme_name)
+                    current = records_by_scheme.get(key)
+                    records_by_scheme[key] = (
+                        _merge_factsheet_records(record, current)
+                        if current
+                        else record
+                    )
+                records = sorted(
+                    records_by_scheme.values(),
+                    key=lambda value: value.scheme_name,
+                )
             vector_risks = _extract_vector_riskometer_levels(
                 file_path,
                 allowed_scheme_names=[record.scheme_name for record in records],
             )
             for record in records:
-                vector_risk = vector_risks.get(_scheme_key(record.scheme_name))
+                vector_risk = vector_risks.get(
+                    _scheme_key(record.scheme_name)
+                ) or vector_risks.get(_uti_alias_key(record.scheme_name))
                 if vector_risk:
                     record.risk_level = vector_risk
                     record.confidence_score = float(min(99.0, 60 + (_record_score(record) * 10)))
@@ -162,6 +182,210 @@ class FactsheetParser:
                 record.fund_manager = mapped_manager
             record.confidence_score = float(min(99.0, 60 + (_record_score(record) * 10)))
         return records
+
+
+def _extract_uti_pdf_records(
+    file_path: str,
+    report_month: date | None,
+) -> list[FactsheetRecord]:
+    records: list[FactsheetRecord] = []
+    document_texts: list[str] = []
+    with fitz.open(file_path) as document:
+        for page in document:
+            text = page.get_text("text")
+            document_texts.append(text)
+            if "Fund Size Monthly Average" not in text:
+                continue
+            scheme_name = _extract_uti_page_scheme_name(text)
+            if not scheme_name:
+                continue
+            fields = {
+                "aum": _extract_pdf_label_numeric_value(page, "Closing AUM"),
+                "expense_ratio": _extract_uti_expense_ratio(text),
+                "benchmark": _extract_uti_benchmark(text),
+                "fund_manager": _extract_uti_managers(text),
+                "risk_level": _extract_risk_level(text),
+            }
+            score = _score_fields(fields)
+            if score <= 0:
+                continue
+            records.append(
+                FactsheetRecord(
+                    scheme_name=scheme_name,
+                    report_month=report_month,
+                    aum=fields["aum"],
+                    expense_ratio=fields["expense_ratio"],
+                    benchmark=fields["benchmark"],
+                    fund_manager=fields["fund_manager"],
+                    risk_level=fields["risk_level"],
+                    confidence_score=float(min(99.0, 60 + (score * 10))),
+                )
+            )
+    ter_by_scheme = _extract_uti_ter_map("\n".join(document_texts))
+    for record in records:
+        mapped_ter = ter_by_scheme.get(_uti_alias_key(record.scheme_name))
+        if mapped_ter is not None:
+            record.expense_ratio = mapped_ter
+            record.confidence_score = float(
+                min(99.0, 60 + (_record_score(record) * 10))
+            )
+    return records
+
+
+def _extract_uti_page_scheme_name(page_text: str) -> str | None:
+    for raw_line in reversed(str(page_text or "").splitlines()):
+        line = _clean_line(raw_line)
+        if not line.upper().startswith("UTI ") or "UTI MUTUAL FUND" in line.upper():
+            continue
+        candidate = re.split(
+            r"(?i)\s+\((?:Erstwhile|An\s+open)",
+            line,
+            maxsplit=1,
+        )[0].strip()
+        letters = re.sub(r"[^A-Za-z]+", "", candidate)
+        if (
+            5 <= len(candidate) <= 180
+            and (" FUND" in candidate.upper() or candidate.upper().endswith(" ETF"))
+            and letters
+            and letters == letters.upper()
+        ):
+            return candidate
+    return None
+
+
+def _extract_pdf_label_numeric_value(page: Any, label: str) -> float | None:
+    label_rects = page.search_for(label)
+    if not label_rects:
+        return None
+    label_rect = label_rects[0]
+    candidates: list[tuple[float, float]] = []
+    for block in page.get_text("dict").get("blocks", []):
+        if block.get("type") != 0:
+            continue
+        for line in block.get("lines", []):
+            for span in line.get("spans", []):
+                bbox = span.get("bbox") or ()
+                if len(bbox) != 4:
+                    continue
+                x0, y0, x1, y1 = (float(value) for value in bbox)
+                if x0 <= float(label_rect.x1) or x0 > float(label_rect.x1) + 140.0:
+                    continue
+                if abs(((y0 + y1) / 2.0) - ((float(label_rect.y0) + float(label_rect.y1)) / 2.0)) > 4.0:
+                    continue
+                value = _parse_number(str(span.get("text") or "").replace("₹", "").replace("`", ""))
+                if value is not None and value > 0:
+                    candidates.append((x0, value))
+    return min(candidates, key=lambda item: item[0])[1] if candidates else None
+
+
+def _extract_uti_expense_ratio(page_text: str) -> float | None:
+    match = re.search(
+        r"(?im)^Regular\s*$\s*:?\s*([0-9]+(?:\.[0-9]+)?)\s*"
+        r"^Direct\s*$\s*:?\s*([0-9]+(?:\.[0-9]+)?)\b",
+        page_text or "",
+    )
+    if not match:
+        match = re.search(
+            r"(?i)\bRegular\s*:?\s*([0-9]+(?:\.[0-9]+)?)\s+"
+            r"Direct\s*:?\s*([0-9]+(?:\.[0-9]+)?)\b",
+            page_text or "",
+        )
+    if not match:
+        return None
+    direct_ratio = _parse_number(match.group(2))
+    return direct_ratio if _valid_expense_ratio(direct_ratio) else None
+
+
+def _extract_uti_ter_map(document_text: str) -> dict[str, float]:
+    marker = re.search(r"(?i)YTD\s+TER\s+AS\s+ON", document_text or "")
+    if not marker:
+        return {}
+    lines = [
+        _clean_line(line)
+        for line in document_text[marker.start():].splitlines()
+        if _clean_line(line)
+    ]
+    ratios: dict[str, float] = {}
+    index = 0
+    while index < len(lines):
+        if not re.fullmatch(r"\d{1,3}", lines[index]):
+            index += 1
+            continue
+        name_lines: list[str] = []
+        cursor = index + 1
+        while cursor < len(lines) and len(name_lines) < 4:
+            if re.fullmatch(r"[0-9]+(?:\.[0-9]+)?|-", lines[cursor]):
+                break
+            if re.fullmatch(r"\d{1,3}", lines[cursor]):
+                break
+            name_lines.append(lines[cursor])
+            cursor += 1
+        if (
+            not name_lines
+            or cursor + 1 >= len(lines)
+            or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", lines[cursor])
+            or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?|-", lines[cursor + 1])
+        ):
+            index += 1
+            continue
+        scheme_name = " ".join(name_lines)
+        regular_ratio = _parse_number(lines[cursor])
+        direct_ratio = _parse_number(lines[cursor + 1])
+        selected_ratio = direct_ratio if _valid_expense_ratio(direct_ratio) else regular_ratio
+        if scheme_name.upper().startswith("UTI ") and _valid_expense_ratio(selected_ratio):
+            ratios[_uti_alias_key(scheme_name)] = float(selected_ratio)
+        index = cursor + 2
+    return ratios
+
+
+def _uti_alias_key(value: str) -> str:
+    normalized = str(value or "").lower()
+    normalized = re.sub(r"\bexchange\s+traded\s+fund\b", "etf", normalized)
+    normalized = re.sub(r"\bunit\s+scheme\b", "fund", normalized)
+    normalized = re.sub(r"\s+", " ", normalized)
+    return _scheme_key(normalized)
+
+
+def _extract_uti_benchmark(page_text: str) -> str | None:
+    text = str(page_text or "")
+    labels = re.search(
+        r"(?im)^Investment\s+Objective\s*$\s*^Date\s+of\s+inception/allotment\s*$",
+        text,
+    )
+    prefix = text[:labels.start()] if labels else text[:5000]
+    manager = re.search(r"(?im)^(?:Mr|Ms|Mrs)\.?\s+", prefix)
+    if not manager:
+        return None
+    before_manager = prefix[:manager.start()]
+    dates = list(
+        re.finditer(
+            r"(?im)^\s*\d{1,2}(?:st|nd|rd|th)?\s+"
+            r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|"
+            r"Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|"
+            r"Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s*,?\s*\d{4}\s*$",
+            before_manager,
+        )
+    )
+    if not dates:
+        return None
+    candidate = " ".join(
+        line.strip()
+        for line in before_manager[dates[-1].end():].splitlines()
+        if line.strip()
+    )
+    candidate = _normalize_benchmark_candidate(candidate)
+    return candidate if candidate and _is_plausible_benchmark(candidate) else None
+
+
+def _extract_uti_managers(page_text: str) -> str | None:
+    text = str(page_text or "")
+    labels = re.search(
+        r"(?im)^Investment\s+Objective\s*$\s*^Date\s+of\s+inception/allotment\s*$",
+        text,
+    )
+    prefix = text[:labels.start()] if labels else text[:5000]
+    names = _extract_manager_names(prefix)
+    return "; ".join(names) if names else None
 
 
 def filter_factsheet_records_for_amc(
@@ -502,7 +726,31 @@ def _extract_vector_riskometer_levels(
         for page in document:
             raw_text = page.get_text("text")
             document_texts.append(raw_text)
-            if "RISKOMETER OF SCHEME" not in raw_text.upper():
+            if "ALL PRODUCT LABELLING DISCLOSURES" in raw_text.upper():
+                uti_risks = _uti_vector_riskometer_rows(
+                    page.get_drawings(),
+                    page.get_text("blocks"),
+                    page.search_for("Riskometer"),
+                )
+                for scheme_name, label in uti_risks.items():
+                    risk_by_scheme[_scheme_key(scheme_name)] = label
+                    risk_by_scheme[_uti_alias_key(scheme_name)] = label
+            single_scheme_risk = _single_scheme_vector_risk_level(
+                raw_text,
+                page.get_drawings(),
+                [
+                    *page.search_for("Scheme Riskometer"),
+                    *page.search_for("Fund Riskometer"),
+                ],
+            )
+            if single_scheme_risk:
+                scheme_name, risk_label = single_scheme_risk
+                risk_by_scheme[_scheme_key(scheme_name)] = risk_label
+            upper_text = raw_text.upper()
+            if (
+                "RISKOMETER OF SCHEME" not in upper_text
+                and "BENCHMARK AND SCHEME RISKOMETERS" not in upper_text
+            ):
                 continue
             page_text = _preprocess_factsheet_text(raw_text)
             scheme_names: list[str] = []
@@ -515,7 +763,37 @@ def _extract_vector_riskometer_levels(
                 seen.add(scheme_key)
                 scheme_names.append(scheme_name)
 
-            needle_rows = _vector_riskometer_needles(page.get_drawings(), float(page.rect.width))
+            drawings = page.get_drawings()
+            table_headers = sorted(
+                (
+                    rect
+                    for rect in page.search_for("Scheme Riskometer")
+                    if float(rect.y0) > 50.0
+                ),
+                key=lambda rect: float(rect.y0),
+            )
+            needle_rows: list[tuple[float, str]] = []
+            for header_index, table_header in enumerate(table_headers):
+                section_bottom = (
+                    float(table_headers[header_index + 1].y0)
+                    if header_index + 1 < len(table_headers)
+                    else float(page.rect.height)
+                )
+                scheme_column = _riskometer_scheme_column(drawings, table_header)
+                needle_rows.extend(
+                    _vector_riskometer_needles(
+                        drawings,
+                        float(page.rect.width),
+                        scheme_column=scheme_column,
+                        row_range=(float(table_header.y1), section_bottom),
+                    )
+                )
+            if not table_headers:
+                needle_rows = _vector_riskometer_needles(
+                    drawings,
+                    float(page.rect.width),
+                )
+            needle_rows = sorted(set(needle_rows))
             needles = [label for _, label in needle_rows]
             all_needles.extend(needles)
             row_scheme_names = _riskometer_row_scheme_names(
@@ -579,6 +857,174 @@ def _extract_vector_riskometer_levels(
     return risk_by_scheme
 
 
+def _uti_vector_riskometer_rows(
+    drawings: list[dict[str, Any]],
+    text_blocks: list[tuple[Any, ...]],
+    header_rects: list[Any],
+) -> dict[str, str]:
+    if not header_rects:
+        return {}
+    scheme_header = min(header_rects, key=lambda rect: float(rect.x0))
+    scheme_column = _riskometer_scheme_column(drawings, scheme_header)
+    if not scheme_column:
+        return {}
+    column_left, column_right = scheme_column
+    column_center = (column_left + column_right) / 2.0
+    needle_rows: list[tuple[float, str]] = []
+    for drawing in drawings:
+        fill = drawing.get("fill")
+        rect = drawing.get("rect")
+        items = drawing.get("items") or []
+        if (
+            not fill
+            or max(float(value) for value in fill) >= 0.2
+            or rect is None
+            or not (column_left <= float(rect.x0) and float(rect.x1) <= column_right)
+            or not (5.0 <= float(rect.width) <= 35.0)
+            or not (3.0 <= float(rect.height) <= 25.0)
+            or float(rect.width) * float(rect.height) <= 50.0
+            or not (5 <= len(items) <= 20)
+        ):
+            continue
+        points = [point for item in items for point in item[1:] if hasattr(point, "x")]
+        if not points:
+            continue
+        pivot_y = float(rect.y1)
+        tip = max(
+            points,
+            key=lambda point: (
+                ((float(point.x) - column_center) ** 2)
+                + ((float(point.y) - pivot_y) ** 2)
+            ),
+        )
+        angle = degrees(
+            atan2(
+                pivot_y - float(tip.y),
+                float(tip.x) - column_center,
+            )
+        )
+        label = _risk_label_from_needle_angle(angle)
+        if label:
+            needle_rows.append((float(rect.y0), label))
+    needle_rows.sort()
+    scheme_names = _uti_riskometer_row_scheme_names(text_blocks, needle_rows)
+    if len(scheme_names) != len(needle_rows):
+        return {}
+    return dict(zip(scheme_names, (label for _, label in needle_rows)))
+
+
+def _uti_riskometer_row_scheme_names(
+    text_blocks: list[tuple[Any, ...]],
+    needle_rows: list[tuple[float, str]],
+) -> list[str]:
+    title_pattern = re.compile(
+        r"(?i)^(?P<name>UTI\s+.{2,180}?"
+        r"(?:ETF\s+Fund\s+of\s+Fund|Fund\s+of\s+Fund|FOF|ETF|Fund))\b"
+    )
+    title_rows: list[tuple[int, float, str]] = []
+    for block_index, block in enumerate(text_blocks):
+        if len(block) < 5 or not (10.0 <= float(block[0]) <= 60.0):
+            continue
+        match = title_pattern.search(" ".join(str(block[4] or "").split()))
+        if match:
+            title_rows.append(
+                (
+                    block_index,
+                    float(block[1]),
+                    _clean_scheme_name(match.group("name")),
+                )
+            )
+    names: list[str] = []
+    used: set[int] = set()
+    for row_y, _ in needle_rows:
+        candidates = [
+            row
+            for row in title_rows
+            if row[0] not in used
+            and row[1] <= row_y + 8.0
+            and row_y - row[1] <= 90.0
+        ]
+        if not candidates:
+            return []
+        block_index, _, scheme_name = max(candidates, key=lambda row: row[1])
+        used.add(block_index)
+        names.append(scheme_name)
+    return names
+
+
+def _single_scheme_vector_risk_level(
+    page_text: str,
+    drawings: list[dict[str, Any]],
+    header_rects: list[Any],
+) -> tuple[str, str] | None:
+    scheme_name = _product_label_scheme_name(page_text) or _last_scheme_name(
+        _preprocess_factsheet_text(page_text)
+    )
+    if not scheme_name or not header_rects:
+        return None
+    labels: set[str] = set()
+    for header_rect in header_rects:
+        header_center = (float(header_rect.x0) + float(header_rect.x1)) / 2.0
+        for drawing in drawings:
+            fill = drawing.get("fill")
+            rect = drawing.get("rect")
+            items = drawing.get("items") or []
+            if (
+                not fill
+                or max(float(value) for value in fill) >= 0.2
+                or rect is None
+                or len(items) != 3
+                or any(item[0] != "l" for item in items)
+                or not (5.0 <= float(rect.width) <= 30.0)
+                or not (2.0 <= float(rect.height) <= 20.0)
+                or abs(((float(rect.x0) + float(rect.x1)) / 2.0) - header_center) > 25.0
+                or not (
+                    float(header_rect.y1)
+                    < float(rect.y0)
+                    <= float(header_rect.y1) + 100.0
+                )
+            ):
+                continue
+            points = [point for item in items for point in item[1:] if hasattr(point, "x")]
+            if not points:
+                continue
+            pivot_x = header_center
+            pivot_y = float(rect.y1)
+            tip = max(
+                points,
+                key=lambda point: (
+                    ((float(point.x) - pivot_x) ** 2)
+                    + ((float(point.y) - pivot_y) ** 2)
+                ),
+            )
+            angle = degrees(atan2(pivot_y - float(tip.y), float(tip.x) - pivot_x))
+            label = _risk_label_from_needle_angle(angle)
+            if label:
+                labels.add(label)
+    if len(labels) != 1:
+        return None
+    return scheme_name, next(iter(labels))
+
+
+def _product_label_scheme_name(page_text: str) -> str | None:
+    text = str(page_text or "")
+    marker = re.search(r"(?i)This\s+product\s+is\s+suitable", text)
+    if not marker:
+        return None
+    product_section = text[marker.start():]
+    product_section = re.sub(
+        r"(?i)\bFund\s*\n+\s*of\s*\n+\s*Fund\b",
+        "Fund of Fund",
+        product_section,
+    )
+    pattern = re.compile(
+        rf"(?i)\b(?P<name>{AMC_SCHEME_PREFIX_PATTERN}[^\n]{{3,180}}?"
+        rf"(?:ETF\s+Fund\s+of\s+Fund|Fund\s+of\s+Fund|FOF|ETF|Fund))\b"
+    )
+    match = pattern.search(product_section)
+    return _clean_scheme_name(match.group("name")) if match else None
+
+
 def _map_document_order_risk_labels(
     ordered_scheme_names: list[str],
     labels: list[str],
@@ -596,9 +1042,11 @@ def _map_document_order_risk_labels(
 def _vector_riskometer_needles(
     drawings: list[dict[str, Any]],
     page_width: float,
+    *,
+    scheme_column: tuple[float, float] | None = None,
+    row_range: tuple[float, float] | None = None,
 ) -> list[tuple[float, str]]:
-    column_left = page_width * 0.43
-    column_right = page_width * 0.64
+    column_left, column_right = scheme_column or (page_width * 0.43, page_width * 0.64)
     column_center = (column_left + column_right) / 2.0
     needles: list[tuple[float, str]] = []
     for drawing in drawings:
@@ -610,7 +1058,11 @@ def _vector_riskometer_needles(
             or max(float(value) for value in fill) >= 0.03
             or rect is None
             or not (column_left <= rect.x0 and rect.x1 <= column_right)
-            or not (20.0 <= rect.width <= 55.0 and 5.0 <= rect.height <= 30.0)
+            or (
+                row_range is not None
+                and not (row_range[0] <= float(rect.y0) < row_range[1])
+            )
+            or not (5.0 <= rect.width <= 55.0 and 5.0 <= rect.height <= 30.0)
             or len(items) != 7
             or any(item[0] != "l" for item in items)
         ):
@@ -631,6 +1083,34 @@ def _vector_riskometer_needles(
     return sorted(needles)
 
 
+def _riskometer_scheme_column(
+    drawings: list[dict[str, Any]],
+    header_rect: Any | None,
+) -> tuple[float, float] | None:
+    if header_rect is None:
+        return None
+    header_center = (float(header_rect.x0) + float(header_rect.x1)) / 2.0
+    vertical_x: set[float] = set()
+    for drawing in drawings:
+        rect = drawing.get("rect")
+        if rect is None or float(rect.width) > 1.5 or float(rect.height) < 30.0:
+            continue
+        if not (
+            float(header_rect.y1) <= float(rect.y0) <= float(header_rect.y1) + 80.0
+        ):
+            continue
+        vertical_x.add(round(float(rect.x0), 2))
+    left = [value for value in vertical_x if value < header_center]
+    right = [value for value in vertical_x if value > header_center]
+    if not left or not right:
+        return None
+    column_left = max(left)
+    column_right = min(right)
+    if column_right - column_left < 40.0:
+        return None
+    return column_left, column_right
+
+
 def _riskometer_row_scheme_names(
     text_blocks: list[tuple[Any, ...]],
     needle_rows: list[tuple[float, str]],
@@ -641,7 +1121,10 @@ def _riskometer_row_scheme_names(
         return []
     del page_height  # Kept in the signature for compatibility with callers.
     title_pattern = re.compile(
-        rf"(?i)^(?:\d{{1,3}}\s+)?(?P<name>{AMC_SCHEME_PREFIX_PATTERN}\s+.{{3,180}}?(?:Fund|FOF|ETF))\b"
+        rf"(?i)^(?:\d{{1,3}}\s+)?(?P<name>{AMC_SCHEME_PREFIX_PATTERN}\s+.{{3,180}}?"
+        rf"(?:Fund\s*-\s*[A-Za-z ]+Plan|ETF\s+Fund\s+of\s+Fund|"
+        rf"Fund\s+of\s+Fund|FOF|ETF|Fund|"
+        rf"Tax\s+Saver(?!\s+Fund)|Plan))\b"
     )
     title_rows: list[tuple[int, float, str]] = []
     for block_index, block in enumerate(text_blocks):
@@ -758,6 +1241,8 @@ def _extract_aum_from_scheme_occurrences(text: str, scheme_name: str) -> float |
 
 def _extract_expense_ratio(chunk: str) -> float | None:
     patterns = (
+        r"Expense\s+Ratio\^?\s+Regular/Other\s+than\s+Direct\s+"
+        r"[0-9]+(?:\.[0-9]+)?\s+Direct\s+([0-9]+(?:\.[0-9]+)?)\b",
         r"Expense\s+Ratio\s+Plan\s+Regular\s+Direct\s+TER\s+[0-9]+(?:\.[0-9]+)?\s+([0-9]+(?:\.[0-9]+)?)\b",
         r"Total\s+Expense\s+Ratio\s*:\s*Regular\s+Plan\s+[0-9]+(?:\.[0-9]+)?\s+Direct\s+Plan\s+([0-9]+(?:\.[0-9]+)?)\b",
         r"Direct\s+Plan\s*:\s*(?:\*\s*)?([0-9]+(?:\.[0-9]+)?)\s*%\*?",
@@ -950,6 +1435,9 @@ def _extract_benchmark(chunk: str) -> str | None:
 
 
 def _extract_fund_manager(chunk: str) -> str | None:
+    hdfc_managers = _extract_hdfc_fund_managers(chunk)
+    if hdfc_managers:
+        return "; ".join(hdfc_managers)
     block_patterns = (
         r"(?im)^Name\s+of\s+the\s+Fund\s+Managers?\s*[\s:]*([\s\S]{0,2200})",
         r"(?im)^Fund\s+Manager(?:\(s\)|s)?\**\s*:?\s*([\s\S]{0,2200})",
@@ -971,6 +1459,65 @@ def _extract_fund_manager(chunk: str) -> str | None:
     if managed_by:
         return " ".join(managed_by.group(1).split())
     return None
+
+
+def _extract_hdfc_fund_managers(chunk: str) -> list[str]:
+    match = re.search(
+        r"(?im)^FUND\s+MANAGER\b[^\n]*$([\s\S]{0,1800})",
+        chunk or "",
+    )
+    if not match:
+        return []
+    body = re.split(
+        r"(?im)^(?:DATE\s+OF\s+ALLOTMENT|ASSETS\s+UNDER\s+MANAGEMENT|"
+        r"EXPENSE\s+RATIO|BENCHMARK)\b",
+        match.group(1),
+        maxsplit=1,
+    )[0]
+    lines = [_clean_line(line) for line in body.splitlines() if _clean_line(line)]
+    excluded = {"name", "since", "total exp", "total experience"}
+    date_pattern = re.compile(
+        r"(?i)^(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|"
+        r"Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|"
+        r"Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?(?:\s+\d{4})?$"
+    )
+    inline_manager_pattern = re.compile(
+        r"^(?P<name>[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,3})\s+"
+        r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|"
+        r"Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|"
+        r"Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?(?:\s+\d{4})?$",
+        flags=re.IGNORECASE,
+    )
+    name_line_pattern = re.compile(r"^[A-Z][A-Za-z.'-]*(?:\s+[A-Z][A-Za-z.'-]*){0,3}$")
+    managers: list[str] = []
+    for index, line in enumerate(lines):
+        inline_match = inline_manager_pattern.fullmatch(line)
+        if inline_match:
+            candidate = " ".join(inline_match.group("name").split())
+            if candidate not in managers:
+                managers.append(candidate)
+            continue
+        if not date_pattern.fullmatch(line):
+            continue
+        candidate_index = index - 1
+        while candidate_index >= 0 and re.fullmatch(r"\([^)]{2,80}\)", lines[candidate_index]):
+            candidate_index -= 1
+        if candidate_index < 0:
+            continue
+        candidate = lines[candidate_index]
+        if candidate.lower() in excluded or not name_line_pattern.fullmatch(candidate):
+            continue
+        if len(candidate.split()) == 1 and candidate_index > 0:
+            previous = lines[candidate_index - 1]
+            if (
+                previous.lower() not in excluded
+                and name_line_pattern.fullmatch(previous)
+                and len(previous.split()) == 1
+            ):
+                candidate = f"{previous} {candidate}"
+        if candidate not in managers:
+            managers.append(candidate)
+    return managers
 
 
 def _extract_manager_names(text: str) -> list[str]:

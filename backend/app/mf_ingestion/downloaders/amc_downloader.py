@@ -524,8 +524,8 @@ def _discover_generic_anchor_documents(
             continue
 
         report_month = _detect_report_month_from_text(combined)
-        if adapter_key == "nippon" and doc_type == "factsheet" and report_month:
-            # Nippon labels each e-factsheet by publication month; its scheme
+        if adapter_key in {"nippon", "uti"} and doc_type == "factsheet" and report_month:
+            # Nippon and UTI label factsheets by publication month; scheme
             # data is for the preceding month (for example, July => June).
             report_month = _previous_month(report_month)
         keyword_hits = sum(1 for keyword in keywords if keyword in combined)
@@ -709,32 +709,36 @@ def _guess_hdfc_combined_factsheets(
             publication_month = date(report_month.year + 1, 1, 1)
         else:
             publication_month = date(report_month.year, report_month.month + 1, 1)
-        file_name = f"HDFC MF Factsheet - {report_month.strftime('%B %Y')}.pdf"
-        url = (
-            "https://files.hdfcfund.com/s3fs-public/"
-            f"{publication_month:%Y-%m}/{quote(file_name)}"
-        )
         recency_score = (report_month.year * 12 + report_month.month) * 10
-        documents.append(
-            DiscoveredDocument(
-                amc_name=source.amc_name,
-                amc_code=source.amc_code,
-                document_type=doc_type,
-                title=file_name,
-                url=url,
-                discovery_page_url=(
-                    source.factsheet_page_url
-                    if doc_type == "factsheet"
-                    else source.portfolio_disclosure_page_url
-                )
-                or "https://www.hdfcfund.com/",
-                file_ext=".pdf",
-                report_month=report_month,
-                priority_score=_generic_base_score(ext=".pdf", document_type=doc_type)
-                + recency_score
-                + 60,
-            )
+        file_names = (
+            f"HDFC MF Factsheet - {report_month.strftime('%B %Y')}.pdf",
+            f"HDFC MF Index Solutions Factsheet - {report_month.strftime('%B %Y')}.pdf",
         )
+        for file_name in file_names:
+            url = (
+                "https://files.hdfcfund.com/s3fs-public/"
+                f"{publication_month:%Y-%m}/{quote(file_name)}"
+            )
+            documents.append(
+                DiscoveredDocument(
+                    amc_name=source.amc_name,
+                    amc_code=source.amc_code,
+                    document_type=doc_type,
+                    title=file_name,
+                    url=url,
+                    discovery_page_url=(
+                        source.factsheet_page_url
+                        if doc_type == "factsheet"
+                        else source.portfolio_disclosure_page_url
+                    )
+                    or "https://www.hdfcfund.com/",
+                    file_ext=".pdf",
+                    report_month=report_month,
+                    priority_score=_generic_base_score(ext=".pdf", document_type=doc_type)
+                    + recency_score
+                    + 60,
+                )
+            )
     return documents
 
 
@@ -1229,6 +1233,9 @@ def _discover_uti_documents(
         report_month = _detect_report_month_from_text(
             f"{title} {row.get('month', '')} {row.get('year', '')} {raw_url}"
         )
+        if doc_type == "factsheet" and report_month:
+            # UTI's Fund Watch publication month trails the contained data month.
+            report_month = _previous_month(report_month)
         recency_score = (report_month.year * 12 + report_month.month) * 10 if report_month else 0
         low = f"{title} {raw_url}".lower()
         language_penalty = -30 if "hindi" in low else 0

@@ -15,6 +15,7 @@ from app.database import supabase
 from app.mf_ingestion.sources.registry import PRODUCTION_TARGET_AMC_KEYS
 
 CORE_FIELDS = ("aum", "expense_ratio", "benchmark", "fund_manager", "risk_level")
+AMC_KEY_ALIASES = {"absl": "aditya_birla"}
 NON_SECTOR_SCHEME_MARKERS = (
     "fund of fund",
     " fof",
@@ -39,6 +40,11 @@ NON_SECTOR_SCHEME_MARKERS = (
 
 def _ratio(count: int, total: int) -> float:
     return round((count / total) * 100.0, 2) if total else 0.0
+
+
+def _normalize_amc_key(value: object) -> str:
+    key = str(value or "").strip().lower()
+    return AMC_KEY_ALIASES.get(key, key)
 
 
 def _sector_not_applicable(raw_scheme_name: object) -> bool:
@@ -76,10 +82,11 @@ def build_staging_coverage(
 ) -> dict[str, Any]:
     report: dict[str, Any] = {}
     for amc in amcs:
+        normalized_amc = _normalize_amc_key(amc)
         current_candidates = [
             row
             for row in candidates
-            if str(row.get("amc_code") or "").lower() == amc
+            if _normalize_amc_key(row.get("amc_code")) == normalized_amc
             and str(row.get("report_month") or "") == report_month
         ]
         candidate_rows = [
@@ -105,7 +112,7 @@ def build_staging_coverage(
         current_holdings = [
             row
             for row in holdings
-            if str(row.get("amc_code") or "").lower() == amc
+            if _normalize_amc_key(row.get("amc_code")) == normalized_amc
             and str(row.get("report_month") or "") == report_month
         ]
         holding_rows = [
@@ -158,7 +165,7 @@ def build_staging_coverage(
             "core": _ratio(core_total, len(observed_core_groups)),
             "portfolio": _ratio(portfolio_total, len(observed_portfolio_groups)),
         }
-        report[amc] = {
+        report[normalized_amc] = {
             "observed_core_groups": len(observed_core_groups),
             "mapped_core_families": core_total,
             "observed_portfolio_groups": len(observed_portfolio_groups),
@@ -194,7 +201,7 @@ def main() -> int:
         filters={"report_month": args.report_month},
     )
     raw_documents = {
-        str(row["id"]): str(row.get("amc_code") or "").lower()
+        str(row["id"]): _normalize_amc_key(row.get("amc_code"))
         for row in _get_filtered(
             "mf_raw_documents",
             "id,amc_code",

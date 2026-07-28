@@ -106,3 +106,31 @@ def test_staging_coverage_separates_non_applicable_sectors_from_missing_sectors(
     assert report["sector_not_applicable_families"] == 1
     assert report["percentages"]["sectors"] == 0.0
     assert report["passes_all_fields"] is False
+
+
+def test_staging_coverage_maps_absl_database_code_to_aditya_birla_registry_key():
+    row = {
+        "amc_code": "ABSL",
+        "report_month": "2026-06-01",
+        "normalized_scheme_name": "aditya birla sun life equity fund",
+        "raw_scheme_name": "Aditya Birla Sun Life Equity Fund",
+        "mapped_family_id": "absl-equity",
+        "mapping_status": "mapped",
+        "aum": 1,
+        "expense_ratio": 1,
+        "benchmark": "Index",
+        "fund_manager": "Manager",
+        "risk_level": "High",
+        "sector": "Banks",
+    }
+
+    report = build_staging_coverage(
+        report_month="2026-06-01",
+        amcs=["aditya_birla"],
+        candidates=[row],
+        holdings=[row],
+        threshold=80.0,
+    )["aditya_birla"]
+
+    assert report["mapping_percentages"] == {"core": 100.0, "portfolio": 100.0}
+    assert report["passes_all_fields"] is True

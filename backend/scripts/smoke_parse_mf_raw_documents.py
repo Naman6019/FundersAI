@@ -148,8 +148,16 @@ def main() -> int:
         "--save-dir",
         help="Optional local directory for retaining the downloaded raw documents used by the smoke pass.",
     )
+    parser.add_argument(
+        "--download-only",
+        action="store_true",
+        help="Save exact-month R2 documents without running parser diagnostics; requires --save-dir.",
+    )
     parser.add_argument("--summary-only", action="store_true")
     args = parser.parse_args()
+
+    if args.download_only and not args.save_dir:
+        parser.error("--download-only requires --save-dir")
 
     if not supabase:
         print(json.dumps({"status": "error", "reason": "supabase_not_configured"}))
@@ -203,6 +211,8 @@ def main() -> int:
 
                 if not resolved_path:
                     pass
+                elif args.download_only:
+                    item["status"] = "passed"
                 elif str(document.get("document_type") or "").lower() == "factsheet":
                     records = filter_factsheet_records_for_amc(
                         service.factsheet_parser.parse(

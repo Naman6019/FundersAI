@@ -2,15 +2,21 @@ from __future__ import annotations
 
 from datetime import date
 
+import fitz
 import pytest
 
 from app.mf_ingestion.parsers.factsheet_parser import (
     FactsheetParser,
     _detect_dominant_factsheet_month,
     _extract_page_aligned_risk_levels,
+    _extract_uti_ter_map,
     _map_document_order_risk_labels,
+    _riskometer_scheme_column,
     _riskometer_row_scheme_names,
     _risk_label_from_needle_angle,
+    _single_scheme_vector_risk_level,
+    _uti_vector_riskometer_rows,
+    _vector_riskometer_needles,
     filter_factsheet_records_for_amc,
 )
 
@@ -238,6 +244,76 @@ def test_vector_riskometer_rows_map_scheme_text_by_vertical_position():
     ]
 
 
+def test_vector_riskometer_uses_detected_narrow_scheme_column():
+    drawings = [
+        {
+            "rect": fitz.Rect(187.1, 102.5, 187.5, 190.6),
+            "items": [("l", fitz.Point(187.1, 102.5), fitz.Point(187.1, 190.6))],
+        },
+        {
+            "rect": fitz.Rect(290.1, 102.5, 290.5, 190.6),
+            "items": [("l", fitz.Point(290.1, 102.5), fitz.Point(290.1, 190.6))],
+        },
+        {
+            "fill": (0.0, 0.0, 0.0),
+            "rect": fitz.Rect(225.6, 130.6, 238.6, 144.0),
+            "items": [
+                ("l", fitz.Point(225.6, 134.1), fitz.Point(226.8, 132.9)),
+                ("l", fitz.Point(226.8, 132.9), fitz.Point(237.7, 144.0)),
+                ("l", fitz.Point(237.7, 144.0), fitz.Point(238.6, 143.0)),
+                ("l", fitz.Point(238.6, 143.0), fitz.Point(227.8, 131.9)),
+                ("l", fitz.Point(227.8, 131.9), fitz.Point(229.0, 130.6)),
+                ("l", fitz.Point(229.0, 130.6), fitz.Point(225.6, 130.6)),
+                ("l", fitz.Point(225.6, 130.6), fitz.Point(225.6, 134.1)),
+            ],
+        },
+    ]
+    column = _riskometer_scheme_column(drawings, fitz.Rect(193.1, 67.8, 256.7, 76.0))
+
+    assert column == (187.1, 290.1)
+    assert _vector_riskometer_needles(
+        drawings,
+        595.32,
+        scheme_column=column,
+        row_range=(76.0, 200.0),
+    ) == [
+        (130.6, "Low to Moderate")
+    ]
+
+
+def test_factsheet_parser_extracts_hdfc_manager_table():
+    text = """
+Name of the Fund
+HDFC Balanced Advantage Fund
+FUND MANAGER
+Name
+Since
+Total Exp
+Gopal Agrawal
+July 29,
+2020
+Over 22 years
+Srinivasan
+Ramamurthy
+(Equity Portfolio)
+July 29,
+2022
+Over 16 years
+Nandita Menezes March 29,
+2025
+Over 3 years
+DATE OF ALLOTMENT
+February 1, 1994
+ASSETS UNDER MANAGEMENT
+As on June 30, 2026
+₹ 10,000 Cr.
+"""
+
+    record = FactsheetParser().parse_text(text, report_month=date(2026, 6, 1))[0]
+
+    assert record.fund_manager == "Gopal Agrawal; Srinivasan Ramamurthy; Nandita Menezes"
+
+
 def test_factsheet_parser_extracts_untitled_dsp_managers_and_total_aum():
     text = """
 Name of the Fund
@@ -280,6 +356,127 @@ Total Expense Ratio**
 
     assert record.expense_ratio == 0.25
     assert record.fund_manager == "Rupesh Patel; Rishit Parikh"
+
+
+def test_factsheet_parser_extracts_nippon_direct_ratio_without_percent_sign():
+    text = """
+Nippon India Large Cap Fund
+Expense Ratio^
+Regular/Other than Direct
+1.22
+Direct
+0.58
+"""
+
+    record = FactsheetParser().parse_text(text, report_month=date(2026, 6, 1))[0]
+
+    assert record.expense_ratio == 0.58
+
+
+def test_uti_ytd_ter_map_uses_direct_or_single_plan_ratio():
+    text = """
+YTD TER AS ON 30th JUNE, 2026
+1
+UTI - Large Cap Fund
+1.84
+1.07
+2
+UTI Nifty 50 ETF
+0.05
+-
+3
+UTI Nifty Midsmallcap 400 Momentum Quality 100
+Index Fund
+1.41
+0.98
+"""
+
+    ratios = _extract_uti_ter_map(text)
+
+    assert ratios["utilargecapfund"] == 1.07
+    assert ratios["utinifty50etf"] == 0.05
+    assert ratios["utiniftymidsmallcap400momentumquality100indexfund"] == 0.98
+
+
+def test_single_scheme_vector_riskometer_reads_needle_angle():
+    drawings = [
+        {
+            "fill": (0.137, 0.122, 0.126),
+            "rect": fitz.Rect(445.0, 706.4, 462.5, 712.2),
+            "items": [
+                ("l", fitz.Point(462.5, 707.2), fitz.Point(445.0, 712.2)),
+                ("l", fitz.Point(445.0, 712.2), fitz.Point(459.0, 706.4)),
+                ("l", fitz.Point(459.0, 706.4), fitz.Point(462.5, 707.2)),
+            ],
+        }
+    ]
+
+    assert _single_scheme_vector_risk_level(
+        "Nippon India Large Cap Fund",
+        drawings,
+        [fitz.Rect(425.4, 657.3, 465.8, 663.4)],
+    ) == ("Nippon India Large Cap Fund", "Very High")
+
+
+def test_single_scheme_vector_riskometer_prefers_product_label_fund_of_fund():
+    drawings = [
+        {
+            "fill": (0.137, 0.122, 0.126),
+            "rect": fitz.Rect(445.0, 706.4, 462.5, 712.2),
+            "items": [
+                ("l", fitz.Point(462.5, 707.2), fitz.Point(445.0, 712.2)),
+                ("l", fitz.Point(445.0, 712.2), fitz.Point(459.0, 706.4)),
+                ("l", fitz.Point(459.0, 706.4), fitz.Point(462.5, 707.2)),
+            ],
+        }
+    ]
+    page_text = """
+Nippon India Silver ETF
+Product Label
+Fund Riskometer
+This product is suitable for investors who are seeking*:
+Nippon India Silver ETF Fund of
+Fund (FOF)
+"""
+
+    assert _single_scheme_vector_risk_level(
+        page_text,
+        drawings,
+        [fitz.Rect(425.4, 657.3, 465.8, 663.4)],
+    ) == ("Nippon India Silver ETF Fund of Fund", "Very High")
+
+
+def test_uti_vector_riskometer_maps_table_row():
+    drawings = [
+        {
+            "rect": fitz.Rect(255.6, 115.8, 256.0, 172.4),
+            "items": [("l", fitz.Point(255.6, 115.8), fitz.Point(255.6, 172.4))],
+        },
+        {
+            "rect": fitz.Rect(417.6, 115.8, 418.0, 172.4),
+            "items": [("l", fitz.Point(417.6, 115.8), fitz.Point(417.6, 172.4))],
+        },
+        {
+            "fill": (0.14, 0.14, 0.13),
+            "rect": fitz.Rect(316.4, 153.5, 337.2, 161.2),
+            "items": [
+                ("c", fitz.Point(316.4, 154.0), fitz.Point(317.0, 154.0), fitz.Point(318.0, 154.5)),
+                ("c", fitz.Point(318.0, 154.5), fitz.Point(320.0, 155.0), fitz.Point(337.2, 161.2)),
+                ("l", fitz.Point(337.2, 161.2), fitz.Point(320.0, 158.0)),
+                ("l", fitz.Point(320.0, 158.0), fitz.Point(316.4, 154.0)),
+                ("l", fitz.Point(316.4, 154.0), fitz.Point(317.0, 154.0)),
+            ],
+        },
+    ]
+    blocks = [
+        (20.6, 104.5, 253.3, 164.6, "UTI ARBITRAGE FUND\nRefer Page no 28", 0, 0)
+    ]
+
+    assert _uti_vector_riskometer_rows(
+        drawings,
+        blocks,
+        [fitz.Rect(315.5, 83.9, 357.8, 96.4)],
+    ) == {"UTI ARBITRAGE FUND": "Low"}
 
 
 def test_factsheet_parser_extracts_sbi_month_end_aum_and_ratio_matrix():

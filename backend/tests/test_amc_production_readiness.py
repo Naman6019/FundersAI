@@ -25,6 +25,7 @@ from app.mf_ingestion.services.ingestion_service import (
     _filter_expected_month_documents,
     _rank_discovered_documents,
 )
+from app.mf_ingestion.services.parsing_service import ParsingService
 from app.mf_ingestion.jobs.promote_mf_disclosures import (
     _available_core_scopes,
     _fetch_all_rows,
@@ -75,6 +76,10 @@ def test_registry_covers_all_twelve_agents_and_moves_discovery_rules_out_of_down
         assert source.factsheet_required_keywords
         assert source.portfolio_required_keywords
         assert source.discovery_strategy
+
+
+def test_parsing_service_accepts_absl_database_code_for_aditya_birla():
+    assert "absl" in ParsingService().adapters
 
 
 def test_discovery_probe_and_acquisition_capabilities_are_independent(monkeypatch):
@@ -175,6 +180,7 @@ def test_staging_migration_and_workflows_keep_acquisition_and_promotion_separate
     assert "promote_mf_holdings_document" in migration
     assert "environment: production-data" in acquisition
     assert "ACQUIRE ${EXPECTED_MONTH} ${SELECTED_AMC}" in acquisition
+    assert "MF_SOURCE_MANIFEST_PATH: backend/config/mf_document_sources.json" in acquisition
     assert "parse_pending_documents" not in acquisition
     assert "environment: production-data" in promotion
     assert "PROMOTE ${SOURCE_DOCUMENT_ID} ${EXPECTED_MONTH}" in promotion

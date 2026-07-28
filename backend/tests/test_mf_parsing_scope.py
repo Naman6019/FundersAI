@@ -107,6 +107,27 @@ def test_parse_pending_documents_matches_amc_code_case_insensitively(monkeypatch
     assert result["processed"][0]["source_document_id"] == "doc-lower-amc-1"
 
 
+def test_parse_pending_documents_resolves_aditya_birla_to_absl_rows(monkeypatch):
+    fake_doc = {
+        "id": "doc-absl-1",
+        "amc_code": "ABSL",
+        "document_type": "factsheet",
+        "source_url": "https://example.com/statement-of-additional-information.pdf",
+        "storage_path": "ignored",
+        "parse_status": "pending",
+    }
+    fake_supabase = _FakeSupabase([fake_doc])
+    monkeypatch.setattr(parsing_service, "supabase", fake_supabase)
+
+    result = ParsingService().parse_pending_documents(
+        limit=1,
+        amc_code="aditya_birla",
+    )
+
+    assert result["count"] == 1
+    assert result["processed"][0]["source_document_id"] == "doc-absl-1"
+
+
 def test_parse_pending_documents_skips_irrelevant_disclosure_urls(monkeypatch):
     fake_doc = {
         "id": "doc-sai-1",
@@ -153,6 +174,16 @@ def test_parse_pending_documents_skips_report_month_mismatch(monkeypatch):
     assert update_payload["validation_issues"] == [
         "skipped_irrelevant_document:report_month_mismatch:2020-07-01!=2024-12-01"
     ]
+
+
+def test_factsheet_publication_month_does_not_override_content_month():
+    document = {
+        "document_type": "factsheet",
+        "report_month": "2026-06-01",
+        "source_url": "https://example.com/factsheet-july-2026.pdf",
+    }
+
+    assert parsing_service._report_month_mismatch_issue(document) is None
 
 
 def test_parse_pending_documents_skips_icici_quant_files(monkeypatch):

@@ -75,6 +75,7 @@ class ParsingService:
             "dsp": DSPAdapter(),
             "kotak": KotakAdapter(),
             "aditya_birla": AdityaBirlaAdapter(),
+            "absl": AdityaBirlaAdapter(),
         }
         self.llm_extractor = StrictJSONLLMExtractor(
             enabled=self.config.llm_extractor_enabled,
@@ -118,7 +119,24 @@ class ParsingService:
         )
         if amc_code:
             normalized_amc_code = str(amc_code).strip()
-            query = query.in_("amc_code", [normalized_amc_code.lower(), normalized_amc_code.upper(), normalized_amc_code])
+            amc_filters = {
+                normalized_amc_code,
+                normalized_amc_code.lower(),
+                normalized_amc_code.upper(),
+            }
+            try:
+                resolved_source = get_source_by_code(normalized_amc_code)
+            except ValueError:
+                resolved_source = None
+            if resolved_source:
+                amc_filters.update(
+                    {
+                        resolved_source.amc_code,
+                        resolved_source.amc_code.lower(),
+                        resolved_source.amc_code.upper(),
+                    }
+                )
+            query = query.in_("amc_code", sorted(amc_filters))
         if report_month:
             query = query.eq("report_month", report_month)
 
@@ -1554,6 +1572,13 @@ def _legacy_ppfas_xls_issue(document: dict[str, Any]) -> str | None:
 def _report_month_mismatch_issue(document: dict[str, Any]) -> str | None:
     report_month = _to_date_or_none(document.get("report_month"))
     if not report_month:
+        return None
+    document_type = str(
+        document.get("document_type") or document.get("source_document_type") or ""
+    ).strip().lower()
+    if document_type in FACTSHEET_SUPPORTED_DOCUMENT_TYPES:
+        # Factsheet filenames commonly use the publication month. The parser
+        # validates their actual reporting month from the downloaded content.
         return None
 
     values = [

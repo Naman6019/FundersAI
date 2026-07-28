@@ -120,7 +120,12 @@ def test_hdfc_official_bucket_fallback_builds_prior_month_combined_factsheet() -
         "https://files.hdfcfund.com/s3fs-public/2026-07/"
         "HDFC%20MF%20Factsheet%20-%20June%202026.pdf"
     )
+    assert factsheets[1].url == (
+        "https://files.hdfcfund.com/s3fs-public/2026-07/"
+        "HDFC%20MF%20Index%20Solutions%20Factsheet%20-%20June%202026.pdf"
+    )
     assert portfolios[0].url == factsheets[0].url
+    assert portfolios[1].url == factsheets[1].url
     assert portfolios[0].document_type == "portfolio_disclosure"
 
 
@@ -564,7 +569,7 @@ def test_uti_official_api_ranks_english_active_before_other_variants(monkeypatch
         "UTI Fund Watch (Passive)-July 2026",
         "UTI Fund Watch(Active)-July 2026 Hindi",
     ]
-    assert docs[0].report_month == date(2026, 7, 1)
+    assert docs[0].report_month == date(2026, 6, 1)
 
 
 def test_uti_official_api_keeps_exact_prior_month_when_newer_rows_exist(monkeypatch) -> None:
@@ -599,8 +604,8 @@ def test_uti_official_api_keeps_exact_prior_month_when_newer_rows_exist(monkeypa
     ).list_documents("factsheet")
 
     assert [doc.report_month for doc in docs] == [
-        date(2026, 7, 1),
         date(2026, 6, 1),
+        date(2026, 5, 1),
     ]
     assert docs[1].title == "UTI Fund Watch(Active)-June 2026"
 
@@ -696,6 +701,35 @@ def test_nippon_factsheet_uses_publication_month_as_prior_report_month(monkeypat
     ]
     assert docs[0].title == "E- Factsheet: July 2026 Download"
     assert "\u200b" not in docs[0].title
+
+
+def test_uti_factsheet_uses_publication_month_as_prior_report_month(monkeypatch) -> None:
+    payload = {
+        "rows": [
+            {
+                "name": "UTI Fund Watch Active July 2026",
+                "doc": (
+                    "https://d3ce1o48hc5oli.cloudfront.net/s3fs-public/2026-07/"
+                    "uti_fund_watch_active_july_2026.pdf"
+                ),
+                "month": "July",
+                "year": "2026",
+            }
+        ]
+    }
+    monkeypatch.setattr(
+        amc_downloader,
+        "_request_with_retry",
+        lambda *args, **kwargs: SimpleNamespace(json=lambda: payload),
+    )
+
+    docs = AMCDownloader(
+        get_source("uti"),
+        timeout_seconds=1,
+        user_agent="test",
+    ).list_documents("factsheet")
+
+    assert docs[0].report_month == date(2026, 6, 1)
 
 
 def test_nippon_mislabeled_openxml_workbook_is_normalized(monkeypatch) -> None:
