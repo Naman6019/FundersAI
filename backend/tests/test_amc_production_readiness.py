@@ -184,6 +184,8 @@ def test_staging_migration_and_workflows_keep_acquisition_and_promotion_separate
     assert "parse_pending_documents" not in acquisition
     assert "environment: production-data" in promotion
     assert "PROMOTE ${SOURCE_DOCUMENT_ID} ${EXPECTED_MONTH}" in promotion
+    assert "promote-mf-disclosures-apply" in promotion
+    assert "promote-mf-disclosures-dry-run-{0}" in promotion
     assert "--apply" in promotion
     assert "--expected-report-month" in promotion
     assert 'default: "2026-06"' in acquisition

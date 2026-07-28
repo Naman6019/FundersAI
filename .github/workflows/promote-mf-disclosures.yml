@@ -28,7 +28,7 @@ on:
         type: string
 
 concurrency:
-  group: promote-mf-disclosures
+  group: ${{ inputs.apply && 'promote-mf-disclosures-apply' || format('promote-mf-disclosures-dry-run-{0}', inputs.source_document_id) }}
   cancel-in-progress: false
 
 jobs:
