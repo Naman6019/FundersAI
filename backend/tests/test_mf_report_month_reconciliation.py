@@ -82,3 +82,12 @@ def test_report_month_reconciliation_contract_is_protected_and_audited() -> None
     assert "environment: production-data" in workflow
     assert "RECONCILE ${SOURCE_DOCUMENT_ID}" in workflow
     assert "R2_SECRET_ACCESS_KEY" in workflow
+    assert "optional for dry-run, required for apply" in workflow
+    assert "expected_checksum_required_for_apply" in (
+        root
+        / "backend"
+        / "app"
+        / "mf_ingestion"
+        / "jobs"
+        / "reconcile_raw_document_report_month.py"
+    ).read_text(encoding="utf-8")

@@ -84,7 +84,7 @@ def main() -> int:
     parser.add_argument("--expected-amc", required=True, choices=sorted(ALLOWED_AMCS))
     parser.add_argument("--expected-current-month", required=True)
     parser.add_argument("--corrected-report-month", required=True)
-    parser.add_argument("--expected-checksum", required=True)
+    parser.add_argument("--expected-checksum", default="")
     parser.add_argument("--requested-by", required=True)
     parser.add_argument("--reason", required=True)
     parser.add_argument("--apply", action="store_true")
@@ -117,6 +117,18 @@ def main() -> int:
         print(json.dumps({"status": "error", "issues": ["source_document_not_found"]}))
         return 1
     document = document_rows[0]
+    supplied_checksum = args.expected_checksum.strip()
+    if args.apply and not supplied_checksum:
+        print(
+            json.dumps(
+                {
+                    "status": "error",
+                    "issues": ["expected_checksum_required_for_apply"],
+                }
+            )
+        )
+        return 2
+    reviewed_checksum = supplied_checksum or str(document.get("checksum") or "")
 
     applied_rows = (
         supabase.table("mf_promotion_runs")
@@ -156,7 +168,7 @@ def main() -> int:
         expected_amc=args.expected_amc,
         expected_current_month=expected_current_month,
         corrected_month=corrected_month,
-        expected_checksum=args.expected_checksum,
+        expected_checksum=reviewed_checksum,
         observed_checksum=observed_checksum,
         observed_body_month=observed_body_month,
         has_applied_promotion=bool(applied_rows),
@@ -167,9 +179,11 @@ def main() -> int:
         "amc_code": document.get("amc_code"),
         "source_url": document.get("source_url"),
         "expected_current_month": expected_current_month.isoformat(),
+        "stored_report_month": document.get("report_month"),
         "corrected_report_month": corrected_month.isoformat(),
         "observed_body_month": observed_body_month.isoformat() if observed_body_month else None,
-        "expected_checksum": args.expected_checksum,
+        "expected_checksum": reviewed_checksum,
+        "checksum_source": "operator" if supplied_checksum else "database_dry_run",
         "observed_checksum": observed_checksum,
         "parse_status": document.get("parse_status"),
         "has_applied_promotion": bool(applied_rows),
@@ -189,7 +203,7 @@ def main() -> int:
             "p_source_document_id": args.source_document_id,
             "p_expected_current_month": expected_current_month.isoformat(),
             "p_corrected_report_month": corrected_month.isoformat(),
-            "p_expected_checksum": args.expected_checksum,
+            "p_expected_checksum": reviewed_checksum,
             "p_observed_body_month": observed_body_month.isoformat(),
             "p_requested_by": args.requested_by,
             "p_reason": args.reason,

@@ -24,8 +24,9 @@ on:
         default: "2026-06"
         type: string
       expected_checksum:
-        description: Exact reviewed SHA-256 from mf_raw_documents
-        required: true
+        description: Exact reviewed SHA-256; optional for dry-run, required for apply
+        required: false
+        default: ""
         type: string
       reason:
         description: Audit reason for the correction
