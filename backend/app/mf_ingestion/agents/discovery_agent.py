@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from typing import Callable
 
@@ -65,8 +66,9 @@ class AMCLinkDiscoveryAgent:
         accepted: list[ValidatedDiscovery] = []
         actions_used = 0
         max_candidates = max(max_candidates_per_type, 1)
+        reusable_factsheets: list[DiscoveredDocument] = []
 
-        for document_type in document_types:
+        for document_type_index, document_type in enumerate(document_types):
             if actions_used >= self.max_actions:
                 trace.append(
                     AgentTraceEvent(
@@ -153,8 +155,38 @@ class AMCLinkDiscoveryAgent:
                         )
                     )
 
+            reusable_documents: list[DiscoveredDocument] = []
+            if document_type == "portfolio_disclosure" and self.source.factsheet_contains_holdings:
+                reusable_documents = [
+                    replace(
+                        document,
+                        document_type="portfolio_disclosure",
+                        discovery_page_url=(
+                            self.source.portfolio_disclosure_page_url
+                            or document.discovery_page_url
+                        ),
+                    )
+                    for document in reusable_factsheets
+                ]
+                trace.append(
+                    AgentTraceEvent(
+                        step="discover",
+                        status="ok" if reusable_documents else "skipped",
+                        detail=(
+                            f"Reused {len(reusable_documents)} validated combined factsheet candidate(s)."
+                        ),
+                        document_type=document_type,
+                        strategy="registry_combined_factsheet",
+                    )
+                )
+
             candidates = _dedupe_candidates(
-                [*manifest_documents, *dynamic_documents, *last_known_good_documents],
+                [
+                    *manifest_documents,
+                    *dynamic_documents,
+                    *last_known_good_documents,
+                    *reusable_documents,
+                ],
                 expected_month=expected_month,
             )
             if not candidates and self.llm_recovery_loader and actions_used < self.max_actions:
@@ -201,8 +233,29 @@ class AMCLinkDiscoveryAgent:
                 continue
 
             accepted_for_type = 0
+            remaining_document_types = len(document_types) - document_type_index - 1
+            reserved_actions = remaining_document_types * _minimum_actions_per_document_type(
+                manifest_enabled=bool(self.manifest_path),
+                last_known_good_enabled=self.last_known_good_loader is not None,
+                probe_downloads=probe_downloads,
+            )
+            candidate_action_cost = 1 + int(probe_downloads)
             for candidate in candidates:
                 if accepted_for_type >= max_candidates or actions_used >= self.max_actions:
+                    break
+                if actions_used + candidate_action_cost + reserved_actions > self.max_actions:
+                    trace.append(
+                        AgentTraceEvent(
+                            step="action_budget",
+                            status="skipped",
+                            detail=(
+                                "Candidate skipped to reserve the bounded action budget "
+                                f"for {remaining_document_types} remaining document type(s)."
+                            ),
+                            document_type=document_type,
+                            source_url=candidate.url,
+                        )
+                    )
                     break
                 actions_used += 1
                 errors, warnings = validate_candidate(
@@ -348,6 +401,8 @@ class AMCLinkDiscoveryAgent:
                     )
                 )
                 accepted_for_type += 1
+                if document_type == "factsheet" and readiness == "promotable":
+                    reusable_factsheets.append(candidate)
                 trace.append(
                     AgentTraceEvent(
                         step="accept",
@@ -536,7 +591,7 @@ def _dedupe_candidates(
         existing = best_by_url.get(key)
         if existing is None or document.priority_score > existing.priority_score:
             best_by_url[key] = document
-    return sorted(
+    ranked = sorted(
         best_by_url.values(),
         key=lambda item: (
             int(bool(expected_month and item.report_month == expected_month)),
@@ -545,4 +600,23 @@ def _dedupe_candidates(
             item.priority_score,
         ),
         reverse=True,
+    )
+    if expected_month is None:
+        return ranked
+    exact_month = [document for document in ranked if document.report_month == expected_month]
+    return exact_month or ranked
+
+
+def _minimum_actions_per_document_type(
+    *,
+    manifest_enabled: bool,
+    last_known_good_enabled: bool,
+    probe_downloads: bool,
+) -> int:
+    return (
+        1
+        + int(manifest_enabled)
+        + int(last_known_good_enabled)
+        + 1
+        + int(probe_downloads)
     )

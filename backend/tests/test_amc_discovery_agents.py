@@ -322,5 +322,86 @@ def test_agent_action_budget_stops_additional_candidate_probes() -> None:
     result = agent.run(document_types=("factsheet",), max_candidates_per_type=2)
 
     assert result.status == "escalated"
-    assert result.actions_used == 2
+    assert result.actions_used == 1
     assert result.documents == []
+    assert any(event.step == "action_budget" for event in result.trace)
+
+
+def test_exact_month_candidates_do_not_starve_later_document_types() -> None:
+    expected_month = date(2026, 6, 1)
+    exact_factsheet = _discovered(
+        "sbi",
+        "factsheet",
+        "https://www.sbimf.com/docs/factsheet-june-2026.pdf",
+        score=300,
+        report_month=expected_month,
+    )
+    stale_factsheet = _discovered(
+        "sbi",
+        "factsheet",
+        "https://www.sbimf.com/docs/factsheet-may-2026.pdf",
+        score=200,
+        report_month=date(2026, 5, 1),
+    )
+    portfolio = _discovered(
+        "sbi",
+        "portfolio_disclosure",
+        "https://www.sbimf.com/docs/portfolio-june-2026.xlsx",
+        score=300,
+        report_month=expected_month,
+    )
+    agent = AGENT_CLASSES["sbi"](
+        source=get_source("sbi"),
+        downloader=_FakeDownloader(
+            documents={
+                "factsheet": [exact_factsheet, stale_factsheet],
+                "portfolio_disclosure": [portfolio],
+            }
+        ),
+        max_actions=6,
+    )
+
+    result = agent.run(
+        document_types=("factsheet", "portfolio_disclosure"),
+        expected_month=expected_month,
+        max_candidates_per_type=3,
+    )
+
+    assert result.status == "completed"
+    assert [document.source_url for document in result.documents] == [
+        exact_factsheet.url,
+        portfolio.url,
+    ]
+    assert result.actions_used == 6
+
+
+def test_combined_factsheet_is_reused_for_portfolio_from_registry_capability() -> None:
+    expected_month = date(2026, 6, 1)
+    factsheet = _discovered(
+        "hdfc",
+        "factsheet",
+        "https://files.hdfcfund.com/hdfc-factsheet-june-2026.pdf",
+        report_month=expected_month,
+    )
+    agent = HDFCLinkDiscoveryAgent(
+        source=get_source("hdfc"),
+        downloader=_FakeDownloader(
+            documents={
+                "factsheet": [factsheet],
+                "portfolio_disclosure": [],
+            }
+        ),
+    )
+
+    result = agent.run(
+        document_types=("factsheet", "portfolio_disclosure"),
+        expected_month=expected_month,
+    )
+
+    assert result.status == "completed"
+    assert [document.document_type for document in result.documents] == [
+        "factsheet",
+        "portfolio_disclosure",
+    ]
+    assert {document.source_url for document in result.documents} == {factsheet.url}
+    assert any(event.strategy == "registry_combined_factsheet" for event in result.trace)
