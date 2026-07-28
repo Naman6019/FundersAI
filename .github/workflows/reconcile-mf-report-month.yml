@@ -1,0 +1,116 @@
+name: Reconcile MF Report Month
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_document_id:
+        description: Exact reviewed mf_raw_documents UUID
+        required: true
+        type: string
+      expected_amc:
+        description: Expected AMC code
+        required: true
+        type: choice
+        options:
+          - uti
+          - absl
+      expected_current_month:
+        description: Month currently stored in the database (YYYY-MM)
+        required: true
+        type: string
+      corrected_report_month:
+        description: Month detected inside the official document body (YYYY-MM)
+        required: true
+        default: "2026-06"
+        type: string
+      expected_checksum:
+        description: Exact reviewed SHA-256 from mf_raw_documents
+        required: true
+        type: string
+      reason:
+        description: Audit reason for the correction
+        required: true
+        type: string
+      apply:
+        description: Apply the verified correction and queue reparse
+        required: true
+        default: false
+        type: boolean
+      approval_phrase:
+        description: For apply, enter RECONCILE source-id current-month TO corrected-month
+        required: false
+        default: ""
+        type: string
+
+concurrency:
+  group: ${{ inputs.apply && 'reconcile-mf-report-month-apply' || format('reconcile-mf-report-month-dry-run-{0}', inputs.source_document_id) }}
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production-data
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Verify body evidence and reconcile
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_RAW_BUCKET: ${{ secrets.R2_RAW_BUCKET }}
+          R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
+          SOURCE_DOCUMENT_ID: ${{ inputs.source_document_id }}
+          EXPECTED_AMC: ${{ inputs.expected_amc }}
+          EXPECTED_CURRENT_MONTH: ${{ inputs.expected_current_month }}
+          CORRECTED_REPORT_MONTH: ${{ inputs.corrected_report_month }}
+          EXPECTED_CHECKSUM: ${{ inputs.expected_checksum }}
+          REASON: ${{ inputs.reason }}
+          APPLY_RECONCILIATION: ${{ inputs.apply }}
+          APPROVAL_PHRASE: ${{ inputs.approval_phrase }}
+          REQUESTED_BY: ${{ github.actor }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "Missing existing Supabase production secrets."
+            exit 1
+          fi
+          if [ -z "$R2_ENDPOINT" ] || [ -z "$R2_ACCESS_KEY_ID" ] || [ -z "$R2_SECRET_ACCESS_KEY" ] || [ -z "$R2_RAW_BUCKET" ]; then
+            echo "Missing existing R2 production secrets."
+            exit 1
+          fi
+          if [ "$APPLY_RECONCILIATION" = "true" ]; then
+            expected_approval="RECONCILE ${SOURCE_DOCUMENT_ID} ${EXPECTED_CURRENT_MONTH} TO ${CORRECTED_REPORT_MONTH}"
+            if [ "$APPROVAL_PHRASE" != "$expected_approval" ]; then
+              echo "Approval phrase mismatch. Expected: $expected_approval"
+              exit 1
+            fi
+          fi
+          args=(
+            --source-document-id "$SOURCE_DOCUMENT_ID"
+            --expected-amc "$EXPECTED_AMC"
+            --expected-current-month "$EXPECTED_CURRENT_MONTH"
+            --corrected-report-month "$CORRECTED_REPORT_MONTH"
+            --expected-checksum "$EXPECTED_CHECKSUM"
+            --requested-by "$REQUESTED_BY"
+            --reason "$REASON"
+          )
+          if [ "$APPLY_RECONCILIATION" = "true" ]; then
+            args+=(--apply)
+          fi
+          python backend/app/mf_ingestion/jobs/reconcile_raw_document_report_month.py "${args[@]}"
