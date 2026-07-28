@@ -367,6 +367,50 @@ def test_motilal_combined_factsheet_extracts_official_sector_allocation():
     ]
 
 
+def test_motilal_debt_portfolio_recognizes_official_tbill_and_bk_names():
+    parsed = parse_combined_factsheet_page(
+        """
+        Motilal Oswal Ultra Short Term Fund
+        Portfolio (as on 30-June-2026)
+        Instrument Name
+        % to Net Assets
+        Money Market Instruments (Treasury Bill/Cash Management Bill)
+        26.2
+        364 Days Tbill (MD 30/07/2026)
+        13.2
+        364 Days Tbill (MD 10/09/2026)
+        6.6
+        364 Days Tbill (MD 11/02/2027)
+        6.4
+        Certificate of Deposit
+        70.8
+        Axis Bank Ltd. CD (MD 11/08/2026)
+        64.5
+        Small Ind Dev Bk of India CD (MD 25/03/2027)
+        6.3
+        Grand Total
+        100.0
+        """,
+        ParseContext(
+            source_document_id="motilal-ultra-short-june",
+            source_url="https://www.motilaloswalmf.com/official.pdf",
+            report_month=date(2026, 6, 1),
+        ),
+        scheme_prefixes=("motilal oswal",),
+    )
+
+    assert parsed is not None
+    assert parsed.metrics["total_percent_aum"] == 97.0
+    assert "percent_aum_total_out_of_band" not in parsed.warnings
+    assert [row["instrument_name"] for row in parsed.holdings] == [
+        "364 Days Tbill (MD 30/07/2026)",
+        "364 Days Tbill (MD 10/09/2026)",
+        "364 Days Tbill (MD 11/02/2027)",
+        "Axis Bank Ltd. CD (MD 11/08/2026)",
+        "Small Ind Dev Bk of India CD (MD 25/03/2027)",
+    ]
+
+
 def test_sector_staging_aggregates_duplicate_names_before_upsert():
     assert _normalize_sector_allocations(
         [

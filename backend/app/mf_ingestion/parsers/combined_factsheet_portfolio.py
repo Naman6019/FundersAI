@@ -9,8 +9,8 @@ from app.mf_ingestion.parsers.pdf_text_parser import PDFTextParser
 
 NUMBER_PATTERN = re.compile(r"^-?\d{1,3}(?:,\d{3})*(?:\.\d+)?%?$")
 SECURITY_PATTERN = re.compile(
-    r"(?:\b(?:ltd|limited|bank|corporation|industries|enterprises|technologies)\b|"
-    r"\b(?:etf|reit|invIT|index-[A-Z0-9]+|direct growth|goi|sdl|g-sec|t-bill)\b|"
+    r"(?:\b(?:ltd|limited|bank|bk|corporation|industries|enterprises|technologies)\b|"
+    r"\b(?:etf|reit|invIT|index-[A-Z0-9]+|direct growth|goi|sdl|g-sec|t[\s-]?bill)\b|"
     r"\d+(?:\.\d+)?%\s+)",
     re.IGNORECASE,
 )
