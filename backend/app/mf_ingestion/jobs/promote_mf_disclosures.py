@@ -340,6 +340,52 @@ def build_dry_run(
     }
 
 
+def apply_promotable_report(
+    report: dict[str, Any],
+    scopes: list[str],
+    expected_report_month: date,
+    *,
+    requested_by: str,
+) -> list[dict[str, Any]]:
+    if report.get("status") != "promotable":
+        raise ValueError("promotion_report_not_promotable")
+
+    applied: list[dict[str, Any]] = []
+    core_scopes = [scope for scope in scopes if scope in CORE_SCOPES]
+    if core_scopes:
+        for candidate in report["candidate_reports"]:
+            candidate_scopes = candidate["eligible_scopes"]
+            if not candidate_scopes or candidate["issues"]:
+                continue
+            result = supabase.rpc(
+                "promote_mf_factsheet_candidate",
+                {
+                    "p_candidate_id": candidate["candidate_id"],
+                    "p_scopes": candidate_scopes,
+                    "p_requested_by": requested_by,
+                    "p_expected_report_month": expected_report_month.isoformat(),
+                },
+            ).execute()
+            applied.append(
+                {"candidate_id": candidate["candidate_id"], "result": result.data}
+            )
+
+    portfolio_scopes = [scope for scope in scopes if scope in PORTFOLIO_SCOPES]
+    if portfolio_scopes:
+        source_document_id = str(report["source_document"]["id"])
+        result = supabase.rpc(
+            "promote_mf_holdings_document",
+            {
+                "p_source_document_id": source_document_id,
+                "p_scopes": portfolio_scopes,
+                "p_requested_by": requested_by,
+                "p_expected_report_month": expected_report_month.isoformat(),
+            },
+        ).execute()
+        applied.append({"source_document_id": source_document_id, "result": result.data})
+    return applied
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Dry-run or apply reviewed MF disclosure promotion.")
     parser.add_argument("--source-document-id", required=True)
@@ -368,36 +414,12 @@ def main() -> int:
         print(json.dumps(report, indent=2, default=str))
         return 0
 
-    applied: list[dict[str, Any]] = []
-    core_scopes = [scope for scope in scopes if scope in CORE_SCOPES]
-    if core_scopes:
-        for candidate in report["candidate_reports"]:
-            candidate_scopes = candidate["eligible_scopes"]
-            if not candidate_scopes or candidate["issues"]:
-                continue
-            result = supabase.rpc(
-                "promote_mf_factsheet_candidate",
-                {
-                    "p_candidate_id": candidate["candidate_id"],
-                    "p_scopes": candidate_scopes,
-                    "p_requested_by": args.requested_by,
-                    "p_expected_report_month": expected_report_month.isoformat(),
-                },
-            ).execute()
-            applied.append({"candidate_id": candidate["candidate_id"], "result": result.data})
-
-    portfolio_scopes = [scope for scope in scopes if scope in PORTFOLIO_SCOPES]
-    if portfolio_scopes:
-        result = supabase.rpc(
-            "promote_mf_holdings_document",
-            {
-                "p_source_document_id": args.source_document_id,
-                "p_scopes": portfolio_scopes,
-                "p_requested_by": args.requested_by,
-                "p_expected_report_month": expected_report_month.isoformat(),
-            },
-        ).execute()
-        applied.append({"source_document_id": args.source_document_id, "result": result.data})
+    applied = apply_promotable_report(
+        report,
+        scopes,
+        expected_report_month,
+        requested_by=args.requested_by,
+    )
 
     print(json.dumps({"status": "applied", "operations": applied}, indent=2, default=str))
     return 0

@@ -1,0 +1,107 @@
+name: Promote MF AMC Disclosures
+
+on:
+  workflow_dispatch:
+    inputs:
+      amc:
+        description: Exact AMC registry key
+        required: true
+        type: choice
+        options:
+          - hdfc
+          - sbi
+          - icici
+          - axis
+          - ppfas
+          - nippon
+          - motilal
+          - mirae
+          - uti
+          - dsp
+          - kotak
+          - aditya_birla
+      scopes:
+        description: Comma-separated scopes (risk,ter_aum,benchmark,manager,holdings,sectors)
+        required: true
+        default: risk,ter_aum,benchmark,manager,holdings,sectors
+        type: string
+      expected_month:
+        description: Exact reviewed reporting month (YYYY-MM)
+        required: true
+        default: "2026-06"
+        type: string
+      max_source_documents:
+        description: Hard source-document cap (1-150)
+        required: true
+        default: "150"
+        type: string
+      apply:
+        description: Apply only after reviewing the complete dry-run
+        required: true
+        default: false
+        type: boolean
+      approval_phrase:
+        description: For apply only, enter PROMOTE AMC amc-key YYYY-MM
+        required: false
+        default: ""
+        type: string
+
+concurrency:
+  group: ${{ inputs.apply && 'promote-mf-amc-disclosures-apply' || format('promote-mf-amc-disclosures-dry-run-{0}', inputs.amc) }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production-data
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Validate and promote bounded AMC disclosures
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          AMC: ${{ inputs.amc }}
+          PROMOTION_SCOPES: ${{ inputs.scopes }}
+          EXPECTED_MONTH: ${{ inputs.expected_month }}
+          MAX_SOURCE_DOCUMENTS: ${{ inputs.max_source_documents }}
+          APPLY_PROMOTION: ${{ inputs.apply }}
+          APPROVAL_PHRASE: ${{ inputs.approval_phrase }}
+          REQUESTED_BY: ${{ github.actor }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "Missing existing Supabase production secrets."
+            exit 1
+          fi
+          if [ "$APPLY_PROMOTION" = "true" ]; then
+            expected_approval="PROMOTE AMC ${AMC} ${EXPECTED_MONTH}"
+            if [ "$APPROVAL_PHRASE" != "$expected_approval" ]; then
+              echo "Approval phrase mismatch. Expected: $expected_approval"
+              exit 1
+            fi
+          fi
+          args=(
+            --amc "$AMC"
+            --scopes "$PROMOTION_SCOPES"
+            --expected-report-month "$EXPECTED_MONTH"
+            --max-source-documents "$MAX_SOURCE_DOCUMENTS"
+            --requested-by "$REQUESTED_BY"
+          )
+          if [ "$APPLY_PROMOTION" = "true" ]; then
+            args+=(--apply)
+          fi
+          python backend/app/mf_ingestion/jobs/promote_mf_amc_disclosures.py "${args[@]}"
