@@ -151,15 +151,17 @@ A staging pass is necessary but not sufficient. These five AMCs still need revie
 | Aditya Birla | `30306027790` | Partial | Portfolio `6f7605ce-94fd-4e34-a615-6bd4d4cc1bda`; factsheet not acquired |
 | Motilal | `30343045400` | Success | Factsheet `c9672b76-3d3b-40c1-82c1-2c8332b2b5ed`; combined-factsheet portfolio scope `b4cd5573-86de-435e-b1a4-8e69bbbeac94`; checksum `775df336…8187e2` |
 | Kotak | `30343047236` | Success | Exact factsheet reused as `c5a4caa8-9333-47b3-b3ef-6818b83499b3`; combined-factsheet portfolio scope `2be39e47-a388-43c4-8247-4c53a7849d5f`; checksum `caac224b…1ff7b0` |
-| Aditya Birla | `30343049424` | Success | Exact June factsheet `9c59868e-f45a-489b-9663-2803e8b11599`; checksum `f24c7d81…509738` |
+| Aditya Birla | `30343049424` | Acquired, rejected for June | Supplied `Empower Factsheet - June 2026` row `9c59868e-f45a-489b-9663-2803e8b11599`; body detector confirms May 2026, checksum `f24c7d81…509738` |
 
 Exact deterministic parser run `30343289910` produced:
 
 - Motilal: 20 schemes and 685 holdings rows per scope; 675 rows valid and 10 held for review.
 - Kotak: 76 schemes and 3,571 holdings rows per scope; 2,869 rows valid and 702 held for review.
-- Aditya Birla: no mutation; the document stayed `pending` because retry filtering did not resolve `aditya_birla` to database code `ABSL`.
+- Aditya Birla: the first run made no mutation because retry filtering did not resolve `aditya_birla` to database code `ABSL`.
 
-The retry alias fix must be pushed before retrying only ABSL source document `9c59868e-f45a-489b-9663-2803e8b11599`.
+The retry alias fix was pushed as `b91a490`. Retry `30344644933` selected the ABSL row and safely returned `needs_review` because the body month is May, not June.
+
+The correct official July-published factsheet is existing R2 row `b00b52c1-74e3-4239-a679-b39616f233fd`, checksum `c930e24e…ca134`. Local body detection confirms June 2026. Do not update or duplicate that row until the operator approves an audited content-confirmed month alias from July to June.
 
 ### Failed reruns after the reviewed fallback was pushed
 
@@ -459,12 +461,12 @@ Required order:
 
 #### Aditya Birla
 
-Current blocker: portfolio coverage passes, but the exact June factsheet has not yet been acquired and its local AUM/risk extraction is below the gate.
+Current blocker: portfolio coverage passes, but the supplied June-labelled factsheet contains May data. The July-published factsheet contains June data but its existing raw row is classified as July.
 
 Required order:
 
-1. Acquire the exact official `empower-factsheet---june-2026.pdf`.
-2. Parse the factsheet.
+1. Approve an audited content-confirmed alias for existing row `b00b52c1-74e3-4239-a679-b39616f233fd` from report month July to June; preserve the original row and R2 object.
+2. Parse the June alias.
 3. Harden AUM/risk extraction, then review mappings and field coverage.
 
 Current portfolio evidence:
@@ -477,15 +479,15 @@ Current portfolio evidence:
 
 #### Kotak
 
-Current blocker: the exact official combined factsheet is locally verified but not yet acquired or staged.
+Current status: the exact official combined factsheet is acquired and staged. Kotak now passes the 80% core, holdings, sectors, and reviewed-mapping gates.
 
-The June PDF contains factsheet fields, holdings, and sector allocation per fund. Local deterministic extraction yields 76 portfolio records, with 64 inside the valid allocation band. Acquire it once for each document scope, stage out-of-band records for review, and promote only rows whose `validation_status` is `valid`.
+The June PDF contains factsheet fields, holdings, and sector allocation per fund. Deterministic extraction yields 76 portfolio records, with 64 inside the valid allocation band. The official promotion job blocks the holdings/sector apply while any staged row remains non-promotable; review or exclude the 12 out-of-band records before applying those scopes.
 
 #### Motilal
 
-Current blocker: the exact official active factsheet is locally verified but not yet acquired or staged.
+Current blocker: the exact official active factsheet is acquired and staged, and core extraction passes locally, but separate sector-allocation data is not represented safely in holdings staging.
 
-The July-published `Factsheet June 2026 Active` PDF contains June 30 factsheet, holdings, and sector data. Local deterministic extraction yields 20 portfolio records, with 19 inside the valid allocation band. The remaining record must stay in review; do not promote it as complete.
+The July-published `Factsheet June 2026 Active` PDF contains June 30 factsheet, holdings, and sector data. Deterministic extraction yields 20 portfolio records, with 19 inside the valid allocation band. Manager and textual product-suitability risk extraction now cover 91.67% and 100% of 24 core records locally. Sector allocation is published as a separate aggregate table, so it must be staged separately; never copy an aggregate sector label onto individual securities.
 
 ### Step 7: Reconcile mappings
 

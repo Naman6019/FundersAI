@@ -337,6 +337,45 @@ BENCHMARK Nifty Large Midcap 250 (TRI)
     assert records[0].fund_manager == "Rohit Singhania; Nilesh Aiya"
 
 
+def test_factsheet_parser_extracts_motilal_co_managers_and_product_risk():
+    scheme_page = """
+Motilal Oswal Midcap Fund
+Fund and Co-Fund Manager
+For Equity Component
+Mr. Ajay Khandelwal
+Managing this fund since 01-Oct-2024
+Mr. Atul Mehra
+Managing this fund since 01-Oct-2024
+For Debt Component
+Mr. Rakesh Shetty
+Managing this fund since 22-Nov-2022
+NAV
+Direct Plan Growth Option
+"""
+    suitability_page = """
+Product Suitability
+Name of the scheme
+Scheme Riskometer
+Benchmark Riskometer Nifty Midcap 150 TRI
+Motilal Oswal Midcap Fund (An open ended equity scheme predominantly investing in mid cap stocks)
+Low Risk
+Moderate Risk
+Very High Risk
+The risk of the scheme is Very High
+Risk-o-meter
+The risk of the Benchmark is Very High
+"""
+
+    record = FactsheetParser().parse_text(
+        text=f"{scheme_page}\n{suitability_page}",
+        report_month=date(2026, 6, 1),
+        page_texts=[scheme_page, suitability_page],
+    )[0]
+
+    assert record.fund_manager == "Mr. Ajay Khandelwal; Mr. Atul Mehra; Mr. Rakesh Shetty"
+    assert record.risk_level == "Very High"
+
+
 def test_factsheet_parser_extracts_nippon_manager_parentheses_and_single_etf_ter():
     text = """
 Nippon India Nifty Chemicals ETF

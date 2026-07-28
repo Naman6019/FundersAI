@@ -252,6 +252,8 @@ def build_dry_run(
             operation_count += 1
         elif holdings:
             issues.append("staged_holdings_have_no_promotable_rows")
+        if rejected_holdings_rows:
+            issues.append("staged_holdings_contain_non_promotable_rows")
 
     if operation_count == 0 and not issues:
         issues.append("no_promotable_operations")

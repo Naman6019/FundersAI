@@ -20,6 +20,9 @@ AMC_SCHEME_PREFIX_PATTERN = (
 SCHEME_NAME_PATTERN = re.compile(
     rf"(?im)^(?:\((?:Formerly|Erstwhile)[^\n]*\)\s*)?(?P<name>{AMC_SCHEME_PREFIX_PATTERN}[^\n]{{3,140}}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{{1,60}}\))?(?:\s*[\*\^$#@~§]+)?\s*$"
 )
+PRODUCT_SUITABILITY_SCHEME_PATTERN = re.compile(
+    rf"(?im)^(?P<name>{AMC_SCHEME_PREFIX_PATTERN}[^\n]{{3,140}}?(?:Fund|FOF|ETF))\b[^\n]*$"
+)
 ANCHORED_SCHEME_PATTERN = re.compile(
     rf"(?im)^Name\s+of\s+the\s+Fund\s*\n+\s*(?P<name>{AMC_SCHEME_PREFIX_PATTERN}[^\n]{{3,160}}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{{1,80}}\))?\s*$"
 )
@@ -134,6 +137,7 @@ class FactsheetParser:
         risk_by_scheme = _extract_scheme_risk_levels(cleaned_text)
         if page_texts:
             risk_by_scheme.update(_extract_page_aligned_risk_levels(page_texts))
+            risk_by_scheme.update(_extract_product_suitability_risk_levels(page_texts))
         axis_ter_by_scheme = _extract_axis_ter_ratios(cleaned_text)
         axis_manager_by_scheme = _extract_axis_manager_map(cleaned_text)
         best_by_scheme: dict[str, FactsheetRecord] = {}
@@ -710,6 +714,32 @@ def _extract_page_aligned_risk_levels(page_texts: list[str]) -> dict[str, str]:
             continue
         for scheme_name, risk_label in zip(scheme_names, risk_labels):
             risk_by_scheme[_scheme_key(scheme_name)] = risk_label
+    return risk_by_scheme
+
+
+def _extract_product_suitability_risk_levels(page_texts: list[str]) -> dict[str, str]:
+    """Map each product-suitability scheme to its own textual risk label."""
+    risk_by_scheme: dict[str, str] = {}
+    risk_pattern = re.compile(
+        r"(?i)\bThe\s+risk\s+of\s+the\s+scheme\s+is\s+"
+        r"(Low\s+to\s+Moderate|Moderately\s+High|Very\s+High|Moderate|High|Low)"
+        r"(?:\s+risk)?\b"
+    )
+    for raw_page in page_texts:
+        page = _preprocess_factsheet_text(raw_page)
+        lower_page = page.lower()
+        if "name of the scheme" not in lower_page or "scheme riskometer" not in lower_page:
+            continue
+        matches = list(PRODUCT_SUITABILITY_SCHEME_PATTERN.finditer(page))
+        for index, match in enumerate(matches):
+            section_end = matches[index + 1].start() if index + 1 < len(matches) else len(page)
+            risk_match = risk_pattern.search(page, match.end(), section_end)
+            if not risk_match:
+                continue
+            scheme_name = _clean_scheme_name(match.group("name"))
+            label = _normalize_risk_label(risk_match.group(1))
+            if scheme_name and label:
+                risk_by_scheme[_scheme_key(scheme_name)] = label
     return risk_by_scheme
 
 
@@ -1438,6 +1468,20 @@ def _extract_fund_manager(chunk: str) -> str | None:
     hdfc_managers = _extract_hdfc_fund_managers(chunk)
     if hdfc_managers:
         return "; ".join(hdfc_managers)
+    motilal_match = re.search(
+        r"(?im)^Fund\s+and\s+Co-Fund\s+Managers?\s*:?\s*([\s\S]{0,2200})",
+        chunk,
+    )
+    if motilal_match:
+        body = re.split(
+            r"(?im)^(?:NAV|Performance|SIP\s+Performance|IDCW\s+History|"
+            r"Scheme\s+Statistics|Portfolio)\b",
+            motilal_match.group(1),
+            maxsplit=1,
+        )[0]
+        names = _extract_manager_names(body)
+        if names:
+            return "; ".join(names)
     block_patterns = (
         r"(?im)^Name\s+of\s+the\s+Fund\s+Managers?\s*[\s:]*([\s\S]{0,2200})",
         r"(?im)^Fund\s+Manager(?:\(s\)|s)?\**\s*:?\s*([\s\S]{0,2200})",

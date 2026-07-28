@@ -242,7 +242,7 @@ def test_reviewed_source_manifest_keeps_exact_june_combined_factsheets():
     assert motilal_scopes == {"factsheet", "portfolio_disclosure"}
     assert kotak_scopes == {"factsheet", "portfolio_disclosure"}
     assert len(absl_factsheets) == 1
-    assert absl_factsheets[0]["source_url"].endswith("/empower-factsheet---june-2026.pdf")
+    assert absl_factsheets[0]["source_url"].endswith("/absl-factsheet_july-2026.pdf")
     assert get_source("motilal").factsheet_contains_holdings is True
     assert get_source("kotak").factsheet_contains_holdings is True
 
