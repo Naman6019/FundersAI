@@ -86,6 +86,7 @@ AXIS_LAYOUT_SCRIPT_PATTERN = re.compile(
 class _AxisSpreadsheetAdapter(GenericPortfolioAdapter):
     amc_code = "AXIS"
     scheme_markers = ("axis",)
+    fractional_percent_cells = True
 
 
 class AxisAdapter(BaseAMCAdapter):

@@ -245,6 +245,7 @@ def _portfolio_batch_coverage(
     observed: set[str] = set()
     applicable: set[str] = set()
     promotable: set[str] = set()
+    isin_ready: set[str] = set()
     for row in scope_reports:
         coverage = row["report"].get(coverage_key) or {}
         observed.update(str(value) for value in coverage.get("observed_keys", []))
@@ -255,6 +256,10 @@ def _portfolio_batch_coverage(
             promotable.update(
                 str(value) for value in coverage.get("promotable_family_ids", [])
             )
+            if scope == "holdings":
+                isin_ready.update(
+                    str(value) for value in coverage.get("isin_family_ids", [])
+                )
 
     denominator = applicable if scope == "sectors" and applicable else observed
     return {
@@ -268,9 +273,15 @@ def _portfolio_batch_coverage(
         "observed_families": len(observed),
         "applicable_families": len(applicable),
         "promotable_families": len(promotable),
+        "isin_ready_families": len(isin_ready),
         "post_apply_family_coverage_percentage": _percentage(
             len(promotable),
             len(denominator),
+        ),
+        "post_apply_isin_family_coverage_percentage": (
+            _percentage(len(isin_ready), len(promotable))
+            if scope == "holdings"
+            else None
         ),
     }
 
@@ -318,6 +329,12 @@ def assess_batch_targets(
             < MIN_PORTFOLIO_FAMILY_COVERAGE
         ):
             issues.append(f"{scope}_batch_family_coverage_below_80")
+        if (
+            scope == "holdings"
+            and scope_coverage["post_apply_isin_family_coverage_percentage"]
+            < MIN_PORTFOLIO_FAMILY_COVERAGE
+        ):
+            issues.append("holding_isin_batch_family_coverage_below_80")
 
     if unsafe_rejected:
         issues.append("one_or_more_unsafe_promotion_targets_rejected")

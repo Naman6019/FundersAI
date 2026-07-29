@@ -141,8 +141,8 @@ def test_axis_monthly_portfolio_workbook_extracts_isins():
             ["Axis Midcap Fund", None, None, None],
             ["Portfolio as on 30 June 2026", None, None, None],
             ["ISIN", "Name of the Instrument", "Industry", "% to NAV"],
-            ["INE040A01034", "HDFC Bank Limited", "Banks", 60.0],
-            ["INE002A01018", "Reliance Industries Limited", "Petroleum Products", 40.0],
+            ["INE040A01034", "HDFC Bank Limited", "Banks", 0.60],
+            ["INE002A01018", "Reliance Industries Limited", "Petroleum Products", 0.40],
         ]
     )
 
@@ -158,6 +158,8 @@ def test_axis_monthly_portfolio_workbook_extracts_isins():
     assert len(records) == 1
     assert records[0].scheme_name == "Axis Midcap Fund"
     assert records[0].report_month == date(2026, 6, 1)
+    assert records[0].metrics["total_percent_aum"] == pytest.approx(100.0)
+    assert records[0].warnings == []
     assert {row["isin"] for row in records[0].holdings} == {
         "INE040A01034",
         "INE002A01018",

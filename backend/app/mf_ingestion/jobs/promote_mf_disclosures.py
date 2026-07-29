@@ -226,6 +226,7 @@ def _portfolio_family_coverage(
     observed_keys: set[str] = set()
     mapped_family_ids: set[str] = set()
     promotable_family_ids: set[str] = set()
+    isin_family_ids: set[str] = set()
 
     for row in rows:
         family_id = str(row.get("mapped_family_id") or "").strip()
@@ -245,11 +246,14 @@ def _portfolio_family_coverage(
             mapped_family_ids.add(family_id)
         if family_id and not issues:
             promotable_family_ids.add(family_id)
+            if not sector_rows and str(row.get("isin") or "").strip():
+                isin_family_ids.add(family_id)
 
     return {
         "observed_keys": sorted(observed_keys),
         "mapped_family_ids": sorted(mapped_family_ids),
         "promotable_family_ids": sorted(promotable_family_ids),
+        "isin_family_ids": sorted(isin_family_ids),
         "mapping_percentage": _coverage_ratio(
             len(mapped_family_ids),
             len(observed_keys),
@@ -344,7 +348,7 @@ def build_dry_run(
     holdings = _fetch_all_rows(
         "mf_scheme_holdings",
         "id,mapped_scheme_code,mapped_family_id,mapping_status,mapping_confidence,"
-        "report_month,raw_scheme_name,validation_status,sector",
+        "report_month,raw_scheme_name,validation_status,isin,sector",
         filters={"source_document_id": source_document_id},
     )
     sector_allocations = _fetch_all_rows(

@@ -61,6 +61,7 @@ def _holding_row(index: int, *, valid: bool) -> dict:
         "report_month": "2026-06-01",
         "raw_scheme_name": f"Fund {index}",
         "validation_status": "valid" if valid else "needs_review",
+        "isin": f"INE{index:08d}0",
         "sector": "Banks",
     }
 
@@ -317,6 +318,7 @@ def _portfolio_target(
     status: str,
     scope: str = "holdings",
     issues: list[str] | None = None,
+    isin_ready: bool = True,
 ) -> dict:
     coverage_key = (
         "holdings_family_coverage"
@@ -328,6 +330,7 @@ def _portfolio_target(
         "observed_keys": [f"family:{family_id}"],
         "mapped_family_ids": [family_id],
         "promotable_family_ids": [family_id],
+        "isin_family_ids": [family_id] if isin_ready and scope == "holdings" else [],
     }
     if scope == "sectors":
         coverage["applicable_family_ids"] = [family_id]
@@ -385,6 +388,25 @@ def test_amc_batch_rejects_when_post_apply_coverage_is_below_eighty_percent() ->
 
     assert gate["status"] == "rejected"
     assert gate["issues"] == ["holdings_batch_family_coverage_below_80"]
+
+
+def test_amc_batch_rejects_holdings_without_overlap_ready_isins() -> None:
+    reports = [
+        _portfolio_target(
+            index,
+            status="promotable",
+            isin_ready=index < 7,
+        )
+        for index in range(10)
+    ]
+
+    gate = assess_batch_targets(reports, ["holdings"])
+
+    assert gate["status"] == "rejected"
+    assert gate["coverage"]["holdings"][
+        "post_apply_isin_family_coverage_percentage"
+    ] == 70.0
+    assert gate["issues"] == ["holding_isin_batch_family_coverage_below_80"]
 
 
 def test_amc_batch_never_quarantines_source_integrity_rejections() -> None:
