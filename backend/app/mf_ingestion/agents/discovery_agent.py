@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import UTC, date, datetime
 from typing import Callable
+from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 from app.mf_ingestion.agents.contracts import AgentTraceEvent, DiscoveryAgentResult, ValidatedDiscovery
 from app.mf_ingestion.agents.validation import (
@@ -168,6 +169,12 @@ class AMCLinkDiscoveryAgent:
                     )
                     for document in reusable_factsheets
                 ]
+                if reusable_documents:
+                    last_known_good_documents = [
+                        document
+                        for document in last_known_good_documents
+                        if not _is_factsheet_candidate(document)
+                    ]
                 trace.append(
                     AgentTraceEvent(
                         step="discover",
@@ -585,7 +592,7 @@ def _dedupe_candidates(
 ) -> list[DiscoveredDocument]:
     best_by_url: dict[str, DiscoveredDocument] = {}
     for document in documents:
-        key = str(document.url or "").strip().lower()
+        key = _candidate_url_identity(document.url)
         if not key:
             continue
         existing = best_by_url.get(key)
@@ -605,6 +612,27 @@ def _dedupe_candidates(
         return ranked
     exact_month = [document for document in ranked if document.report_month == expected_month]
     return exact_month or ranked
+
+
+def _candidate_url_identity(url: str) -> str:
+    raw = str(url or "").strip()
+    if not raw:
+        return ""
+    parts = urlsplit(raw)
+    return urlunsplit(
+        (
+            parts.scheme.lower(),
+            parts.netloc.lower(),
+            quote(unquote(parts.path), safe="/:@"),
+            parts.query,
+            "",
+        )
+    ).lower()
+
+
+def _is_factsheet_candidate(document: DiscoveredDocument) -> bool:
+    text = f"{document.title} {document.url}".lower()
+    return "factsheet" in text or "fact sheet" in text
 
 
 def _minimum_actions_per_document_type(

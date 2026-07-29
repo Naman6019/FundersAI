@@ -11,6 +11,7 @@ from app.mf_ingestion.agents.discovery_agent import (
     AxisLinkDiscoveryAgent,
     HDFCLinkDiscoveryAgent,
     ICICILinkDiscoveryAgent,
+    _dedupe_candidates,
     build_discovery_agent,
 )
 from app.mf_ingestion.agents.supervisor import AMCDiscoverySupervisor
@@ -405,3 +406,66 @@ def test_combined_factsheet_is_reused_for_portfolio_from_registry_capability() -
     ]
     assert {document.source_url for document in result.documents} == {factsheet.url}
     assert any(event.strategy == "registry_combined_factsheet" for event in result.trace)
+
+
+def test_current_combined_factsheet_replaces_stale_factsheet_portfolio_alias() -> None:
+    expected_month = date(2026, 6, 1)
+    current = _discovered(
+        "kotak",
+        "factsheet",
+        "https://www.kotakmf.com/factsheet/June_2026/Kotak%20MF%20Factsheet%20June%202026.pdf",
+        report_month=expected_month,
+    )
+    stale_alias = _discovered(
+        "kotak",
+        "portfolio_disclosure",
+        "https://vatseelabs-s3.kotakmf.com/FormsDownloads/Factsheet/KotakMFFactsheetJune2026.pdf",
+        report_month=expected_month,
+    )
+    agent = AGENT_CLASSES["kotak"](
+        source=get_source("kotak"),
+        downloader=_FakeDownloader(
+            documents={
+                "factsheet": [current],
+                "portfolio_disclosure": [],
+            }
+        ),
+        last_known_good_loader=lambda _source, document_type: (
+            [stale_alias] if document_type == "portfolio_disclosure" else []
+        ),
+    )
+
+    result = agent.run(
+        document_types=("factsheet", "portfolio_disclosure"),
+        expected_month=expected_month,
+    )
+
+    portfolio_urls = [
+        document.source_url
+        for document in result.documents
+        if document.document_type == "portfolio_disclosure"
+    ]
+    assert portfolio_urls == [current.url]
+
+
+def test_discovery_dedupes_encoded_and_unencoded_urls() -> None:
+    expected_month = date(2026, 6, 1)
+    encoded = _discovered(
+        "kotak",
+        "factsheet",
+        "https://www.kotakmf.com/factsheet/June_2026/Kotak%20MF%20Factsheet.pdf",
+        score=200,
+        report_month=expected_month,
+    )
+    unencoded = _discovered(
+        "kotak",
+        "factsheet",
+        "https://www.kotakmf.com/factsheet/June_2026/Kotak MF Factsheet.pdf",
+        score=100,
+        report_month=expected_month,
+    )
+
+    assert _dedupe_candidates(
+        [unencoded, encoded],
+        expected_month=expected_month,
+    ) == [encoded]
