@@ -7,7 +7,10 @@ from types import SimpleNamespace
 from app.mf_ingestion.downloaders import amc_downloader
 from app.mf_ingestion.downloaders.amc_downloader import (
     AMCDownloader,
+    _browser_fallback_allowed_for_source,
     _guess_hdfc_combined_factsheets,
+    _kotak_candidates_from_payload,
+    _kotak_documents_from_candidates,
     _load_hdfc_reviewed_monthly_portfolios,
 )
 from app.mf_ingestion.downloaders.base_downloader import DiscoveredDocument
@@ -261,6 +264,49 @@ def test_axis_browser_fallback_requires_explicit_enablement(monkeypatch) -> None
     monkeypatch.setenv("MF_DISCOVERY_BROWSER_ENABLED", "true")
     monkeypatch.setenv("MF_DISCOVERY_BROWSER_AMCS", "axis")
     assert _browser_fallback_allowed("axis") is True
+
+
+def test_kotak_browser_fallback_requires_registry_and_explicit_approval(
+    monkeypatch,
+) -> None:
+    source = get_source("kotak")
+    monkeypatch.delenv("MF_DISCOVERY_BROWSER_ENABLED", raising=False)
+    monkeypatch.delenv("MF_DISCOVERY_BROWSER_AMCS", raising=False)
+    assert _browser_fallback_allowed_for_source(source) is False
+
+    monkeypatch.setenv("MF_DISCOVERY_BROWSER_ENABLED", "true")
+    monkeypatch.setenv("MF_DISCOVERY_BROWSER_AMCS", "axis")
+    assert _browser_fallback_allowed_for_source(source) is False
+
+    monkeypatch.setenv("MF_DISCOVERY_BROWSER_AMCS", "axis,kotak")
+    assert _browser_fallback_allowed_for_source(source) is True
+
+
+def test_kotak_payload_maps_extensionless_monthly_portfolio_download() -> None:
+    source = get_source("kotak")
+    candidates = _kotak_candidates_from_payload(
+        {
+            "documents": [
+                {
+                    "title": "Monthly Portfolio June 2026",
+                    "downloadUrl": "/kotakmf/reportupload/download/Monthly/6000/2026/6",
+                }
+            ]
+        },
+        source.portfolio_disclosure_page_url or "",
+    )
+
+    documents = _kotak_documents_from_candidates(
+        source,
+        "portfolio_disclosure",
+        source.portfolio_disclosure_page_url or "",
+        candidates,
+    )
+
+    assert len(documents) == 1
+    assert documents[0].file_ext == ".xlsx"
+    assert documents[0].report_month == date(2026, 6, 1)
+    assert documents[0].url.endswith("/reportupload/download/Monthly/6000/2026/6")
 
 
 def test_axis_factsheet_render_url_selects_factsheet_filter() -> None:

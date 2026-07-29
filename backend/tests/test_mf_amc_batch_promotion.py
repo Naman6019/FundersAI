@@ -140,7 +140,34 @@ def test_amc_batch_promotion_assigns_only_available_source_scopes() -> None:
         "aggregate-sectors": ["sectors"],
         "core": ["risk", "ter_aum", "benchmark", "manager"],
         "debt-portfolio": ["holdings"],
-        "equity-portfolio": ["holdings"],
+        "equity-portfolio": ["holdings", "sectors"],
+    }
+
+
+def test_amc_batch_promotion_keeps_broader_workbook_sectors_with_direct_allocations() -> None:
+    targets = _build_target_scopes(
+        amc="motilal",
+        requested_scopes=["sectors"],
+        candidates=[],
+        holdings=[
+            {
+                "amc_code": "MOTILAL",
+                "source_document_id": "portfolio-workbook",
+                "sector": "Banks",
+            }
+        ],
+        sector_allocations=[
+            {
+                "amc_code": "MOTILAL",
+                "source_document_id": "combined-factsheet",
+                "sector_name": "Financial Services",
+            }
+        ],
+    )
+
+    assert targets == {
+        "combined-factsheet": ["sectors"],
+        "portfolio-workbook": ["sectors"],
     }
 
 

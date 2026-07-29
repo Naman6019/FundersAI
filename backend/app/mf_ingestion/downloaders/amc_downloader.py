@@ -76,6 +76,9 @@ DAY_FIRST_MONTH_PATTERN = re.compile(
     re.IGNORECASE,
 )
 SUPPORTED_FILE_EXTENSIONS = {".pdf", ".xls", ".xlsx", ".xlsm", ".csv", ".zip", ".html", ".htm"}
+KOTAK_DOWNLOAD_PATH_MARKERS = (
+    "/reportupload/download/",
+)
 GENERIC_KEYWORDS = {
     "factsheet": ("factsheet", "fact sheet", "fund sheet", "monthly factsheet"),
     "portfolio_disclosure": ("portfolio", "disclosure", "holdings", "statutory", "monthly portfolio"),
@@ -255,6 +258,19 @@ class AMCDownloader(BaseDownloader):
                 timeout_seconds=self.timeout_seconds,
                 user_agent=self.user_agent,
             )
+            if (
+                adapter_key == "kotak"
+                and (document_type or "").strip().lower()
+                == "portfolio_disclosure"
+                and not docs
+                and _browser_fallback_allowed_for_source(self.source)
+            ):
+                docs = _discover_kotak_browser_documents(
+                    self.source,
+                    document_type=document_type,
+                    timeout_seconds=self.timeout_seconds,
+                    user_agent=self.user_agent,
+                )
             logger.info(
                 "event=amc_discovery_complete amc_code=%s adapter=%s document_type=%s count=%s",
                 self.source.amc_code,
@@ -700,6 +716,328 @@ def _discover_generic_anchor_documents(
 
     docs.sort(key=lambda item: item.priority_score, reverse=True)
     return docs
+
+
+def _browser_fallback_allowed_for_source(source: AMCDocumentSource) -> bool:
+    if not source.browser_recovery_allowed:
+        return False
+    enabled = str(
+        os.getenv("MF_DISCOVERY_BROWSER_ENABLED", "false") or ""
+    ).strip().lower()
+    if enabled not in {"1", "true", "yes", "on"}:
+        return False
+    approved = {
+        item.strip().lower()
+        for item in str(
+            os.getenv("MF_DISCOVERY_BROWSER_AMCS", "") or ""
+        ).split(",")
+        if item.strip()
+    }
+    return source.adapter_key.strip().lower() in approved
+
+
+def _discover_kotak_browser_documents(
+    source: AMCDocumentSource,
+    document_type: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        logger.error("kotak:playwright_not_installed")
+        return []
+
+    listing_url = (
+        source.portfolio_disclosure_page_url
+        or source.factsheet_page_url
+    )
+    if not listing_url:
+        return []
+
+    candidates: list[dict[str, str]] = []
+    timeout_ms = max(5_000, min(int(timeout_seconds * 1_000), 30_000))
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            context = browser.new_context(user_agent=user_agent)
+            page = context.new_page()
+
+            def capture_response(response) -> None:
+                response_url = str(response.url or "")
+                content_disposition = str(
+                    response.headers.get("content-disposition") or ""
+                )
+                response_text = f"{response_url} {content_disposition}".lower()
+                if _looks_like_kotak_document_url(response_url):
+                    candidates.append(
+                        {
+                            "title": content_disposition or _human_title_from_url(
+                                response_url
+                            ),
+                            "context_text": content_disposition,
+                            "url": response_url,
+                        }
+                    )
+                if "application/json" not in str(
+                    response.headers.get("content-type") or ""
+                ).lower():
+                    return
+                try:
+                    candidates.extend(
+                        _kotak_candidates_from_payload(
+                            response.json(),
+                            response.url or listing_url,
+                        )
+                    )
+                except Exception:
+                    logger.debug(
+                        "kotak:browser_json_response_unavailable url=%s",
+                        response.url,
+                    )
+
+            page.on("response", capture_response)
+            page.goto(
+                listing_url,
+                wait_until="domcontentloaded",
+                timeout=timeout_ms,
+            )
+            page.wait_for_timeout(4_000)
+            candidates.extend(_kotak_candidates_from_page(page))
+            _activate_kotak_portfolio_controls(page)
+            page.wait_for_timeout(3_000)
+            candidates.extend(_kotak_candidates_from_page(page))
+            candidates.extend(
+                _kotak_candidates_from_html(page.content(), listing_url)
+            )
+            browser.close()
+    except Exception as exc:
+        logger.warning("kotak:browser_discovery_failed error=%s", exc)
+        return []
+
+    return _kotak_documents_from_candidates(
+        source,
+        document_type,
+        listing_url,
+        candidates,
+    )
+
+
+def _activate_kotak_portfolio_controls(page) -> None:
+    for selector in (
+        "text=/^Portfolios?$/i",
+        "text=/^Monthly Portfolios?$/i",
+    ):
+        locator = page.locator(selector)
+        for index in range(min(locator.count(), 3)):
+            try:
+                locator.nth(index).click(timeout=3_000)
+            except Exception:
+                continue
+
+    for index in range(min(page.locator("select").count(), 10)):
+        select = page.locator("select").nth(index)
+        try:
+            options = select.locator("option").evaluate_all(
+                """options => options.map(option => ({
+                    label: option.textContent || "",
+                    value: option.value || ""
+                }))"""
+            )
+        except Exception:
+            continue
+        portfolio_option = next(
+            (
+                option
+                for option in options
+                if "portfolio" in str(option.get("label") or "").lower()
+            ),
+            None,
+        )
+        if not portfolio_option:
+            continue
+        try:
+            select.select_option(
+                value=str(portfolio_option.get("value") or ""),
+                timeout=3_000,
+            )
+        except Exception:
+            continue
+
+
+def _kotak_candidates_from_page(page) -> list[dict[str, str]]:
+    try:
+        return page.locator("a[href]").evaluate_all(
+            """anchors => anchors.slice(0, 500).map(anchor => ({
+                title: (anchor.textContent || "").trim(),
+                context_text: (
+                    anchor.closest("li, tr, article, section, div")?.textContent
+                    || anchor.textContent
+                    || ""
+                ).trim().slice(0, 800),
+                url: anchor.href || ""
+            }))"""
+        )
+    except Exception:
+        return []
+
+
+def _kotak_candidates_from_html(
+    html: str,
+    listing_url: str,
+) -> list[dict[str, str]]:
+    candidates: list[dict[str, str]] = []
+    for url in _extract_embedded_file_urls(
+        html,
+        listing_url,
+        extensions=(".xlsx", ".xlsm", ".xls", ".csv", ".zip"),
+    ):
+        candidates.append(
+            {
+                "title": _human_title_from_url(url),
+                "context_text": "portfolio",
+                "url": url,
+            }
+        )
+    return candidates
+
+
+def _kotak_candidates_from_payload(
+    payload: object,
+    base_url: str,
+) -> list[dict[str, str]]:
+    candidates: list[dict[str, str]] = []
+
+    def visit(value: object, context_text: str = "") -> None:
+        if isinstance(value, dict):
+            local_context = " ".join(
+                str(item)
+                for item in value.values()
+                if isinstance(item, (str, int, float))
+                and not _looks_like_kotak_document_url(str(item))
+            )
+            combined_context = _clean_discovery_text(
+                f"{context_text} {local_context}"
+            )[:1_200]
+            for item in value.values():
+                visit(item, combined_context)
+            return
+        if isinstance(value, list):
+            for item in value[:500]:
+                visit(item, context_text)
+            return
+        if not isinstance(value, str) or not _looks_like_kotak_document_url(
+            value
+        ):
+            return
+        absolute_url = urljoin(base_url, value)
+        candidates.append(
+            {
+                "title": context_text or _human_title_from_url(absolute_url),
+                "context_text": context_text,
+                "url": absolute_url,
+            }
+        )
+
+    visit(payload)
+    return candidates
+
+
+def _looks_like_kotak_document_url(value: str) -> bool:
+    low = str(value or "").strip().lower()
+    if not low:
+        return False
+    path = urlsplit(low).path
+    return (
+        Path(path).suffix.lower()
+        in {".pdf", ".xls", ".xlsx", ".xlsm", ".csv", ".zip"}
+        or any(marker in path for marker in KOTAK_DOWNLOAD_PATH_MARKERS)
+    )
+
+
+def _kotak_documents_from_candidates(
+    source: AMCDocumentSource,
+    document_type: str,
+    listing_url: str,
+    candidates: list[dict[str, str]],
+) -> list[DiscoveredDocument]:
+    doc_type = (document_type or "").strip().lower()
+    required_keywords = _required_keywords_for_generic_source(
+        source,
+        doc_type,
+    )
+    allowed_suffixes = {
+        suffix.strip().lower().rstrip(".")
+        for suffix in (*source.allowed_host_suffixes, "kotakmf.com")
+        if suffix
+    }
+    documents: list[DiscoveredDocument] = []
+    seen: set[str] = set()
+    for candidate in candidates[:1_000]:
+        url = urljoin(listing_url, str(candidate.get("url") or "").strip())
+        if not url or url in seen:
+            continue
+        parsed_url = urlsplit(url)
+        host = str(parsed_url.hostname or "").lower().rstrip(".")
+        if not any(
+            host == suffix or host.endswith(f".{suffix}")
+            for suffix in allowed_suffixes
+        ):
+            continue
+        title = _clean_discovery_text(
+            candidate.get("title") or _human_title_from_url(url)
+        )
+        context_text = _clean_discovery_text(
+            candidate.get("context_text") or ""
+        )
+        combined = f"{title} {context_text} {url}".lower()
+        ext = (
+            Path(parsed_url.path).suffix.lower()
+            or _infer_file_ext_from_text(combined)
+        )
+        if (
+            not ext
+            and doc_type == "portfolio_disclosure"
+            and any(
+                marker in parsed_url.path.lower()
+                for marker in KOTAK_DOWNLOAD_PATH_MARKERS
+            )
+        ):
+            ext = ".xlsx"
+        if not _generic_candidate_allowed(
+            source,
+            combined,
+            doc_type,
+            ext,
+            required_keywords,
+        ):
+            continue
+        report_month = _detect_report_month_from_text(combined)
+        base_score = _generic_base_score(
+            ext=ext,
+            document_type=doc_type,
+        )
+        recency_score = (
+            (report_month.year * 12 + report_month.month) * 10
+            if report_month
+            else 0
+        )
+        seen.add(url)
+        documents.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type=doc_type,
+                title=title or _human_title_from_url(url),
+                url=url,
+                discovery_page_url=listing_url,
+                file_ext=ext,
+                report_month=report_month,
+                priority_score=base_score + recency_score + 50,
+            )
+        )
+    documents.sort(key=lambda item: item.priority_score, reverse=True)
+    return documents
 
 
 def _clean_discovery_text(value: object) -> str:

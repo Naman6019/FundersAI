@@ -257,7 +257,20 @@ def test_reviewed_source_manifest_keeps_exact_june_combined_factsheets():
 
     assert axis_scopes == {"factsheet", "portfolio_disclosure"}
     assert motilal_scopes == {"factsheet", "portfolio_disclosure"}
-    assert kotak_scopes == {"factsheet", "portfolio_disclosure"}
+    assert kotak_scopes == {"factsheet"}
+    kotak_factsheet = next(
+        row
+        for row in documents
+        if row["amc"] == "KOTAK"
+        and row["document_type"] == "factsheet"
+        and row["report_month"] == "2026-06-01"
+    )
+    assert kotak_factsheet["discovery_page_url"] == (
+        "https://www.kotakmf.com/factsheet/June_2026/"
+    )
+    assert kotak_factsheet["source_url"].endswith(
+        "/Kotak%20MF%20Factsheet%20June%202026.pdf"
+    )
     assert len(hdfc_factsheets) == 2
     assert all(row["source_url"].endswith("_1.pdf") for row in hdfc_factsheets)
     assert len(absl_factsheets) == 1

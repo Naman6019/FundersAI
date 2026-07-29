@@ -82,16 +82,16 @@ def _build_target_scopes(
             and row.get("source_document_id")
             and row.get("sector_name") not in (None, "")
         ]
-        # Official aggregate sector allocations supersede holdings-derived
-        # fallback sectors for an AMC/report month.
-        if not current_direct_sectors:
-            for row in holdings:
-                if (
-                    _normalize_amc(row.get("amc_code")) == normalized_amc
-                    and row.get("source_document_id")
-                    and row.get("sector") not in (None, "")
-                ):
-                    targets[str(row["source_document_id"])].add("sectors")
+        # Keep holdings-derived sector candidates in scope even when a
+        # consolidated factsheet contains direct allocations. The dedicated
+        # portfolio workbook can cover materially more scheme families.
+        for row in holdings:
+            if (
+                _normalize_amc(row.get("amc_code")) == normalized_amc
+                and row.get("source_document_id")
+                and row.get("sector") not in (None, "")
+            ):
+                targets[str(row["source_document_id"])].add("sectors")
         for row in current_direct_sectors:
             targets[str(row["source_document_id"])].add("sectors")
 

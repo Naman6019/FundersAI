@@ -191,7 +191,7 @@ SOURCES: dict[str, AMCDocumentSource] = {
         adapter_key="kotak",
         factsheet_page_url=_env_url(
             "MF_KOTAK_FACTSHEET_PAGE_URL",
-            "https://www.kotakmf.com/Information/forms-and-downloads",
+            "https://www.kotakmf.com/factsheet/June_2026/",
         ),
         portfolio_disclosure_page_url=_env_url(
             "MF_KOTAK_PORTFOLIO_PAGE_URL",
@@ -202,6 +202,7 @@ SOURCES: dict[str, AMCDocumentSource] = {
         confirmation_notes=None,
         enabled=False,
         factsheet_contains_holdings=True,
+        browser_recovery_allowed=True,
         factsheet_required_keywords=("factsheet", "fact sheet"),
         portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
         allowed_host_suffixes=("kotakmf.com",),
