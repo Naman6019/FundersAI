@@ -52,6 +52,9 @@ HDFC_PUBLIC_DOWNLOAD_USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/138.0.0.0 Safari/537.36"
 )
+HDFC_MONTHLY_PORTFOLIO_INVENTORY_PATH = (
+    Path(__file__).resolve().parents[3] / "config" / "hdfc_monthly_portfolios.json"
+)
 UTI_ENDPOINT_BY_DOCUMENT_TYPE = {
     "factsheet": "https://www.utimf.com/api/get-fact-sheet",
     "portfolio_disclosure": "https://www.utimf.com/api/get-consolidate-portfolio-disclosure",
@@ -490,15 +493,21 @@ def _discover_generic_anchor_documents(
             exc,
         )
         if adapter_key == "hdfc":
-            docs.extend(
-                document
-                for document in _guess_hdfc_combined_factsheets(
-                    source,
-                    doc_type,
-                    now_utc=datetime.now(UTC),
+            for document in _load_hdfc_reviewed_monthly_portfolios(source, doc_type):
+                if document.url in seen_urls:
+                    continue
+                seen_urls.add(document.url)
+                docs.append(document)
+            if not docs:
+                docs.extend(
+                    document
+                    for document in _guess_hdfc_combined_factsheets(
+                        source,
+                        doc_type,
+                        now_utc=datetime.now(UTC),
+                    )
+                    if document.url not in seen_urls
                 )
-                if document.url not in seen_urls
-            )
         return docs
 
     soup = BeautifulSoup(response.text or "", "html.parser")
@@ -597,6 +606,11 @@ def _discover_generic_anchor_documents(
                     priority_score=base_score + recency_score + 40,
                 )
             )
+        for document in _load_hdfc_reviewed_monthly_portfolios(source, doc_type):
+            if document.url in seen_urls:
+                continue
+            seen_urls.add(document.url)
+            docs.append(document)
         if not docs:
             for document in _guess_hdfc_combined_factsheets(
                 source,
@@ -760,6 +774,58 @@ def _guess_hdfc_combined_factsheets(
                     - revision_rank,
                 )
             )
+    return documents
+
+
+def _load_hdfc_reviewed_monthly_portfolios(
+    source: AMCDocumentSource,
+    document_type: str,
+) -> list[DiscoveredDocument]:
+    if str(document_type or "").strip().lower() != "portfolio_disclosure":
+        return []
+    try:
+        payload = json.loads(
+            HDFC_MONTHLY_PORTFOLIO_INVENTORY_PATH.read_text(encoding="utf-8")
+        )
+        report_month = date.fromisoformat(str(payload["report_month"]))
+        publication_path = str(payload["publication_path"]).strip().strip("/")
+        portfolio_date = str(payload["portfolio_date"]).strip()
+        discovery_page_url = str(
+            payload.get("source_page")
+            or source.portfolio_disclosure_page_url
+            or "https://www.hdfcfund.com/"
+        ).strip()
+        scheme_names = payload.get("scheme_names")
+        if not isinstance(scheme_names, list):
+            raise ValueError("scheme_names must be a list")
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        logger.error("event=hdfc_reviewed_portfolio_inventory_invalid reason=%s", exc)
+        return []
+
+    documents: list[DiscoveredDocument] = []
+    seen_names: set[str] = set()
+    for index, raw_name in enumerate(scheme_names):
+        scheme_name = str(raw_name or "").strip()
+        if not scheme_name or scheme_name in seen_names:
+            continue
+        seen_names.add(scheme_name)
+        file_name = f"Monthly {scheme_name} - {portfolio_date}.xlsx"
+        documents.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type="portfolio_disclosure",
+                title=file_name,
+                url=(
+                    "https://files.hdfcfund.com/s3fs-public/"
+                    f"{publication_path}/{quote(file_name)}"
+                ),
+                discovery_page_url=discovery_page_url,
+                file_ext=".xlsx",
+                report_month=report_month,
+                priority_score=8_500_000 - index,
+            )
+        )
     return documents
 
 

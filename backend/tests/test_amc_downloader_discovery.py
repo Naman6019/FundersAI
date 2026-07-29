@@ -8,6 +8,7 @@ from app.mf_ingestion.downloaders import amc_downloader
 from app.mf_ingestion.downloaders.amc_downloader import (
     AMCDownloader,
     _guess_hdfc_combined_factsheets,
+    _load_hdfc_reviewed_monthly_portfolios,
 )
 from app.mf_ingestion.downloaders.base_downloader import DiscoveredDocument
 from app.mf_ingestion.parsers.adapters.axis_adapter import (
@@ -50,10 +51,10 @@ def test_hdfc_embedded_portfolio_xlsx_links_are_discovered(monkeypatch) -> None:
 
     docs = AMCDownloader(source, timeout_seconds=1, user_agent="test").list_documents("portfolio_disclosure")
 
-    assert len(docs) == 1
-    assert docs[0].file_ext == ".xlsx"
-    assert docs[0].report_month == date(2026, 4, 1)
-    assert docs[0].url.endswith(".xlsx")
+    assert len(docs) == 108
+    live_doc = next(doc for doc in docs if doc.report_month == date(2026, 4, 1))
+    assert live_doc.file_ext == ".xlsx"
+    assert live_doc.url.endswith(".xlsx")
 
 
 def test_hdfc_factsheet_urls_are_not_reused_for_portfolios_without_flag(monkeypatch) -> None:
@@ -74,7 +75,27 @@ def test_hdfc_factsheet_urls_are_not_reused_for_portfolios_without_flag(monkeypa
 
     docs = AMCDownloader(source, timeout_seconds=1, user_agent="test").list_documents("portfolio_disclosure")
 
-    assert docs == []
+    assert len(docs) == 107
+    assert all(doc.file_ext == ".xlsx" for doc in docs)
+    assert all("HDFC%20MF%20Factsheet" not in doc.url for doc in docs)
+
+
+def test_hdfc_reviewed_xlsx_inventory_replaces_pdf_fallback_when_page_fails(
+    monkeypatch,
+) -> None:
+    def fail_request(*args, **kwargs):
+        raise RuntimeError("listing unavailable")
+
+    monkeypatch.setattr(amc_downloader, "_request_with_retry", fail_request)
+
+    docs = AMCDownloader(
+        get_source("hdfc"),
+        timeout_seconds=1,
+        user_agent="test",
+    ).list_documents("portfolio_disclosure")
+
+    assert len(docs) == 107
+    assert all(doc.file_ext == ".xlsx" for doc in docs)
 
 
 def test_hdfc_factsheet_urls_can_be_reused_for_portfolios_when_enabled(monkeypatch) -> None:
@@ -96,9 +117,8 @@ def test_hdfc_factsheet_urls_can_be_reused_for_portfolios_when_enabled(monkeypat
 
     docs = AMCDownloader(source, timeout_seconds=1, user_agent="test").list_documents("portfolio_disclosure")
 
-    assert len(docs) == 1
-    assert docs[0].document_type == "portfolio_disclosure"
-    assert docs[0].url.endswith("May%202026.pdf")
+    assert any(doc.url.endswith("May%202026.pdf") for doc in docs)
+    assert any(doc.file_ext == ".xlsx" for doc in docs)
 
 
 def test_hdfc_official_bucket_fallback_builds_prior_month_combined_factsheet() -> None:
@@ -132,6 +152,29 @@ def test_hdfc_official_bucket_fallback_builds_prior_month_combined_factsheet() -
     assert portfolios[0].document_type == "portfolio_disclosure"
 
 
+def test_hdfc_reviewed_inventory_builds_exact_june_portfolio_urls() -> None:
+    docs = _load_hdfc_reviewed_monthly_portfolios(
+        get_source("hdfc"),
+        "portfolio_disclosure",
+    )
+
+    assert len(docs) == 107
+    assert all(doc.report_month == date(2026, 6, 1) for doc in docs)
+    assert all(doc.file_ext == ".xlsx" for doc in docs)
+    assert all(
+        doc.discovery_page_url
+        == "https://www.hdfcfund.com/statutory-disclosure/portfolio/monthly-portfolio"
+        for doc in docs
+    )
+    assert any(
+        doc.url.endswith(
+            "Monthly%20HDFC%20Nifty100%20Quality%2030%20ETF%20-%2030%20June%202026.xlsx"
+        )
+        for doc in docs
+    )
+    assert not any("Banking%20Financial%20Services" in doc.url for doc in docs)
+
+
 def test_hdfc_generic_factsheet_reuse_flag_is_supported(monkeypatch) -> None:
     source = _source(
         "hdfc",
@@ -151,9 +194,8 @@ def test_hdfc_generic_factsheet_reuse_flag_is_supported(monkeypatch) -> None:
 
     docs = AMCDownloader(source, timeout_seconds=1, user_agent="test").list_documents("portfolio_disclosure")
 
-    assert len(docs) == 1
-    assert docs[0].document_type == "portfolio_disclosure"
-    assert docs[0].url.endswith("May%202026.pdf")
+    assert any(doc.url.endswith("May%202026.pdf") for doc in docs)
+    assert any(doc.file_ext == ".xlsx" for doc in docs)
 
 
 def test_axis_manual_urls_are_used_before_dynamic_discovery(monkeypatch) -> None:
