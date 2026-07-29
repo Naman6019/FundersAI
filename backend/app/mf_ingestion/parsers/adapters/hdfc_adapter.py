@@ -17,6 +17,7 @@ INLINE_NAME_PCT_PATTERN = re.compile(
     r"(?P<name>[A-Za-z][A-Za-z0-9&,'\-\.\(\)/ ]{2,}?)\s+(?P<pct>\d{1,2}\.\d{2})(?=\s+[A-Za-z]|$)"
 )
 PCT_ONLY_PATTERN = re.compile(r"^-?\d{1,2}\.\d{2}$")
+ISIN_PATTERN = re.compile(r"^[A-Z]{2}[A-Z0-9]{9}[0-9]$")
 INLINE_DATE_PATTERN = re.compile(
     r"\b(?P<day>\d{1,2})\s+(?P<month>Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[,\s]+(?P<year>20\d{2})\b",
     re.IGNORECASE,
@@ -154,9 +155,25 @@ def _parse_hdfc_frame(frame: pd.DataFrame, context: ParseContext, fallback_schem
     if not scheme_name:
         return None
 
-    header_row_idx, instrument_idx, percent_idx, sector_idx = _locate_header_and_columns(rows)
+    (
+        header_row_idx,
+        instrument_idx,
+        percent_idx,
+        sector_idx,
+        isin_idx,
+        quantity_idx,
+        market_value_idx,
+    ) = _locate_header_and_columns(rows)
     data_rows = rows[header_row_idx + 1 :] if header_row_idx is not None else rows
-    holdings, total_percent = _extract_holdings(data_rows, instrument_idx, percent_idx, sector_idx)
+    holdings, total_percent = _extract_holdings(
+        data_rows,
+        instrument_idx,
+        percent_idx,
+        sector_idx,
+        isin_idx,
+        quantity_idx,
+        market_value_idx,
+    )
     
     word_holdings = _extract_holdings_from_page_words(frame.attrs.get("page_words") or [])
     if len(word_holdings) > 5:
@@ -392,7 +409,17 @@ def _page_text_scoped_to_scheme(page_text: str, scheme_name: str) -> bool:
     return bool(normalized_scheme and mentions == {normalized_scheme})
 
 
-def _locate_header_and_columns(rows: list[list[object]]) -> tuple[int | None, int | None, int | None, int | None]:
+def _locate_header_and_columns(
+    rows: list[list[object]],
+) -> tuple[
+    int | None,
+    int | None,
+    int | None,
+    int | None,
+    int | None,
+    int | None,
+    int | None,
+]:
     for idx, row in enumerate(rows[:30]):
         normalized = [normalize_column_name(cell) for cell in row]
         lowered = [str(cell or "").strip().lower() for cell in row]
@@ -422,10 +449,35 @@ def _locate_header_and_columns(rows: list[list[object]]) -> tuple[int | None, in
             )
             if sector_idx is None and instrument_idx + 1 < len(row):
                 sector_idx = instrument_idx + 1
-            return idx, instrument_idx, percent_idx, sector_idx
+            isin_idx = _find_first_index(
+                normalized,
+                lowered,
+                lambda norm, low: norm == "isin" or low == "isin" or "isin code" in low,
+            )
+            quantity_idx = _find_first_index(
+                normalized,
+                lowered,
+                lambda norm, low: norm == "quantity" or "quantity" in low,
+            )
+            market_value_idx = _find_first_index(
+                normalized,
+                lowered,
+                lambda norm, low: norm == "market_value"
+                or "market value" in low
+                or "fair value" in low,
+            )
+            return (
+                idx,
+                instrument_idx,
+                percent_idx,
+                sector_idx,
+                isin_idx,
+                quantity_idx,
+                market_value_idx,
+            )
 
     # Fallback for fragmented frames that carry data rows without headers.
-    return None, 0, None, None
+    return None, 0, None, None, None, None, None
 
 
 def _find_first_index(normalized: list[str], lowered: list[str], predicate) -> int | None:
@@ -447,6 +499,9 @@ def _extract_holdings(
     instrument_idx: int | None,
     percent_idx: int | None,
     sector_idx: int | None,
+    isin_idx: int | None,
+    quantity_idx: int | None,
+    market_value_idx: int | None,
 ) -> tuple[list[dict], float]:
     holdings: list[dict] = []
     true_total_percent = 0.0
@@ -535,14 +590,22 @@ def _extract_holdings(
             if sector and sector.lower() == instrument_name.lower():
                 sector = None
 
+        isin = _normalize_isin(_safe_row_get(row, isin_idx)) if isin_idx is not None else None
+        quantity = _parse_number(_safe_row_get(row, quantity_idx)) if quantity_idx is not None else None
+        market_value = (
+            _parse_number(_safe_row_get(row, market_value_idx))
+            if market_value_idx is not None
+            else None
+        )
+
         holdings.append(
             {
                 "instrument_name": instrument_name,
-                "isin": None,
+                "isin": isin,
                 "sector": sector,
                 "percent_aum": round(percent, 6),
-                "quantity": None,
-                "market_value": None,
+                "quantity": quantity,
+                "market_value": market_value,
             }
         )
 
@@ -562,6 +625,11 @@ def _safe_row_get(row: list[object], index: int) -> object:
     if index < 0 or index >= len(row):
         return None
     return row[index]
+
+
+def _normalize_isin(value: object) -> str | None:
+    text = re.sub(r"\s+", "", str(value or "")).upper()
+    return text if ISIN_PATTERN.fullmatch(text) else None
 
 
 def _is_summary_or_noise_row(name: str) -> bool:

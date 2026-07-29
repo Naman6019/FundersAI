@@ -14,7 +14,6 @@ if BASE_DIR not in sys.path:
 from app.database import supabase
 from app.mf_ingestion.sources.registry import PRODUCTION_TARGET_AMC_KEYS
 from scripts.report_mf_staging_coverage import (
-    _get_compact_coverage_rows,
     _get_filtered,
     _normalize_amc_key,
     _ratio,
@@ -64,6 +63,95 @@ def _promotion_month(row: dict[str, Any]) -> str:
     if not isinstance(payload, dict):
         return ""
     return str(payload.get("report_month") or "")
+
+
+def _compact_staging_rows(
+    rows: list[dict[str, Any]],
+    *,
+    amc_by_document_id: dict[str, str],
+    value_column: str,
+) -> list[dict[str, Any]]:
+    grouped: dict[tuple[object, ...], dict[str, Any]] = {}
+    identity_columns = (
+        "source_document_id",
+        "report_month",
+        "raw_scheme_name",
+        "mapped_scheme_code",
+        "mapped_family_id",
+        "mapping_status",
+        "mapping_confidence",
+        "validation_status",
+    )
+    for row in rows:
+        source_document_id = str(row.get("source_document_id") or "")
+        amc_code = amc_by_document_id.get(source_document_id)
+        if not source_document_id or not amc_code:
+            continue
+        key = tuple(row.get(column) for column in identity_columns)
+        current = grouped.setdefault(
+            key,
+            {
+                **{column: row.get(column) for column in identity_columns},
+                "amc_code": amc_code,
+                value_column: None,
+            },
+        )
+        if row.get(value_column) not in (None, ""):
+            current[value_column] = "__present__"
+    return list(grouped.values())
+
+
+def _get_selected_staging_rows(
+    *,
+    report_month: str,
+    amcs: list[str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    normalized_amcs = {_normalize_amc_key(amc) for amc in amcs}
+    raw_documents = _get_filtered(
+        "mf_raw_documents",
+        "id,amc_code,report_month",
+        filters={"report_month": report_month},
+    )
+    amc_by_document_id = {
+        str(row["id"]): str(row.get("amc_code") or "")
+        for row in raw_documents
+        if row.get("id")
+        and _normalize_amc_key(row.get("amc_code")) in normalized_amcs
+    }
+    document_ids = list(amc_by_document_id)
+    if not document_ids:
+        return [], []
+
+    holding_rows = _get_in_filtered(
+        "mf_scheme_holdings",
+        "source_document_id,report_month,raw_scheme_name,mapped_scheme_code,"
+        "mapped_family_id,mapping_status,mapping_confidence,validation_status,sector",
+        column="source_document_id",
+        values=document_ids,
+        filters={"report_month": report_month},
+        batch_size=20,
+    )
+    sector_rows = _get_in_filtered(
+        "mf_scheme_sector_allocations",
+        "source_document_id,report_month,raw_scheme_name,mapped_scheme_code,"
+        "mapped_family_id,mapping_status,mapping_confidence,validation_status,sector_name",
+        column="source_document_id",
+        values=document_ids,
+        filters={"report_month": report_month},
+        batch_size=20,
+    )
+    return (
+        _compact_staging_rows(
+            holding_rows,
+            amc_by_document_id=amc_by_document_id,
+            value_column="sector",
+        ),
+        _compact_staging_rows(
+            sector_rows,
+            amc_by_document_id=amc_by_document_id,
+            value_column="sector_name",
+        ),
+    )
 
 
 def build_runtime_coverage(
@@ -169,6 +257,15 @@ def build_runtime_coverage(
             and str(row.get("as_of_date") or "") == report_month
             and row.get("source") == "amc_disclosure"
         }
+        live_isin_families = {
+            str(row["family_id"])
+            for row in runtime_holdings
+            if str(row.get("scheme_code")) in scheme_codes
+            and str(row.get("family_id") or "") in holding_families
+            and str(row.get("as_of_date") or "") == report_month
+            and row.get("source") == "amc_disclosure"
+            and row.get("isin") not in (None, "")
+        }
         live_sector_families = {
             str(row["family_id"])
             for row in runtime_sectors
@@ -184,6 +281,7 @@ def build_runtime_coverage(
                 for scope, families in covered_core.items()
             },
             "holdings": len(live_holding_families),
+            "holding_isin": len(live_isin_families),
             "sectors": len(live_sector_families),
         }
         percentages = {
@@ -192,6 +290,10 @@ def build_runtime_coverage(
                 for scope in CORE_SCOPE_FIELDS
             },
             "holdings": _ratio(counts["holdings"], len(holding_families)),
+            "holding_isin": _ratio(
+                counts["holding_isin"],
+                len(live_holding_families),
+            ),
             "sectors": (
                 _ratio(counts["sectors"], len(sector_applicable_families))
                 if sector_applicable_families
@@ -235,13 +337,9 @@ def main() -> int:
         "mapping_status,mapping_confidence,promotion_status,promoted_scopes,promoted_at",
         filters={"report_month": args.report_month},
     )
-    staged_holdings = _get_compact_coverage_rows(
-        "mf_staging_holding_promotion_coverage_rows",
-        args.report_month,
-    )
-    staged_sectors = _get_compact_coverage_rows(
-        "mf_staging_sector_promotion_coverage_rows",
-        args.report_month,
+    staged_holdings, staged_sectors = _get_selected_staging_rows(
+        report_month=args.report_month,
+        amcs=amcs,
     )
     scheme_codes = sorted(
         {
@@ -261,7 +359,7 @@ def main() -> int:
     )
     runtime_holdings = _get_in_filtered(
         "mutual_fund_holdings",
-        "scheme_code,family_id,as_of_date,source,provider_payload",
+        "scheme_code,family_id,as_of_date,security_name,isin,source,provider_payload",
         column="scheme_code",
         values=numeric_scheme_codes,
         filters={"source": "amc_disclosure", "as_of_date": args.report_month},

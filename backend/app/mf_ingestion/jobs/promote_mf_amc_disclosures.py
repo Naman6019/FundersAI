@@ -24,7 +24,6 @@ from app.mf_ingestion.jobs.promote_mf_disclosures import (
     MIN_PORTFOLIO_FAMILY_COVERAGE,
     PORTFOLIO_SCOPES,
     _fetch_all_rows,
-    _fetch_all_rpc_rows,
     _parse_report_month,
     _parse_scopes,
     apply_promotable_report,
@@ -338,10 +337,125 @@ def assess_batch_targets(
     }
 
 
-def _compact_rows(function_name: str, report_month: date) -> list[dict[str, Any]]:
-    return _fetch_all_rpc_rows(
-        function_name,
-        {"p_report_month": report_month.isoformat()},
+def _fetch_rows_by_document_ids(
+    table: str,
+    columns: str,
+    *,
+    source_document_ids: list[str],
+    report_month: date,
+    batch_size: int = 20,
+    page_size: int = 1000,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for offset in range(0, len(source_document_ids), batch_size):
+        query = (
+            supabase.table(table)
+            .select(columns)
+            .in_(
+                "source_document_id",
+                source_document_ids[offset : offset + batch_size],
+            )
+            .eq("report_month", report_month.isoformat())
+        )
+        start = 0
+        while True:
+            page = query.range(start, start + page_size - 1).execute().data or []
+            rows.extend(page)
+            if len(page) < page_size:
+                break
+            start += page_size
+    return rows
+
+
+def _compact_staging_rows(
+    rows: list[dict[str, Any]],
+    *,
+    amc_by_document_id: dict[str, str],
+    value_column: str,
+) -> list[dict[str, Any]]:
+    grouped: dict[tuple[object, ...], dict[str, Any]] = {}
+    identity_columns = (
+        "source_document_id",
+        "report_month",
+        "raw_scheme_name",
+        "mapped_scheme_code",
+        "mapped_family_id",
+        "mapping_status",
+        "mapping_confidence",
+        "validation_status",
+    )
+    for row in rows:
+        source_document_id = str(row.get("source_document_id") or "")
+        amc_code = amc_by_document_id.get(source_document_id)
+        if not source_document_id or not amc_code:
+            continue
+        key = tuple(row.get(column) for column in identity_columns)
+        current = grouped.setdefault(
+            key,
+            {
+                **{column: row.get(column) for column in identity_columns},
+                "amc_code": amc_code,
+                value_column: None,
+            },
+        )
+        if row.get(value_column) not in (None, ""):
+            current[value_column] = "__present__"
+    return list(grouped.values())
+
+
+def _get_selected_amc_staging_rows(
+    *,
+    amc: str,
+    report_month: date,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    raw_documents = _fetch_all_rows(
+        "mf_raw_documents",
+        "id,amc_code",
+        filters={"report_month": report_month.isoformat()},
+    )
+    normalized_amc = _normalize_amc(amc)
+    amc_by_document_id = {
+        str(row["id"]): str(row.get("amc_code") or "")
+        for row in raw_documents
+        if row.get("id") and _normalize_amc(row.get("amc_code")) == normalized_amc
+    }
+    source_document_ids = list(amc_by_document_id)
+    if not source_document_ids:
+        return [], [], []
+
+    candidates = _fetch_rows_by_document_ids(
+        "mf_factsheet_candidates",
+        "id,source_document_id,amc_code,report_month",
+        source_document_ids=source_document_ids,
+        report_month=report_month,
+    )
+    holdings = _fetch_rows_by_document_ids(
+        "mf_scheme_holdings",
+        "source_document_id,report_month,raw_scheme_name,mapped_scheme_code,"
+        "mapped_family_id,mapping_status,mapping_confidence,validation_status,sector",
+        source_document_ids=source_document_ids,
+        report_month=report_month,
+    )
+    sector_allocations = _fetch_rows_by_document_ids(
+        "mf_scheme_sector_allocations",
+        "source_document_id,report_month,raw_scheme_name,mapped_scheme_code,"
+        "mapped_family_id,mapping_status,mapping_confidence,validation_status,"
+        "sector_name",
+        source_document_ids=source_document_ids,
+        report_month=report_month,
+    )
+    return (
+        candidates,
+        _compact_staging_rows(
+            holdings,
+            amc_by_document_id=amc_by_document_id,
+            value_column="sector",
+        ),
+        _compact_staging_rows(
+            sector_allocations,
+            amc_by_document_id=amc_by_document_id,
+            value_column="sector_name",
+        ),
     )
 
 
@@ -351,13 +465,10 @@ def collect_promotion_targets(
     requested_scopes: list[str],
     report_month: date,
 ) -> dict[str, list[str]]:
-    candidates = _fetch_all_rows(
-        "mf_factsheet_candidates",
-        "id,source_document_id,amc_code,report_month",
-        filters={"report_month": report_month.isoformat()},
+    candidates, holdings, sector_allocations = _get_selected_amc_staging_rows(
+        amc=amc,
+        report_month=report_month,
     )
-    holdings = _compact_rows("mf_staging_holding_coverage_rows", report_month)
-    sector_allocations = _compact_rows("mf_staging_sector_coverage_rows", report_month)
     targets = _build_target_scopes(
         amc=amc,
         requested_scopes=requested_scopes,

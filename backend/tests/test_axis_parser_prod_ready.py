@@ -6,12 +6,19 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+import pandas as pd
 
-from app.mf_ingestion.parsers.adapters.axis_adapter import AxisAdapter
+from app.mf_ingestion.parsers.adapters.axis_adapter import (
+    AxisAdapter,
+    _axis_layout_script_urls,
+    _axis_portfolio_documents_from_payload,
+    _axis_public_cms_token,
+)
 from app.mf_ingestion.parsers.base_parser import ParseContext
 from app.mf_ingestion.parsers.factsheet_parser import FactsheetParser
 from app.mf_ingestion.parsers.holdings_parser import HoldingsParser
 from app.mf_ingestion.services.parsing_service import ParsingService
+from app.mf_ingestion.sources.registry import get_source
 
 AXIS_FACTSHEET = Path(__file__).resolve().parents[1] / "axis_factsheet.pdf"
 
@@ -126,6 +133,86 @@ Grand Total
     assert "Axis NIFTY 50 ETF" in names
     assert "Grand Total" not in names
     assert "Mutual Fund Units" not in names
+
+
+def test_axis_monthly_portfolio_workbook_extracts_isins():
+    frame = pd.DataFrame(
+        [
+            ["Axis Midcap Fund", None, None, None],
+            ["Portfolio as on 30 June 2026", None, None, None],
+            ["ISIN", "Name of the Instrument", "Industry", "% to NAV"],
+            ["INE040A01034", "HDFC Bank Limited", "Banks", 60.0],
+            ["INE002A01018", "Reliance Industries Limited", "Petroleum Products", 40.0],
+        ]
+    )
+
+    records = AxisAdapter().parse_excel_frame_many(
+        frame,
+        ParseContext(
+            source_document_id="axis-june-2026",
+            source_url="https://www.axismf.com/monthly.xlsx",
+            report_month=date(2026, 6, 1),
+        ),
+    )
+
+    assert len(records) == 1
+    assert records[0].scheme_name == "Axis Midcap Fund"
+    assert records[0].report_month == date(2026, 6, 1)
+    assert {row["isin"] for row in records[0].holdings} == {
+        "INE040A01034",
+        "INE002A01018",
+    }
+
+
+def test_axis_public_cms_helpers_select_consolidated_monthly_workbooks():
+    html = (
+        '<script src="/_next/static/chunks/app/layout-current.js"></script>'
+        '<script src="/_next/static/chunks/app/page.js"></script>'
+    )
+    assert _axis_layout_script_urls(
+        html,
+        "https://www.axismf.com/statutory-disclosures",
+    ) == ["https://www.axismf.com/_next/static/chunks/app/layout-current.js"]
+    assert _axis_public_cms_token(
+        'window.config={CMSTOKEN:"Bearer public-cms-token"}'
+    ) == "Bearer public-cms-token"
+
+    payload = {
+        "status": "success",
+        "data": {
+            "documentList": [
+                {
+                    "documentName": "Monthly Portfolio-30 06 26",
+                    "documentPostedDate": "2026-06-01",
+                    "docuementURL": (
+                        "https://www.axismf.com/1/5/464/560/3622/4325/"
+                        "Monthly_Portfolio30_06_26.xlsx.xlsx"
+                    ),
+                },
+                {
+                    "documentName": "Monthly Portfolio Axis Midcap Fund June 2026",
+                    "documentPostedDate": "2026-06-01",
+                    "documentPath": "https://www.axismf.com/per-scheme.xlsx",
+                },
+                {
+                    "documentName": "Monthly Portfolio-31 05 26",
+                    "documentPostedDate": "2026-05-01",
+                    "documentPath": "https://unofficial.example/may.xlsx",
+                },
+            ]
+        },
+    }
+
+    documents = _axis_portfolio_documents_from_payload(
+        get_source("axis"),
+        payload,
+        "https://www.axismf.com/statutory-disclosures",
+    )
+
+    assert len(documents) == 1
+    assert documents[0].report_month == date(2026, 6, 1)
+    assert documents[0].file_ext == ".xlsx"
+    assert documents[0].document_type == "portfolio_disclosure"
 
 
 @pytest.mark.skipif(not AXIS_FACTSHEET.exists(), reason="backend/axis_factsheet.pdf is not available")

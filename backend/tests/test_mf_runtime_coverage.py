@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from scripts.report_mf_runtime_coverage import build_runtime_coverage
+from scripts.report_mf_runtime_coverage import (
+    _compact_staging_rows,
+    build_runtime_coverage,
+)
 
 
 def _fixture_rows(runtime_family_count: int) -> dict:
@@ -58,6 +61,7 @@ def _fixture_rows(runtime_family_count: int) -> dict:
                     "scheme_code": scheme_code,
                     "family_id": family_id,
                     "as_of_date": "2026-06-01",
+                    "isin": f"INE000A01{index:03d}",
                     "source": "amc_disclosure",
                     "provider_payload": {},
                 }
@@ -94,6 +98,7 @@ def test_runtime_coverage_passes_at_exactly_eighty_percent():
         "benchmark": 100.0,
         "manager": 100.0,
         "holdings": 80.0,
+        "holding_isin": 100.0,
         "sectors": 80.0,
     }
     assert report["passes_all_fields"] is True
@@ -108,6 +113,7 @@ def test_runtime_coverage_rejects_missing_promoted_families():
     )["hdfc"]
 
     assert report["percentages"]["holdings"] == 70.0
+    assert report["percentages"]["holding_isin"] == 100.0
     assert report["percentages"]["sectors"] == 70.0
     assert report["passes_all_fields"] is False
 
@@ -149,4 +155,81 @@ def test_runtime_coverage_ignores_stale_or_non_official_rows():
     )["hdfc"]
 
     assert report["percentages"]["holdings"] == 80.0
+    assert report["percentages"]["holding_isin"] == 100.0
     assert report["percentages"]["sectors"] == 80.0
+
+
+def test_runtime_coverage_rejects_families_without_isin():
+    fixture = _fixture_rows(runtime_family_count=8)
+    for row in fixture["runtime_holdings"][6:]:
+        row["isin"] = None
+
+    report = build_runtime_coverage(
+        report_month="2026-06-01",
+        amcs=["hdfc"],
+        threshold=80.0,
+        **fixture,
+    )["hdfc"]
+
+    assert report["percentages"]["holdings"] == 80.0
+    assert report["percentages"]["holding_isin"] == 75.0
+    assert report["passes_all_fields"] is False
+
+
+def test_compact_staging_rows_is_amc_bounded_and_preserves_presence():
+    rows = [
+        {
+            "source_document_id": "doc-1",
+            "report_month": "2026-06-01",
+            "raw_scheme_name": "Fund A",
+            "mapped_scheme_code": "100001",
+            "mapped_family_id": "family-a",
+            "mapping_status": "mapped",
+            "mapping_confidence": 100,
+            "validation_status": "valid",
+            "sector": None,
+        },
+        {
+            "source_document_id": "doc-1",
+            "report_month": "2026-06-01",
+            "raw_scheme_name": "Fund A",
+            "mapped_scheme_code": "100001",
+            "mapped_family_id": "family-a",
+            "mapping_status": "mapped",
+            "mapping_confidence": 100,
+            "validation_status": "valid",
+            "sector": "Banks",
+        },
+        {
+            "source_document_id": "other-doc",
+            "report_month": "2026-06-01",
+            "raw_scheme_name": "Other Fund",
+            "mapped_scheme_code": "200001",
+            "mapped_family_id": "family-b",
+            "mapping_status": "mapped",
+            "mapping_confidence": 100,
+            "validation_status": "valid",
+            "sector": "Finance",
+        },
+    ]
+
+    compact = _compact_staging_rows(
+        rows,
+        amc_by_document_id={"doc-1": "PPFAS"},
+        value_column="sector",
+    )
+
+    assert compact == [
+        {
+            "source_document_id": "doc-1",
+            "report_month": "2026-06-01",
+            "raw_scheme_name": "Fund A",
+            "mapped_scheme_code": "100001",
+            "mapped_family_id": "family-a",
+            "mapping_status": "mapped",
+            "mapping_confidence": 100,
+            "validation_status": "valid",
+            "amc_code": "PPFAS",
+            "sector": "__present__",
+        }
+    ]

@@ -12,6 +12,9 @@ from bs4 import BeautifulSoup
 
 from app.mf_ingestion.downloaders.base_downloader import DiscoveredDocument
 from app.mf_ingestion.parsers.adapters.base_adapter import BaseAMCAdapter
+from app.mf_ingestion.parsers.adapters.generic_portfolio_adapter import (
+    GenericPortfolioAdapter,
+)
 from app.mf_ingestion.sources.registry import AMCDocumentSource
 from app.mf_ingestion.parsers.adapters.ppfas_adapter import classify_documents, detect_file_ext
 from app.mf_ingestion.parsers.base_parser import ParseContext, ParsedDocument
@@ -69,6 +72,21 @@ AXIS_HOLDING_SKIP_LINES = {
     "domestic equities",
     "grand total",
 }
+AXIS_STATUTORY_DISCLOSURES_URL = "https://www.axismf.com/statutory-disclosures"
+AXIS_PORTFOLIO_DOCUMENTS_URL = "https://www.axismf.com/cms/get-scheme-documents"
+AXIS_CMS_TOKEN_PATTERN = re.compile(
+    r"""CMSTOKEN\s*:\s*["'](?P<token>Bearer [^"']+)["']"""
+)
+AXIS_LAYOUT_SCRIPT_PATTERN = re.compile(
+    r'<script[^>]+src="(?P<src>[^"]*/app/layout-[^"]+\.js)"',
+    re.IGNORECASE,
+)
+
+
+class _AxisSpreadsheetAdapter(GenericPortfolioAdapter):
+    amc_code = "AXIS"
+    scheme_markers = ("axis",)
+
 
 class AxisAdapter(BaseAMCAdapter):
     amc_code = "AXIS"
@@ -77,11 +95,19 @@ class AxisAdapter(BaseAMCAdapter):
     def __init__(self, user_agent: str = "Mozilla/5.0", timeout_seconds: int = 30) -> None:
         self.user_agent = user_agent
         self.timeout_seconds = timeout_seconds
+        self._spreadsheet_adapter = _AxisSpreadsheetAdapter()
 
     def discover_documents(self, source: AMCDocumentSource, document_type: str) -> List[DiscoveredDocument]:
         return self.fetch_documents(source, document_type)
 
     def parse_holdings(self, excel_frames: list, pdf_table_frames: list, pdf_text: str, context: ParseContext) -> ParsedDocument:
+        excel_documents = [
+            document
+            for frame in excel_frames
+            for document in self.parse_excel_frame_many(frame, context)
+        ]
+        if excel_documents:
+            return max(excel_documents, key=lambda item: len(item.holdings))
         parsed_documents = self.parse_pdf_text_many(pdf_text, context) if pdf_text else []
         if parsed_documents:
             return max(parsed_documents, key=lambda item: len(item.holdings))
@@ -92,6 +118,9 @@ class AxisAdapter(BaseAMCAdapter):
             warnings=["axis_parsing_not_implemented"],
             confidence_score=0.0
         )
+
+    def parse_excel_frame_many(self, frame, context: ParseContext) -> list[ParsedDocument]:
+        return self._spreadsheet_adapter.parse_excel_frame_many(frame, context)
 
     def parse_pdf_file_many(self, file_path: str, context: ParseContext) -> list[ParsedDocument]:
         """Crop-based PDF extraction for Axis two-column factsheet layout.
@@ -318,6 +347,12 @@ class AxisAdapter(BaseAMCAdapter):
                         "FACTSHEET" if document_type == "factsheet" else "PORTFOLIO")
             return env_docs
 
+        if document_type == "portfolio_disclosure":
+            attempted_tiers.append("axis_cms")
+            docs = self.fetch_portfolios_from_axis_cms(source)
+            if docs:
+                return docs
+
         attempted_tiers.append("axis_page")
         docs = self.fetch_from_axis_api_or_page(source, document_type)
 
@@ -340,6 +375,67 @@ class AxisAdapter(BaseAMCAdapter):
                 ",".join(attempted_tiers),
             )
         return docs
+
+    def fetch_portfolios_from_axis_cms(
+        self,
+        source: AMCDocumentSource,
+    ) -> List[DiscoveredDocument]:
+        proxy_url = str(os.getenv("MF_HTTP_PROXY", "") or "").strip()
+        proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+        common_kwargs = {
+            "timeout": self.timeout_seconds,
+            "proxies": proxies,
+            "verify": not bool(proxies),
+        }
+        try:
+            page_response = requests.get(
+                AXIS_STATUTORY_DISCLOSURES_URL,
+                headers={"User-Agent": self.user_agent},
+                **common_kwargs,
+            )
+            page_response.raise_for_status()
+
+            token = ""
+            for script_url in _axis_layout_script_urls(
+                page_response.text,
+                AXIS_STATUTORY_DISCLOSURES_URL,
+            ):
+                script_response = requests.get(
+                    script_url,
+                    headers={"User-Agent": self.user_agent},
+                    **common_kwargs,
+                )
+                script_response.raise_for_status()
+                token = _axis_public_cms_token(script_response.text)
+                if token:
+                    break
+            if not token:
+                logger.warning("axis:public_cms_token_not_found")
+                return []
+
+            response = requests.post(
+                AXIS_PORTFOLIO_DOCUMENTS_URL,
+                headers={
+                    "Authorization": token,
+                    "Content-Type": "application/json",
+                    "Referer": AXIS_STATUTORY_DISCLOSURES_URL,
+                    "User-Agent": self.user_agent,
+                },
+                json={
+                    "sdType": "yearMonthSchemeDocs",
+                    "sdID": "sdMonthSchemePortfolio",
+                },
+                **common_kwargs,
+            )
+            response.raise_for_status()
+            return _axis_portfolio_documents_from_payload(
+                source,
+                response.json(),
+                AXIS_STATUTORY_DISCLOSURES_URL,
+            )
+        except Exception as exc:
+            logger.warning("axis:portfolio_cms_discovery_failed error=%s", exc)
+            return []
 
     def _docs_from_env(self, source: AMCDocumentSource, document_type: str) -> List[DiscoveredDocument]:
         """Read comma-separated direct document URLs from MF_AXIS_FACTSHEET_DOCUMENT_URLS
@@ -522,6 +618,124 @@ def _axis_render_url(
     if document_type != "factsheet" and not factsheet_contains_holdings:
         return page_url
     return urljoin(page_url, "/downloads/products")
+
+
+def _axis_layout_script_urls(html: str, page_url: str) -> list[str]:
+    urls: list[str] = []
+    seen: set[str] = set()
+    for match in AXIS_LAYOUT_SCRIPT_PATTERN.finditer(html or ""):
+        url = urljoin(page_url, match.group("src"))
+        if url not in seen:
+            seen.add(url)
+            urls.append(url)
+    return urls
+
+
+def _axis_public_cms_token(script_text: str) -> str:
+    match = AXIS_CMS_TOKEN_PATTERN.search(script_text or "")
+    return match.group("token").strip() if match else ""
+
+
+def _axis_document_report_month(row: dict, title: str) -> date | None:
+    raw_date = str(
+        row.get("documentPostedDate")
+        or row.get("postedDate")
+        or row.get("date")
+        or ""
+    ).strip()
+    if raw_date:
+        try:
+            parsed = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+            return date(parsed.year, parsed.month, 1)
+        except ValueError:
+            pass
+    return _axis_extract_report_month([title])
+
+
+def _axis_portfolio_documents_from_payload(
+    source: AMCDocumentSource,
+    payload: object,
+    page_url: str,
+) -> list[DiscoveredDocument]:
+    if not isinstance(payload, dict) or payload.get("status") != "success":
+        return []
+    data = payload.get("data")
+    rows = data.get("documentList") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        return []
+
+    allowed_suffixes = {
+        suffix.strip().lower().rstrip(".")
+        for suffix in (*source.allowed_host_suffixes, "axismf.com")
+        if suffix
+    }
+    documents: list[DiscoveredDocument] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        title = str(
+            row.get("documentName")
+            or row.get("name")
+            or row.get("title")
+            or ""
+        ).strip()
+        normalized_title = " ".join(title.lower().split())
+        # Prefer one consolidated workbook per month over many per-scheme files.
+        if not normalized_title.startswith("monthly portfolio") or "axis " in normalized_title:
+            continue
+        raw_url = str(
+            row.get("docuementURL")
+            or row.get("documentUrl")
+            or row.get("documentURL")
+            or row.get("documentPath")
+            or row.get("fileUrl")
+            or row.get("url")
+            or ""
+        ).strip()
+        url = urljoin(page_url, raw_url)
+        parsed_url = urlsplit(url)
+        host = str(parsed_url.hostname or "").lower().rstrip(".")
+        extension = Path(parsed_url.path).suffix.lower()
+        if (
+            not raw_url
+            or extension not in {".xls", ".xlsx", ".xlsm"}
+            or not any(
+                host == suffix or host.endswith(f".{suffix}")
+                for suffix in allowed_suffixes
+            )
+            or url in seen
+        ):
+            continue
+        seen.add(url)
+        report_month = _axis_document_report_month(row, title)
+        priority = (
+            8_000_000 + report_month.year * 100 + report_month.month
+            if report_month
+            else 1_000_000
+        )
+        documents.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type="portfolio_disclosure",
+                title=title,
+                url=url,
+                discovery_page_url=page_url,
+                file_ext=extension,
+                report_month=report_month,
+                priority_score=priority,
+            )
+        )
+    documents.sort(
+        key=lambda item: (
+            item.report_month or date.min,
+            item.priority_score,
+            item.url,
+        ),
+        reverse=True,
+    )
+    return documents[:24]
 
 
 def _browser_fallback_allowed(adapter_key: str) -> bool:

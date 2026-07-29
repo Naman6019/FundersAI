@@ -102,7 +102,11 @@ def test_hdfc_parse_holdings_extracts_rows_from_monthly_excel_frame():
     assert parsed.scheme_name == "HDFC Value Fund"
     assert parsed.report_month == date(2026, 4, 1)
     assert len(parsed.holdings) == 2
+    assert parsed.holdings[0]["isin"] == "INE090A01021"
+    assert parsed.holdings[0]["quantity"] == 100.0
+    assert parsed.holdings[0]["market_value"] == 1000.0
     assert parsed.holdings[1]["instrument_name"] == "HDFC Bank Ltd."
+    assert parsed.holdings[1]["isin"] == "INE040A01034"
     assert parsed.metrics["total_percent_aum"] == 11.92
 
 

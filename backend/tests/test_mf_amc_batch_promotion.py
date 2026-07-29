@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from app.mf_ingestion.jobs import promote_mf_disclosures
 from app.mf_ingestion.jobs.promote_mf_amc_disclosures import (
     _build_target_scopes,
+    _compact_staging_rows,
     _dedupe_target_scopes,
     _split_scope_groups,
     assess_batch_targets,
@@ -140,6 +141,60 @@ def test_amc_batch_promotion_assigns_only_available_source_scopes() -> None:
         "debt-portfolio": ["holdings"],
         "equity-portfolio": ["holdings"],
     }
+
+
+def test_amc_batch_compacts_only_selected_source_documents() -> None:
+    rows = [
+        {
+            "source_document_id": "nippon-doc",
+            "report_month": "2026-06-01",
+            "raw_scheme_name": "Nippon India Growth Fund",
+            "mapped_scheme_code": "118668",
+            "mapped_family_id": "nippon-growth",
+            "mapping_status": "mapped",
+            "mapping_confidence": 100,
+            "validation_status": "valid",
+            "sector": None,
+        },
+        {
+            "source_document_id": "nippon-doc",
+            "report_month": "2026-06-01",
+            "raw_scheme_name": "Nippon India Growth Fund",
+            "mapped_scheme_code": "118668",
+            "mapped_family_id": "nippon-growth",
+            "mapping_status": "mapped",
+            "mapping_confidence": 100,
+            "validation_status": "valid",
+            "sector": "Banks",
+        },
+        {
+            "source_document_id": "other-doc",
+            "report_month": "2026-06-01",
+            "raw_scheme_name": "Other Fund",
+            "sector": "Finance",
+        },
+    ]
+
+    compact = _compact_staging_rows(
+        rows,
+        amc_by_document_id={"nippon-doc": "NIPPON"},
+        value_column="sector",
+    )
+
+    assert compact == [
+        {
+            "source_document_id": "nippon-doc",
+            "report_month": "2026-06-01",
+            "raw_scheme_name": "Nippon India Growth Fund",
+            "mapped_scheme_code": "118668",
+            "mapped_family_id": "nippon-growth",
+            "mapping_status": "mapped",
+            "mapping_confidence": 100,
+            "validation_status": "valid",
+            "amc_code": "NIPPON",
+            "sector": "__present__",
+        }
+    ]
 
 
 def test_amc_batch_promotion_normalizes_absl_database_code() -> None:
@@ -399,6 +454,8 @@ def test_amc_batch_promotion_workflow_is_bounded_and_protected() -> None:
     assert 'expected_approval="PROMOTE AMC ${AMC} ${EXPECTED_MONTH}"' in workflow
     assert "--max-source-documents" in workflow
     assert "DEFAULT_MAX_SOURCE_DOCUMENTS = 150" in job
+    assert "mf_staging_holding_coverage_rows" not in job
+    assert "source_document_ids[offset : offset + batch_size]" in job
     assert "Revalidate every target immediately before the first mutation." in job
 
 
