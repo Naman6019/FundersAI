@@ -284,6 +284,67 @@ def test_amc_batch_promotion_uses_document_role_for_shared_checksum() -> None:
     }
 
 
+def test_amc_batch_promotion_prefers_dedicated_portfolio_over_combined_factsheet() -> None:
+    targets = {
+        "combined-factsheet": ["risk", "holdings", "sectors"],
+        "dedicated-portfolio": ["holdings", "sectors"],
+    }
+    documents = [
+        {
+            "id": "combined-factsheet",
+            "document_type": "factsheet",
+            "checksum": "factsheet-checksum",
+            "source_url": "https://official.example/factsheet.pdf",
+            "parsed_at": "2026-07-20T00:00:00+00:00",
+        },
+        {
+            "id": "dedicated-portfolio",
+            "document_type": "portfolio_disclosure",
+            "checksum": "portfolio-checksum",
+            "source_url": "https://official.example/portfolio.xlsx",
+            "parsed_at": "2026-07-15T00:00:00+00:00",
+        },
+    ]
+
+    assert _dedupe_target_scopes(
+        targets,
+        documents,
+        ["risk", "holdings", "sectors"],
+    ) == {
+        "combined-factsheet": ["risk"],
+        "dedicated-portfolio": ["holdings", "sectors"],
+    }
+
+
+def test_amc_batch_promotion_prefers_workbook_when_factsheet_is_misclassified() -> None:
+    targets = {
+        "misclassified-factsheet": ["holdings", "sectors"],
+        "portfolio-workbook": ["holdings", "sectors"],
+    }
+    documents = [
+        {
+            "id": "misclassified-factsheet",
+            "document_type": "portfolio_disclosure",
+            "checksum": "factsheet-checksum",
+            "source_url": "https://official.example/factsheet.pdf",
+            "parsed_at": "2026-07-20T00:00:00+00:00",
+        },
+        {
+            "id": "portfolio-workbook",
+            "document_type": "portfolio_disclosure",
+            "checksum": "portfolio-checksum",
+            "source_url": "https://official.example/portfolio.xlsx?download=1",
+            "parsed_at": "2026-07-15T00:00:00+00:00",
+        },
+    ]
+
+    assert _dedupe_target_scopes(
+        targets,
+        documents,
+        ["holdings", "sectors"],
+    ) == {"portfolio-workbook": ["holdings", "sectors"]}
+
+
 def test_amc_batch_promotion_retains_distinct_portfolio_documents() -> None:
     targets = {
         "active": ["holdings"],

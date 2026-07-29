@@ -113,6 +113,11 @@ def _preferred_document_type(scope: str) -> str:
     return "factsheet" if scope in CORE_SCOPES else "portfolio_disclosure"
 
 
+def _is_tabular_portfolio_document(document: dict[str, Any]) -> bool:
+    source_path = str(document.get("source_url") or "").split("?", 1)[0].lower()
+    return source_path.endswith((".csv", ".xls", ".xlsx", ".zip"))
+
+
 def _dedupe_target_scopes(
     targets: dict[str, list[str]],
     documents: list[dict[str, Any]],
@@ -127,6 +132,32 @@ def _dedupe_target_scopes(
             for source_document_id, scopes in targets.items()
             if scope in scopes
         ]
+        preferred_type = _preferred_document_type(scope)
+        preferred_source_ids = [
+            source_document_id
+            for source_document_id in source_ids
+            if str(
+                metadata.get(source_document_id, {}).get("document_type") or ""
+            ).strip().lower()
+            == preferred_type
+        ]
+        # Do not let holdings parsed from a combined factsheet overwrite a
+        # dedicated official portfolio disclosure for the same month.
+        if preferred_source_ids:
+            source_ids = preferred_source_ids
+        if scope in PORTFOLIO_SCOPES:
+            tabular_source_ids = [
+                source_document_id
+                for source_document_id in source_ids
+                if _is_tabular_portfolio_document(
+                    metadata.get(source_document_id, {})
+                )
+            ]
+            # A dedicated workbook is stronger portfolio evidence than a
+            # combined factsheet PDF, even when discovery stored both under
+            # the portfolio-disclosure role.
+            if tabular_source_ids:
+                source_ids = tabular_source_ids
 
         checksum_groups: dict[str, list[str]] = defaultdict(list)
         for source_document_id in source_ids:
@@ -137,7 +168,6 @@ def _dedupe_target_scopes(
             )
 
         checksum_winners: list[str] = []
-        preferred_type = _preferred_document_type(scope)
         for group in checksum_groups.values():
             checksum_winners.append(
                 max(
