@@ -7,7 +7,7 @@ feedparser
 pytz
 supabase
 python-dotenv
-pandas
+pandas==2.3.3
 pyarrow
 numpy
 pydantic

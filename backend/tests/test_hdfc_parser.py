@@ -73,6 +73,11 @@ def test_hdfc_parse_holdings_extracts_rows_from_monthly_excel_frame():
             [None, "INE090A01021", None, "ICICI Bank Ltd.", "Banks", 100, 1000, 6.47],
             [None, "INE040A01034", None, "HDFC Bank Ltd.Ł", "Banks", 100, 1000, 5.45],
             [None, None, None, "Grand Total", None, None, None, 100.0],
+            # pandas 3 forward-fills merged summary values while leaving the
+            # instrument cell as NaN. These rows must not inflate the total.
+            [None, None, None, float("nan"), None, None, None, 100.0],
+            [None, None, None, float("nan"), None, None, None, 100.0],
+            [None, None, None, float("nan"), None, None, None, 100.0],
         ],
         columns=[
             "HDFC Value Fund (An open ended equity scheme following a value investment strategy)",

@@ -1,12 +1,14 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
+  List,
+  X
 } from "@phosphor-icons/react";
 import { HeroWave } from "@/components/ui/ai-input-hero";
 import { FeatureCarousel } from "@/components/ui/animated-feature-carousel";
@@ -180,6 +182,7 @@ function NoiseOverlay() {
 
 export default function FundersAILandingPage() {
   const router = useRouter();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
     <main className="landing-editorial relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] text-[var(--text-primary)]  selection:bg-[var(--accent-crimson)] selection:text-[var(--bg-base)]">
@@ -206,12 +209,35 @@ export default function FundersAILandingPage() {
             <a href="#proof" className="transition hover:text-[var(--text-primary)]">Proof</a>
           </nav>
           <div className="flex items-center gap-4">
-            <Link href="/login" className="hidden text-sm font-semibold text-[var(--text-muted)] transition hover:text-[var(--text-primary)] sm:inline">
+            <Link href="/login" className="text-sm font-semibold text-[var(--text-muted)] transition hover:text-[var(--text-primary)]">
               Login
             </Link>
-            <EditorialButton href="/dashboard">Workspace</EditorialButton>
+            <div className="hidden md:block">
+              <EditorialButton href="/dashboard">Workspace</EditorialButton>
+            </div>
+            <button 
+              className="md:hidden p-1 text-[var(--text-muted)] transition hover:text-[var(--text-primary)]"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              aria-label="Toggle mobile menu"
+            >
+              {isMobileMenuOpen ? <X weight="bold" size={24} /> : <List weight="bold" size={24} />}
+            </button>
           </div>
         </div>
+        
+        {/* Mobile menu */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden border-t border-[var(--line)] bg-[var(--bg-base)]/95 px-5 py-4 flex flex-col gap-4 backdrop-blur-xl">
+            <a href="#flow" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Flow</a>
+            <a href="#intelligence" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Intelligence</a>
+            <a href="#data-trust" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Data &amp; Trust</a>
+            <a href="#workspace" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Workspace</a>
+            <a href="#proof" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Proof</a>
+            <div className="mt-2" onClick={() => setIsMobileMenuOpen(false)}>
+              <EditorialButton href="/dashboard">Workspace</EditorialButton>
+            </div>
+          </div>
+        )}
       </header>
       <HeroWave 
         title={<>Research funds <br /><span className="bg-gradient-to-r from-white via-white/80 to-[#00FF9D] bg-clip-text text-transparent opacity-90 mix-blend-lighten">with evidence</span></>}
