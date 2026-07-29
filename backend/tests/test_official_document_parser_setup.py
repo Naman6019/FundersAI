@@ -607,7 +607,9 @@ def test_sync_workflow_prints_disclosure_diagnostics_before_coverage_gate():
     workflow = Path(".github/workflows/sync-mf-disclosures.yml").read_text(encoding="utf-8")
 
     assert "backend/scripts/report_mf_disclosure_diagnostics.py" in workflow
-    assert workflow.index("report_mf_disclosure_diagnostics.py") < workflow.index("check_mf_disclosure_coverage.py")
+    assert workflow.index("report_mf_disclosure_diagnostics.py") < workflow.index(
+        "report_mf_staging_coverage.py"
+    )
 
 
 def test_sync_workflow_has_strict_scheduled_coverage_defaults():

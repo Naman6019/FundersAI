@@ -6,6 +6,7 @@ from app.mf_ingestion.jobs.promote_mf_amc_disclosures import (
     _build_target_scopes,
     _dedupe_target_scopes,
     _split_scope_groups,
+    assess_batch_targets,
 )
 from app.mf_ingestion.jobs.promote_mf_disclosures import (
     MIN_PORTFOLIO_FAMILY_COVERAGE,
@@ -253,6 +254,131 @@ def test_amc_batch_promotion_retains_distinct_portfolio_documents() -> None:
         "active": ["holdings"],
         "passive": ["holdings"],
     }
+
+
+def _portfolio_target(
+    index: int,
+    *,
+    status: str,
+    scope: str = "holdings",
+    issues: list[str] | None = None,
+) -> dict:
+    coverage_key = (
+        "holdings_family_coverage"
+        if scope == "holdings"
+        else "sector_family_coverage"
+    )
+    family_id = f"family-{index}"
+    coverage = {
+        "observed_keys": [f"family:{family_id}"],
+        "mapped_family_ids": [family_id],
+        "promotable_family_ids": [family_id],
+    }
+    if scope == "sectors":
+        coverage["applicable_family_ids"] = [family_id]
+    return {
+        "source_document_id": f"source-{index}",
+        "scopes": [scope],
+        "status": status,
+        "issues": issues or [],
+        "warnings": [],
+        "report": {coverage_key: coverage},
+    }
+
+
+def test_amc_batch_quarantines_review_sources_when_post_apply_coverage_passes() -> None:
+    reports = [
+        *[_portfolio_target(index, status="promotable") for index in range(8)],
+        *[
+            _portfolio_target(
+                index,
+                status="rejected",
+                issues=[
+                    "staged_holdings_below_family_coverage_threshold",
+                    "staged_holdings_have_no_promotable_rows",
+                ],
+            )
+            for index in range(8, 10)
+        ],
+    ]
+
+    gate = assess_batch_targets(reports, ["holdings"])
+
+    assert gate["status"] == "promotable"
+    assert gate["quarantined_target_count"] == 2
+    assert gate["unsafe_rejected_target_count"] == 0
+    assert (
+        gate["coverage"]["holdings"]["post_apply_family_coverage_percentage"]
+        == 80.0
+    )
+
+
+def test_amc_batch_rejects_when_post_apply_coverage_is_below_eighty_percent() -> None:
+    reports = [
+        *[_portfolio_target(index, status="promotable") for index in range(7)],
+        *[
+            _portfolio_target(
+                index,
+                status="rejected",
+                issues=["staged_holdings_below_family_coverage_threshold"],
+            )
+            for index in range(7, 10)
+        ],
+    ]
+
+    gate = assess_batch_targets(reports, ["holdings"])
+
+    assert gate["status"] == "rejected"
+    assert gate["issues"] == ["holdings_batch_family_coverage_below_80"]
+
+
+def test_amc_batch_never_quarantines_source_integrity_rejections() -> None:
+    reports = [
+        _portfolio_target(0, status="promotable"),
+        _portfolio_target(
+            1,
+            status="rejected",
+            issues=["source_report_month_mismatch"],
+        ),
+    ]
+
+    gate = assess_batch_targets(reports, ["holdings"])
+
+    assert gate["status"] == "rejected"
+    assert gate["quarantined_target_count"] == 0
+    assert gate["unsafe_rejected_target_count"] == 1
+    assert "one_or_more_unsafe_promotion_targets_rejected" in gate["issues"]
+
+
+def test_amc_batch_requires_eighty_percent_core_field_coverage() -> None:
+    candidates = [
+        {
+            "candidate_id": f"candidate-{index}",
+            "raw_scheme_name": f"Fund {index}",
+            "mapped_scheme_code": str(100000 + index),
+            "mapped_family_id": f"family-{index}",
+            "eligible_scopes": ["risk"] if index < 7 else [],
+            "unavailable_scopes": [] if index < 7 else ["risk"],
+            "issues": [],
+        }
+        for index in range(10)
+    ]
+    reports = [
+        {
+            "source_document_id": "factsheet",
+            "scopes": ["risk"],
+            "status": "promotable",
+            "issues": [],
+            "warnings": [],
+            "report": {"candidate_reports": candidates},
+        }
+    ]
+
+    gate = assess_batch_targets(reports, ["risk"])
+
+    assert gate["status"] == "rejected"
+    assert gate["coverage"]["core"]["field_percentages"]["risk"] == 70.0
+    assert gate["issues"] == ["risk_batch_family_coverage_below_80"]
 
 
 def test_amc_batch_promotion_workflow_is_bounded_and_protected() -> None:

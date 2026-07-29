@@ -246,10 +246,29 @@ def build_staging_coverage(
     return report
 
 
+def failed_strict_amcs(
+    report: dict[str, Any],
+    strict_amcs: list[str],
+) -> list[str]:
+    return sorted(
+        {
+            normalized_amc
+            for amc in strict_amcs
+            if (normalized_amc := _normalize_amc_key(amc))
+            and not bool(report.get(normalized_amc, {}).get("passes_all_fields"))
+        }
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Read-only distinct-family staging coverage report.")
     parser.add_argument("--report-month", required=True, help="Exact month as YYYY-MM-01")
     parser.add_argument("--amcs", default=",".join(PRODUCTION_TARGET_AMC_KEYS))
+    parser.add_argument(
+        "--strict-amcs",
+        default="",
+        help="Comma-separated AMCs that must pass every current-month staging gate",
+    )
     parser.add_argument("--threshold", type=float, default=80.0)
     args = parser.parse_args()
     if not supabase:
@@ -257,6 +276,9 @@ def main() -> int:
         return 1
 
     amcs = [value.strip().lower() for value in args.amcs.split(",") if value.strip()]
+    strict_amcs = [
+        value.strip().lower() for value in args.strict_amcs.split(",") if value.strip()
+    ]
     candidates = _get_filtered(
         "mf_factsheet_candidates",
         "id,source_document_id,amc_code,report_month,raw_scheme_name,normalized_scheme_name,"
@@ -282,18 +304,21 @@ def main() -> int:
         sector_allocations=sector_allocations,
         threshold=args.threshold,
     )
+    failed_amcs = failed_strict_amcs(report, strict_amcs)
     print(
         json.dumps(
             {
                 "status": "ok",
                 "report_month": args.report_month,
                 "threshold_percent": args.threshold,
+                "strict_amcs": strict_amcs,
+                "failed_strict_amcs": failed_amcs,
                 "amcs": report,
             },
             indent=2,
         )
     )
-    return 0
+    return 1 if failed_amcs else 0
 
 
 if __name__ == "__main__":

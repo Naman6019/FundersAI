@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts.report_mf_staging_coverage import build_staging_coverage
+from scripts.report_mf_staging_coverage import (
+    build_staging_coverage,
+    failed_strict_amcs,
+)
 
 
 def test_staging_coverage_rpc_is_read_only_and_service_role_only():
@@ -292,3 +295,17 @@ def test_staging_coverage_excludes_holdings_that_are_not_promotion_eligible():
     assert report["percentages"]["holdings"] == 0.0
     assert report["percentages"]["sectors"] == 0.0
     assert report["passes_all_fields"] is False
+
+
+def test_staging_coverage_strict_gate_only_fails_selected_amcs():
+    report = {
+        "hdfc": {"passes_all_fields": True},
+        "mirae": {"passes_all_fields": False},
+        "aditya_birla": {"passes_all_fields": False},
+    }
+
+    assert failed_strict_amcs(report, ["hdfc"]) == []
+    assert failed_strict_amcs(report, ["mirae", "ABSL"]) == [
+        "aditya_birla",
+        "mirae",
+    ]

@@ -207,6 +207,8 @@ def test_staging_migration_and_workflows_keep_acquisition_and_promotion_separate
     assert "DISPATCH_AMCS:-$(PYTHONPATH=backend python -c" in parser_workflow
     assert "report_mf_staging_coverage.py" in parser_workflow
     assert "--report-month \"${STAGING_REPORT_MONTH}-01\"" in parser_workflow
+    assert '--strict-amcs "$MF_DISCLOSURE_STRICT_COVERAGE_AMCS"' in parser_workflow
+    assert "check_mf_disclosure_coverage.py" not in parser_workflow
     assert "axis,hdfc,sbi,icici,ppfas,nippon" not in parser_workflow
     assert "fromJson(needs.registry-matrix.outputs.amcs)" in parser_workflow
     assert "capability_keys('portfolio_parser_enabled')" in retry_workflow

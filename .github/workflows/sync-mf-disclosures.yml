@@ -593,6 +593,6 @@ jobs:
           python backend/scripts/report_mf_disclosure_diagnostics.py
           python backend/scripts/report_mf_staging_coverage.py \
             --report-month "${STAGING_REPORT_MONTH}-01" \
-            --amcs "$MF_DISCLOSURE_COVERAGE_AMCS"
+            --amcs "$MF_DISCLOSURE_COVERAGE_AMCS" \
+            --strict-amcs "$MF_DISCLOSURE_STRICT_COVERAGE_AMCS"
           python backend/scripts/check_coverage.py
-          python backend/scripts/check_mf_disclosure_coverage.py
