@@ -383,7 +383,9 @@ def test_motilal_official_api_uses_report_month_from_title(monkeypatch) -> None:
     )
     assert docs[0].report_month == date(2026, 5, 1)
     assert all(call["category"] == "factsheet" for call in calls)
-    assert len(calls) == amc_downloader.MOTILAL_DISCOVERY_LOOKBACK_MONTHS
+    assert calls[0]["year"] == ""
+    assert calls[0]["month"] == ""
+    assert len(calls) == amc_downloader.MOTILAL_DISCOVERY_LOOKBACK_MONTHS + 1
 
 
 def test_motilal_official_api_maps_month_end_portfolio(monkeypatch) -> None:
@@ -420,6 +422,8 @@ def test_motilal_official_api_maps_month_end_portfolio(monkeypatch) -> None:
     assert docs[0].file_ext == ".xlsx"
     assert docs[0].report_month == date(2026, 6, 1)
     assert all(call["category"] == "month end portfolio" for call in calls)
+    assert calls[0]["year"] == ""
+    assert calls[0]["month"] == ""
 
 
 def test_absl_official_api_maps_june_portfolio_to_amc_host(monkeypatch) -> None:

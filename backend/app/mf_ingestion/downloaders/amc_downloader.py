@@ -845,27 +845,41 @@ def _discover_motilal_documents(
     docs = _manual_discovered_documents_for_source(source, doc_type, listing_url)
     seen_urls = {item.url for item in docs}
 
-    for year, month in _recent_month_buckets(datetime.now(UTC).date(), MOTILAL_DISCOVERY_LOOKBACK_MONTHS):
+    # Motilal's page loads current documents with blank year/month filters.
+    # Its abbreviated month-filter API can return empty current-month buckets.
+    buckets: list[tuple[int | None, int | None]] = [
+        (None, None),
+        *_recent_month_buckets(
+            datetime.now(UTC).date(),
+            MOTILAL_DISCOVERY_LOOKBACK_MONTHS,
+        ),
+    ]
+    for year, month in buckets:
+        params = {
+            "year": year or "",
+            "category": category,
+            "month": (
+                datetime(year, month, 1, tzinfo=UTC).strftime("%b").lower()
+                if year and month
+                else ""
+            ),
+            "type": "mf",
+        }
         try:
             response = _request_with_retry(
                 "GET",
                 MOTILAL_DOCUMENTS_ENDPOINT,
                 timeout_seconds=timeout_seconds,
                 headers={"User-Agent": user_agent, "Referer": listing_url},
-                params={
-                    "year": year,
-                    "category": category,
-                    "month": datetime(year, month, 1, tzinfo=UTC).strftime("%b").lower(),
-                    "type": "mf",
-                },
+                params=params,
             )
             payload = response.json()
         except Exception as exc:
             logger.warning(
                 "event=motilal_discovery_bucket_failed document_type=%s year=%s month=%s reason=%s",
                 doc_type,
-                year,
-                month,
+                year or "",
+                month or "",
                 exc,
             )
             continue
