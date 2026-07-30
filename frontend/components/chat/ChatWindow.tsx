@@ -462,7 +462,7 @@ function ReasoningSummary({ metadata }: { metadata?: Record<string, unknown> | n
 export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: boolean }) {
   const [streamStatus, setStreamStatus] = useState<string>("Thinking...");
   const searchParams = useSearchParams();
-  const { setView, setIds, openCanvas } = useCanvasStore();
+  const { openCanvas } = useCanvasStore();
   const messages = useChatStore((state) => state.messages);
   const input = useChatStore((state) => state.input);
   const isProcessing = useChatStore((state) => state.isProcessing);
@@ -607,15 +607,19 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
       }
       const data = await readChatStream(res, setStreamStatus);
 
-      if (data.system_action?.type === 'COMPARE' && (data.system_action.ids?.length || 0) >= 2) {
-        setIds(data.system_action.ids || []);
-        setView('COMPARISON', data);
-        openCanvas(data);
+      if (data?.system_action?.type === 'COMPARE' && (data.system_action.ids?.length || 0) >= 2) {
+        openCanvas({
+          view: 'COMPARISON',
+          ids: data.system_action.ids || [],
+          data: data
+        });
       }
-      if (data.system_action?.type === 'PORTFOLIO_REVIEW') {
-        setIds([]);
-        setView('PORTFOLIO_REVIEW', data);
-        openCanvas(data);
+      if (data?.system_action?.type === 'PORTFOLIO_REVIEW') {
+        openCanvas({
+          view: 'PORTFOLIO_REVIEW',
+          ids: [],
+          data: data
+        });
       }
 
       const nextConversationContext: ConversationContext = data.conversation_context
@@ -661,7 +665,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
     } finally {
       setIsProcessing(false);
     }
-  }, [addMessage, assetType, conversationContext, currentSessionId, createNewSession, explanationMode, getAccessToken, messages, openCanvas, researchDepth, setConversationContext, setIds, setInput, setIsProcessing, setView]);
+  }, [addMessage, assetType, conversationContext, currentSessionId, createNewSession, explanationMode, getAccessToken, messages, openCanvas, researchDepth, setConversationContext, setInput, setIsProcessing]);
 
   useEffect(() => {
     if (!isHistoryReady) return;

@@ -6,6 +6,7 @@ import { useBenchmarkData } from '../../hooks/useBenchmarkData';
 import FundComparisonChart, { Period } from '../funds/FundComparisonChart';
 import FundSearchSelect from '../ui/FundSearchSelect';
 import { useCanvasStore } from '@/store/useCanvasStore';
+import { Panel } from '@/components/ui/Panel';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { CanvasPayload, MetricValue as SharedMetricValue } from '@/types/funds';
 import type { NavPoint } from '@/types/funds';
@@ -610,7 +611,7 @@ function PortfolioCompositionPanel({
           const holdings = (f.details?.holdings || []).slice(0, 10);
           const sectors = (f.details?.sector_allocation || []).slice(0, 5);
           return (
-            <div key={i} className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md p-5 shadow-[0_24px_90px_rgba(0,0,0,0.18)]">
+            <Panel key={i} className="rounded-3xl bg-white/[0.045] backdrop-blur-md p-5 shadow-[0_24px_90px_rgba(0,0,0,0.18)]">
               <h4 className="font-serif-display text-lg font-bold text-white mb-4 line-clamp-1" title={f.label}>{f.label}</h4>
               
               <div className="mb-6">
@@ -647,7 +648,7 @@ function PortfolioCompositionPanel({
                   <p className="text-xs text-slate-500 italic">No holdings data available</p>
                 )}
               </div>
-            </div>
+            </Panel>
           );
         })}
       </div>
@@ -812,7 +813,7 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
     const newIds = [...ids];
     newIds[index] = newId;
     setIds(newIds);
-    store.setIds(newIds);
+    store.openCanvas({ ids: newIds });
   };
 
   const handleAddFund = (newId: string) => {
@@ -820,7 +821,7 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
     const store = useCanvasStore.getState();
     const newIds = [...ids, newId];
     setIds(newIds);
-    store.setIds(newIds);
+    store.openCanvas({ ids: newIds });
   };
 
   const handleRemoveFund = (index: number) => {
@@ -828,7 +829,7 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
     const store = useCanvasStore.getState();
     const newIds = ids.filter((_, i) => i !== index);
     setIds(newIds);
-    store.setIds(newIds);
+    store.openCanvas({ ids: newIds });
   };
 
   if (!isMF) {
@@ -1364,7 +1365,7 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
             if (variant === 'graph_only') {
                return (
                  <div className="flex flex-col h-full bg-[#050505]">
-                  <div className="flex-1 min-h-[400px] rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
+                  <Panel className="flex-1 min-h-[400px] rounded-3xl p-5">
                     {ids.length === 2 && activeFunds.length === 2 && activeFunds[0] && activeFunds[1] ? (
                       <FundComparisonChart
                         schemeCodeA={ids[0]}
@@ -1376,7 +1377,7 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
                     ) : ids.length > 2 ? (
                       <div className="text-sm text-[#8ea7cd] text-center p-4">Chart comparison currently supports only 2 funds. Please select 2 funds to view the chart.</div>
                     ) : null}
-                  </div>
+                  </Panel>
                  </div>
                );
             }
@@ -1424,12 +1425,12 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
                   </div>
 
                   {loadingVerdict ? (
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
+                    <Panel className="rounded-2xl bg-white/[0.045] p-4">
                       <div className="flex items-center gap-3">
                         <div className="w-4 h-4 rounded-full border-2 border-[#66a3ff] border-t-transparent animate-spin"></div>
                         <h3 className="text-sm font-semibold text-[#66a3ff]">Generating Simple Verdict...</h3>
                       </div>
-                    </div>
+                    </Panel>
                   ) : verdict ? (
                     <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5">
                       <h3 className="mb-2 text-sm font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
@@ -1459,7 +1460,7 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
 
                 <div className={`grid grid-cols-1 ${colsClass} gap-4`}>
                   {activeFunds.map((f, index) => (
-                    <div key={index} className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
+                    <Panel key={index} className="rounded-3xl p-5">
                       <h3 className="font-serif-display text-2xl font-bold text-white">{f!.label}</h3>
                       <p className="text-xs text-[#8ea7cd] mt-1 line-clamp-1" title={f!.fund?.meta?.scheme_name}>{f!.fund?.meta?.scheme_name}</p>
                       <div className="mt-4 grid gap-2 text-xs">
@@ -1486,14 +1487,14 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
                             <span className="rounded bg-slate-500/10 px-2 py-1 text-[10px] font-medium text-slate-300 border border-slate-500/20">Coverage pending</span>
                          )}
                       </div>
-                    </div>
+                    </Panel>
                   ))}
                 </div>
 
                 <RiskAnalysisPanel payload={mfRiskAnalysis} />
 
                 {showDecisionClarity && (
-                <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-6">
+                <Panel className="rounded-3xl p-6">
                   <h3 className="mb-3 text-base font-semibold text-white">Decision clarity</h3>
                   {decisionHeadline && <p className="text-base leading-7 text-[#d7e4fb]">{decisionHeadline}</p>}
                   {verdictCards.length > 0 && (
@@ -1541,18 +1542,18 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
                     )}
                   </div>
                   )}
-                </div>
+                </Panel>
                 )}
 
                 {researchFrame && (
-                  <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-6">
+                  <Panel className="rounded-3xl p-6">
                     <h3 className="mb-3 text-base font-semibold text-white">Research frame</h3>
                     <p className="text-base leading-7 text-[#d7e4fb]">{researchFrame}</p>
-                  </div>
+                  </Panel>
                 )}
 
                 {holdingsOverlap && (
-                  <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
+                  <Panel className="rounded-3xl p-5">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <h3 className="text-sm font-semibold text-white">Holdings overlap</h3>
@@ -1626,7 +1627,7 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
                         Holdings overlap will appear when both selected funds have latest holdings data.
                       </div>
                     )}
-                  </div>
+                  </Panel>
                 )}
 
                 <div className="space-y-4">
@@ -1641,7 +1642,7 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
 
                 <PortfolioCompositionPanel activeFunds={activeFunds} />
 
-                <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
+                <Panel className="rounded-3xl p-5">
                   {ids.length === 2 && activeFunds.length === 2 && activeFunds[0] && activeFunds[1] ? (
                     <FundComparisonChart
                       schemeCodeA={ids[0]}
@@ -1653,10 +1654,10 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
                   ) : ids.length > 2 ? (
                     <div className="text-sm text-[#8ea7cd] text-center p-4">Chart comparison currently supports only 2 funds. Please select 2 funds to view the chart.</div>
                   ) : null}
-                </div>
+                </Panel>
 
                 {mfWhyBetter?.research_notes && mfWhyBetter.research_notes.length > 0 && (
-                  <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
+                  <Panel className="rounded-3xl p-5">
                     <h3 className="mb-4 text-base font-semibold text-white">Research notes</h3>
                     <div className="grid gap-4 sm:grid-cols-3">
                       {mfWhyBetter.research_notes.slice(0, 3).map((note: {title: string; content: string}, idx: number) => (
@@ -1668,10 +1669,10 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </Panel>
                 )}
 
-                <div className="rounded-3xl border border-white/10 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] p-5">
+                <Panel className="rounded-3xl p-5">
                   <p className="text-xs text-slate-400 leading-relaxed">
                     Deterministic comparison based on available local NAV, risk, cost, and freshness factors for selected funds. Not a universal investment verdict.
                   </p>
@@ -1689,7 +1690,7 @@ export default function ComparisonView({ ids: initialIds, type, auxiliaryData, v
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> NAV rows fetched: {Math.max(...activeFunds.map(f => Number(f?.historyPts || 0)))}
                     </span>
                   </div>
-                </div>
+                </Panel>
 
               </div>
             );

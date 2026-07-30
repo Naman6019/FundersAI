@@ -39,6 +39,9 @@ import type { CategoryComparePayload, CategoryFundRow, SearchResultItem } from '
 import type { UserTier } from '@/lib/billing/tiers';
 import { useDataHealthContext } from '@/components/data-health/DataHealthProvider';
 import { dataHealthSummary, statusDotClass } from '@/lib/dataHealth';
+import { Panel } from '@/components/ui/Panel';
+import { formatDistanceToNow } from 'date-fns';
+import LandingThemeToggle from '@/components/landing/LandingThemeToggle';
 
 const HEADER_HEIGHT = 64;
 const MAIN_PADDING = 24;
@@ -46,8 +49,9 @@ const PANEL_GAP = 16;
 const RESIZE_HANDLE_WIDTH = 12;
 const CHAT_MIN_WIDTH = 320;
 const CANVAS_MIN_WIDTH = 420;
+const INITIAL_CANVAS_WIDTH = 550;
 
-const CATEGORY_CARDS = [
+const FUND_CATEGORIES = [
   { key: 'large_cap', title: 'Large Cap', desc: 'Top 100 companies', icon: Landmark },
   { key: 'mid_cap', title: 'Mid Cap', desc: 'High growth potential', icon: TrendingUp },
   { key: 'small_cap', title: 'Small Cap', desc: 'Aggressive growth', icon: ChartSpline },
@@ -113,7 +117,7 @@ export default function DashboardLayout() {
   const [activeTab, setActiveTab] = useState<'overview' | 'research'>('research');
   const [currentTier, setCurrentTier] = useState<UserTier>('free');
   const [isResizingCanvas, setIsResizingCanvas] = useState(false);
-  const [canvasWidth, setCanvasWidth] = useState(500);
+  const [canvasWidth, setCanvasWidth] = useState(INITIAL_CANVAS_WIDTH);
   const [compareFund1, setCompareFund1] = useState<SearchResultItem | null>(null);
   const [compareFund2, setCompareFund2] = useState<SearchResultItem | null>(null);
 
@@ -188,6 +192,18 @@ export default function DashboardLayout() {
   const handleOverviewQuery = (query: string) => {
     setPendingQuery(query);
     setActiveTab('research');
+  };
+
+  const handleQuickCompare = () => {
+    if (compareFund1 && compareFund2) {
+      const { openCanvas } = useCanvasStore.getState();
+      openCanvas({
+        view: 'COMPARISON',
+        ids: [compareFund1.id, compareFund2.id]
+      });
+      setActiveTab('research');
+      setPendingQuery(`Compare ${compareFund1.displayName} and ${compareFund2.displayName}`);
+    }
   };
 
   const formatPercent = (value: unknown) => {
@@ -275,10 +291,11 @@ export default function DashboardLayout() {
 
   const useCategoryCompareInChat = () => {
     if (!categoryCompare?.selected_funds?.length) return;
-    const { setView, setIds, openCanvas } = useCanvasStore.getState();
-    setIds(selectedCategoryCodes);
-    setView('COMPARISON');
-    openCanvas();
+    const { openCanvas } = useCanvasStore.getState();
+    openCanvas({
+      view: 'COMPARISON',
+      ids: selectedCategoryCodes
+    });
     setActiveTab('research');
 
     const names = categoryCompare.selected_funds.map((fund) => compactFundName(fund.scheme_name));
@@ -300,9 +317,9 @@ export default function DashboardLayout() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div
+          <Panel
             onClick={() => handleOverviewQuery('Compare Axis Flexi Cap and HDFC Flexi Cap')}
-            className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 p-6 rounded-xl hover:border-[#00FF9D]/40 transition-colors cursor-pointer group shadow-lg"
+            className="p-6 hover:border-[#00FF9D]/40 transition-colors cursor-pointer group shadow-lg"
           >
             <div className="w-10 h-10 rounded-lg bg-[#00FF9D]/10 flex items-center justify-center mb-4 group-hover:bg-[#00FF9D]/20 transition-colors">
               <ArrowLeftRight className="text-[#00FF9D] h-5 w-5" />
@@ -312,11 +329,11 @@ export default function DashboardLayout() {
               Compare returns, risk, expense ratio, AUM, fund category, and consistency side-by-side.
             </p>
             <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">Comparison only, not advice</p>
-          </div>
+          </Panel>
 
-          <div
+          <Panel
             onClick={() => setActiveTab('research')}
-            className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-[#00FF9D]/20 p-6 rounded-xl hover:border-[#00FF9D]/60 transition-colors cursor-pointer group relative overflow-hidden shadow-lg"
+            className="border-[#00FF9D]/20 p-6 hover:border-[#00FF9D]/60 transition-colors cursor-pointer group relative overflow-hidden shadow-lg"
           >
             <div className="absolute top-0 right-0 w-32 h-32 bg-[#00FF9D]/5 rounded-full blur-3xl pointer-events-none"></div>
             <div className="w-10 h-10 rounded-lg bg-[#00FF9D]/20 flex items-center justify-center mb-4 group-hover:bg-[#00FF9D]/30 transition-colors relative z-10">
@@ -327,11 +344,11 @@ export default function DashboardLayout() {
               Ask FundersAI to explain funds, compare strategies, or simplify complex fund data.
             </p>
             <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd] relative z-10">Source-backed explanation, not a recommendation</p>
-          </div>
+          </Panel>
 
-          <div
+          <Panel
             onClick={() => handleOverviewQuery('Review my portfolio diversification')}
-            className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 p-6 rounded-xl hover:border-[#00FF9D]/40 transition-colors cursor-pointer group shadow-lg"
+            className="p-6 hover:border-[#00FF9D]/40 transition-colors cursor-pointer group shadow-lg"
           >
             <div className="w-10 h-10 rounded-lg bg-[#00FF9D]/10 flex items-center justify-center mb-4 group-hover:bg-[#00FF9D]/20 transition-colors">
               <Wallet className="text-[#00FF9D] h-5 w-5" />
@@ -341,7 +358,7 @@ export default function DashboardLayout() {
               Review holdings structure, concentration, and diversification signals.
             </p>
             <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8ea7cd]">Diversification read, not portfolio advice</p>
-          </div>
+          </Panel>
         </div>
 
         <div className="rounded-xl border border-[#00FF9D]/20 bg-[#00FF9D]/[0.055] p-5">
@@ -382,7 +399,7 @@ export default function DashboardLayout() {
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <div className="xl:col-span-2 space-y-6">
-            <div className="relative z-30 bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 rounded-xl p-6 shadow-lg">
+            <Panel className="relative z-30 p-6 shadow-lg">
               <div className="flex items-center gap-2 mb-4">
                 <ArrowLeftRight className="text-[#00FF9D] h-5 w-5" />
                 <h3 className="font-serif text-xl font-medium text-white">Quick Compare</h3>
@@ -393,47 +410,28 @@ export default function DashboardLayout() {
                     placeholder="Search Fund 1..."
                     onSelect={setCompareFund1}
                   />
-                  {compareFund1 && (
-                    <div className="absolute top-full mt-1 left-0 right-0 z-10 px-2 py-1 bg-[#1a2333] border border-emerald-500/30 rounded text-xs text-emerald-200">
-                      Selected: {compareFund1.displayName}
-                    </div>
-                  )}
                 </div>
-                <div className="text-slate-500 font-medium font-serif-display px-2 text-sm">VS</div>
+                <div className="flex-shrink-0 text-white/50 text-sm font-medium">VS</div>
                 <div className="flex-1 w-full relative">
                   <FundSearchSelect
                     placeholder="Search Fund 2..."
                     onSelect={setCompareFund2}
                   />
-                  {compareFund2 && (
-                    <div className="absolute top-full mt-1 left-0 right-0 z-10 px-2 py-1 bg-[#1a2333] border border-emerald-500/30 rounded text-xs text-emerald-200">
-                      Selected: {compareFund2.displayName}
-                    </div>
-                  )}
                 </div>
                 <button
-                  onClick={() => {
-                    if (compareFund1 && compareFund2) {
-                      const { setView, setIds, openCanvas } = useCanvasStore.getState();
-                      setIds([compareFund1.id, compareFund2.id]);
-                      setView('COMPARISON');
-                      openCanvas();
-                      setActiveTab('research');
-                      setPendingQuery(`Compare ${compareFund1.displayName} and ${compareFund2.displayName}`);
-                    }
-                  }}
+                  onClick={handleQuickCompare}
                   disabled={!compareFund1 || !compareFund2}
-                  className="w-full sm:w-auto px-6 py-2.5 bg-[#00FF9D] text-slate-950 rounded-lg font-medium text-sm hover:bg-[#00FF9D]/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-4 sm:mt-0"
+                  className="w-full sm:w-auto mt-2 sm:mt-0 whitespace-nowrap bg-[#00FF9D] text-black font-semibold px-6 py-2.5 rounded-lg hover:bg-[#00FF9D]/90 disabled:opacity-50 disabled:cursor-not-allowed transition"
                 >
-                  Compare Now
+                  Compare
                 </button>
               </div>
-            </div>
+            </Panel>
 
             <div className="relative z-0">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-serif text-xl font-medium text-white">Explore Categories</h3>
+                  <h3 className="font-serif text-xl font-medium text-white">Explore by Category</h3>
                   <p className="mt-1 text-xs text-slate-400">List funds by bucket, select 2-3 supported funds, then compare metrics and portfolios.</p>
                 </div>
                 {selectedCategoryCodes.length > 0 && (
@@ -442,15 +440,14 @@ export default function DashboardLayout() {
                   </span>
                 )}
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {CATEGORY_CARDS.map((cat) => {
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {FUND_CATEGORIES.map((cat) => {
                   const CatIcon = cat.icon;
                   return (
-                    <button
-                      type="button"
+                    <Panel
                       key={cat.key}
                       onClick={() => loadCategoryFunds(cat.key)}
-                      className={`text-left bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border rounded-lg p-4 transition-all cursor-pointer group shadow-sm ${
+                      className={`text-left p-4 transition-all cursor-pointer group shadow-sm ${
                         activeCategory === cat.key
                           ? 'border-[#00FF9D]/60 bg-[#00FF9D]/10 shadow-[0_4px_16px_rgba(102,163,255,0.15)]'
                           : 'border-white/10 hover:border-[#00FF9D]/30 hover:bg-[#1a2333]'
@@ -459,7 +456,7 @@ export default function DashboardLayout() {
                       <CatIcon className="text-[#00FF9D] h-4 w-4 mb-2 opacity-80 group-hover:opacity-100 transition-opacity" />
                       <div className="text-sm font-medium text-white mb-0.5">{cat.title}</div>
                       <div className="text-[11px] text-slate-400">{cat.desc}</div>
-                    </button>
+                    </Panel>
                   );
                 })}
               </div>
@@ -469,7 +466,7 @@ export default function DashboardLayout() {
                   <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <h4 className="text-sm font-semibold text-white">
-                        {CATEGORY_CARDS.find((item) => item.key === activeCategory)?.title || 'Category'} funds
+                        {FUND_CATEGORIES.find((item) => item.key === activeCategory)?.title || 'Category'} funds
                       </h4>
                       <p className="mt-1 text-xs text-slate-400">Unsupported AMCs are visible but disabled until their pipeline is ready.</p>
                     </div>
@@ -600,7 +597,7 @@ export default function DashboardLayout() {
           </div>
 
           <div className="space-y-6">
-            <div className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 rounded-xl p-6 shadow-lg">
+            <Panel className="p-6 shadow-lg">
               <h3 className="font-serif text-lg font-medium text-white mb-4">Investor Tools</h3>
               <div className="space-y-2">
                 <Link href="/dashboard/research-evidence" className="w-full text-left p-3 rounded-lg border border-[#00FF9D]/20 bg-[#00FF9D]/[0.06] hover:bg-[#00FF9D]/10 hover:border-[#00FF9D]/30 transition-all cursor-pointer flex items-center justify-between group">
@@ -610,24 +607,24 @@ export default function DashboardLayout() {
                   </div>
                   <ArrowRight className="h-4 w-4 text-[#00FF9D] transition-colors" />
                 </Link>
-                <Link href="/dashboard/sip-calculator" className="w-full text-left p-3 rounded-lg border border-white/10 bg-black/20 hover:bg-[#00FF9D]/10 hover:border-[#00FF9D]/30 transition-all cursor-pointer flex items-center justify-between group">
+                <div onClick={() => handleOverviewQuery('Is this a good time to invest in mid cap funds?')} className="w-full text-left p-3 rounded-lg border border-white/10 bg-white/[0.02] hover:bg-white/[0.04] transition-all cursor-pointer flex items-center justify-between group">
                   <div>
-                    <div className="text-[13px] font-medium text-white">SIP Calculator</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">Estimate SIP outcomes</div>
+                    <div className="text-[13px] font-medium text-white">Market Outlook</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">Macro trends and equity valuations</div>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-[#00FF9D] transition-colors" />
-                </Link>
-                <Link href="/dashboard/risk-quiz" className="w-full text-left p-3 rounded-lg border border-white/10 bg-black/20 hover:bg-[#00FF9D]/10 hover:border-[#00FF9D]/30 transition-all cursor-pointer flex items-center justify-between group">
+                  <ArrowRight className="h-4 w-4 text-white/30 group-hover:text-white/70 transition-colors" />
+                </div>
+                <div onClick={() => handleOverviewQuery('Explain the difference between growth and value investing')} className="w-full text-left p-3 rounded-lg border border-white/10 bg-white/[0.02] hover:bg-white/[0.04] transition-all cursor-pointer flex items-center justify-between group">
                   <div>
-                    <div className="text-[13px] font-medium text-white">Risk Quiz</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">Understand risk profile</div>
+                    <div className="text-[13px] font-medium text-white">Learn Concepts</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">Investing principles simplified</div>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-[#00FF9D] transition-colors" />
-                </Link>
+                  <ArrowRight className="h-4 w-4 text-white/30 group-hover:text-white/70 transition-colors" />
+                </div>
               </div>
-            </div>
+            </Panel>
 
-            <div className="bg-white/[0.045] backdrop-blur-md shadow-[0_24px_90px_rgba(0,0,0,0.18)] border border-white/10 rounded-xl p-6 shadow-lg">
+            <Panel className="p-6 shadow-lg">
               <h3 className="font-serif text-lg font-medium text-white mb-4">Recent Activity</h3>
               <div className="space-y-3">
                 <div onClick={() => handleOverviewQuery('Analyze Parag Parikh Flexi Cap Fund')} className="flex items-center gap-3 cursor-pointer group">
@@ -636,20 +633,20 @@ export default function DashboardLayout() {
                   </div>
                   <div>
                     <div className="text-[12px] font-medium text-white group-hover:text-[#00FF9D] transition-colors">Parag Parikh Flexi Cap</div>
-                    <div className="text-[10px] text-slate-500">Viewed 2h ago</div>
+                    <div className="text-[10px] text-slate-500">Fund Analysis • 2h ago</div>
                   </div>
                 </div>
-                <div onClick={() => handleOverviewQuery('Compare Nifty 50 vs Next 50')} className="flex items-center gap-3 cursor-pointer group">
+                <div onClick={() => handleOverviewQuery('Compare Axis Flexi Cap and HDFC Flexi Cap')} className="flex items-center gap-3 cursor-pointer group">
                   <div className="w-8 h-8 rounded bg-[#111] border border-[#222] flex items-center justify-center shrink-0">
                     <History className="h-3.5 w-3.5 text-slate-400" />
                   </div>
                   <div>
-                    <div className="text-[12px] font-medium text-white group-hover:text-[#00FF9D] transition-colors">Nifty 50 vs Next 50</div>
-                    <div className="text-[10px] text-slate-500">Compared yesterday</div>
+                    <div className="text-[12px] font-medium text-white group-hover:text-[#00FF9D] transition-colors">Axis Flexi vs HDFC Flexi</div>
+                    <div className="text-[10px] text-slate-500">Comparison • 1d ago</div>
                   </div>
                 </div>
               </div>
-            </div>
+            </Panel>
           </div>
         </div>
 
@@ -750,6 +747,9 @@ export default function DashboardLayout() {
                 <span>Data &amp; Trust</span>
                 <span className="hidden max-w-40 truncate font-normal text-slate-400 lg:inline">{healthSummary.label}</span>
               </Link>
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/15 bg-white/[0.04] hover:bg-white/10 transition-colors">
+                <LandingThemeToggle />
+              </div>
             </div>
           </header>
 

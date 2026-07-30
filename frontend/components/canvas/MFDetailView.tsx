@@ -73,7 +73,7 @@ export default function MFDetailView({ schemeCode }: { schemeCode: string }) {
   const [data, setData] = useState<MFDetailApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { setView, setIds } = useCanvasStore();
+  const { openCanvas } = useCanvasStore();
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
@@ -308,7 +308,7 @@ export default function MFDetailView({ schemeCode }: { schemeCode: string }) {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {SUGGESTED_COMPARISONS.map((fund, idx) => (
-                <div key={idx} onClick={() => { setIds([schemeCode, fund.code]); setView('COMPARISON'); }} className="cursor-pointer group">
+                <div key={idx} onClick={() => { openCanvas({ view: 'COMPARISON', ids: [schemeCode, fund.code] }); }} className="cursor-pointer group">
                   <MagicCard gradientColor="rgba(0,255,157,0.1)" className="p-4 group-hover:border-[#00FF9D]/30 transition-colors">
                   <div className="flex items-center justify-between">
                     <div>

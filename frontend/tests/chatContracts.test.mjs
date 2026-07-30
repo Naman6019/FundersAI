@@ -85,10 +85,10 @@ test('comparison view syncs local ids when a new compare action arrives', () => 
 
   assert.match(layout, /key=\{`comparison:\$\{selectedIds\.join\('\|'\)\}`\}/);
   assert.match(layout, /key=\{`comparison-graph:\$\{selectedIds\.join\('\|'\)\}`\}/);
-  assert.match(chat, /data\.system_action\?\.type === 'COMPARE' && \(data\.system_action\.ids\?\.length \|\| 0\) >= 2/);
-  assert.match(chat, /setView\('COMPARISON', data\);\s*openCanvas\(data\);/);
+  assert.match(chat, /data\?\.system_action\?\.type === 'COMPARE' && \(data\.system_action\.ids\?\.length \|\| 0\) >= 2/);
+  assert.match(chat, /openCanvas\(\{[\s\S]*?view: 'COMPARISON'[\s\S]*?\}\)/);
   assert.doesNotMatch(chat, /variant="metrics_only"/);
-  assert.match(comparison, /setIds\(newIds\);\s*store\.setIds\(newIds\);/);
+  assert.match(comparison, /setIds\(newIds\);\s*store\.openCanvas\(\{ ids: newIds \}\);/);
 });
 
 test('chat-triggered comparison canvas has honest empty states and no Ask AI control', () => {
