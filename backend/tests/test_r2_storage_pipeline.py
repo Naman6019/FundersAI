@@ -171,6 +171,12 @@ def test_ingestion_writes_r2_storage_columns(monkeypatch):
 
 def test_disabled_source_requires_explicit_acquisition_opt_in(monkeypatch):
     from app.mf_ingestion.services import ingestion_service
+    from app.mf_ingestion.sources import registry
+    import dataclasses
+    
+    # Mock Kotak to be disabled for this test
+    mock_kotak = dataclasses.replace(registry.SOURCES["kotak"], enabled=False)
+    monkeypatch.setitem(registry.SOURCES, "kotak", mock_kotak)
 
     fake_supabase = _FakeSupabase()
     monkeypatch.setattr(ingestion_service, "supabase", fake_supabase)
@@ -179,17 +185,17 @@ def test_disabled_source_requires_explicit_acquisition_opt_in(monkeypatch):
     monkeypatch.setattr(ingestion_service, "R2Store", _FakeR2Enabled)
 
     service = IngestionService()
-    skipped = service.ingest_documents(amc="mirae", document_type="factsheet")
+    skipped = service.ingest_documents(amc="kotak", document_type="factsheet")
     acquired = service.ingest_documents(
-        amc="mirae",
+        amc="kotak",
         document_type="factsheet",
         allow_disabled_source=True,
     )
 
-    assert skipped == {"status": "skipped", "reason": "mirae_source_not_enabled"}
+    assert skipped == {"status": "skipped", "reason": "kotak_source_not_enabled"}
     assert acquired["status"] == "ok"
     source_upsert = [payload for table, payload, _ in fake_supabase.upserts if table == "mf_amc_sources"][0]
-    assert source_upsert["amc_code"] == "MIRAE"
+    assert source_upsert["amc_code"] == "KOTAK"
     assert source_upsert["is_enabled"] is False
 
 

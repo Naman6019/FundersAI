@@ -198,16 +198,30 @@ def test_resolver_rejects_unsupported_amc_without_db_lookup():
     assert fake.calls == []
 
 
-def test_resolver_keeps_motilal_parser_only_until_coverage_is_promoted():
+def test_resolver_keeps_disabled_amc_unsupported_until_promoted(monkeypatch):
+    from app.mf_ingestion.sources import registry
+    from app.mf_ingestion.sources.registry import AMCSource
+    
+    # Register a fake disabled AMC
+    fake_amc = AMCSource(
+        code="fake-disabled",
+        name="Fake Disabled AMC",
+        factsheet_url="http://fake",
+        enabled=False,
+        runtime_enabled=False,
+        factsheet_contains_holdings=True
+    )
+    monkeypatch.setitem(registry.SOURCES, "fake-disabled", fake_amc)
+    
     resolver, fake = _resolver([
         {
-            "scheme_code": "motilal-101",
-            "scheme_name": "Motilal Oswal Midcap Fund Direct Growth",
-            "amc_name": "Motilal Oswal Mutual Fund",
+            "scheme_code": "fake-101",
+            "scheme_name": "Fake Midcap Fund Direct Growth",
+            "amc_name": "Fake Disabled AMC",
         }
     ])
 
-    result = resolver.resolve("Motilal Midcap Fund", asset_type="mutual_fund")
+    result = resolver.resolve("Fake Midcap Fund", asset_type="mutual_fund")
 
     assert result.coverage_status == "unsupported"
     assert result.confidence == 0
