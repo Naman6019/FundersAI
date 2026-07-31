@@ -129,10 +129,11 @@ def load_retry_documents(
     return eligible[:limit]
 
 
-def reparse_documents(documents: list[dict[str, Any]], service: ParsingService) -> dict[str, int]:
+def reparse_documents(documents: list[dict[str, Any]], service: ParsingService) -> dict[str, Any]:
     success_count = 0
     still_actionable_count = 0
     runtime_error_count = 0
+    failed_docs = []
     for doc in documents:
         doc_id = doc.get("id")
         amc_code = doc.get("amc_code")
@@ -154,15 +155,30 @@ def reparse_documents(documents: list[dict[str, Any]], service: ParsingService) 
             else:
                 logger.warning("Doc %s still needs action after retry: %s", doc_id, result)
                 still_actionable_count += 1
+                failed_docs.append({
+                    "id": doc_id,
+                    "amc": amc_code,
+                    "month": report_month,
+                    "status": status,
+                    "result": result
+                })
         except Exception as exc:
             logger.exception("Unexpected error parsing doc %s: %s", doc_id, exc)
             runtime_error_count += 1
+            failed_docs.append({
+                "id": doc_id,
+                "amc": amc_code,
+                "month": report_month,
+                "status": "runtime_error",
+                "result": str(exc)
+            })
 
     return {
         "success_count": success_count,
         "still_actionable_count": still_actionable_count,
         "runtime_error_count": runtime_error_count,
         "skipped_duplicate_count": 0,
+        "failed_docs": failed_docs,
     }
 
 
@@ -235,7 +251,24 @@ def main() -> int:
 
     logger.info("Found %s eligible documents to retry.", len(documents))
     summary = reparse_documents(documents, service)
-    logger.info("Reparse retry complete: %s", json.dumps(summary, sort_keys=True))
+    logger.info("Reparse retry complete: %s", json.dumps({k: v for k, v in summary.items() if k != "failed_docs"}, sort_keys=True))
+    
+    failed_docs = summary.get("failed_docs", [])
+    if failed_docs and os.environ.get("GITHUB_STEP_SUMMARY"):
+        try:
+            with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+                f.write("### ⚠️ Parser Retry Failures\\n\\n")
+                f.write("| AMC | Month | Status | Doc ID | Details |\\n")
+                f.write("|---|---|---|---|---|\\n")
+                for fd in failed_docs:
+                    res_str = str(fd.get("result"))
+                    if len(res_str) > 100:
+                        res_str = res_str[:100] + "..."
+                    res_str = res_str.replace("|", "\\\\|").replace("\\n", " ")
+                    f.write(f"| {fd.get('amc')} | {fd.get('month')} | {fd.get('status')} | `{fd.get('id')}` | {res_str} |\\n")
+        except Exception as e:
+            logger.warning(f"Could not write to step summary: {e}")
+
     return retry_exit_code(summary, fail_on_still_actionable=args.fail_on_still_actionable)
 
 
