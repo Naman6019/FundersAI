@@ -138,7 +138,6 @@ function DataTrailRibbon({ compact = false }) {
 
 function AMCBrandLogo({ amcKey, label }) {
   // Local logo files — official AMC logos downloaded from each AMC's website.
-  // Clearbit CDN is used as a fallback if the local file fails to load.
   const amcLocalLogos = {
     hdfc:    "/logos/hdfc.svg",
     icici:   "/logos/icici.jpeg",
@@ -154,42 +153,20 @@ function AMCBrandLogo({ amcKey, label }) {
     aditya:  "/logos/aditya_birla.png",
   };
 
-  const amcClearbitFallbacks = {
-    hdfc:    "hdfcfund.com",
-    icici:   "icicipruamc.com",
-    axis:    "axismf.com",
-    sbi:     "sbimf.com",
-    ppfas:   "ppfas.com",
-    uti:     "utimf.com",
-    nippon:  "nipponindiaim.com",
-    kotak:   "kotak.com",
-    mirae:   "miraeassetmf.co.in",
-    dsp:     "dspim.com",
-    motilal: "motilaloswalamc.com",
-    aditya:  "adityabirlasunlifemf.com",
-  };
-
   const localSrc = amcLocalLogos[amcKey];
-  const clearbitDomain = amcClearbitFallbacks[amcKey];
 
   if (!localSrc) return null;
 
   return (
-    /* eslint-disable-next-line @next/next/no-img-element */
-    <img
-      src={localSrc}
-      alt={`${label} logo`}
-      className="h-10 w-auto max-w-[120px] object-contain"
-      loading="lazy"
-      onError={(e) => {
-        // Try Clearbit CDN as fallback
-        if (clearbitDomain && e.currentTarget.src !== `https://logo.clearbit.com/${clearbitDomain}`) {
-          e.currentTarget.src = `https://logo.clearbit.com/${clearbitDomain}`;
-        } else {
-          e.currentTarget.style.display = "none";
-        }
-      }}
-    />
+    <div className="relative w-full h-full flex items-center justify-center">
+      <Image
+        src={localSrc}
+        alt={`${label} logo`}
+        fill
+        className="object-contain"
+        unoptimized
+      />
+    </div>
   );
 }
 
@@ -197,18 +174,121 @@ function AMCBrandLogo({ amcKey, label }) {
 const amcData = [
   { key: "hdfc",    label: "HDFC Mutual Fund",      desc: "India's largest AMC with extensive equity and debt schemes." },
   { key: "icici",   label: "ICICI Prudential",       desc: "Leading mutual fund with a diverse product portfolio." },
-  { key: "axis",    label: "Axis Mutual Fund",       desc: "Growth-oriented fund house covering key market caps." },
+  { key: "axis",    label: "Axis Mutual Fund",       desc: "Growth-oriented fund house covering key market caps.", darkBg: true },
   { key: "sbi",     label: "SBI Mutual Fund",        desc: "Trusted AMC backed by India's largest bank." },
   { key: "ppfas",   label: "Parag Parikh",           desc: "Value-focused fund house known for Flexi Cap." },
   { key: "uti",     label: "UTI Mutual Fund",        desc: "One of the oldest and most trusted AMCs in India." },
   { key: "nippon",  label: "Nippon India MF",        desc: "Comprehensive coverage across multiple asset classes." },
-  { key: "kotak",   label: "Kotak Mutual Fund",      desc: "Pioneer in disciplined investment strategies." },
+  { key: "kotak",   label: "Kotak Mutual Fund",      desc: "Pioneer in disciplined investment strategies.", darkBg: true },
   { key: "mirae",   label: "Mirae Asset MF",         desc: "Global asset manager with strong emerging market funds." },
   { key: "dsp",     label: "DSP Mutual Fund",        desc: "Process-driven AMC with decades of investment excellence." },
   // motilal logo is white-on-transparent — needs a dark pill background
   { key: "motilal", label: "Motilal Oswal MF",       desc: "Known for their 'Buy Right: Sit Tight' philosophy.", darkBg: true },
   { key: "aditya",  label: "Aditya Birla Sun Life",  desc: "Strong joint venture providing diverse financial solutions." },
 ];
+
+const defaultTickerItems = [
+  { label: "System", value: "Loading live market data...", isNeutral: true },
+];
+
+function LiveDataTicker() {
+  const [tickerItems, setTickerItems] = useState(defaultTickerItems);
+
+  useEffect(() => {
+    const fetchTickerData = async () => {
+      try {
+        const res = await fetch('/api/funds/ticker');
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        const newItems = [];
+        
+        // Indices
+        if (data.indices) {
+          data.indices.forEach(idx => {
+            newItems.push({
+              label: idx.name,
+              value: parseFloat(idx.value).toLocaleString('en-IN', { maximumFractionDigits: 2 }),
+              change: (idx.return_1d > 0 ? "+" : "") + idx.return_1d.toFixed(2) + "%",
+              isPositive: idx.return_1d > 0
+            });
+          });
+        }
+        
+        // Top Funds (AUM & Popular)
+        const funds = [...(data.top_aum || []), ...(data.popular_funds || [])];
+        // Deduplicate by scheme_name
+        const uniqueFunds = Array.from(new Map(funds.map(item => [item.scheme_name, item])).values()).slice(0, 10);
+        
+        uniqueFunds.forEach(fund => {
+          let shortName = fund.scheme_name.replace("Mutual Fund", "").replace("Fund", "").trim();
+          if (shortName.length > 25) shortName = shortName.substring(0, 25) + "...";
+          
+          const ret = fund.return_1y || 0;
+          newItems.push({
+            label: shortName,
+            value: `NAV ₹${fund.nav?.toFixed(2) || "N/A"}`,
+            change: (ret > 0 ? "+" : "") + ret.toFixed(2) + "% (1Y)",
+            isPositive: ret > 0
+          });
+        });
+        
+        // System Status
+        if (data.system_metrics) {
+          newItems.push({
+            label: "Coverage", 
+            value: `${data.system_metrics.total_amcs} AMCs, ${data.system_metrics.total_funds.toLocaleString('en-IN')} Funds tracked`,
+            isNeutral: true
+          });
+          newItems.push({
+            label: "System",
+            value: "Live Data Feed Active",
+            isNeutral: true
+          });
+        }
+        
+        if (newItems.length > 0) {
+          setTickerItems(newItems);
+        }
+      } catch (e) {
+        console.error("Failed to fetch ticker data", e);
+      }
+    };
+    
+    fetchTickerData();
+    const interval = setInterval(fetchTickerData, 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="w-full border-t border-b border-white/10 bg-white/[0.02] backdrop-blur-md py-2 overflow-hidden flex relative z-30">
+      <div className="pointer-events-none absolute left-0 top-0 z-10 h-full w-[40px] sm:w-[80px]" style={{ background: "linear-gradient(to right, #000, transparent)" }} />
+      <div className="pointer-events-none absolute right-0 top-0 z-10 h-full w-[40px] sm:w-[80px]" style={{ background: "linear-gradient(to left, #000, transparent)" }} />
+      
+      <motion.div
+        animate={{ x: ["0%", "-50%"] }}
+        transition={{ ease: "linear", duration: 35, repeat: Infinity }}
+        className="flex w-max shrink-0 items-center gap-10 pr-10 hover:[animation-play-state:paused]"
+      >
+        {[...Array(2)].map((_, i) => (
+          <div key={i} className="flex shrink-0 items-center gap-10 pr-10">
+            {tickerItems.map((item, idx) => (
+              <div key={`${i}-${idx}`} className="flex items-center gap-2 whitespace-nowrap text-sm cursor-default">
+                <span className="font-semibold text-white/70">{item.label}</span>
+                <span className="font-mono text-white/90">{item.value}</span>
+                {!item.isNeutral && (
+                  <span className={`font-mono font-bold ${item.isPositive ? "text-[#00FF9D]" : "text-red-400"}`}>
+                    {item.change}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        ))}
+      </motion.div>
+    </div>
+  );
+}
 
 function AMCCoverageMarquee() {
   const Card = ({ item }) => (
@@ -288,8 +368,8 @@ function NoiseOverlay() {
 
 function PromptChips({ onSelect }) {
   return (
-    <div className="relative z-10 mx-auto w-full max-w-[1500px] px-5 sm:px-8 pb-6 -mt-4">
-      <div className="flex flex-wrap gap-2">
+    <div className="relative z-10 mx-auto w-full max-w-3xl">
+      <div className="flex flex-wrap justify-center gap-2">
         {promptChips.map((chip) => (
           <button
             key={chip}
@@ -623,9 +703,10 @@ export default function FundersAILandingPage() {
         onPromptSubmit={(query) => {
           router.push(`/dashboard?query=${encodeURIComponent(query)}`);
         }}
-      />
-
-      <PromptChips onSelect={(chip) => router.push(`/dashboard?query=${encodeURIComponent(chip)}`)} />
+        ticker={<LiveDataTicker />}
+      >
+        <PromptChips onSelect={(chip) => router.push(`/dashboard?query=${encodeURIComponent(chip)}`)} />
+      </HeroWave>
 
       <DataTrailRibbon />
 

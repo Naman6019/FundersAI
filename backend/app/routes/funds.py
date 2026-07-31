@@ -12,6 +12,10 @@ from app.services.fund_similarity_service import FundSimilarityService
 from app.services.document_retrieval_service import DocumentRetrievalService
 from app.workflows.fund_research_graph import run_fund_research_workflow
 from pydantic import BaseModel
+import time
+from app.providers.yfinance_provider import YFinanceProvider
+from app.repositories.admin_ops_repository import AdminOpsRepository
+from app.services.data_health_service import DataHealthService
 
 router = APIRouter(tags=["funds"])
 JUDGE_REPORT_PATH = Path(__file__).resolve().parents[2] / "evals" / "fund_research_v1" / "judge_report.json"
@@ -162,3 +166,79 @@ async def generate_compare_verdict(req: VerdictRequest):
         }
     except Exception:
         return {"verdict": "Could not generate verdict.", "sources": []}
+
+
+_TICKER_CACHE = None
+_TICKER_CACHE_TIME = 0
+
+@router.get("/api/funds/ticker")
+def get_live_ticker_data():
+    global _TICKER_CACHE, _TICKER_CACHE_TIME
+    now = time.time()
+    
+    # 5 minute cache
+    if _TICKER_CACHE and (now - _TICKER_CACHE_TIME) < 300:
+        return _TICKER_CACHE
+
+    repo = MutualFundRepository()
+    
+    # 1. Fetch Top 5 by AUM
+    top_aum = repo.table("mutual_fund_core_snapshot").select("scheme_name, nav, return_1y, aum").order("aum", desc=True, nullsfirst=False).limit(5).execute().data or []
+    
+    # 2. Fetch Top 5 popular AMCs manually
+    popular_names = [
+        "Parag Parikh Flexi Cap Fund",
+        "Nippon India Small Cap Fund",
+        "SBI Small Cap Fund",
+        "HDFC Mid-Cap Opportunities Fund",
+        "ICICI Prudential Bluechip Fund"
+    ]
+    popular_funds = []
+    for name in popular_names:
+        res = repo.table("mutual_fund_core_snapshot").select("scheme_name, nav, return_1y").ilike("scheme_name", f"%{name}%").limit(1).execute().data
+        if res:
+            popular_funds.append(res[0])
+            
+    # 3. System Metrics
+    admin_repo = AdminOpsRepository()
+    health_service = DataHealthService(admin_repo)
+    health_data = health_service.get_data_health()
+    
+    amc_quality = health_data.get("amc_quality", [])
+    total_amcs = len(amc_quality)
+    total_funds = sum([h.get("total_funds", 0) for h in amc_quality])
+    
+    system_metrics = {
+        "total_amcs": total_amcs,
+        "total_funds": total_funds,
+    }
+    
+    # 4. Indices (NIFTY 50 and SENSEX)
+    yf_provider = YFinanceProvider()
+    indices = []
+    
+    try:
+        nifty_hist = yf_provider.get_price_history("NIFTY", period="5d")
+        if nifty_hist and len(nifty_hist) >= 2:
+            latest = nifty_hist[-1]
+            prev = nifty_hist[-2]
+            ret = ((latest["close"] - prev["close"]) / prev["close"]) * 100
+            indices.append({"name": "NIFTY 50", "value": latest["close"], "return_1d": ret})
+            
+        sensex_hist = yf_provider.get_price_history("^BSESN", period="5d")
+        if sensex_hist and len(sensex_hist) >= 2:
+            latest = sensex_hist[-1]
+            prev = sensex_hist[-2]
+            ret = ((latest["close"] - prev["close"]) / prev["close"]) * 100
+            indices.append({"name": "SENSEX", "value": latest["close"], "return_1d": ret})
+    except Exception:
+        pass
+
+    _TICKER_CACHE = {
+        "top_aum": top_aum,
+        "popular_funds": popular_funds,
+        "system_metrics": system_metrics,
+        "indices": indices
+    }
+    _TICKER_CACHE_TIME = now
+    return _TICKER_CACHE

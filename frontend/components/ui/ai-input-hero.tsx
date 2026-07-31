@@ -13,11 +13,13 @@ export type HeroWaveProps = {
   className?: string;
   style?: React.CSSProperties;
   extendLeftPx?: number; // how far to extend bars past the left edge
-  title?: string;
+  title?: string | React.ReactNode;
   subtitle?: string;
   placeholder?: string;
   buttonText?: string;
   onPromptSubmit?: (value: string) => void;
+  children?: React.ReactNode;
+  ticker?: React.ReactNode;
 };
 
 type WaveState = {
@@ -31,7 +33,7 @@ type WaveKeyframe = Omit<WaveState, "currentAngle"> & {
   time: number;
 };
 
-export function HeroWave({ className, style, extendLeftPx = 320, title = "Build with AI.", subtitle = "The AI Fullstack Engineer. Build prototypes, apps, and websites", placeholder = "Compare ", buttonText = "Generate", onPromptSubmit }: HeroWaveProps) {
+export function HeroWave({ className, style, extendLeftPx = 320, title = "Build with AI.", subtitle = "The AI Fullstack Engineer. Build prototypes, apps, and websites", placeholder = "Compare ", buttonText = "Generate", onPromptSubmit, children, ticker }: HeroWaveProps) {
   const [prompt, setPrompt] = useState("");
   const containerRef = useRef<HTMLDivElement | null>(null);
   const waveRef = useRef<HTMLDivElement | null>(null);
@@ -647,7 +649,7 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
       waveRenderPass = new RenderPass(waveScene, waveCamera);
       waveComposer.addPass(waveRenderPass);
 
-      waveBloomPass = new UnrealBloomPass(new THREE.Vector2(cameraWidth, cameraHeight), 1.0, 0.68, 0.0);
+      waveBloomPass = new UnrealBloomPass(new THREE.Vector2(cameraWidth, cameraHeight), 0.4, 0.68, 0.0);
       waveBloomPass.resolution.set(cameraWidth * 0.5, cameraHeight * 0.5);
       waveComposer.addPass(waveBloomPass);
 
@@ -854,8 +856,8 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
         }}
       >
         <div
-          className="max-w-4xl w-full text-center"
-          style={{ pointerEvents: "auto" }}
+          className="max-w-6xl w-full text-center"
+          style={{ pointerEvents: "auto", marginTop: "-18vh" }}
         >
           <div className="flex flex-col items-center mb-8">
             <div className="rounded-full border border-[#00FF9D]/30 bg-[#00FF9D]/10 px-4 py-1.5 backdrop-blur-md">
@@ -863,7 +865,7 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
             </div>
           </div>
           
-          <h1 className="text-white text-5xl sm:text-[7.5vw] leading-[1.05] tracking-tight font-bold drop-shadow-[0_1px_8px_rgba(31,61,188,0.25)] text-transparent bg-clip-text bg-gradient-to-b from-white to-white/60">
+          <h1 className="text-white text-5xl sm:text-[6.5vw] lg:text-[90px] xl:text-[110px] leading-[1.05] tracking-tight font-bold drop-shadow-[0_1px_8px_rgba(31,61,188,0.25)] text-transparent bg-clip-text bg-gradient-to-b from-white to-white/60">
             {title}
           </h1>
           <p className="text-gray-300/90 mt-6 sm:mt-8 max-w-2xl mx-auto text-lg sm:text-2xl leading-relaxed">
@@ -909,11 +911,21 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
               </button>
             </div>
           </form>
+          {children && (
+            <div className="mt-8">
+              {children}
+            </div>
+          )}
         </div>
       </div>
+      {ticker && (
+        <div className="absolute bottom-0 left-0 w-full z-20">
+          {ticker}
+        </div>
+      )}
       <div
         aria-hidden="true"
-        className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_72%_78%,rgba(0,255,157,0.18),transparent_34%),radial-gradient(circle_at_28%_64%,rgba(102,163,255,0.2),transparent_38%)]"
+        className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_72%_78%,rgba(0,255,157,0.05),transparent_34%),radial-gradient(circle_at_28%_64%,rgba(102,163,255,0.08),transparent_38%)]"
       />
       <div
         ref={waveRef}
@@ -922,7 +934,7 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
           position: "absolute",
           inset: 0,
           zIndex: 1,
-          opacity: 0.8,
+          opacity: 0.35,
           pointerEvents: "none"
         }}
       />
