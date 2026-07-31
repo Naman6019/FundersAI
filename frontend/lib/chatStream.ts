@@ -31,7 +31,8 @@ export interface ChatApiResponse extends CanvasPayload {
 type ChatStreamEvent = {
   type?: string;
   message?: string;
-  payload?: ChatApiResponse;
+  agent?: string;
+  payload?: any;
 };
 
 function parseEvent(frame: string): ChatStreamEvent | null {
@@ -52,6 +53,7 @@ function parseEvent(frame: string): ChatStreamEvent | null {
 export async function readChatStream(
   response: Response,
   onStatus?: (message: string) => void,
+  onAgentEvent?: (event: ChatStreamEvent) => void,
 ): Promise<ChatApiResponse> {
   if (!response.body) {
     throw new Error('The research service returned an empty response.');
@@ -65,6 +67,12 @@ export async function readChatStream(
   const handleFrame = (frame: string) => {
     const event = parseEvent(frame);
     if (!event) return;
+    
+    // Fire agent event callback if provided
+    if (['agent_start', 'agent_update', 'agent_complete', 'agent_error'].includes(event.type || '')) {
+      onAgentEvent?.(event);
+    }
+    
     if (event.type === 'status' && event.message) {
       onStatus?.(event.message);
       return;

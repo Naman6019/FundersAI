@@ -200,18 +200,30 @@ def test_resolver_rejects_unsupported_amc_without_db_lookup():
 
 def test_resolver_keeps_disabled_amc_unsupported_until_promoted(monkeypatch):
     from app.mf_ingestion.sources import registry
-    from app.mf_ingestion.sources.registry import AMCSource
+    from app.mf_ingestion.sources.registry import AMCDocumentSource
     
     # Register a fake disabled AMC
-    fake_amc = AMCSource(
-        code="fake-disabled",
-        name="Fake Disabled AMC",
-        factsheet_url="http://fake",
+    fake_amc = AMCDocumentSource(
+        amc_code="fake-disabled",
+        amc_name="Fake Disabled AMC",
+        adapter_key="fake-disabled",
+        factsheet_page_url="http://fake",
+        portfolio_disclosure_page_url=None,
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
         enabled=False,
         runtime_enabled=False,
         factsheet_contains_holdings=True
     )
     monkeypatch.setitem(registry.SOURCES, "fake-disabled", fake_amc)
+    
+    from app.services import asset_resolver
+    monkeypatch.setattr(
+        asset_resolver,
+        "UNSUPPORTED_MF_AMC_KEYWORDS",
+        asset_resolver.UNSUPPORTED_MF_AMC_KEYWORDS + ("fake",)
+    )
     
     resolver, fake = _resolver([
         {

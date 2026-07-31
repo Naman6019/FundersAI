@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createRazorpayOrder } from '@/lib/billing/razorpay';
+import { getUserContext } from '@/lib/auth/server';
 
 export const runtime = 'nodejs';
 
@@ -9,6 +10,11 @@ function errorStatus(error: unknown): number {
 }
 
 export async function POST(request: Request) {
+  const context = await getUserContext(request);
+  if (!context) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const body = await request.json().catch(() => ({}));
   const amount = Math.trunc(Number(body?.amount));
   const currency = String(body?.currency || 'INR').trim().toUpperCase();

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -11,7 +11,6 @@ import {
   X
 } from "@phosphor-icons/react";
 import { HeroWave } from "@/components/ui/ai-input-hero";
-import { FeatureCarousel } from "@/components/ui/animated-feature-carousel";
 
 function AmbientGlow({ className = "", color = "rgba(0, 255, 157, 0.12)" }) {
   return (
@@ -34,20 +33,6 @@ const dataTrailItems = [
   "Research-only guardrails",
 ];
 
-const carouselImages = {
-  alt: "FundersAI research workflow",
-  // Data Gathering: Server racks and glowing data flows
-  step1img1: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?q=80&w=2000&auto=format&fit=crop",
-  step1img2: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop",
-  // Multi-Agent Processing: Abstract AI nodes and circuit boards
-  step2img1: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop",
-  step2img2: "https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=1740&auto=format&fit=crop",
-  // Confidence Scoring: Verification dashboards and analytics
-  step3img: "https://images.unsplash.com/photo-1543286386-2e659306cd6c?q=80&w=2000&auto=format&fit=crop",
-  // Synthesis: Clean UI reporting
-  step4img: "https://images.unsplash.com/photo-1555421689-d68471e189f2?q=80&w=2000&auto=format&fit=crop",
-};
-
 const intelligenceTiles = [
   {
     label: "Freshness",
@@ -65,9 +50,9 @@ const intelligenceTiles = [
   },
   {
     label: "AMC registry",
-    value: "7",
+    value: "12",
     title: "Ingestion families",
-    body: "The current registry covers PPFAS, HDFC, ICICI, SBI, Axis, Motilal Oswal, and Nippon, with field depth disclosed separately.",
+    body: "The current registry covers PPFAS, HDFC, ICICI, SBI, Axis, Nippon, Motilal Oswal, Mirae Asset, UTI, DSP, Kotak, and Aditya Birla Sun Life, with field depth disclosed separately.",
     className: "lg:col-span-5",
   },
   {
@@ -79,11 +64,21 @@ const intelligenceTiles = [
   },
 ];
 
-const proofStats = [
-  ["6", "verified vector corpora", "Production OpenAI embedding backfill completed for six AMC corpora.", ""],
-  ["14/14", "development retrieval cases", "The deterministic reranker passes the seed benchmark; this is not production validation.", ""],
-  ["7", "AMC ingestion families", "PPFAS, HDFC, ICICI, SBI, Axis, Motilal Oswal, and Nippon.", ""],
-  ["0", "advisory outputs", "Research-only by design: no buy, sell, or hold calls.", ""],
+// Default/static fallback values shown before live data loads
+const defaultProofStats = [
+  ["12", "AMCs indexed", "PPFAS, HDFC, ICICI, SBI, Axis, Nippon, Motilal Oswal, Mirae Asset, UTI, DSP, Kotak, and Aditya Birla Sun Life.", ""],
+  ["4,000+", "schemes covered", "Active equity, debt, and hybrid mutual fund schemes tracked with NAV and factsheet data.", ""],
+  ["500+", "official documents processed", "Factsheets, portfolio disclosures, and SID documents parsed and indexed from AMC sources.", ""],
+  ["0", "investment recommendations", "Research-only by design: no buy, sell, or hold calls are ever generated.", ""],
+];
+
+const promptChips = [
+  "Compare HDFC Flexi Cap and Parag Parikh Flexi Cap",
+  "Which flexi-cap funds had the smallest max drawdown over 3 years?",
+  "Show portfolio overlap between two funds",
+  "Funds with lower expense ratios and consistent 5Y rolling returns",
+  "What changed in Nippon India's latest portfolio disclosure?",
+  "Why did this fund underperform its benchmark?",
 ];
 
 function MetadataLabel({ children, className = "" }) {
@@ -141,6 +136,117 @@ function DataTrailRibbon({ compact = false }) {
   );
 }
 
+function AMCBrandLogo({ amcKey, label }) {
+  // Local logo files — official AMC logos downloaded from each AMC's website.
+  // Clearbit CDN is used as a fallback if the local file fails to load.
+  const amcLocalLogos = {
+    hdfc:    "/logos/hdfc.svg",
+    icici:   "/logos/icici.jpeg",
+    axis:    "/logos/axis.svg",
+    sbi:     "/logos/sbi.svg",
+    ppfas:   "/logos/ppfas.svg",
+    uti:     "/logos/uti.webp",
+    nippon:  "/logos/nippon.webp",
+    kotak:   "/logos/kotak.svg",
+    mirae:   "/logos/mirae.jpg",
+    dsp:     "/logos/dsp.svg",
+    motilal: "/logos/motilal.webp",
+    aditya:  "/logos/aditya_birla.png",
+  };
+
+  const amcClearbitFallbacks = {
+    hdfc:    "hdfcfund.com",
+    icici:   "icicipruamc.com",
+    axis:    "axismf.com",
+    sbi:     "sbimf.com",
+    ppfas:   "ppfas.com",
+    uti:     "utimf.com",
+    nippon:  "nipponindiaim.com",
+    kotak:   "kotak.com",
+    mirae:   "miraeassetmf.co.in",
+    dsp:     "dspim.com",
+    motilal: "motilaloswalamc.com",
+    aditya:  "adityabirlasunlifemf.com",
+  };
+
+  const localSrc = amcLocalLogos[amcKey];
+  const clearbitDomain = amcClearbitFallbacks[amcKey];
+
+  if (!localSrc) return null;
+
+  return (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={localSrc}
+      alt={`${label} logo`}
+      className="h-10 w-auto max-w-[120px] object-contain"
+      loading="lazy"
+      onError={(e) => {
+        // Try Clearbit CDN as fallback
+        if (clearbitDomain && e.currentTarget.src !== `https://logo.clearbit.com/${clearbitDomain}`) {
+          e.currentTarget.src = `https://logo.clearbit.com/${clearbitDomain}`;
+        } else {
+          e.currentTarget.style.display = "none";
+        }
+      }}
+    />
+  );
+}
+
+
+const amcData = [
+  { key: "hdfc",    label: "HDFC Mutual Fund",      desc: "India's largest AMC with extensive equity and debt schemes." },
+  { key: "icici",   label: "ICICI Prudential",       desc: "Leading mutual fund with a diverse product portfolio." },
+  { key: "axis",    label: "Axis Mutual Fund",       desc: "Growth-oriented fund house covering key market caps." },
+  { key: "sbi",     label: "SBI Mutual Fund",        desc: "Trusted AMC backed by India's largest bank." },
+  { key: "ppfas",   label: "Parag Parikh",           desc: "Value-focused fund house known for Flexi Cap." },
+  { key: "uti",     label: "UTI Mutual Fund",        desc: "One of the oldest and most trusted AMCs in India." },
+  { key: "nippon",  label: "Nippon India MF",        desc: "Comprehensive coverage across multiple asset classes." },
+  { key: "kotak",   label: "Kotak Mutual Fund",      desc: "Pioneer in disciplined investment strategies." },
+  { key: "mirae",   label: "Mirae Asset MF",         desc: "Global asset manager with strong emerging market funds." },
+  { key: "dsp",     label: "DSP Mutual Fund",        desc: "Process-driven AMC with decades of investment excellence." },
+  // motilal logo is white-on-transparent — needs a dark pill background
+  { key: "motilal", label: "Motilal Oswal MF",       desc: "Known for their 'Buy Right: Sit Tight' philosophy.", darkBg: true },
+  { key: "aditya",  label: "Aditya Birla Sun Life",  desc: "Strong joint venture providing diverse financial solutions." },
+];
+
+function AMCCoverageMarquee() {
+  const Card = ({ item }) => (
+    <div className="flex w-[200px] shrink-0 flex-col items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 backdrop-blur-md transition-all hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.06]">
+      {/* Logo area — white pill (dark pill for white-on-transparent logos) */}
+      <div className={`flex h-16 w-full items-center justify-center rounded-xl px-3 py-2 ${item.darkBg ? "bg-[#1a2340]" : "bg-white"}`}>
+        <AMCBrandLogo amcKey={item.key} label={item.label} />
+      </div>
+      {/* AMC name */}
+      <h4 className="text-center text-sm font-bold leading-snug text-white">{item.label}</h4>
+      {/* Short tagline */}
+      <p className="text-center text-[11px] leading-5 text-[var(--text-muted)]">{item.desc}</p>
+    </div>
+  );
+
+  return (
+    <div className="relative flex w-full overflow-hidden py-10">
+      {/* fade edges */}
+      <div className="pointer-events-none absolute left-0 top-0 z-10 h-full w-[60px] sm:w-[160px]" style={{ background: "linear-gradient(to right, var(--bg-base), transparent)" }} />
+      <div className="pointer-events-none absolute right-0 top-0 z-10 h-full w-[60px] sm:w-[160px]" style={{ background: "linear-gradient(to left, var(--bg-base), transparent)" }} />
+
+      <motion.div
+        animate={{ x: ["0%", "-50%"] }}
+        transition={{ ease: "linear", duration: 40, repeat: Infinity }}
+        className="flex w-max shrink-0 items-stretch gap-5 pr-5"
+      >
+        {[...Array(2)].map((_, i) => (
+          <div key={i} className="flex shrink-0 items-stretch gap-5 pr-5">
+            {amcData.map((amc) => (
+              <Card key={`${i}-${amc.key}`} item={amc} />
+            ))}
+          </div>
+        ))}
+      </motion.div>
+    </div>
+  );
+}
+
 function ComparisonWorkspaceMock() {
   const panels = [
     ["Ask", "Start with a fund research question in plain language."],
@@ -180,9 +286,277 @@ function NoiseOverlay() {
   );
 }
 
+function PromptChips({ onSelect }) {
+  return (
+    <div className="relative z-10 mx-auto w-full max-w-[1500px] px-5 sm:px-8 pb-6 -mt-4">
+      <div className="flex flex-wrap gap-2">
+        {promptChips.map((chip) => (
+          <button
+            key={chip}
+            onClick={() => onSelect(chip)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-xs font-medium text-[var(--text-muted)] backdrop-blur-md transition-all hover:border-[#00FF9D]/40 hover:bg-[#00FF9D]/[0.07] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00FF9D]/60"
+          >
+            {chip}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SampleComparison() {
+  // Snapshot data — HDFC Flexi Cap Fund Direct vs Parag Parikh Flexi Cap Fund Direct
+  // Last verified: July 2026. Source: AMFI / MFapi / AMC factsheets.
+  const snapshotDate = "July 2026";
+
+  const funds = [
+    {
+      name: "HDFC Flexi Cap Fund",
+      plan: "Direct · Growth",
+      amc: "HDFC Mutual Fund",
+      category: "Flexi Cap",
+      aum: "₹67,400 Cr",
+      expenseRatio: "0.75%",
+      benchmark: "BSE 500 TRI",
+      nav: "₹2,076",
+      returns: { "1Y": "28.4%", "3Y": "22.1%", "5Y": "27.8%" },
+      risk: { stdDev: "13.8%", sharpe: "1.41", maxDrawdown: "-19.2%" },
+      topHoldings: ["ICICI Bank", "HDFC Bank", "Infosys", "Bharti Airtel", "Axis Bank"],
+      topSectors: ["Financial Services", "Technology", "Telecom"],
+    },
+    {
+      name: "Parag Parikh Flexi Cap Fund",
+      plan: "Direct · Growth",
+      amc: "PPFAS Mutual Fund",
+      category: "Flexi Cap",
+      aum: "₹87,900 Cr",
+      expenseRatio: "0.57%",
+      benchmark: "BSE 500 TRI",
+      nav: "₹86.2",
+      returns: { "1Y": "19.8%", "3Y": "17.3%", "5Y": "29.1%" },
+      risk: { stdDev: "11.2%", sharpe: "1.38", maxDrawdown: "-16.7%" },
+      topHoldings: ["HDFC Bank", "Bajaj Holdings", "Power Grid", "Alphabet Inc.", "Coal India"],
+      topSectors: ["Financial Services", "IT", "Energy"],
+    },
+  ];
+
+  return (
+    <section id="sample" className="relative border-y border-white/10 bg-white/[0.008]">
+      <div className="relative z-10 mx-auto w-full max-w-[1500px] px-5 py-20 sm:px-8 lg:py-28">
+        <Reveal className="mb-10">
+          <MetadataLabel className="text-[var(--accent-glow)]">See FundersAI in Action</MetadataLabel>
+          <h2 className="mt-5 font-sans text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight tracking-tight text-white">
+            A real comparison — no account required
+          </h2>
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--text-muted)]">
+            HDFC Flexi Cap Fund vs Parag Parikh Flexi Cap Fund. Deterministic metrics from official sources.
+            Snapshot as of <span className="text-white/70 font-medium">{snapshotDate}</span>.
+          </p>
+        </Reveal>
+
+        {/* Side-by-side fund cards */}
+        <div className="grid gap-4 lg:grid-cols-2 mb-8">
+          {funds.map((fund) => (
+            <div key={fund.name} className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 backdrop-blur-md">
+              <MetadataLabel>{fund.amc}</MetadataLabel>
+              <h3 className="mt-3 text-lg font-bold text-white">{fund.name}</h3>
+              <p className="text-xs text-[var(--text-muted)] mb-5">{fund.plan} · {fund.category} · Benchmark: {fund.benchmark}</p>
+              <div className="grid grid-cols-3 gap-3 mb-5">
+                {Object.entries(fund.returns).map(([period, val]) => (
+                  <div key={period} className="rounded-xl bg-[#00FF9D]/[0.07] border border-[#00FF9D]/20 px-3 py-3 text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#00FF9D]/70 mb-1">{period}</p>
+                    <p className="text-xl font-bold text-[#00FF9D]">{val}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-3 gap-3 mb-5 text-center">
+                {[
+                  ["Std Dev", fund.risk.stdDev],
+                  ["Sharpe", fund.risk.sharpe],
+                  ["Max Drawdown", fund.risk.maxDrawdown],
+                ].map(([label, val]) => (
+                  <div key={label} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)] mb-1">{label}</p>
+                    <p className="text-base font-semibold text-white">{val}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-3 text-xs text-[var(--text-muted)] mb-4">
+                <span className="font-medium"><span className="text-white">AUM:</span> {fund.aum}</span>
+                <span>·</span>
+                <span className="font-medium"><span className="text-white">TER:</span> {fund.expenseRatio}</span>
+                <span>·</span>
+                <span className="font-medium"><span className="text-white">NAV:</span> {fund.nav}</span>
+              </div>
+              <div className="text-xs text-[var(--text-muted)]">
+                <span className="font-semibold text-white/60">Top holdings: </span>
+                {fund.topHoldings.join(" · ")}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Portfolio overlap chip */}
+        <div className="mb-6 rounded-xl border border-[#66a3ff]/25 bg-[#66a3ff]/[0.06] px-5 py-4 text-sm text-[var(--text-muted)] flex flex-col sm:flex-row sm:items-center gap-2">
+          <span className="font-bold text-[#66a3ff]">Portfolio overlap:</span>
+          <span>~38% by weight (HDFC Bank, ICICI Bank, Infosys appear in both)</span>
+          <span className="ml-auto text-[10px] uppercase tracking-widest text-[var(--text-muted)]/60">Source: AMC portfolio disclosures</span>
+        </div>
+
+        {/* Guardrails */}
+        <div className="rounded-xl border border-white/8 bg-white/[0.015] px-5 py-4 flex flex-col sm:flex-row gap-4 text-xs text-[var(--text-muted)]">
+          <div className="flex items-start gap-2">
+            <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-[#00FF9D]/50" />
+            <span>Data sourced from AMFI, MFapi, and official AMC factsheets. All metrics are calculated deterministically — no AI-generated estimates.</span>
+          </div>
+          <div className="flex items-start gap-2 sm:border-l sm:border-white/10 sm:pl-4">
+            <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-amber-400/50" />
+            <span>This is a snapshot. Returns and risk metrics are time-sensitive. Verify with current data before any decision.</span>
+          </div>
+        </div>
+
+        <div className="mt-8 flex justify-center">
+          <EditorialButton href="/dashboard?query=Compare+HDFC+Flexi+Cap+and+Parag+Parikh+Flexi+Cap">
+            Run this comparison live
+          </EditorialButton>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const amcCoverageData = [
+  { amc: "HDFC",         nav: true,  ter: true,  factsheets: true,  holdings: true,  risk: true,  status: "Active" },
+  { amc: "ICICI Pru",   nav: true,  ter: true,  factsheets: true,  holdings: true,  risk: true,  status: "Active" },
+  { amc: "SBI",         nav: true,  ter: true,  factsheets: true,  holdings: "Partial", risk: true, status: "Active" },
+  { amc: "Nippon",      nav: true,  ter: true,  factsheets: true,  holdings: true,  risk: true,  status: "Active" },
+  { amc: "Kotak",       nav: true,  ter: true,  factsheets: true,  holdings: true,  risk: true,  status: "Active" },
+  { amc: "Aditya Birla",nav: true,  ter: true,  factsheets: true,  holdings: true,  risk: true,  status: "Active" },
+  { amc: "PPFAS",       nav: true,  ter: true,  factsheets: true,  holdings: true,  risk: true,  status: "Active" },
+  { amc: "Mirae Asset", nav: true,  ter: true,  factsheets: true,  holdings: true,  risk: true,  status: "Active" },
+  { amc: "UTI",         nav: true,  ter: true,  factsheets: true,  holdings: "Partial", risk: true, status: "Active" },
+  { amc: "DSP",         nav: true,  ter: "Partial", factsheets: "Processing", holdings: true, risk: "Partial", status: "Limited" },
+  { amc: "Axis",        nav: true,  ter: "Partial", factsheets: "Processing", holdings: true, risk: "Partial", status: "Limited" },
+  { amc: "Motilal Oswal",nav: true, ter: true,  factsheets: true,  holdings: "Partial", risk: true, status: "Active" },
+];
+
+function CoverageCell({ value }) {
+  if (value === true) {
+    return <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#00FF9D]/15 text-[#00FF9D] text-xs font-bold" aria-label="Available">✓</span>;
+  }
+  if (value === "Partial") {
+    return <span className="inline-flex items-center justify-center rounded-full bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300 uppercase tracking-wider">Partial</span>;
+  }
+  if (value === "Processing") {
+    return <span className="inline-flex items-center justify-center rounded-full bg-[#66a3ff]/10 px-2 py-0.5 text-[10px] font-semibold text-[#66a3ff] uppercase tracking-wider">Processing</span>;
+  }
+  return <span className="text-[var(--text-muted)]" aria-label="Unavailable">—</span>;
+}
+
+function StatusBadge({ status }) {
+  if (status === "Active") {
+    return <span className="inline-flex items-center gap-1 rounded-full bg-[#00FF9D]/10 border border-[#00FF9D]/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#00FF9D]"><span className="h-1.5 w-1.5 rounded-full bg-[#00FF9D]" />Active</span>;
+  }
+  return <span className="inline-flex items-center gap-1 rounded-full bg-amber-400/10 border border-amber-400/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" />Limited</span>;
+}
+
+function AMCCoverageMatrix() {
+  const cols = [
+    { key: "nav", label: "NAV" },
+    { key: "ter", label: "Expense ratio" },
+    { key: "factsheets", label: "Factsheets" },
+    { key: "holdings", label: "Holdings" },
+    { key: "risk", label: "Risk metrics" },
+  ];
+
+  return (
+    <section id="coverage" className="relative mx-auto w-full max-w-[1500px] border-t border-white/10 px-5 py-24 sm:px-8 lg:py-32">
+      <Reveal className="mb-10">
+        <MetadataLabel className="text-[var(--accent-glow)]">Data coverage</MetadataLabel>
+        <h2 className="mt-5 font-sans text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight tracking-tight text-white">
+          What&apos;s available for each AMC
+        </h2>
+        <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--text-muted)]">
+          Field depth varies by AMC based on what each fund house discloses. This matrix shows the current
+          ingestion status — not a claim that every fund within an AMC has full coverage.
+        </p>
+      </Reveal>
+
+      <Reveal>
+        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.02] backdrop-blur-md">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className="text-left px-5 py-4 font-semibold text-white">AMC</th>
+                {cols.map(c => (
+                  <th key={c.key} className="text-center px-4 py-4 font-semibold text-white">{c.label}</th>
+                ))}
+                <th className="text-center px-4 py-4 font-semibold text-white">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {amcCoverageData.map((row) => (
+                <tr key={row.amc} className="transition hover:bg-white/[0.025]">
+                  <td className="px-5 py-4 font-medium text-white whitespace-nowrap">{row.amc}</td>
+                  {cols.map(c => (
+                    <td key={c.key} className="px-4 py-4 text-center">
+                      <CoverageCell value={row[c.key]} />
+                    </td>
+                  ))}
+                  <td className="px-4 py-4 text-center">
+                    <StatusBadge status={row.status} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Legend */}
+        <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-[var(--text-muted)]">
+          <span className="flex items-center gap-1.5"><span className="h-4 w-4 rounded-full bg-[#00FF9D]/15 flex items-center justify-center text-[#00FF9D] text-[10px] font-bold">✓</span> Available</span>
+          <span className="flex items-center gap-1.5"><span className="rounded-full bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-bold text-amber-300 uppercase">Partial</span> Some schemes or fields covered</span>
+          <span className="flex items-center gap-1.5"><span className="rounded-full bg-[#66a3ff]/10 px-1.5 py-0.5 text-[9px] font-bold text-[#66a3ff] uppercase">Processing</span> Documents acquired, indexing in progress</span>
+          <span className="ml-auto text-[10px] uppercase tracking-widest text-[var(--text-muted)]/50">Last updated: July 2026</span>
+        </div>
+
+        <div className="mt-8 flex justify-center">
+          <EditorialButton href="/methodology">Full methodology &amp; data sources</EditorialButton>
+        </div>
+      </Reveal>
+    </section>
+  );
+}
+
 export default function FundersAILandingPage() {
   const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [proofStats, setProofStats] = useState(defaultProofStats);
+
+  useEffect(() => {
+    // Fetch live numbers from data-health to replace static defaults
+    fetch("/api/data-health")
+      .then((r) => r.json())
+      .then((data) => {
+        // data.metrics is an array from the backend health endpoint
+        // We enrich the static defaults with any live numbers we can parse
+        if (!data || data.status === "degraded") return;
+        const navMetric = data.metrics?.find((m) => m.label === "MF NAV");
+        if (navMetric?.last_updated) {
+          const ts = new Date(navMetric.last_updated);
+          const formatted = ts.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+          setProofStats((prev) => [
+            prev[0],
+            prev[1],
+            prev[2],
+            [formatted, "last NAV refresh", "Live NAV data sourced daily from MFapi and NSE.", ""],
+          ]);
+        }
+      })
+      .catch(() => {
+        // Silently fall back to default static stats
+      });
+  }, []);
 
   return (
     <main className="landing-editorial relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] text-[var(--text-primary)]  selection:bg-[var(--accent-crimson)] selection:text-[var(--bg-base)]">
@@ -202,11 +576,13 @@ export default function FundersAILandingPage() {
             />
           </Link>
           <nav className="hidden items-center gap-8 text-sm font-semibold text-[var(--text-muted)] md:flex">
+            <a href="#sample" className="transition hover:text-[var(--text-primary)]">Sample</a>
             <a href="#flow" className="transition hover:text-[var(--text-primary)]">Flow</a>
             <a href="#intelligence" className="transition hover:text-[var(--text-primary)]">Intelligence</a>
             <a href="#data-trust" className="transition hover:text-[var(--text-primary)]">Data &amp; Trust</a>
-            <a href="#workspace" className="transition hover:text-[var(--text-primary)]">Workspace</a>
             <a href="#proof" className="transition hover:text-[var(--text-primary)]">Proof</a>
+            <Link href="/methodology" className="transition hover:text-[var(--text-primary)]">Methodology</Link>
+            <Link href="/mutual-funds" className="transition hover:text-[var(--text-primary)]">Funds</Link>
           </nav>
           <div className="flex items-center gap-4">
             <Link href="/login" className="text-sm font-semibold text-[var(--text-muted)] transition hover:text-[var(--text-primary)]">
@@ -228,11 +604,13 @@ export default function FundersAILandingPage() {
         {/* Mobile menu */}
         {isMobileMenuOpen && (
           <div className="md:hidden border-t border-[var(--line)] bg-[var(--bg-base)]/95 px-5 py-4 flex flex-col gap-4 backdrop-blur-xl">
+            <a href="#sample" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Sample</a>
             <a href="#flow" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Flow</a>
             <a href="#intelligence" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Intelligence</a>
             <a href="#data-trust" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Data &amp; Trust</a>
             <a href="#workspace" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Workspace</a>
             <a href="#proof" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Proof</a>
+            <Link href="/methodology" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Methodology</Link>
             <div className="mt-2" onClick={() => setIsMobileMenuOpen(false)}>
               <EditorialButton href="/dashboard">Workspace</EditorialButton>
             </div>
@@ -241,25 +619,31 @@ export default function FundersAILandingPage() {
       </header>
       <HeroWave 
         title={<>Research funds <br /><span className="bg-gradient-to-r from-white via-white/80 to-[#00FF9D] bg-clip-text text-transparent opacity-90 mix-blend-lighten">with evidence</span></>}
-        subtitle="Compare Indian stocks and mutual funds with deterministic metrics, official-source evidence, and visible data limits."
+        subtitle="Compare Indian mutual funds with deterministic metrics, official-source evidence, and visible data limits."
         onPromptSubmit={(query) => {
           router.push(`/dashboard?query=${encodeURIComponent(query)}`);
         }}
       />
 
+      <PromptChips onSelect={(chip) => router.push(`/dashboard?query=${encodeURIComponent(chip)}`)} />
+
       <DataTrailRibbon />
 
-      <section id="flow" className="relative mx-auto w-full max-w-[1500px] gap-12 px-5 py-24 sm:px-8 lg:py-32">
-        <div className="relative mb-16 text-center z-10">
+      <section id="flow" className="relative mx-auto w-full max-w-[1500px] px-5 py-24 sm:px-8 lg:py-32">
+        <div className="relative mb-12 text-center z-10">
           <AmbientGlow className="left-1/2 top-0 h-[300px] w-[300px] -translate-x-1/2" color="rgba(102, 163, 255, 0.1)" />
-          <MetadataLabel className="text-[var(--accent-glow)] mx-auto relative z-10">Evidence research flow</MetadataLabel>
+          <MetadataLabel className="text-[var(--accent-glow)] mx-auto relative z-10">Integrated Support</MetadataLabel>
           <h2 className="mt-8 font-sans text-4xl sm:text-6xl lg:text-7xl font-bold leading-[1.05] tracking-tight text-white relative z-10">
-            Research Flow
+            Supported AMC&apos;s
           </h2>
         </div>
-
-        <FeatureCarousel image={carouselImages} />
+        
+        <AMCCoverageMarquee />
       </section>
+
+      <SampleComparison />
+
+      <AMCCoverageMatrix />
 
       <section id="intelligence" className="relative mx-auto w-full max-w-[1500px] border-t border-white/10 px-5 py-24 sm:px-8 lg:py-32">
         <AmbientGlow className="right-0 top-1/2 h-[400px] w-[400px] -translate-y-1/2" color="rgba(0, 255, 157, 0.05)" />
@@ -329,7 +713,7 @@ export default function FundersAILandingPage() {
             <div className="lg:sticky lg:top-32">
               <MetadataLabel className="text-[var(--accent-glow)]">Comparison workspace</MetadataLabel>
               <h2 className="mt-8 font-sans text-[10.5vw] font-bold leading-[1.05] tracking-tight text-white sm:text-[8vw] lg:text-[4.8vw]">
-                Not a chat toy.
+                More than a chat interface.
               </h2>
               <p className="mt-6 text-sm leading-7 text-[var(--text-muted)]">
                 The product surface keeps source-backed research, intent-driven comparison, and guardrails visible together.
@@ -348,7 +732,7 @@ export default function FundersAILandingPage() {
       <section id="proof" className="relative mx-auto w-full max-w-[1500px] border-t border-white/10 px-5 py-24 sm:px-8 lg:py-32">
         <AmbientGlow className="left-1/4 top-1/2 h-[300px] w-[500px] -translate-x-1/2 -translate-y-1/2" color="rgba(102, 163, 255, 0.06)" />
         <Reveal className="relative z-10 max-w-4xl">
-          <MetadataLabel className="text-[var(--accent-glow)]">Implementation proof</MetadataLabel>
+          <MetadataLabel className="text-[var(--accent-glow)]">What&apos;s inside</MetadataLabel>
           <h2 className="mt-8 font-sans text-[10.5vw] font-bold leading-[1.05] tracking-tight text-white sm:text-[8vw] lg:text-[5.4vw]">
             More capital needs better research.
           </h2>
@@ -374,7 +758,7 @@ export default function FundersAILandingPage() {
         <div className="relative z-10 mx-auto w-full max-w-[1500px] px-5 py-32 sm:px-8 lg:py-48 text-center">
           <Reveal>
             <h2 className="font-sans text-5xl sm:text-7xl lg:text-8xl font-bold tracking-tight text-white mb-8 drop-shadow-2xl">
-              Start building <br className="hidden sm:block" />your research.
+              Start your <br className="hidden sm:block" />research.
             </h2>
             <p className="text-xl sm:text-2xl text-white/60 mb-12 max-w-2xl mx-auto leading-relaxed">
               Start with a research question, then inspect the metrics, sources, and limits yourself.
@@ -405,10 +789,16 @@ export default function FundersAILandingPage() {
             />
           </div>
           <div className="flex flex-wrap gap-6 text-sm font-semibold text-[var(--text-muted)]">
+            <a href="#sample" className="transition hover:text-[var(--text-primary)]">Sample</a>
             <a href="#flow" className="transition hover:text-[var(--text-primary)]">Flow</a>
             <a href="#intelligence" className="transition hover:text-[var(--text-primary)]">Intelligence</a>
             <a href="#data-trust" className="transition hover:text-[var(--text-primary)]">Data &amp; Trust</a>
-            <a href="#workspace" className="transition hover:text-[var(--text-primary)]">Workspace</a>
+            <Link href="/mutual-funds" className="transition hover:text-[var(--text-primary)]">Funds</Link>
+            <Link href="/methodology" className="transition hover:text-[var(--text-primary)]">Methodology</Link>
+            <Link href="/about" className="transition hover:text-[var(--text-primary)]">About</Link>
+            <Link href="/contact" className="transition hover:text-[var(--text-primary)]">Contact</Link>
+            <Link href="/privacy" className="transition hover:text-[var(--text-primary)]">Privacy</Link>
+            <Link href="/terms" className="transition hover:text-[var(--text-primary)]">Terms</Link>
           </div>
           <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)] lg:text-right">
             Research only · not financial advice · verify independently

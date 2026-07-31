@@ -22,7 +22,7 @@ Use this guide for repository conventions and quick orientation. For the authori
 - NSE/FinEdge scheduled stock data with YFinance fallback paths
 - AMFI, MFapi, and official AMC documents for mutual-fund data
 - OpenRouter and Groq chat/extraction paths; direct OpenAI `text-embedding-3-small` document/query embeddings; Langfuse tracing is optional and feature-flagged
-- Render production hosting
+- Google Cloud Run production hosting
 
 **Database, storage, and automation**
 

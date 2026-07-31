@@ -459,8 +459,15 @@ function ReasoningSummary({ metadata }: { metadata?: Record<string, unknown> | n
   );
 }
 
+type AgentState = {
+  name: string;
+  status: 'running' | 'success' | 'error';
+  message: string;
+};
+
 export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: boolean }) {
   const [streamStatus, setStreamStatus] = useState<string>("Thinking...");
+  const [agentStates, setAgentStates] = useState<AgentState[]>([]);
   const searchParams = useSearchParams();
   const { openCanvas } = useCanvasStore();
   const messages = useChatStore((state) => state.messages);
@@ -553,6 +560,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
     }
 
     setStreamStatus('Analyzing your question...');
+    setAgentStates([]);
     setIsProcessing(true);
 
     try {
@@ -605,7 +613,30 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
         }
         throw new Error(errorMessage);
       }
-      const data = await readChatStream(res, setStreamStatus);
+      const data = await readChatStream(res, setStreamStatus, (event) => {
+        const agentName = event.agent;
+        if (!agentName) return;
+        setAgentStates((prev) => {
+          const existing = prev.find(a => a.name === agentName);
+          if (event.type === 'agent_start') {
+            if (existing) return prev;
+            return [...prev, { name: agentName, status: 'running', message: 'Starting...' }];
+          }
+          if (event.type === 'agent_update') {
+            if (!existing) return [...prev, { name: agentName, status: 'running', message: event.payload?.message || '' }];
+            return prev.map(a => a.name === agentName ? { ...a, message: event.payload?.message || a.message } : a);
+          }
+          if (event.type === 'agent_complete') {
+            if (!existing) return prev;
+            return prev.map(a => a.name === agentName ? { ...a, status: 'success' } : a);
+          }
+          if (event.type === 'agent_error') {
+            if (!existing) return prev;
+            return prev.map(a => a.name === agentName ? { ...a, status: 'error', message: event.message || 'Error' } : a);
+          }
+          return prev;
+        });
+      });
 
       if (data?.system_action?.type === 'COMPARE' && (data.system_action.ids?.length || 0) >= 2) {
         openCanvas({
@@ -870,18 +901,44 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
 
               {isProcessing && (
                 <motion.div
-                    className="mr-auto w-fit backdrop-blur-md bg-white/[0.02] rounded-full px-4 py-2 shadow-sm border border-white/[0.05]"
+                    className="mr-auto w-fit max-w-[92%] backdrop-blur-md bg-white/[0.02] rounded-2xl px-5 py-4 shadow-sm border border-white/[0.05]"
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                 >
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-7 rounded-full bg-[linear-gradient(135deg,#67b2ff,#3b82f6)] flex items-center justify-center text-center shadow-[0_4px_8px_rgba(59,130,246,0.2)]">
-                            <Sparkles className="h-3 w-3 text-white" />
+                    <div className="flex flex-col gap-3">
+                      {agentStates.length === 0 ? (
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-7 rounded-full bg-[linear-gradient(135deg,#67b2ff,#3b82f6)] flex items-center justify-center text-center shadow-[0_4px_8px_rgba(59,130,246,0.2)]">
+                                <Sparkles className="h-3 w-3 text-white" />
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-white/70">
+                                <span>{streamStatus}</span>
+                                <TypingDots />
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2 text-sm text-white/70">
-                            <span>{streamStatus}</span>
-                            <TypingDots />
-                        </div>
+                      ) : (
+                        agentStates.map((agent) => (
+                          <div key={agent.name} className="flex items-start gap-3">
+                            <div className={`mt-0.5 w-6 h-6 shrink-0 rounded-full flex items-center justify-center ${
+                              agent.status === 'running' ? 'bg-[#66a3ff]/20 text-[#66a3ff] animate-pulse' :
+                              agent.status === 'success' ? 'bg-emerald-500/20 text-emerald-400' :
+                              'bg-rose-500/20 text-rose-400'
+                            }`}>
+                              {agent.status === 'running' ? <Sparkles className="h-3 w-3" /> :
+                               agent.status === 'success' ? <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> :
+                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              }
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{agent.name}</span>
+                              <span className={`text-sm ${agent.status === 'running' ? 'text-white/90' : 'text-white/50'}`}>
+                                {agent.message}
+                                {agent.status === 'running' && <TypingDots />}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                 </motion.div>
               )}

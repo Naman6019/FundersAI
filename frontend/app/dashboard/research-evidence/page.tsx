@@ -34,12 +34,18 @@ type EvaluationVariant = {
 };
 
 const AMC_OPTIONS = [
+  ['aditya_birla', 'Aditya Birla Sun Life Mutual Fund'],
   ['axis', 'Axis Mutual Fund'],
+  ['dsp', 'DSP Mutual Fund'],
   ['hdfc', 'HDFC Mutual Fund'],
   ['icici', 'ICICI Prudential Mutual Fund'],
+  ['kotak', 'Kotak Mahindra Mutual Fund'],
+  ['mirae', 'Mirae Asset Mutual Fund'],
+  ['motilal', 'Motilal Oswal Mutual Fund'],
   ['nippon', 'Nippon India Mutual Fund'],
   ['ppfas', 'PPFAS Mutual Fund'],
   ['sbi', 'SBI Mutual Fund'],
+  ['uti', 'UTI Mutual Fund'],
 ];
 
 const TRACE_LABELS: Record<string, string> = {

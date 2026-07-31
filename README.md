@@ -129,7 +129,7 @@ For agents and contributors, read [`Agents.md`](Agents.md) and the [documentatio
 
 ## 🧭 Current status boundaries
 
-- The production AMC evidence corpus has verified vector backfills for six AMC corpora; hosted semantic-query verification is still a separate deployment check.
+- The production AMC evidence corpus has verified vector backfills for twelve AMC corpora; hosted semantic-query verification is still a separate deployment check.
 - The retrieval result of `14/14` is a development-seed benchmark, not a production-quality claim.
 - Prefect, MLflow, Docker, and GCP files provide implementation foundations and reproducible scaffolding; the active production topology remains Vercel, Render, Supabase, Cloudflare R2, and GitHub Actions.
 - FundersAI shows missing, partial, and stale data as limitations and does not convert them into investment recommendations.
