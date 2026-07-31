@@ -93,13 +93,13 @@ stitch_downloads/
 *.gif
 *.webp
 *.ico
-!frontend/public/logos/*
+!frontend/public/logos/**
 *.json
 !backend/evals/fund_research_v1/judge_report.json
 *.yaml
 *.yml
-!backend/config/mf_document_sources.json
-!backend/config/hdfc_monthly_portfolios.json
+!frontend/data/*.yaml
+!backend/config/*.yaml
 !.github/workflows/*.yml
 *.log
 *.markdown
