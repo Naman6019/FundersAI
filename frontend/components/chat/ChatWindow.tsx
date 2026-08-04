@@ -602,7 +602,7 @@ export default function ChatWindow({ isFullScreen = false }: { isFullScreen?: bo
         try {
           const errorBody = await res.json();
           if (errorBody?.error === 'token_budget_exceeded') {
-            errorMessage = 'Your chat token budget has been reached for this period.';
+            errorMessage = 'Your chat token budget has been reached for this period. [Upgrade your plan](/billing) to continue researching.';
           } else if (errorBody?.error === 'Upstream Error') {
             errorMessage = 'FundersAI research service could not complete the request in time. Try again in a moment.';
           } else if (typeof errorBody?.error === 'string') {

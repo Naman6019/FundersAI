@@ -24,6 +24,7 @@ import {
   History,
   Check,
   X,
+  Sparkles,
 } from 'lucide-react';
 import { useCanvasStore } from '@/store/useCanvasStore';
 import { useChatStore } from '@/store/useChatStore';
@@ -737,7 +738,16 @@ export default function DashboardLayout() {
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              {currentTier === 'free' && (
+                <Link
+                  href="/billing"
+                  className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 px-4 text-xs font-semibold text-white transition hover:from-blue-500 hover:to-blue-400 shadow-[0_0_15px_rgba(37,99,235,0.2)]"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-blue-100" />
+                  <span className="hidden sm:inline tracking-wide">Upgrade</span>
+                </Link>
+              )}
               <Link
                 href="/dashboard/data-trust"
                 className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white"

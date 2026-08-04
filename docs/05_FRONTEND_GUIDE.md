@@ -1,9 +1,9 @@
 # Frontend Guide
 
-**Last updated:** 2026-07-21
+**Last updated:** 2026-08-04
 
 ## Stack
-- Next.js `16.2.4` (App Router)
+- Next.js `16.2.11` (App Router)
 - React `19.2.4`
 - TypeScript
 - Tailwind CSS 4
@@ -15,19 +15,28 @@
 - `app/dashboard/page.tsx`: authenticated workspace entry.
 - `app/auth/page.tsx`: sign-in/sign-up entry.
 - `app/auth/callback/page.tsx`: Supabase OAuth/email callback.
+- `app/auth/reset-password/page.tsx`: password update route.
+- `app/feedback/page.tsx`: post-logout feedback surface.
+- `app/compare/[pair]/page.tsx`: shareable deep-link to a comparison canvas.
+- `app/mutual-funds/page.tsx`, `app/mutual-funds/[amcSlug]/page.tsx`, `app/mutual-funds/[amcSlug]/[fundSlug]/page.tsx`: public AMC/fund pages.
+- `app/learn/**`: SEO content pages (alpha-beta-sharpe, large-cap-vs-flexi-cap, mutual-fund-comparison, pe-ratio, reading-stock-fundamentals).
+- `app/dashboard/data-trust/page.tsx`: authenticated data-trust status page.
+- `app/dashboard/research-evidence/page.tsx`: judge-facing research trace and evaluation surface.
+- `app/dashboard/risk-quiz/page.tsx`, `app/dashboard/sip-calculator/page.tsx`: authenticated planning tools.
 - `app/api/chat/route.ts`: backend chat proxy.
 - `lib/chatStream.ts`: shared SSE parser used by full chat and inline copilot.
 - `app/api/chat/sessions/**`: authenticated owned-session list/create/restore routes.
+- `app/api/chat/history/route.ts`: legacy saved-message history (GET/DELETE).
 - `app/api/data-health/route.ts`: rate-limited backend health proxy.
+- `app/api/feedback/route.ts`: authenticated, origin-checked feedback endpoint.
 - `app/api/quant/**`: backend quant proxy routes.
-- `app/api/funds/**`: category, comparison-verdict, and official-document research routes.
+- `app/api/funds/**`: category, comparison-verdict, official-document research, and live landing-page ticker routes.
 - `app/api/create-order/route.ts`: Razorpay Standard Checkout order creation.
 - `app/api/verify-payment/route.ts`: Razorpay Standard Checkout signature verification.
 - `app/api/billing/**`: Razorpay subscription creation and webhook handling.
 - `components/chat/`: prompt input + response rendering.
 - `components/canvas/`: stock/fund/comparison visual panels.
 - `components/billing/`: subscription tiers and Standard Checkout panel.
-- `app/dashboard/research-evidence/page.tsx`: judge-facing research trace and evaluation surface.
 - `store/useChatStore.ts`, `store/useCanvasStore.ts`: persistent client state.
 
 ## Auth Flow

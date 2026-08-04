@@ -1,6 +1,6 @@
 # Product Specification
 
-**Last updated:** 2026-07-21
+**Last updated:** 2026-08-04
 
 ## Positioning
 FundersAI is a research-only product for Indian stocks and mutual funds.  
@@ -16,7 +16,9 @@ It does not provide investment advice.
    - explicit data limitations when fields are missing
 3. Data automation
    - scheduled stock and MF sync workflows
-   - enabled AMC disclosure sources for `ppfas`, `hdfc`, `icici`, `sbi`, `axis`, `motilal`, and `nippon`
+   - official AMC disclosure pipeline enabled for 12 AMCs in `mutual_fund_core_snapshot`: `hdfc`, `sbi`, `icici`, `axis`, `ppfas`, `nippon`, `motilal`, `mirae`, `uti`, `dsp`, `kotak`, `aditya birla`
+   - production-runtime enabled: `hdfc`, `sbi`, `icici`, `axis`, `ppfas`, `nippon`, `motilal`
+   - staging-only / pending enablement: `mirae`, `uti`, `dsp`, `kotak`, `aditya birla`
 4. Official-document research
    - deterministic lexical reranking and evidence-coverage abstention by default
    - cited official-source answers through a bounded LangGraph workflow

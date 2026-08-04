@@ -1,6 +1,6 @@
 # Architecture
 
-**Last updated:** 2026-07-21
+**Last updated:** 2026-08-04
 
 ## System Shape
 FundersAI is a split web architecture:
@@ -15,6 +15,7 @@ The next infrastructure work extends this shape rather than replacing it. The ta
 ## Component Boundaries
 
 ### Frontend (`frontend/`)
+- Next.js `16.2.11` App Router renders the workspace and authenticated routes.
 - `/dashboard` is auth-gated.
 - `/admin` is admin-gated with `AdminAccessGate` + server-side `/api/admin/*` role checks.
 - `/dashboard/admin` redirects to `/admin` for compatibility.

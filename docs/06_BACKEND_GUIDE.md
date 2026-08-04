@@ -1,6 +1,6 @@
 # Backend Guide
 
-**Last updated:** 2026-07-21
+**Last updated:** 2026-08-04
 
 ## Stack
 - FastAPI + Uvicorn
@@ -68,7 +68,7 @@ backend/
 - Core: `/`, `/health`, `/api/v1/providers/usage`
 - Quant: `/api/quant/*`
 - Chat: `POST /api/chat` streams status/final/error SSE events and cancels its worker if the downstream stream is abandoned.
-- Mutual funds: search, category comparison, detail, verdict, and similarity under `/api/funds/*` and `/api/mf/*`
+- Mutual funds: search, category comparison, detail, verdict, similarity, and live landing-page ticker under `/api/funds/*` and `/api/mf/*`
 - Official-document research: `/api/funds/research/search`, `/answer`, and `/evaluation`
 - Internal MF ingestion: `/api/internal/mf/*`
 - Internal admin review/operations: `/api/admin/*` (requires `X-Admin-Key`)

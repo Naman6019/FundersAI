@@ -1,6 +1,6 @@
 # Database Schema
 
-**Last updated:** 2026-07-28
+**Last updated:** 2026-08-04
 
 FundersAI uses Supabase PostgreSQL for structured application data and authentication. Browser access is limited by Row Level Security (RLS); service-role writes are server-side only.
 
@@ -146,5 +146,13 @@ The Next.js proxy uses the service role only after authenticating the user and c
 9. `20260723_add_discovery_v2_history.sql`
 10. `20260727_add_mf_extraction_staging_and_promotion.sql` (production schema presence verified 2026-07-27; no promotion was applied during verification)
 11. `20260728_allow_content_confirmed_discovery_month.sql` (required before the updated discovery supervisor can persist body-confirmed observations)
+12. `20260728_add_mf_sector_allocation_staging.sql`
+13. `20260728_add_mf_staging_coverage_rpc.sql`
+14. `20260728_add_mf_report_month_reconciliation.sql`
+15. `20260728_add_mf_promotion_eligible_coverage_rpc.sql`
+16. `20260728_add_mf_thresholded_portfolio_promotion_v2.sql`
+17. `20260728_fix_mf_promotion_provider_payload.sql`
+18. `20260728_harden_mf_promotion_rpc_contract.sql`
+19. `20260728_make_mf_factsheet_promotion_atomic.sql`
 
 Equivalent production SQL is not a substitute for keeping the migration in version control.

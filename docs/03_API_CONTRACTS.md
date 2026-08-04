@@ -1,6 +1,6 @@
 # API Contracts
 
-**Last updated:** 2026-07-21
+**Last updated:** 2026-08-04
 
 The supported browser boundary is the Next.js `/api/*` surface. Browser code must not call FastAPI directly. Unless noted otherwise, routes return JSON; chat uses Server-Sent Events (SSE).
 
@@ -69,6 +69,7 @@ These routes proxy to their matching `/api/quant/*` FastAPI endpoints.
 - `POST /api/funds/research/answer`: bounded official-document research answer with citations or abstention.
   - Returns `answer_format=field_summary` for concise verified claims, `source_excerpts` when only matching raw evidence is available, or `abstention` when the evidence gate fails.
 - `GET /api/funds/research/evaluation`: versioned development evaluation artifact used by the evidence UI.
+- `GET /api/funds/ticker`: live landing-page ticker. Returns `{top_aum, popular_funds, system_metrics, indices}`. Backend caches the payload for 5 minutes; the Next.js proxy sets `revalidate=1800`. No authentication required; rate-limited under the public `data-health` group.
 
 ### Billing and Payments
 
@@ -129,6 +130,7 @@ Missing authentication returns `401`; an authenticated non-admin returns `403`.
 - `GET /api/funds/research/evaluation`
 - `GET /api/mf/{scheme_code}`
 - `POST /api/funds/compare/verdict`
+- `GET /api/funds/ticker`: landing-page ticker; in-process 5-minute cache.
 
 Similarity and research responses expose version/coverage metadata and remain research signals, not forecasts or recommendations.
 
