@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Callable, TypeVar
+from uuid import uuid4
 
 from app.database import supabase as default_supabase
 from app.models.stock_models import (
@@ -17,6 +18,7 @@ from app.models.stock_models import (
     StockPriceDaily,
     StockProfile,
 )
+from app.supabase_retry import execute_with_retry
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -55,12 +57,16 @@ class StockRepository:
     def create_provider_run(self, run: ProviderRun) -> str:
         if not self._has_client():
             return ""
-        try:
-            response = self.supabase.table("data_provider_runs").insert(self._to_row(run)).execute()
-            return str((response.data or [{}])[0].get("id") or "")
-        except Exception as exc:
-            logger.warning("Provider run insert failed: %s", exc)
-            return ""
+        self.reconcile_stale_provider_runs()
+        run_id = str(uuid4())
+        row = {"id": run_id, **self._to_row(run)}
+        query = self.supabase.table("data_provider_runs").upsert(row, on_conflict="id")
+        execute_with_retry(
+            query.execute,
+            operation_name="create_provider_run",
+            log=logger,
+        )
+        return run_id
 
     def update_provider_run(self, run_id: str, run: ProviderRun) -> None:
         if not self._has_client():
@@ -74,10 +80,68 @@ class StockRepository:
             "error_summary": run.error_summary,
             "metadata": run.metadata or {},
         }
-        try:
-            self.supabase.table("data_provider_runs").update(row).eq("id", run_id).execute()
-        except Exception as exc:
-            logger.warning("Provider run update failed for %s: %s", run_id, exc)
+        query = self.supabase.table("data_provider_runs").update(row).eq("id", run_id)
+        execute_with_retry(
+            query.execute,
+            operation_name="update_provider_run",
+            log=logger,
+        )
+
+    def reconcile_stale_provider_runs(
+        self,
+        *,
+        stale_after: timedelta = timedelta(hours=6),
+        now: datetime | None = None,
+        limit: int = 500,
+    ) -> int:
+        if not self._has_client():
+            return 0
+        now_utc = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        cutoff = now_utc - stale_after
+        query = (
+            self.supabase.table("data_provider_runs")
+            .select("id,started_at,metadata")
+            .eq("status", "running")
+            .is_("finished_at", "null")
+            .lte("started_at", cutoff.isoformat())
+            .limit(max(1, int(limit)))
+        )
+        response = execute_with_retry(
+            query.execute,
+            operation_name="load_stale_provider_runs",
+            log=logger,
+        )
+        reconciled = 0
+        for stale_run in response.data or []:
+            run_id = str(stale_run.get("id") or "").strip()
+            if not run_id:
+                continue
+            existing_metadata = stale_run.get("metadata")
+            metadata = dict(existing_metadata) if isinstance(existing_metadata, dict) else {}
+            metadata.update(
+                reconciled_at=now_utc.isoformat(),
+                reconciliation_reason="stale_running_timeout",
+            )
+            update_query = (
+                self.supabase.table("data_provider_runs")
+                .update(
+                    {
+                        "status": "timed_out",
+                        "finished_at": now_utc.isoformat(),
+                        "error_summary": "Run exceeded the stale-running cutoff and was reconciled.",
+                        "metadata": metadata,
+                    }
+                )
+                .eq("id", run_id)
+                .eq("status", "running")
+            )
+            execute_with_retry(
+                update_query.execute,
+                operation_name="reconcile_stale_provider_run",
+                log=logger,
+            )
+            reconciled += 1
+        return reconciled
 
     def log_data_quality_issue(self, issue: DataQualityIssue) -> None:
         if not self._has_client() or not self._data_quality_issues_available:
@@ -277,13 +341,18 @@ class StockRepository:
             if not active_rows:
                 return
             try:
-                self.supabase.table(table).upsert(active_rows, on_conflict=on_conflict).execute()
+                query = self.supabase.table(table).upsert(active_rows, on_conflict=on_conflict)
+                execute_with_retry(
+                    query.execute,
+                    operation_name=f"upsert_{table}",
+                    log=logger,
+                )
                 return
             except Exception as exc:
                 missing_column = _missing_column_from_error(exc)
                 if not missing_column or missing_column in attempted_missing:
-                    logger.warning("Batch upsert failed for %s: %s", table, exc)
-                    return
+                    logger.error("Batch upsert failed for %s: %s", table, exc)
+                    raise
                 attempted_missing.add(missing_column)
                 self._table_disabled_columns.setdefault(table, set()).add(missing_column)
                 logger.warning(

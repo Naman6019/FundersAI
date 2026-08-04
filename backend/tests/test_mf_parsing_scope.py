@@ -113,6 +113,42 @@ def test_parse_pending_documents_matches_amc_code_case_insensitively(monkeypatch
     assert result["processed"][0]["source_document_id"] == "doc-lower-amc-1"
 
 
+def test_parse_pending_documents_filters_exact_source_document_ids(monkeypatch):
+    docs = [
+        {"id": "approved", "amc_code": "SBI", "document_type": "factsheet", "storage_path": "ignored", "parse_status": "pending"},
+        {"id": "unapproved", "amc_code": "SBI", "document_type": "factsheet", "storage_path": "ignored", "parse_status": "pending"},
+    ]
+    fake_supabase = _FakeSupabase(docs)
+    monkeypatch.setattr(parsing_service, "supabase", fake_supabase)
+
+    result = ParsingService().parse_pending_documents(
+        limit=20,
+        amc_code="SBI",
+        source_document_ids=["approved"],
+    )
+
+    assert result["count"] == 1
+    assert result["processed"][0]["source_document_id"] == "approved"
+
+
+def test_parse_pending_documents_fails_when_exact_scope_selects_nothing(monkeypatch):
+    fake_supabase = _FakeSupabase([])
+    monkeypatch.setattr(parsing_service, "supabase", fake_supabase)
+
+    result = ParsingService().parse_pending_documents(
+        limit=20,
+        amc_code="SBI",
+        source_document_ids=["missing"],
+    )
+
+    assert result == {
+        "status": "error",
+        "reason": "no_requested_documents_selected",
+        "processed": [],
+        "count": 0,
+    }
+
+
 def test_parse_pending_documents_resolves_aditya_birla_to_absl_rows(monkeypatch):
     fake_doc = {
         "id": "doc-absl-1",

@@ -124,6 +124,7 @@ The Next.js proxy uses the service role only after authenticating the user and c
 ## Observability and Job Telemetry
 
 - `data_provider_runs` and legacy-compatible `provider_runs`
+  - stale unfinished `running` rows are reconciled to `timed_out`; the partial `(status, started_at)` index supports bounded reconciliation scans.
 - `provider_usage_logs`
 - `data_quality_issues`
 
@@ -150,6 +151,7 @@ The Next.js proxy uses the service role only after authenticating the user and c
 13. `20260728_add_mf_staging_coverage_rpc.sql`
 14. `20260728_add_mf_report_month_reconciliation.sql`
 15. `20260728_add_mf_promotion_eligible_coverage_rpc.sql`
+16. `20260805_index_stale_data_provider_runs.sql`
 16. `20260728_add_mf_thresholded_portfolio_promotion_v2.sql`
 17. `20260728_fix_mf_promotion_provider_payload.sql`
 18. `20260728_harden_mf_promotion_rpc_contract.sql`

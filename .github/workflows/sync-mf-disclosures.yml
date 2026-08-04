@@ -9,6 +9,18 @@ on:
         description: 'Optional comma-separated parser-enabled AMCs; blank uses the registry'
         required: false
         default: ''
+      lane:
+        description: 'Automation lane'
+        required: false
+        type: choice
+        options:
+          - green
+          - validation_only
+        default: green
+      source_document_ids:
+        description: 'Exact mf_raw_documents UUIDs required for validation-only parsing'
+        required: false
+        default: ''
       max_documents:
         description: 'Max documents per AMC per document type'
         required: false
@@ -90,6 +102,9 @@ on:
         required: false
         default: 'false'
 
+permissions:
+  contents: read
+
 concurrency:
   group: sync-mf-disclosures-${{ github.ref }}
   cancel-in-progress: false
@@ -104,7 +119,13 @@ jobs:
       - id: registry
         shell: bash
         run: |
-          matrix="$(PYTHONPATH=backend python -c "import json; from app.mf_ingestion.sources.registry import capability_keys; print(json.dumps(capability_keys('portfolio_parser_enabled')))")"
+          matrix="$(python backend/scripts/resolve_mf_automation_scope.py \
+            --operation disclosure_parse \
+            --lane '${{ inputs.lane || 'green' }}' \
+            --amcs '${{ inputs.amcs }}' \
+            --event-name '${{ github.event_name }}' \
+            --source-document-ids '${{ inputs.source_document_ids }}' \
+            --format json)"
           echo "amcs=$matrix" >> "$GITHUB_OUTPUT"
 
   sync-matrix:
@@ -176,11 +197,11 @@ jobs:
           MF_LLM_ALLOW_FINAL_WRITES: ${{ github.event.inputs.llm_allow_final_writes || vars.MF_LLM_ALLOW_FINAL_WRITES || 'false' }}
           MF_SOURCE_MANIFEST_PATH: ${{ vars.MF_SOURCE_MANIFEST_PATH || 'backend/config/mf_document_sources.json' }}
           ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "false"
-          DISPATCH_AMCS: ${{ github.event.inputs.amcs }}
           DISPATCH_MAX_DOCS: ${{ github.event.inputs.max_documents }}
           DISPATCH_PARSE_LIMIT: ${{ github.event.inputs.parse_limit }}
           DISPATCH_PARSE_ROUNDS: ${{ github.event.inputs.parse_rounds }}
           DISPATCH_PARSE_ONLY: ${{ github.event.inputs.parse_only }}
+          DISPATCH_SOURCE_DOCUMENT_IDS: ${{ github.event.inputs.source_document_ids }}
           DISPATCH_HDFC_FACTSHEET_URLS: ${{ github.event.inputs.hdfc_factsheet_urls }}
           DISPATCH_HDFC_PORTFOLIO_URLS: ${{ github.event.inputs.hdfc_portfolio_urls }}
           DISPATCH_AXIS_FACTSHEET_URLS: ${{ github.event.inputs.axis_factsheet_urls }}
@@ -248,7 +269,6 @@ jobs:
           export MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO="${MF_ALLOW_HDFC_FACTSHEET_AS_PORTFOLIO:-$MF_ALLOW_FACTSHEET_AS_PORTFOLIO}"
 
           EVENT_NAME="${GITHUB_EVENT_NAME:-workflow_dispatch}"
-          AMCS="${DISPATCH_AMCS:-$(PYTHONPATH=backend python -c "from app.mf_ingestion.sources.registry import capability_keys; print(','.join(capability_keys('portfolio_parser_enabled')))")}"
           GLOBAL_MAX_DOCS="${DISPATCH_MAX_DOCS:-5}"
           GLOBAL_PARSE_LIMIT="${DISPATCH_PARSE_LIMIT:-800}"
           PARSE_ROUNDS="${DISPATCH_PARSE_ROUNDS:-3}"
@@ -256,15 +276,6 @@ jobs:
             echo "Acquisition is separated. Use Acquire MF Documents, then rerun this parser workflow."
           fi
           PARSE_ONLY="true"
-
-          # Check if the matrix amc is in the AMCS list
-          # We add commas around both sides to ensure exact matching (e.g. ,axis, against ,axis,hdfc,)
-          # We also strip spaces just in case
-          clean_amcs=$(echo "$AMCS" | tr -d ' ')
-          if [[ ! ",$clean_amcs," == *",${{ matrix.amc }},"* ]]; then
-            echo "Skipping ${{ matrix.amc }} as it is not in the requested AMCS list ($AMCS)"
-            exit 0
-          fi
 
           amc="${{ matrix.amc }}"
           
@@ -544,7 +555,11 @@ jobs:
           round=1
           while [ "$round" -le "$PARSE_ROUNDS" ]; do
             echo "AMC=$amc parse_round=$round/$PARSE_ROUNDS"
-            if ! timeout 85m python -m backend.app.mf_ingestion.jobs.parse_pending_documents --amc "$amc" --limit "$parse_limit" --strict; then
+            parse_args=(--amc "$amc" --limit "$parse_limit" --strict)
+            if [ -n "${DISPATCH_SOURCE_DOCUMENT_IDS:-}" ]; then
+              parse_args+=(--source-document-ids "$DISPATCH_SOURCE_DOCUMENT_IDS")
+            fi
+            if ! timeout 85m python -m backend.app.mf_ingestion.jobs.parse_pending_documents "${parse_args[@]}"; then
               amc_failed=true
               echo "AMC parse failed/timed out: $amc round=$round"
               break
@@ -583,9 +598,15 @@ jobs:
           MF_DISCLOSURE_MIN_CORE_FIELD_RATIO: "0.80"
           MF_DISCLOSURE_MIN_PORTFOLIO_FAMILY_RATIO: "0.80"
         run: |
-          export MF_DISCLOSURE_COVERAGE_AMCS="$(PYTHONPATH=backend python -c "from app.mf_ingestion.sources.registry import capability_keys; print(','.join(capability_keys('portfolio_parser_enabled')))")"
-          if [ -z "$MF_DISCLOSURE_STRICT_COVERAGE_AMCS" ]; then
-            export MF_DISCLOSURE_STRICT_COVERAGE_AMCS="$(PYTHONPATH=backend python -c "from app.mf_ingestion.sources.registry import capability_keys; print(','.join(capability_keys('runtime_enabled')))")"
+          lane="${{ inputs.lane || 'green' }}"
+          export MF_DISCLOSURE_COVERAGE_AMCS="$(python backend/scripts/resolve_mf_automation_scope.py \
+            --operation disclosure_parse \
+            --lane "$lane" \
+            --amcs '${{ inputs.amcs }}' \
+            --event-name '${{ github.event_name }}' \
+            --source-document-ids '${{ inputs.source_document_ids }}')"
+          if [ -z "$MF_DISCLOSURE_STRICT_COVERAGE_AMCS" ] && [ "$lane" = "green" ]; then
+            export MF_DISCLOSURE_STRICT_COVERAGE_AMCS="$MF_DISCLOSURE_COVERAGE_AMCS"
           fi
           if [ -z "$STAGING_REPORT_MONTH" ]; then
             STAGING_REPORT_MONTH="$(date -d '1 month ago' +%Y-%m)"

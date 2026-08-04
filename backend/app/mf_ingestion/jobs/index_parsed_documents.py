@@ -12,13 +12,14 @@ from app.mf_ingestion.sources.registry import get_source
 from app.repositories.mutual_fund_repository import MutualFundRepository
 from app.services.document_indexing_service import DocumentIndexingService, INDEXABLE_DOCUMENT_STATUSES
 
-DEFAULT_AMCS = "axis,hdfc,sbi,icici,ppfas,nippon"
+DEFAULT_AMCS = "ppfas,sbi,mirae"
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Create citations-ready chunks from parsed official AMC PDFs")
     parser.add_argument("--limit", type=int, default=10, help="Maximum new documents to index.")
     parser.add_argument("--amcs", default=DEFAULT_AMCS, help="Comma-separated enabled AMC source keys.")
+    parser.add_argument("--source-document-ids", default="", help="Comma-separated exact document UUIDs.")
     parser.add_argument("--force", action="store_true", help="Reindex documents that already have chunks.")
     parser.add_argument("--require-embeddings", action="store_true", help="Fail instead of using lexical-only chunks.")
     parser.add_argument("--minimum-available", type=int, default=0, help="Require this many indexed documents after the run.")
@@ -36,19 +37,19 @@ def main() -> int:
 
     amc_keys = _normalize_amcs(args.amcs)
     amc_codes = [get_source(key).amc_code for key in amc_keys]
-    candidate_limit = max(args.limit * 4, 20)
-    documents = (
+    requested_document_ids = _normalize_document_ids(args.source_document_ids)
+    candidate_limit = max(args.limit * 4, len(requested_document_ids), 20)
+    document_query = (
         supabase.table("mf_raw_documents")
         .select("*")
         .in_("parse_status", sorted(INDEXABLE_DOCUMENT_STATUSES))
         .in_("amc_code", amc_codes)
         .eq("file_ext", ".pdf")
         .order("parsed_at", desc=True)
-        .limit(candidate_limit)
-        .execute()
-        .data
-        or []
     )
+    if requested_document_ids:
+        document_query = document_query.in_("id", requested_document_ids)
+    documents = document_query.limit(candidate_limit).execute().data or []
     existing_ids = _existing_document_ids(documents, require_embeddings=args.require_embeddings) if not args.force else set()
     parser_service = ParsingService()
     indexer = DocumentIndexingService(
@@ -57,7 +58,12 @@ def main() -> int:
     )
     indexed: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
-    failures: list[dict[str, Any]] = []
+    found_document_ids = {str(document.get("id") or "") for document in documents}
+    failures: list[dict[str, Any]] = [
+        {"document_id": document_id, "error_type": "DocumentScopeError", "error": "requested_document_not_indexable"}
+        for document_id in requested_document_ids
+        if document_id not in found_document_ids
+    ]
 
     def checkpoint(status: str = "running") -> dict[str, Any]:
         summary = _build_summary(
@@ -168,6 +174,15 @@ def _normalize_amcs(raw: str) -> list[str]:
             values.append(key)
     if not values:
         raise ValueError("at_least_one_amc_required")
+    return values
+
+
+def _normalize_document_ids(raw: str) -> list[str]:
+    values: list[str] = []
+    for item in str(raw or "").split(","):
+        document_id = item.strip()
+        if document_id and document_id not in values:
+            values.append(document_id)
     return values
 
 

@@ -108,6 +108,45 @@ def test_metric_health_reports_catalog_and_supported_denominators(monkeypatch):
     assert coverage["history_ready_count"] == 2
     assert coverage["alpha_beta_count"] == 1
     assert coverage["supported_alpha_beta_coverage"] == 1.0
+    assert coverage["supported_history_alpha_beta_count"] == 1
+    assert coverage["supported_history_alpha_beta_coverage"] == 0.5
     assert coverage["supported_benchmark_coverage"] == 0.5
     assert coverage["supported_risk_coverage"] == 0.5
     assert coverage["benchmark_freshness"]["fresh"] is True
+
+
+def test_metric_health_intersects_fresh_history_and_alpha_beta(monkeypatch):
+    candidates = [
+        {
+            "amc_code": "HDFC",
+            "report_month": "2026-07-01",
+            "mapped_scheme_code": code,
+            "mapped_family_id": f"family-{code}",
+            "mapping_status": "mapped",
+            "mapping_confidence": 99,
+            "promotion_status": "promoted",
+        }
+        for code in ("101", "102", "103")
+    ]
+    client = Client({
+        "mf_factsheet_candidates": candidates,
+        "nav_api_cache": [
+            {"scheme_code": "101", "point_count": 400, "expires_at": "2026-08-05T00:00:00+00:00"},
+            {"scheme_code": "102", "point_count": 400, "expires_at": "2026-08-05T00:00:00+00:00"},
+            {"scheme_code": "103", "point_count": 400, "expires_at": "2026-08-03T00:00:00+00:00"},
+        ],
+        "mutual_fund_core_snapshot": [
+            {"scheme_code": "101", "alpha": 1.0, "beta": 0.9, "provider_payload": {"metric_snapshot": {"overlap_points": 100, "minimum_overlap_points": 30}}},
+            {"scheme_code": "102", "alpha": None, "beta": None, "provider_payload": {"metric_snapshot": {"overlap_points": 100, "minimum_overlap_points": 30}}},
+            {"scheme_code": "103", "alpha": 1.0, "beta": 0.9, "provider_payload": {"metric_snapshot": {"overlap_points": 100, "minimum_overlap_points": 30}}},
+        ],
+        "stock_prices_daily": [{"symbol": "NIFTY", "date": "2026-08-03"}],
+    })
+    monkeypatch.setattr(admin_service, "get_admin_repository", lambda: client)
+
+    coverage = admin_service._mf_metric_coverage(datetime(2026, 8, 4, tzinfo=timezone.utc))
+
+    assert coverage["history_ready_count"] == 2
+    assert coverage["alpha_beta_count"] == 2
+    assert coverage["supported_history_alpha_beta_count"] == 1
+    assert coverage["supported_history_alpha_beta_coverage"] == 0.3333

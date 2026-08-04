@@ -38,6 +38,7 @@ from app.mf_ingestion.services.document_classifier import DocumentClassification
 from app.mf_ingestion.services.review_service import ReviewService
 from app.mf_ingestion.sources.registry import get_source_by_code
 from app.mf_ingestion.validators.holdings_validator import validate_holdings
+from app.supabase_retry import execute_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,14 @@ FACTSHEET_SUPPORTED_DOCUMENT_TYPES = {"factsheet", "ter_disclosure"}
 AMC_DISCLOSURE_SOURCE = "amc_disclosure"
 OFFICIAL_CORE_SOURCE_MARKERS = ("AMFI TER API", "AMFI AUM API", "TER", "AUM", AMC_DISCLOSURE_SOURCE)
 OFFICIAL_HOLDING_SOURCES = ("AMFI scheme-wise disclosure", AMC_DISCLOSURE_SOURCE)
+
+
+def _execute_supabase(query: Any, operation_name: str) -> Any:
+    return execute_with_retry(
+        query.execute,
+        operation_name=operation_name,
+        log=logger,
+    )
 
 
 class ParsingService:
@@ -98,7 +107,7 @@ class ParsingService:
             .order("downloaded_at", desc=True)
             .limit(1)
         )
-        response = query.execute()
+        response = _execute_supabase(query, "load_latest_parser_document")
         if not response.data:
             return None
             
@@ -106,7 +115,13 @@ class ParsingService:
         logger.info("event=auto_heal_parsing amc_code=%s scheme_name=%s document_id=%s", amc_code, scheme_name, document.get("id"))
         return self._parse_one(document, bypass_official_coverage=True, target_scheme_name=scheme_name)
 
-    def parse_pending_documents(self, limit: int = 20, amc_code: str | None = None, report_month: str | None = None) -> dict[str, Any]:
+    def parse_pending_documents(
+        self,
+        limit: int = 20,
+        amc_code: str | None = None,
+        report_month: str | None = None,
+        source_document_ids: list[str] | None = None,
+    ) -> dict[str, Any]:
         if not supabase:
             return {"status": "error", "reason": "supabase_not_configured"}
 
@@ -139,8 +154,17 @@ class ParsingService:
             query = query.in_("amc_code", sorted(amc_filters))
         if report_month:
             query = query.eq("report_month", report_month)
+        if source_document_ids:
+            query = query.in_("id", source_document_ids)
 
-        documents = query.execute().data or []
+        documents = _execute_supabase(query, "load_pending_parser_documents").data or []
+        if source_document_ids and not documents:
+            return {
+                "status": "error",
+                "reason": "no_requested_documents_selected",
+                "processed": [],
+                "count": 0,
+            }
         processed = []
 
         for document in documents:
@@ -308,13 +332,22 @@ class ParsingService:
 
         if supabase:
             try:
-                supabase.table("mf_scheme_holdings").delete().eq("source_document_id", document_id).execute()
-                supabase.table("mf_scheme_sector_allocations").delete().eq(
+                _execute_supabase(
+                    supabase.table("mf_scheme_holdings").delete().eq("source_document_id", document_id),
+                    "clear_staged_holdings",
+                )
+                _execute_supabase(supabase.table("mf_scheme_sector_allocations").delete().eq(
                     "source_document_id",
                     document_id,
-                ).execute()
-                supabase.table("mf_scheme_monthly_metrics").delete().eq("source_document_id", document_id).execute()
-                supabase.table("mf_parse_review_queue").delete().eq("source_document_id", document_id).execute()
+                ), "clear_staged_sectors")
+                _execute_supabase(
+                    supabase.table("mf_scheme_monthly_metrics").delete().eq("source_document_id", document_id),
+                    "clear_staged_monthly_metrics",
+                )
+                _execute_supabase(
+                    supabase.table("mf_parse_review_queue").delete().eq("source_document_id", document_id),
+                    "clear_parser_review_queue",
+                )
             except Exception as e:
                 logger.warning("event=cleanup_failed source_document_id=%s reason=%s", document_id, e)
 
@@ -465,10 +498,10 @@ class ParsingService:
                         }
                     )
                 if rows:
-                    upsert_resp = (
+                    upsert_resp = _execute_supabase(
                         supabase.table("mf_scheme_holdings")
-                        .upsert(rows, on_conflict="source_document_id,source_row_hash")
-                        .execute()
+                        .upsert(rows, on_conflict="source_document_id,source_row_hash"),
+                        "upsert_staged_holdings",
                     )
                     inserted_count = len(upsert_resp.data or [])
 
@@ -503,13 +536,13 @@ class ParsingService:
                     for row in normalized_sector_allocations
                 ]
                 if sector_rows:
-                    sector_resp = (
+                    sector_resp = _execute_supabase(
                         supabase.table("mf_scheme_sector_allocations")
                         .upsert(
                             sector_rows,
                             on_conflict="source_document_id,source_row_hash",
-                        )
-                        .execute()
+                        ),
+                        "upsert_staged_sectors",
                     )
                     inserted_sector_count = len(sector_resp.data or [])
 
@@ -525,10 +558,13 @@ class ParsingService:
                 "validation_status": validation.validation_status,
             }
             if metrics_payload.get("report_month"):
-                supabase.table("mf_scheme_monthly_metrics").upsert(
-                    metrics_payload,
-                    on_conflict="scheme_id,report_month,metric_name,source_document_id",
-                ).execute()
+                _execute_supabase(
+                    supabase.table("mf_scheme_monthly_metrics").upsert(
+                        metrics_payload,
+                        on_conflict="scheme_id,report_month,metric_name,source_document_id",
+                    ),
+                    "upsert_staged_monthly_metrics",
+                )
 
             review_needed = (
                 validation.validation_status in {VALIDATION_STATUS_REVIEW, VALIDATION_STATUS_INVALID}
@@ -887,12 +923,12 @@ class ParsingService:
         return sorted(set(issues))
 
     def _already_parsed(self, source_document_id: str) -> bool:
-        res = (
+        res = _execute_supabase(
             supabase.table("mf_scheme_holdings")
             .select("id")
             .eq("source_document_id", source_document_id)
-            .limit(1)
-            .execute()
+            .limit(1),
+            "check_already_parsed",
         )
         return bool(res.data)
 
@@ -904,24 +940,30 @@ class ParsingService:
             "match_confidence": confidence,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
-        response = supabase.table("mf_schemes").upsert(payload, on_conflict="amc_code,scheme_name_normalized").execute()
+        response = _execute_supabase(
+            supabase.table("mf_schemes").upsert(payload, on_conflict="amc_code,scheme_name_normalized"),
+            "upsert_parsed_scheme",
+        )
         if response.data:
             return str(response.data[0]["id"])
 
-        fallback = (
+        fallback = _execute_supabase(
             supabase.table("mf_schemes")
             .select("id")
             .eq("amc_code", amc_code)
             .eq("scheme_name_normalized", scheme_name.lower())
-            .limit(1)
-            .execute()
+            .limit(1),
+            "load_upserted_scheme",
         )
         if not fallback.data:
             raise RuntimeError("failed_to_upsert_scheme")
         return str(fallback.data[0]["id"])
 
     def _load_scheme_candidates(self, amc_code: str) -> list[str]:
-        res = supabase.table("mf_schemes").select("scheme_name").eq("amc_code", amc_code).limit(500).execute()
+        res = _execute_supabase(
+            supabase.table("mf_schemes").select("scheme_name").eq("amc_code", amc_code).limit(500),
+            "load_scheme_candidates",
+        )
         names = [str(row.get("scheme_name")) for row in (res.data or []) if row.get("scheme_name")]
         if str(amc_code).lower() == "ppfas" and "Parag Parikh Flexi Cap Fund" not in names:
             names.append("Parag Parikh Flexi Cap Fund")
@@ -957,12 +999,12 @@ class ParsingService:
         seen: set[str] = set()
         for pattern in patterns:
             try:
-                response = (
+                response = _execute_supabase(
                     client.table("mutual_fund_core_snapshot")
                     .select("scheme_code,amc_name,data_source,provider_payload,aum,expense_ratio,benchmark,fund_manager,risk_level")
                     .ilike("amc_name", pattern)
-                    .limit(1000)
-                    .execute()
+                    .limit(1000),
+                    "load_official_core_rows",
                 )
             except Exception:
                 logger.exception("event=official_core_lookup_failed amc_code=%s", amc_code)
@@ -1002,16 +1044,22 @@ class ParsingService:
 
 
     def _mark_document(self, source_document_id: str, status: str, issues: list[str]) -> None:
-        supabase.table("mf_raw_documents").update(
-            {
-                "parse_status": status,
-                "validation_issues": issues,
-                "parsed_at": datetime.now(timezone.utc).isoformat(),
-            }
-        ).eq("id", source_document_id).execute()
+        _execute_supabase(
+            supabase.table("mf_raw_documents").update(
+                {
+                    "parse_status": status,
+                    "validation_issues": issues,
+                    "parsed_at": datetime.now(timezone.utc).isoformat(),
+                }
+            ).eq("id", source_document_id),
+            "mark_parser_document",
+        )
         if status in {"api_covered", "official_source_covered", "parsed", "parsed_partial", "skipped_not_supported", "skipped_no_source_data"}:
             try:
-                supabase.table("mf_parse_review_queue").delete().eq("source_document_id", source_document_id).execute()
+                _execute_supabase(
+                    supabase.table("mf_parse_review_queue").delete().eq("source_document_id", source_document_id),
+                    "clear_completed_parser_review",
+                )
             except Exception:
                 logger.warning("event=review_queue_cleanup_failed source_document_id=%s status=%s", source_document_id, status)
 
@@ -1029,12 +1077,12 @@ class ParsingService:
         for pattern in seen_patterns:
             for table in ("mutual_fund_core_snapshot", "mutual_funds"):
                 try:
-                    result = (
+                    result = _execute_supabase(
                         supabase.table(table)
                         .select("scheme_code,scheme_name")
                         .ilike("scheme_name", pattern)
-                        .limit(350)
-                        .execute()
+                        .limit(350),
+                        "resolve_parser_scheme_code",
                     )
                     candidates.extend(result.data or [])
                 except Exception:
@@ -1087,12 +1135,12 @@ class ParsingService:
         if not report_month:
             issues.append("report_month_missing")
         try:
-            raw_document = (
+            raw_document = _execute_supabase(
                 supabase.table("mf_raw_documents")
                 .select("storage_bucket,storage_key,checksum")
                 .eq("id", source_document_id)
-                .limit(1)
-                .execute()
+                .limit(1),
+                "load_parser_source_metadata",
             )
             source_meta = (raw_document.data or [{}])[0] or {}
         except Exception:
@@ -1121,10 +1169,13 @@ class ParsingService:
             "updated_at": datetime.now(timezone.utc).isoformat(),
             **parsed_fields,
         }
-        supabase.table("mf_factsheet_candidates").upsert(
-            payload,
-            on_conflict="source_document_id,normalized_scheme_name",
-        ).execute()
+        _execute_supabase(
+            supabase.table("mf_factsheet_candidates").upsert(
+                payload,
+                on_conflict="source_document_id,normalized_scheme_name",
+            ),
+            "upsert_factsheet_candidate",
+        )
         return mapping_status == "mapped" and bool(report_month)
 
     def _resolve_document_path(self, document: dict[str, Any]) -> tuple[str | None, str | None]:
@@ -1146,12 +1197,12 @@ class ParsingService:
 
     def _resolve_family_id_for_scheme(self, scheme_code: str) -> str | None:
         try:
-            mapping = (
+            mapping = _execute_supabase(
                 supabase.table("mutual_fund_family_mapping")
                 .select("family_id")
                 .eq("scheme_code", str(scheme_code))
-                .limit(1)
-                .execute()
+                .limit(1),
+                "load_parser_family_mapping",
             )
             if mapping.data and mapping.data[0].get("family_id"):
                 return str(mapping.data[0]["family_id"])

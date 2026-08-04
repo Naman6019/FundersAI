@@ -1,23 +1,20 @@
 # AMC Link Discovery Agents
 
-**Last updated:** 2026-07-23
+**Last updated:** 2026-08-05
 
-FundersAI has a default top-10 supervisor roster for official AMC document discovery:
+FundersAI has specialist support for the twelve registered official AMC sources. Scheduled automation intentionally uses a smaller green lane:
 
 - SBI
 - Mirae Asset
 - PPFAS
-- ICICI Prudential
-- HDFC
-- Nippon India
-- Kotak Mahindra
-- Aditya Birla Sun Life
-- UTI
-- DSP
 
-One supervisor runs the specialists concurrently and isolates failures by AMC.
+One supervisor runs the selected specialists concurrently and isolates failures by AMC.
 
-Axis has an additional bounded specialist used by the active ingestion workflow but is not part of the historical top-10 roster. Motilal Oswal is enabled in the source registry but does not currently have a class in `AGENT_CLASSES`; do not claim supervisor-agent coverage for it.
+Manual lanes are separate from runtime capability flags:
+
+- Approved-restricted: Nippon India and UTI, with exact reviewed document IDs.
+- Validation-only: Axis, DSP, Motilal Oswal, and HDFC, explicitly dispatched.
+- Frozen by GitHub issue #2: Aditya Birla Sun Life, ICICI Prudential, and Kotak Mahindra.
 
 ## Safety contract
 
@@ -48,7 +45,7 @@ Axis has an additional bounded specialist used by the active ingestion workflow 
 | UTI | Official document APIs with the exact UTI CDN host allowlisted |
 | DSP | Official `downloads.json` API for factsheets |
 
-Mirae, Kotak, Aditya Birla, UTI, and DSP remain disabled in the production ingestion registry. Their discovery specialists can run explicitly without claiming that downstream parsers are ready.
+Registry capability flags describe available adapters. `automation_scope.py` independently controls which AMCs may enter scheduled, approved-restricted, validation-only, or frozen workflows.
 
 ## Run locally or as a hosted worker
 
@@ -62,7 +59,7 @@ From the repository root:
   --strict
 ```
 
-The default roster is all ten AMCs. Use `--amcs sbi,mirae,ppfas` to run a subset. Keep download probes enabled for reliability checks; `--skip-download-probes` is only a discovery dry run.
+The scheduled roster is `ppfas,sbi,mirae`. Use the validation-only workflow lane for an explicit Axis, DSP, Motilal, or HDFC run. Keep download probes enabled for reliability checks; `--skip-download-probes` is only a discovery dry run.
 
 ## GitHub Actions deployment
 
@@ -70,14 +67,14 @@ The default roster is all ten AMCs. Use `--amcs sbi,mirae,ppfas` to run a subset
 
 The workflow:
 
-- defaults to the ten-agent factsheet roster;
+- defaults to the three-AMC green lane;
 - uses the previous UTC month as the minimum report month when none is supplied;
 - persists checksum-addressed reports and manifests to the R2 cold bucket;
 - records persistence stages, evidence, and document observations in server-only discovery tables;
 - compares meaningful document changes with the prior run and stages source-configuration evidence only after three promotable observations;
 - retains the local JSON files as a GitHub artifact for 30 days;
 - fails when fewer than the configured minimum agents complete;
-- never invokes ingestion or promotes a disabled AMC.
+- never invokes ingestion or promotion.
 
 Apply `20260721_add_mf_discovery_runs.sql` and `20260723_add_discovery_v2_history.sql` and configure the documented Supabase/R2 secrets before enabling the schedule. A successful discovery run proves discovery readiness only; it does not invoke ingestion or prove app coverage.
 

@@ -5,6 +5,7 @@ def test_metric_coverage_gate_rejects_stale_or_insufficient_output() -> None:
     coverage = {
         "supported_mapped_total": 100,
         "history_ready_count": 89,
+        "supported_history_alpha_beta_count": 89,
         "supported_alpha_beta_coverage": 0.89,
         "supported_benchmark_coverage": 0.94,
         "supported_risk_coverage": 0.95,
@@ -24,3 +25,31 @@ def test_metric_coverage_gate_rejects_stale_or_insufficient_output() -> None:
         "benchmark_coverage_below_threshold",
         "benchmark_stale",
     ]
+
+
+def test_metric_coverage_gate_uses_supported_history_alpha_beta_intersection() -> None:
+    coverage = {
+        "supported_mapped_total": 871,
+        "history_ready_count": 871,
+        "supported_history_alpha_beta_count": 783,
+        "supported_alpha_beta_coverage": 1.0,
+        "supported_benchmark_coverage": 0.95,
+        "supported_risk_coverage": 0.95,
+        "benchmark_freshness": {"fresh": True},
+    }
+
+    failures = coverage_failures(
+        coverage,
+        history_minimum=0.90,
+        alpha_beta_minimum=0.90,
+        benchmark_risk_minimum=0.95,
+    )
+    assert failures == ["alpha_beta_coverage_below_threshold"]
+
+    coverage["supported_history_alpha_beta_count"] = 784
+    assert coverage_failures(
+        coverage,
+        history_minimum=0.90,
+        alpha_beta_minimum=0.90,
+        benchmark_risk_minimum=0.95,
+    ) == []

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+from uuid import uuid4
 
 from app.database import supabase
+from app.supabase_retry import execute_with_retry
 
 
 class ReviewService:
@@ -22,6 +24,7 @@ class ReviewService:
             return
 
         payload = {
+            "id": str(uuid4()),
             "source_document_id": source_document_id,
             "amc_code": amc_code,
             "report_month": report_month,
@@ -33,4 +36,8 @@ class ReviewService:
             "sample_rows": sample_rows,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
-        supabase.table("mf_parse_review_queue").insert(payload).execute()
+        query = supabase.table("mf_parse_review_queue").upsert(payload, on_conflict="id")
+        execute_with_retry(
+            query.execute,
+            operation_name="enqueue_parser_review",
+        )
