@@ -4,7 +4,8 @@ from datetime import date, timedelta
 
 from types import SimpleNamespace
 
-from app.jobs.refresh_mf_snapshot_metrics import _benchmark_rows, _metric_row
+from app.jobs import refresh_mf_snapshot_metrics
+from app.jobs.refresh_mf_snapshot_metrics import _benchmark_rows, _cache_row_pages, _metric_row
 from app.services.mf_metrics_service import (
     NAV_METRIC_SNAPSHOT_VERSION,
     compute_nav_metrics_with_diagnostics,
@@ -145,3 +146,33 @@ def test_benchmark_query_requests_newest_rows_and_returns_ascending_unique_dates
 
     assert [row["date"] for row in rows] == ["2026-07-02", "2026-07-03"]
     assert rows[0]["source"] == "new"
+
+
+def test_cache_pages_query_only_supported_codes_in_small_indexed_batches(monkeypatch):
+    requested_batches: list[list[str]] = []
+
+    class Query:
+        def select(self, _fields):
+            return self
+
+        def in_(self, field, values):
+            assert field == "scheme_code"
+            requested_batches.append(list(values))
+            self.values = list(values)
+            return self
+
+        def execute(self):
+            return SimpleNamespace(
+                data=[{"scheme_code": value, "payload": []} for value in reversed(self.values)]
+            )
+
+    repo = SimpleNamespace(supabase=SimpleNamespace(table=lambda _name: Query()))
+    monkeypatch.setattr(refresh_mf_snapshot_metrics, "PAGE_SIZE", 2)
+
+    pages = list(_cache_row_pages(repo, ["100", "101", "102", "103", "104"], 4))
+
+    assert requested_batches == [["100", "101"], ["102", "103"]]
+    assert [[row["scheme_code"] for row in page] for page in pages] == [
+        ["100", "101"],
+        ["102", "103"],
+    ]
