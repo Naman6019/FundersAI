@@ -16,6 +16,11 @@ on:
         required: true
         default: "2026-06"
         type: string
+      candidate_ids:
+        description: Optional comma-separated factsheet candidate UUID allowlist (core scopes only)
+        required: false
+        default: ""
+        type: string
       apply:
         description: Apply the validated promotion
         required: true
@@ -60,6 +65,7 @@ jobs:
           APPLY_PROMOTION: ${{ inputs.apply }}
           APPROVAL_PHRASE: ${{ inputs.approval_phrase }}
           REQUESTED_BY: ${{ github.actor }}
+          CANDIDATE_IDS: ${{ inputs.candidate_ids }}
         shell: bash
         run: |
           set -euo pipefail
@@ -82,5 +88,8 @@ jobs:
           )
           if [ "$APPLY_PROMOTION" = "true" ]; then
             args+=(--apply)
+          fi
+          if [ -n "$CANDIDATE_IDS" ]; then
+            args+=(--candidate-ids "$CANDIDATE_IDS")
           fi
           python backend/app/mf_ingestion/jobs/promote_mf_disclosures.py "${args[@]}"

@@ -11,6 +11,8 @@ from app.mf_ingestion.jobs.promote_mf_amc_disclosures import (
 )
 from app.mf_ingestion.jobs.promote_mf_disclosures import (
     MIN_PORTFOLIO_FAMILY_COVERAGE,
+    _internal_family_conflicts,
+    _parse_candidate_ids,
     _portfolio_family_coverage,
 )
 
@@ -50,6 +52,36 @@ def test_rpc_rows_are_paginated_past_supabase_default_limit(monkeypatch) -> None
         "coverage_rows",
         {"p_report_month": "2026-06-01"},
     ) == rows
+
+
+def test_candidate_allowlist_requires_valid_unique_uuids() -> None:
+    first = "ad4ac081-eb76-4147-9004-e3da10133d07"
+    second = "02bc8db4-6a67-4728-a04d-82297e40938c"
+
+    assert _parse_candidate_ids(f"{first},{second},{first}") == {first, second}
+    assert _parse_candidate_ids("") is None
+
+
+def test_internal_family_conflicts_reject_disagreeing_official_values() -> None:
+    conflicts = _internal_family_conflicts(
+        [
+            {
+                "mapped_family_id": "family-a",
+                "benchmark": "MSCI World Index",
+                "risk_level": "Very High",
+            },
+            {
+                "mapped_family_id": "family-a",
+                "benchmark": "Nasdaq 100 TRI",
+                "risk_level": " very  high ",
+            },
+        ],
+        ["benchmark", "risk"],
+    )
+
+    assert conflicts == {
+        "family-a": {"benchmark": ["MSCI World Index", "Nasdaq 100 TRI"]}
+    }
 
 
 def _holding_row(index: int, *, valid: bool) -> dict:
@@ -567,6 +599,17 @@ def test_amc_batch_promotion_workflow_is_bounded_and_protected() -> None:
     assert "mf_staging_holding_coverage_rows" not in job
     assert "source_document_ids[offset : offset + batch_size]" in job
     assert "Revalidate every target immediately before the first mutation." in job
+
+
+def test_single_document_workflow_supports_a_core_candidate_allowlist() -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = (
+        root / ".github" / "workflows" / "promote-mf-disclosures.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "candidate_ids:" in workflow
+    assert 'args+=(--candidate-ids "$CANDIDATE_IDS")' in workflow
+    assert "environment: production-data" in workflow
 
 
 def test_thresholded_portfolio_promotion_is_indexed_and_valid_only() -> None:

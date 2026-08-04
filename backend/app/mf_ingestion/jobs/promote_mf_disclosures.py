@@ -7,6 +7,7 @@ import sys
 from collections import Counter, defaultdict
 from datetime import date
 from typing import Any
+from uuid import UUID
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 if BASE_DIR not in sys.path:
@@ -55,6 +56,51 @@ def _parse_scopes(value: str) -> list[str]:
     if not scopes:
         raise ValueError("promotion_scope_required")
     return scopes
+
+
+def _parse_candidate_ids(value: str | None) -> set[str] | None:
+    if not value or not value.strip():
+        return None
+    candidate_ids: set[str] = set()
+    for raw_value in value.split(","):
+        candidate_id = raw_value.strip()
+        if not candidate_id:
+            continue
+        try:
+            candidate_ids.add(str(UUID(candidate_id)))
+        except ValueError as exc:
+            raise ValueError("candidate_id_invalid") from exc
+    if not candidate_ids:
+        raise ValueError("candidate_id_required")
+    return candidate_ids
+
+
+def _internal_family_conflicts(
+    candidates: list[dict[str, Any]],
+    scopes: list[str],
+) -> dict[str, dict[str, list[str]]]:
+    values: dict[str, dict[str, set[str]]] = defaultdict(
+        lambda: {"benchmark": set(), "risk": set()}
+    )
+    for candidate in candidates:
+        family_id = str(candidate.get("mapped_family_id") or "").strip()
+        if not family_id:
+            continue
+        if "benchmark" in scopes and candidate.get("benchmark") not in (None, ""):
+            values[family_id]["benchmark"].add(str(candidate["benchmark"]).strip())
+        if "risk" in scopes and candidate.get("risk_level") not in (None, ""):
+            values[family_id]["risk"].add(str(candidate["risk_level"]).strip())
+
+    conflicts: dict[str, dict[str, list[str]]] = {}
+    for family_id, family_values in values.items():
+        field_conflicts = {
+            scope: sorted(scope_values)
+            for scope, scope_values in family_values.items()
+            if len({" ".join(value.lower().split()) for value in scope_values}) > 1
+        }
+        if field_conflicts:
+            conflicts[family_id] = field_conflicts
+    return conflicts
 
 
 def _parse_report_month(value: str) -> date:
@@ -437,6 +483,9 @@ def build_dry_run(
     source_document_id: str,
     scopes: list[str],
     expected_report_month: date,
+    *,
+    candidate_ids: set[str] | None = None,
+    requested_by: str = "dry-run",
 ) -> dict[str, Any]:
     document_result = (
         supabase.table("mf_raw_documents")
@@ -460,6 +509,14 @@ def build_dry_run(
         "*",
         filters={"source_document_id": source_document_id},
     )
+    candidate_filter_issues: list[str] = []
+    if candidate_ids is not None:
+        if PORTFOLIO_SCOPES.intersection(scopes):
+            candidate_filter_issues.append("candidate_filter_core_scopes_only")
+        available_ids = {str(row.get("id")) for row in candidates if row.get("id")}
+        if candidate_ids - available_ids:
+            candidate_filter_issues.append("candidate_filter_ids_not_in_source_document")
+        candidates = [row for row in candidates if str(row.get("id")) in candidate_ids]
     holdings = _fetch_all_rows(
         "mf_scheme_holdings",
         "id,mapped_scheme_code,mapped_family_id,mapping_status,mapping_confidence,"
@@ -494,6 +551,7 @@ def build_dry_run(
         }
 
     issues = _validate_source_document(document, expected_report_month)
+    issues.extend(candidate_filter_issues)
     warnings: list[str] = []
     candidate_reports = []
     operation_count = 0
@@ -507,6 +565,7 @@ def build_dry_run(
     sector_rejection_reasons: Counter[str] = Counter()
     holdings_family_coverage: dict[str, Any] = {}
     sector_family_coverage: dict[str, Any] = {}
+    internal_family_conflicts = _internal_family_conflicts(candidates, scopes)
     if CORE_SCOPES.intersection(scopes):
         if not candidates:
             issues.append("factsheet_candidates_missing")
@@ -517,11 +576,28 @@ def build_dry_run(
                 document,
                 expected_report_month,
             )
+            family_id = str(candidate.get("mapped_family_id") or "").strip()
+            family_internal_conflicts = internal_family_conflicts.get(family_id, {})
+            candidate_issues.extend(
+                f"family_{scope}_values_conflict"
+                for scope in sorted(family_internal_conflicts)
+            )
             eligible_scopes = (
                 _available_core_scopes(candidate, scopes)
                 if not candidate_issues
                 else []
             )
+            family_plan: dict[str, Any] = {"conflicts": {}}
+            if eligible_scopes:
+                family_plan = build_family_invariant_propagation_plan(
+                    candidate,
+                    eligible_scopes,
+                    expected_report_month,
+                    requested_by=requested_by,
+                )
+                if family_plan.get("conflicts"):
+                    candidate_issues.append("family_existing_values_conflict")
+                    eligible_scopes = []
             unavailable_scopes = sorted(CORE_SCOPES.intersection(scopes) - set(eligible_scopes))
             candidate_reports.append(
                 {
@@ -536,6 +612,8 @@ def build_dry_run(
                     "risk_level": candidate.get("risk_level"),
                     "eligible_scopes": eligible_scopes,
                     "unavailable_scopes": unavailable_scopes,
+                    "family_internal_conflicts": family_internal_conflicts,
+                    "family_existing_conflicts": family_plan.get("conflicts", {}),
                     "issues": candidate_issues,
                 }
             )
@@ -648,6 +726,8 @@ def build_dry_run(
         "source_document": document,
         "expected_report_month": expected_report_month.isoformat(),
         "scopes": scopes,
+        "candidate_filter": sorted(candidate_ids) if candidate_ids is not None else None,
+        "internal_family_conflicts": internal_family_conflicts,
         "candidate_reports": candidate_reports,
         "staged_holdings_rows": len(holdings),
         "promotable_holdings_rows": valid_holdings_rows,
@@ -730,6 +810,11 @@ def main() -> int:
     parser.add_argument("--scopes", required=True, help="risk,ter_aum,benchmark,manager,holdings,sectors")
     parser.add_argument("--expected-report-month", required=True, help="Exact reviewed month in YYYY-MM form")
     parser.add_argument("--requested-by", required=True)
+    parser.add_argument(
+        "--candidate-ids",
+        default="",
+        help="Optional comma-separated factsheet candidate UUID allowlist for core scopes.",
+    )
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
 
@@ -739,11 +824,18 @@ def main() -> int:
     try:
         scopes = _parse_scopes(args.scopes)
         expected_report_month = _parse_report_month(args.expected_report_month)
+        candidate_ids = _parse_candidate_ids(args.candidate_ids)
     except ValueError as exc:
         print(json.dumps({"status": "error", "issues": [str(exc)]}))
         return 2
 
-    report = build_dry_run(args.source_document_id, scopes, expected_report_month)
+    report = build_dry_run(
+        args.source_document_id,
+        scopes,
+        expected_report_month,
+        candidate_ids=candidate_ids,
+        requested_by=args.requested_by,
+    )
     if report["status"] != "promotable":
         print(json.dumps(report, indent=2, default=str))
         return 1
