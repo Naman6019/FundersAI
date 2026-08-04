@@ -20,6 +20,7 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 from app.models.stock_models import ProviderRun
 from app.repositories.stock_repository import StockRepository
+from app.services.mf_metric_target_service import supported_metric_targets
 from app.services.mf_metrics_service import (
     NAV_METRIC_SNAPSHOT_VERSION,
     compute_nav_metrics_with_diagnostics,
@@ -29,7 +30,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 RISK_FREE_RATE = float(os.getenv("MF_METRIC_RISK_FREE_RATE", "0.06"))
-PAGE_SIZE = max(1, min(int(os.getenv("MF_METRIC_REFRESH_PAGE_SIZE", "250")), 1000))
+PAGE_SIZE = max(1, min(int(os.getenv("MF_METRIC_REFRESH_PAGE_SIZE", "50")), 250))
 BENCHMARK_MAX_LAG_BUSINESS_DAYS = max(
     int(os.getenv("MF_METRIC_BENCHMARK_MAX_LAG_BUSINESS_DAYS", "3")),
     0,
@@ -47,26 +48,28 @@ def _enabled(name: str, default: bool) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _cache_row_pages(repo: StockRepository, limit: int) -> Iterator[list[dict[str, Any]]]:
-    processed = 0
-    offset = 0
-    while limit <= 0 or processed < limit:
-        batch_size = min(PAGE_SIZE, limit - processed) if limit > 0 else PAGE_SIZE
+def _cache_row_pages(
+    repo: StockRepository,
+    scheme_codes: list[str],
+    limit: int,
+) -> Iterator[list[dict[str, Any]]]:
+    selected_codes = scheme_codes[:limit] if limit > 0 else scheme_codes
+    for start in range(0, len(selected_codes), PAGE_SIZE):
+        code_batch = selected_codes[start : start + PAGE_SIZE]
+        if not code_batch:
+            continue
         response = (
             repo.supabase.table("nav_api_cache")
             .select("scheme_code,payload,point_count,last_nav_date,fetched_at,updated_at")
-            .order("scheme_code")
-            .range(offset, offset + batch_size - 1)
+            .in_("scheme_code", code_batch)
             .execute()
         )
-        raw_batch = response.data or []
-        batch = [row for row in raw_batch if isinstance(row, dict)]
+        batch = sorted(
+            (row for row in (response.data or []) if isinstance(row, dict)),
+            key=lambda row: str(row.get("scheme_code") or ""),
+        )
         if batch:
             yield batch
-        processed += len(raw_batch)
-        if len(raw_batch) < batch_size:
-            break
-        offset += batch_size
 
 
 def _core_rows(repo: StockRepository, scheme_codes: list[str]) -> dict[str, dict[str, Any]]:
@@ -276,8 +279,9 @@ def main() -> int:
     eligible = 0
     alpha_beta = 0
     last_known_good = 0
+    target_codes = [row["scheme_code"] for row in supported_metric_targets(repo.supabase)]
 
-    for batch in _cache_row_pages(repo, limit):
+    for batch in _cache_row_pages(repo, target_codes, limit):
         cached += len(batch)
         scheme_codes = [str(row.get("scheme_code")) for row in batch if row.get("scheme_code") not in (None, "")]
         existing = _core_rows(repo, scheme_codes)
