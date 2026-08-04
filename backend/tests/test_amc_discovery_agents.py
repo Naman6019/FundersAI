@@ -169,6 +169,60 @@ def test_agent_rejects_unknown_or_stale_month_when_expected_month_is_supplied() 
     assert any("report_month_before_expected" in event.detail for event in result.trace)
 
 
+def test_expected_month_grace_runs_through_next_month_day_fourteen() -> None:
+    from app.mf_ingestion.agents.validation import validate_candidate
+
+    stale = _discovered(
+        "mirae",
+        "factsheet",
+        "https://www.miraeassetmf.co.in/docs/factsheet-june-2026.pdf",
+        report_month=date(2026, 6, 1),
+    )
+    source = get_source("mirae")
+
+    _, during_grace = validate_candidate(
+        source,
+        stale,
+        expected_month=date(2026, 7, 1),
+        expected_month_grace_days=14,
+        observed_on=date(2026, 8, 14),
+    )
+    _, after_grace = validate_candidate(
+        source,
+        stale,
+        expected_month=date(2026, 7, 1),
+        expected_month_grace_days=14,
+        observed_on=date(2026, 8, 15),
+    )
+
+    assert during_grace == ["report_month_pending_expected:2026-06-01"]
+    assert after_grace == ["report_month_before_expected:2026-06-01"]
+
+
+def test_last_known_good_keeps_discovery_operational_during_grace() -> None:
+    stale = _discovered(
+        "mirae",
+        "factsheet",
+        "https://www.miraeassetmf.co.in/docs/factsheet-june-2026.pdf",
+        report_month=date(2026, 6, 1),
+    )
+    agent = AGENT_CLASSES["mirae"](
+        source=get_source("mirae"),
+        downloader=_FakeDownloader(documents={"factsheet": [stale]}),
+    )
+
+    result = agent.run(
+        document_types=("factsheet",),
+        expected_month=date(2026, 7, 1),
+        expected_month_grace_days=14,
+        observed_on=date(2026, 8, 14),
+    )
+
+    assert result.status == "completed"
+    assert result.documents[0].readiness == "needs_review"
+    assert result.documents[0].warnings == ("report_month_pending_expected:2026-06-01",)
+
+
 def test_discovery_content_month_gate_rejects_mislabeled_factsheet() -> None:
     text = "\n".join(
         [

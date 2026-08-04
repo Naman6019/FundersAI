@@ -70,6 +70,7 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - unavailable metrics are labeled as data gaps instead of inflating the risk-signal count.
   - standard mutual-fund canvas requests now return a snapshot-only Trend Observation from chat, so full NAV history, holdings, and sector reads occur once in the canvas rather than before it opens; deep or follow-up comparisons retain the full comparison path.
   - locally implemented comparison-latency hardening adds a nightly cache-backed metric refresh for returns, volatility, drawdown, Sharpe, alpha, and beta; versioned snapshot metrics bypass request-time history/benchmark math, holdings and sector reads run concurrently after one family lookup, and MF detail requests skip the benchmark when precomputed alpha/beta are present. Deployment and the first hosted workflow run remain pending.
+  - locally implemented metric repair refreshes the newest 2,200 NIFTY proxy rows, rejects a benchmark more than three business days old, requires 30 aligned return dates, records calculation provenance/failure reasons, and preserves last-known-good alpha/beta when a refresh is ineligible. Supported mapped schemes are refreshed missing-first in bounded 100-scheme batches, protected from cache cleanup, and checked against explicit 90% history/alpha-beta and 95% official benchmark/risk gates. Deployment and the bounded production backfill remain approval-gated.
 - Source-neutral stock data model and scheduled stock workflows.
 - Mutual-fund NAV sync and metadata pipelines:
   - NAV freshness uses the last expected IST business day (with an optional `MF_NAV_MARKET_HOLIDAYS` override), rather than a fixed 24-hour cache age;
@@ -188,6 +189,7 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - discovery remains separate from ingestion, parser readiness, and user-facing AMC promotion.
 - Locally verified Discovery V2 enhancements (not deployed):
   - document readiness gates, exact-month handling with a 14-day grace period, range probes, content checks, and parser smoke tests;
+  - the publication grace deadline is based on the following month, so a July target with 14 grace days remains operational through August 14; a validated prior-month last-known-good document can keep runtime healthy during grace but remains `needs_review` and cannot be promoted as the newer month;
   - the bounded agent now excludes stale fallback candidates when an exact expected-month candidate exists, reserves enough actions for every requested document type, and reuses validated combined factsheets for portfolio discovery only when the AMC registry declares that capability. The focused discovery/downloader/readiness suite passes `90` tests;
   - checksum-addressed R2 persistence stages, RLS-protected discovery-document history, last-known-good fallback, and run-to-run diff evidence;
   - browser fallback disabled by default and restricted to explicitly approved AMC adapters.
@@ -202,6 +204,7 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - AMC/document metadata is normalized for case-stable retrieval filters;
   - missing or failed embeddings fall back to provider-free lexical chunks unless strict embeddings are requested;
   - the evidence UI distinguishes an empty production corpus from an irrelevant query.
+  - locally implemented workflow hardening limits each invocation to five new documents by default, checkpoints its JSON evidence after every document, and uploads partial evidence when the process times out. Deployment remains pending.
 - Production official-research corpus verification on July 21:
   - `20260721_harden_amc_document_chunks.sql` is applied;
   - the PPFAS backfill indexed 2 official June 2026 factsheet rows into 186 lexical chunks with no failures and no embedding-provider call;

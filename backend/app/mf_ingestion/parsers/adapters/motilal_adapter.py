@@ -223,7 +223,7 @@ def _extract_holdings(
             continue
             
         percent = _parse_number(_safe_row_get(row, percent_idx))
-        if percent is None or percent <= 0.0 or percent > 100.0:
+        if percent is None or percent < -100.0 or percent > 100.0 or percent == 0.0:
             continue
 
         name_value = _safe_row_get(row, instrument_idx) if instrument_idx is not None else None
@@ -246,6 +246,11 @@ def _extract_holdings(
 
         if not any(marker in low_name for marker in ("sub total", "subtotal", "total", "grand total", "total value", "total market value")):
             true_total_percent += percent
+
+        # Arbitrage disclosures include negative derivative exposure. It belongs
+        # in the portfolio total but not in the long-holdings payload.
+        if percent < 0.0:
+            continue
 
         if _is_summary_or_noise_row(instrument_name):
             continue

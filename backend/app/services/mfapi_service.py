@@ -493,13 +493,42 @@ def get_stored_nav_history(scheme_code: str) -> dict[str, Any]:
     return _cache_result(row, status="hit" if status == "fresh" else "stale_cache", stale=status != "fresh")
 
 
-def delete_expired_nav_cache_rows(now: datetime | None = None) -> int:
+def delete_expired_nav_cache_rows(
+    now: datetime | None = None,
+    *,
+    protected_scheme_codes: set[str] | None = None,
+) -> int:
     if not supabase:
         return 0
     cutoff = (now or _utc_now()) - timedelta(days=NAV_CACHE_RETENTION_DAYS)
     try:
-        response = supabase.table("nav_api_cache").delete().lt("updated_at", cutoff.isoformat()).execute()
-        deleted = len(response.data or [])
+        protected = {str(code) for code in (protected_scheme_codes or set()) if str(code).strip()}
+        if not protected:
+            response = supabase.table("nav_api_cache").delete().lt("updated_at", cutoff.isoformat()).execute()
+            deleted = len(response.data or [])
+        else:
+            stale_response = (
+                supabase.table("nav_api_cache")
+                .select("scheme_code")
+                .lt("updated_at", cutoff.isoformat())
+                .limit(5000)
+                .execute()
+            )
+            deletable = [
+                str(row.get("scheme_code"))
+                for row in (stale_response.data or [])
+                if row.get("scheme_code") not in (None, "")
+                and str(row.get("scheme_code")) not in protected
+            ]
+            deleted = 0
+            for start in range(0, len(deletable), 500):
+                response = (
+                    supabase.table("nav_api_cache")
+                    .delete()
+                    .in_("scheme_code", deletable[start : start + 500])
+                    .execute()
+                )
+                deleted += len(response.data or [])
         logger.info("NAV cache retention deleted_rows=%s cutoff=%s", deleted, cutoff.isoformat())
         return deleted
     except Exception as exc:

@@ -5,7 +5,7 @@ import os
 import re
 import hmac
 from contextvars import ContextVar
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import Header, Query
@@ -25,6 +25,7 @@ from app.services.chat_service import (
 )
 from app.services.provider_usage import build_usage_dashboard
 from app.services.supported_amcs import SUPPORTED_MF_AMC_MARKERS, supported_amc_label_from_text
+from app.services.mf_metric_target_service import supported_metric_targets
 from app.utils.date_helpers import age_days as _age_days
 from app.utils.date_helpers import fmt_age as _fmt_age
 from app.utils.date_helpers import iso_or_none as _iso_or_none
@@ -231,6 +232,159 @@ def _core_snapshot_enrichment_summary(rows: list[dict[str, Any]]) -> dict[str, A
     }
 
 
+def _empty_mf_metric_coverage() -> dict[str, Any]:
+    return {
+        "catalog_total": 0,
+        "supported_mapped_total": 0,
+        "metric_eligible_total": 0,
+        "history_ready_count": 0,
+        "alpha_beta_count": 0,
+        "catalog_alpha_beta_coverage": 0.0,
+        "supported_alpha_beta_coverage": 0.0,
+        "supported_benchmark_count": 0,
+        "supported_benchmark_coverage": 0.0,
+        "supported_risk_count": 0,
+        "supported_risk_coverage": 0.0,
+        "benchmark_freshness": {
+            "identifier": "NIFTY",
+            "mode": "proxy",
+            "latest_date": None,
+            "business_day_lag": None,
+            "fresh": False,
+        },
+        "last_known_good_usage": 0,
+    }
+
+
+def _business_day_lag(latest: date, current: date) -> int:
+    if latest >= current:
+        return 0
+    lag = 0
+    cursor = latest + timedelta(days=1)
+    while cursor <= current:
+        if cursor.weekday() < 5:
+            lag += 1
+        cursor += timedelta(days=1)
+    return lag
+
+
+def _mf_metric_coverage(now_utc: datetime) -> dict[str, Any]:
+    coverage = _empty_mf_metric_coverage()
+    repository = get_admin_repository()
+    if not repository:
+        return coverage
+    try:
+        coverage["catalog_total"] = int(
+            repository.table("mutual_fund_core_snapshot")
+            .select("scheme_code", count="exact")
+            .limit(1)
+            .execute()
+            .count
+            or 0
+        )
+    except Exception:
+        pass
+
+    try:
+        targets = supported_metric_targets(repository)
+        target_codes = [row["scheme_code"] for row in targets]
+        coverage["supported_mapped_total"] = len(target_codes)
+        if not target_codes:
+            return coverage
+
+        cache_by_code: dict[str, dict[str, Any]] = {}
+        core_by_code: dict[str, dict[str, Any]] = {}
+        for start in range(0, len(target_codes), 500):
+            codes = target_codes[start : start + 500]
+            cache_rows = (
+                repository.table("nav_api_cache")
+                .select("scheme_code,point_count,last_nav_date,expires_at")
+                .in_("scheme_code", codes)
+                .execute()
+                .data
+                or []
+            )
+            cache_by_code.update({str(row["scheme_code"]): row for row in cache_rows if row.get("scheme_code")})
+            core_rows = (
+                repository.table("mutual_fund_core_snapshot")
+                .select("scheme_code,alpha,beta,benchmark,risk_level,provider_payload")
+                .in_("scheme_code", codes)
+                .execute()
+                .data
+                or []
+            )
+            core_by_code.update({str(row["scheme_code"]): row for row in core_rows if row.get("scheme_code")})
+
+        history_ready = 0
+        eligible_codes: set[str] = set()
+        alpha_beta = 0
+        benchmark_count = 0
+        risk_count = 0
+        last_known_good = 0
+        for code in target_codes:
+            cache = cache_by_code.get(code, {})
+            expires_at = _to_utc_datetime(cache.get("expires_at"))
+            if int(cache.get("point_count") or 0) >= 31 and expires_at and expires_at > now_utc:
+                history_ready += 1
+            core = core_by_code.get(code, {})
+            provider_payload = core.get("provider_payload")
+            metric_snapshot = (
+                provider_payload.get("metric_snapshot", {})
+                if isinstance(provider_payload, dict)
+                else {}
+            )
+            if int(metric_snapshot.get("overlap_points") or 0) >= int(metric_snapshot.get("minimum_overlap_points") or 30):
+                eligible_codes.add(code)
+                if core.get("alpha") not in (None, "") and core.get("beta") not in (None, ""):
+                    alpha_beta += 1
+            if core.get("benchmark") not in (None, ""):
+                benchmark_count += 1
+            if core.get("risk_level") not in (None, ""):
+                risk_count += 1
+            if metric_snapshot.get("last_known_good_used"):
+                last_known_good += 1
+
+        supported_total = len(target_codes)
+        eligible_total = len(eligible_codes)
+        coverage.update(
+            metric_eligible_total=eligible_total,
+            history_ready_count=history_ready,
+            alpha_beta_count=alpha_beta,
+            catalog_alpha_beta_coverage=_coverage_ratio(alpha_beta, int(coverage["catalog_total"])),
+            supported_alpha_beta_coverage=_coverage_ratio(alpha_beta, eligible_total),
+            supported_benchmark_count=benchmark_count,
+            supported_benchmark_coverage=_coverage_ratio(benchmark_count, supported_total),
+            supported_risk_count=risk_count,
+            supported_risk_coverage=_coverage_ratio(risk_count, supported_total),
+            last_known_good_usage=last_known_good,
+        )
+    except Exception as exc:
+        logger.warning("Data health MF metric coverage read failed: %s", exc)
+
+    try:
+        benchmark_rows = (
+            repository.table("stock_prices_daily")
+            .select("date")
+            .eq("symbol", "NIFTY")
+            .order("date", desc=True)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        latest = _to_utc_datetime((benchmark_rows or [{}])[0].get("date"))
+        if latest:
+            lag = _business_day_lag(latest.date(), now_utc.date())
+            coverage["benchmark_freshness"].update(
+                latest_date=latest.date().isoformat(),
+                business_day_lag=lag,
+                fresh=lag <= 3,
+            )
+    except Exception as exc:
+        logger.warning("Data health benchmark freshness read failed: %s", exc)
+    return coverage
+
+
 def _latest_mf_doc_timestamp(*, status: str | None, field: str) -> datetime | None:
     if not get_admin_repository():
         return None
@@ -402,6 +556,7 @@ def data_health():
         {"label": "AMC docs", "status": "Missing", "note": "No parsed AMC factsheet/disclosure docs found.", "last_updated": None},
     ]
     amc_parser_quality: list[dict[str, Any]] = _build_amc_parser_quality([], [], [])
+    mf_metric_coverage = _empty_mf_metric_coverage()
 
     if not get_admin_repository():
         return {
@@ -410,6 +565,7 @@ def data_health():
             "checked_at": now_utc.isoformat(),
             "metrics": metrics,
             "amc_parser_quality": amc_parser_quality,
+            "mf_metric_coverage": mf_metric_coverage,
         }
 
     try:
@@ -435,6 +591,7 @@ def data_health():
                 {"label": "AMC docs", "status": "Missing", "note": "Not checked due core snapshot read failure.", "last_updated": None},
             ],
             "amc_parser_quality": amc_parser_quality,
+            "mf_metric_coverage": mf_metric_coverage,
         }
 
     try:
@@ -468,6 +625,7 @@ def data_health():
             metrics[0].update(status="Stale", note=f"Latest NAV date {latest_nav_dt.date().isoformat()} is {missed_business_days} business days behind expected {expected_nav_date}.", last_updated=latest_nav_dt.isoformat())
 
     enrichment = _core_snapshot_enrichment_summary(enrichment_rows)
+    mf_metric_coverage = _mf_metric_coverage(now_utc)
     latest_aum_ter_dt = enrichment["latest_updated_at"]
     aum_ter_age_days = _age_days(latest_aum_ter_dt, now_utc)
     aum_ter_note = (
@@ -651,6 +809,7 @@ def data_health():
         "metrics": metrics,
         "pipeline": pipeline,
         "amc_parser_quality": amc_parser_quality,
+        "mf_metric_coverage": mf_metric_coverage,
     }
 
 

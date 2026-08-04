@@ -268,12 +268,19 @@ def test_reparse_documents_returns_zero_runtime_errors_for_still_review(monkeypa
         _FakeService({"doc-1": "needs_review", "doc-2": "parsed"}),
     )
 
-    assert summary == {
+    assert {key: summary[key] for key in (
+        "success_count",
+        "still_actionable_count",
+        "runtime_error_count",
+        "skipped_duplicate_count",
+    )} == {
         "success_count": 1,
         "still_actionable_count": 1,
         "runtime_error_count": 0,
         "skipped_duplicate_count": 0,
     }
+    assert summary["failed_docs"][0]["id"] == "doc-1"
+    assert summary["failed_docs"][0]["status"] == "needs_review"
     assert fake_supabase.tables["mf_raw_documents"][0]["parse_status"] == "needs_reparse"
     assert fake_supabase.deletes == [("mf_parse_review_queue", {"source_document_id": "doc-2"})]
 
@@ -308,7 +315,7 @@ def test_retry_exit_code_can_fail_on_still_actionable():
     assert reparse_needs_review.retry_exit_code(summary, fail_on_still_actionable=True) == 1
 
 
-def test_retry_workflow_enables_strict_scheduled_retries():
+def test_retry_workflow_keeps_strict_failure_manual():
     workflow = Path(".github/workflows/retry-mf-parser-actions.yml").read_text(encoding="utf-8")
 
     assert "fail_on_still_actionable" in workflow
@@ -317,3 +324,4 @@ def test_retry_workflow_enables_strict_scheduled_retries():
     assert "--source-document-ids" in workflow
     assert "report_month" in workflow
     assert "--report-month" in workflow
+    assert 'if [ "$EVENT_NAME" = "schedule" ] ||' not in workflow

@@ -666,7 +666,7 @@ def sync_holding_sources(supabase, funds: list[dict[str, Any]], registry: dict, 
     return written
 
 
-def main():
+def main() -> dict[str, Any]:
     if not SUPABASE_URL or not SUPABASE_KEY:
         raise RuntimeError("Missing SUPABASE_URL or SUPABASE_KEY environment variables.")
 
@@ -678,26 +678,54 @@ def main():
     funds = build_scheme_index(funds_res.data or [])
     if not funds:
         logger.warning("No mutual_funds rows found. Run sync_mf.py first.")
-        return
+        return {"status": "degraded", "reason": "no_mutual_funds", "counts": {}, "errors": []}
+
+    counts: dict[str, int] = {}
+    errors: list[dict[str, str]] = []
 
     try:
-        sync_amfi_ter_api(supabase, funds, session)
+        counts["amfi_ter"] = sync_amfi_ter_api(supabase, funds, session)
     except Exception as e:
         logger.error("AMFI TER API sync failed: %s", e)
+        counts["amfi_ter"] = 0
+        errors.append({"source": "amfi_ter", "error": str(e)})
 
     try:
-        sync_amfi_aum_api(supabase, funds, session)
+        counts["amfi_aum"] = sync_amfi_aum_api(supabase, funds, session)
     except Exception as e:
         logger.error("AMFI AUM API sync failed: %s", e)
+        counts["amfi_aum"] = 0
+        errors.append({"source": "amfi_aum", "error": str(e)})
 
     try:
-        sync_amfi_holdings_api(supabase, funds, session)
+        counts["amfi_holdings"] = sync_amfi_holdings_api(supabase, funds, session)
     except Exception as e:
         logger.error("AMFI holdings API sync failed: %s", e)
+        counts["amfi_holdings"] = 0
+        errors.append({"source": "amfi_holdings", "error": str(e)})
 
-    sync_ter_sources(supabase, funds, registry, session)
-    sync_aum_sources(supabase, funds, registry, session)
-    sync_holding_sources(supabase, funds, registry, session)
+    for name, sync in (
+        ("official_ter", sync_ter_sources),
+        ("official_aum", sync_aum_sources),
+        ("official_holdings", sync_holding_sources),
+    ):
+        try:
+            counts[name] = sync(supabase, funds, registry, session)
+        except Exception as exc:
+            logger.error("%s sync failed: %s", name, exc)
+            counts[name] = 0
+            errors.append({"source": name, "error": str(exc)})
+
+    amfi_written = sum(counts.get(name, 0) for name in ("amfi_ter", "amfi_aum", "amfi_holdings"))
+    reason = "amfi_zero_parseable_rows" if amfi_written == 0 else None
+    return {
+        "status": "degraded" if reason or errors else "success",
+        "reason": reason,
+        "counts": counts,
+        "amfi_written_total": amfi_written,
+        "official_written_total": sum(value for name, value in counts.items() if name.startswith("official_")),
+        "errors": errors,
+    }
 
 
 if __name__ == "__main__":
