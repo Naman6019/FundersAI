@@ -9,6 +9,18 @@ on:
         description: 'Enabled AMCs to index'
         required: false
         default: ''
+      lane:
+        description: 'Automation lane'
+        required: false
+        type: choice
+        options:
+          - green
+          - approved_restricted
+        default: green
+      source_document_ids:
+        description: 'Exact approved mf_raw_documents UUIDs for restricted indexing'
+        required: false
+        default: ''
       limit:
         description: 'Maximum new parsed PDFs to index'
         required: false
@@ -78,10 +90,13 @@ jobs:
           mkdir -p ../research-index-output
 
           amcs="${{ inputs.amcs }}"
+          lane="${{ inputs.lane }}"
+          source_document_ids="${{ inputs.source_document_ids }}"
           limit="${{ inputs.limit }}"
           force="${{ inputs.force }}"
           require_embeddings="${{ inputs.require_embeddings }}"
-          amcs="${amcs:-$(python -c "from app.mf_ingestion.sources.registry import capability_keys; print(','.join(capability_keys('runtime_enabled')))")}"
+          lane="${lane:-green}"
+          amcs="$(python scripts/resolve_mf_automation_scope.py --operation research_index --lane "$lane" --amcs "$amcs" --event-name "$GITHUB_EVENT_NAME" --source-document-ids "$source_document_ids")"
           limit="${limit:-5}"
           force="${force:-false}"
           require_embeddings="${require_embeddings:-true}"
@@ -98,6 +113,9 @@ jobs:
             --strict
             --output ../research-index-output/summary.json
           )
+          if [ -n "$source_document_ids" ]; then
+            args+=(--source-document-ids "$source_document_ids")
+          fi
           if [ "$force" = "true" ]; then
             args+=(--force)
           fi

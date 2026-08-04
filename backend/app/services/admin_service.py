@@ -239,8 +239,10 @@ def _empty_mf_metric_coverage() -> dict[str, Any]:
         "metric_eligible_total": 0,
         "history_ready_count": 0,
         "alpha_beta_count": 0,
+        "supported_history_alpha_beta_count": 0,
         "catalog_alpha_beta_coverage": 0.0,
         "supported_alpha_beta_coverage": 0.0,
+        "supported_history_alpha_beta_coverage": 0.0,
         "supported_benchmark_count": 0,
         "supported_benchmark_coverage": 0.0,
         "supported_risk_count": 0,
@@ -316,6 +318,7 @@ def _mf_metric_coverage(now_utc: datetime) -> dict[str, Any]:
             core_by_code.update({str(row["scheme_code"]): row for row in core_rows if row.get("scheme_code")})
 
         history_ready = 0
+        supported_history_alpha_beta = 0
         eligible_codes: set[str] = set()
         alpha_beta = 0
         benchmark_count = 0
@@ -324,9 +327,20 @@ def _mf_metric_coverage(now_utc: datetime) -> dict[str, Any]:
         for code in target_codes:
             cache = cache_by_code.get(code, {})
             expires_at = _to_utc_datetime(cache.get("expires_at"))
-            if int(cache.get("point_count") or 0) >= 31 and expires_at and expires_at > now_utc:
+            history_is_ready = (
+                int(cache.get("point_count") or 0) >= 31
+                and expires_at is not None
+                and expires_at > now_utc
+            )
+            if history_is_ready:
                 history_ready += 1
             core = core_by_code.get(code, {})
+            has_alpha_beta = (
+                core.get("alpha") not in (None, "")
+                and core.get("beta") not in (None, "")
+            )
+            if history_is_ready and has_alpha_beta:
+                supported_history_alpha_beta += 1
             provider_payload = core.get("provider_payload")
             metric_snapshot = (
                 provider_payload.get("metric_snapshot", {})
@@ -335,7 +349,7 @@ def _mf_metric_coverage(now_utc: datetime) -> dict[str, Any]:
             )
             if int(metric_snapshot.get("overlap_points") or 0) >= int(metric_snapshot.get("minimum_overlap_points") or 30):
                 eligible_codes.add(code)
-                if core.get("alpha") not in (None, "") and core.get("beta") not in (None, ""):
+                if has_alpha_beta:
                     alpha_beta += 1
             if core.get("benchmark") not in (None, ""):
                 benchmark_count += 1
@@ -350,8 +364,13 @@ def _mf_metric_coverage(now_utc: datetime) -> dict[str, Any]:
             metric_eligible_total=eligible_total,
             history_ready_count=history_ready,
             alpha_beta_count=alpha_beta,
+            supported_history_alpha_beta_count=supported_history_alpha_beta,
             catalog_alpha_beta_coverage=_coverage_ratio(alpha_beta, int(coverage["catalog_total"])),
             supported_alpha_beta_coverage=_coverage_ratio(alpha_beta, eligible_total),
+            supported_history_alpha_beta_coverage=_coverage_ratio(
+                supported_history_alpha_beta,
+                supported_total,
+            ),
             supported_benchmark_count=benchmark_count,
             supported_benchmark_coverage=_coverage_ratio(benchmark_count, supported_total),
             supported_risk_count=risk_count,
@@ -883,7 +902,7 @@ def admin_ops_overview(x_admin_key: str | None = Header(default=None, alias="X-A
             continue
         if status in {"success", "ok", "completed", "done"}:
             successes_24h += 1
-        elif status in {"failed", "error", "partial_failed", "timeout"}:
+        elif status in {"failed", "error", "partial_failed", "timeout", "timed_out"}:
             failures_24h += 1
 
     mf_pipeline_rows: list[dict[str, Any]] = []

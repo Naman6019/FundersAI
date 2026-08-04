@@ -25,6 +25,7 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--amc", default=None)
     parser.add_argument("--report-month", default=None, help="YYYY-MM-01")
+    parser.add_argument("--source-document-ids", default="", help="Comma-separated exact document UUIDs.")
     parser.add_argument("--strict", action="store_true", help="Exit non-zero when parse failures occur.")
     parser.add_argument(
         "--fail-on-needs-review",
@@ -34,7 +35,13 @@ def main() -> int:
     args = parser.parse_args()
 
     service = ParsingService()
-    result = service.parse_pending_documents(limit=args.limit, amc_code=args.amc, report_month=args.report_month)
+    source_document_ids = [value.strip() for value in args.source_document_ids.split(",") if value.strip()]
+    result = service.parse_pending_documents(
+        limit=args.limit,
+        amc_code=args.amc,
+        report_month=args.report_month,
+        source_document_ids=source_document_ids,
+    )
     logger.info(json.dumps(result, indent=2, default=str))
     if args.strict:
         if str(result.get("status") or "").strip().lower() == "error":

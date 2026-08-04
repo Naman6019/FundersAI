@@ -9,6 +9,14 @@ on:
         description: 'Discovery agents to run'
         required: false
         default: ''
+      lane:
+        description: 'Automation lane'
+        required: false
+        type: choice
+        options:
+          - green
+          - validation_only
+        default: green
       document_scope:
         description: 'Document scope'
         required: false
@@ -28,7 +36,7 @@ on:
       minimum_completed:
         description: 'Minimum agents that must complete'
         required: false
-        default: '12'
+        default: ''
       max_actions:
         description: 'Maximum bounded actions per agent'
         required: false
@@ -131,6 +139,7 @@ jobs:
           mkdir -p discovery-output
 
           amcs="${{ inputs.amcs }}"
+          lane="${{ inputs.lane }}"
           document_scope="${{ inputs.document_scope }}"
           expected_month="${{ inputs.expected_month }}"
           expected_month_grace_days="${{ inputs.expected_month_grace_days }}"
@@ -139,14 +148,21 @@ jobs:
           max_candidates="${{ inputs.max_candidates }}"
           probe_downloads="${{ inputs.probe_downloads }}"
 
-          amcs="${amcs:-$(PYTHONPATH=backend python -c "from app.mf_ingestion.sources.registry import capability_keys; print(','.join(capability_keys('discovery_enabled')))")}"
+          lane="${lane:-green}"
+          amcs="$(python backend/scripts/resolve_mf_automation_scope.py --operation discovery --lane "$lane" --amcs "$amcs" --event-name "$GITHUB_EVENT_NAME")"
           document_scope="${document_scope:-all}"
           expected_month="${expected_month:-$(date -u -d '1 month ago' +%Y-%m)}"
           expected_month_grace_days="${expected_month_grace_days:-14}"
-          minimum_completed="${minimum_completed:-12}"
+          amc_count="$(python -c "print(len('$amcs'.split(',')))")"
+          minimum_completed="${minimum_completed:-$amc_count}"
           max_actions="${max_actions:-12}"
           max_candidates="${max_candidates:-3}"
           probe_downloads="${probe_downloads:-true}"
+
+          if [ "${MF_DISCOVERY_BROWSER_ENABLED}" = "true" ] && [ "$lane" != "validation_only" ]; then
+            echo "Browser fallback is allowed only for explicit validation-only discovery."
+            exit 2
+          fi
 
           args=(
             --amcs "$amcs"

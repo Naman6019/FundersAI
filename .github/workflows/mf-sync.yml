@@ -29,6 +29,12 @@ jobs:
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
 
+      - name: Reconcile stale provider-run telemetry
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python backend/scripts/reconcile_stale_provider_runs.py --stale-after-hours 6 --output mf-provider-run-reconciliation-health.json
+
       - name: Run AMFI MF Sync
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

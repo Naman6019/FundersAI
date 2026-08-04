@@ -203,9 +203,10 @@ def test_staging_migration_and_workflows_keep_acquisition_and_promotion_separate
     assert 'PARSE_ONLY="true"' in parser_workflow
     assert "Acquisition is separated. Use Acquire MF Documents" in parser_workflow
     assert 'if [ "$EDGE_ACQUIRED" = "true" ] && [ "$PARSE_ONLY" != "true" ]; then' in parser_workflow
-    assert "capability_keys('portfolio_parser_enabled')" in parser_workflow
-    assert "MF_DISCLOSURE_COVERAGE_AMCS=\"$(PYTHONPATH=backend python -c" in parser_workflow
-    assert "DISPATCH_AMCS:-$(PYTHONPATH=backend python -c" in parser_workflow
+    assert "resolve_mf_automation_scope.py" in parser_workflow
+    assert "--operation disclosure_parse" in parser_workflow
+    assert "capability_keys('portfolio_parser_enabled')" not in parser_workflow
+    assert "capability_keys('runtime_enabled')" not in parser_workflow
     assert "report_mf_staging_coverage.py" in parser_workflow
     assert "--report-month \"${STAGING_REPORT_MONTH}-01\"" in parser_workflow
     assert '--strict-amcs "$MF_DISCLOSURE_STRICT_COVERAGE_AMCS"' in parser_workflow
@@ -213,9 +214,10 @@ def test_staging_migration_and_workflows_keep_acquisition_and_promotion_separate
     assert "axis,hdfc,sbi,icici,ppfas,nippon" not in parser_workflow
     assert "fromJson(needs.registry-matrix.outputs.amcs)" in parser_workflow
     assert "list_actionable_mf_parser_amcs.py" in retry_workflow
-    assert 'capability_keys("portfolio_parser_enabled")' in retry_matrix
+    assert "resolve_automation_scope" in retry_matrix
     assert "parse_status" in retry_matrix
-    assert "capability_keys('runtime_enabled')" in index_workflow
+    assert "resolve_mf_automation_scope.py" in index_workflow
+    assert "capability_keys('runtime_enabled')" not in index_workflow
     assert 'supabase.table("mutual_fund_holdings").upsert' not in parsing_service
     assert 'supabase.table("mutual_fund_sectors").upsert' not in parsing_service
     assert 'supabase.table("mutual_fund_core_snapshot").update' not in parsing_service

@@ -19,6 +19,7 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 from app.database import supabase
 from app.mf_ingestion.services.parsing_service import ParsingService
 from app.mf_ingestion.sources.registry import get_source
+from app.supabase_retry import execute_with_retry
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -117,7 +118,11 @@ def load_retry_documents(
         query = query.in_("id", source_document_ids)
     if report_month:
         query = query.eq("report_month", report_month)
-    rows = query.limit(query_limit).execute().data or []
+    rows = execute_with_retry(
+        lambda: query.limit(query_limit).execute(),
+        operation_name="load_retry_documents",
+        log=logger,
+    ).data or []
 
     eligible = [
         row
@@ -141,7 +146,12 @@ def reparse_documents(documents: list[dict[str, Any]], service: ParsingService) 
         logger.info("Processing doc %s (AMC: %s, Month: %s)", doc_id, amc_code, report_month)
 
         try:
-            supabase.table("mf_raw_documents").update({"parse_status": "needs_reparse"}).eq("id", doc_id).execute()
+            status_query = supabase.table("mf_raw_documents").update({"parse_status": "needs_reparse"}).eq("id", doc_id)
+            execute_with_retry(
+                status_query.execute,
+                operation_name="mark_document_needs_reparse",
+                log=logger,
+            )
 
             doc_to_parse = dict(doc)
             doc_to_parse["parse_status"] = "needs_reparse"
@@ -150,7 +160,12 @@ def reparse_documents(documents: list[dict[str, Any]], service: ParsingService) 
 
             if status not in {"failed", "needs_review", "parsed_partial"}:
                 logger.info("Doc %s no longer actionable after retry: %s", doc_id, result)
-                supabase.table("mf_parse_review_queue").delete().eq("source_document_id", doc_id).execute()
+                cleanup_query = supabase.table("mf_parse_review_queue").delete().eq("source_document_id", doc_id)
+                execute_with_retry(
+                    cleanup_query.execute,
+                    operation_name="clear_parser_review_queue",
+                    log=logger,
+                )
                 success_count += 1
             else:
                 logger.warning("Doc %s still needs action after retry: %s", doc_id, result)

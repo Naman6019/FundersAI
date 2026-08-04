@@ -9,6 +9,15 @@ on:
         description: 'Comma-separated AMCs to retry'
         required: false
         default: ''
+      lane:
+        description: 'Automation lane'
+        required: false
+        type: choice
+        options:
+          - green
+          - approved_restricted
+          - validation_only
+        default: green
       limit:
         description: 'Max docs retried per AMC'
         required: false
@@ -58,6 +67,9 @@ on:
         required: false
         default: 'false'
 
+permissions:
+  contents: read
+
 concurrency:
   group: retry-mf-parser-actions-${{ github.ref }}
   cancel-in-progress: false
@@ -75,7 +87,11 @@ jobs:
       - id: registry
         shell: bash
         run: |
-          matrix="$(python backend/scripts/list_actionable_mf_parser_amcs.py --amcs '${{ inputs.amcs }}')"
+          matrix="$(python backend/scripts/list_actionable_mf_parser_amcs.py \
+            --amcs '${{ inputs.amcs }}' \
+            --lane '${{ inputs.lane || 'green' }}' \
+            --event-name '${{ github.event_name }}' \
+            --source-document-ids '${{ inputs.source_document_ids }}')"
           echo "amcs=$matrix" >> "$GITHUB_OUTPUT"
 
   retry:
@@ -121,7 +137,6 @@ jobs:
           MF_LLM_MIN_WRITE_CONFIDENCE: ${{ inputs.llm_min_write_confidence || vars.MF_LLM_MIN_WRITE_CONFIDENCE || '90' }}
           MF_LLM_ALLOW_FINAL_WRITES: ${{ inputs.llm_allow_final_writes || vars.MF_LLM_ALLOW_FINAL_WRITES || 'false' }}
           ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "false"
-          DISPATCH_AMCS: ${{ inputs.amcs }}
           DISPATCH_LIMIT: ${{ inputs.limit }}
           DISPATCH_MIN_AGE_HOURS: ${{ inputs.min_age_hours }}
           DISPATCH_STATUSES: ${{ inputs.statuses }}
@@ -141,13 +156,6 @@ jobs:
           fi
 
           EVENT_NAME="${GITHUB_EVENT_NAME:-workflow_dispatch}"
-          AMCS="${DISPATCH_AMCS:-$(PYTHONPATH=backend python -c "from app.mf_ingestion.sources.registry import capability_keys; print(','.join(capability_keys('runtime_enabled')))")}"
-          clean_amcs=$(echo "$AMCS" | tr -d ' ')
-          if [[ ! ",$clean_amcs," == *",${{ matrix.amc }},"* ]]; then
-            echo "Skipping ${{ matrix.amc }} as it is not in the requested AMCS list ($AMCS)"
-            exit 0
-          fi
-
           if [ -n "${DISPATCH_LIMIT:-}" ]; then
             LIMIT="$DISPATCH_LIMIT"
           elif [ "$EVENT_NAME" = "schedule" ]; then

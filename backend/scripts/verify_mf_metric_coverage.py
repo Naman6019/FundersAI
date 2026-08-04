@@ -24,12 +24,17 @@ def coverage_failures(
 ) -> list[str]:
     supported = int(coverage.get("supported_mapped_total") or 0)
     history_ratio = int(coverage.get("history_ready_count") or 0) / supported if supported else 0.0
+    history_alpha_beta_ratio = (
+        int(coverage.get("supported_history_alpha_beta_count") or 0) / supported
+        if supported
+        else 0.0
+    )
     failures: list[str] = []
     if supported == 0:
         failures.append("no_supported_mapped_schemes")
     if history_ratio < history_minimum:
         failures.append("history_coverage_below_threshold")
-    if float(coverage.get("supported_alpha_beta_coverage") or 0) < alpha_beta_minimum:
+    if history_alpha_beta_ratio < alpha_beta_minimum:
         failures.append("alpha_beta_coverage_below_threshold")
     if float(coverage.get("supported_benchmark_coverage") or 0) < benchmark_risk_minimum:
         failures.append("benchmark_coverage_below_threshold")

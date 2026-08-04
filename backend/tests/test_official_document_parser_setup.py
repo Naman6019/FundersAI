@@ -281,7 +281,7 @@ def test_llm_fallback_creates_review_only_payload(monkeypatch, tmp_path: Path):
 
     assert result["processed"][0]["status"] == "fallback_needs_review"
     assert result["processed"][0]["extractor_type"] == "llm"
-    assert any(table == "mf_parse_review_queue" for table, _payload in fake_supabase.inserts)
+    assert any(table == "mf_parse_review_queue" and conflict == "id" for table, _payload, conflict in fake_supabase.upserts)
     assert not any(table in {"mutual_fund_holdings", "mutual_fund_core_snapshot"} for table, *_ in fake_supabase.upserts)
 
 
@@ -519,7 +519,7 @@ def test_llm_primary_dry_run_enqueues_review_and_uses_deterministic_fallback(mon
     result = service.parse_pending_documents(limit=1, amc_code="ICICI")
 
     assert result["processed"][0]["status"] == "needs_review"
-    assert any(table == "mf_parse_review_queue" for table, _payload in fake_supabase.inserts)
+    assert any(table == "mf_parse_review_queue" and conflict == "id" for table, _payload, conflict in fake_supabase.upserts)
     assert any(table == "mf_factsheet_candidates" for table, _payload, _conflict in fake_supabase.upserts)
     assert repo.upserts == []
 
@@ -615,7 +615,9 @@ def test_sync_workflow_prints_disclosure_diagnostics_before_coverage_gate():
 def test_sync_workflow_has_strict_scheduled_coverage_defaults():
     workflow = Path(".github/workflows/sync-mf-disclosures.yml").read_text(encoding="utf-8")
 
-    assert "capability_keys('runtime_enabled')" in workflow
+    assert "resolve_mf_automation_scope.py" in workflow
+    assert "--operation disclosure_parse" in workflow
+    assert "capability_keys('runtime_enabled')" not in workflow
     assert 'MF_DISCLOSURE_MIN_CORE_FIELD_RATIO: "0.80"' in workflow
     assert 'MF_DISCLOSURE_MIN_PORTFOLIO_FAMILY_RATIO: "0.80"' in workflow
 

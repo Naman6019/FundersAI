@@ -126,11 +126,12 @@ def test_render_summary_is_github_readable() -> None:
     assert "| HDFC | escalated | 0 |" in rendered
 
 
-def test_discovery_workflow_is_persistence_only_and_keeps_the_twelve_amc_gate() -> None:
+def test_discovery_workflow_is_persistence_only_and_uses_resolved_lane_gate() -> None:
     workflow = Path(".github/workflows/discover-mf-documents.yml").read_text(encoding="utf-8")
 
-    assert "capability_keys('discovery_enabled')" in workflow
-    assert "minimum_completed=\"${minimum_completed:-12}\"" in workflow
+    assert "resolve_mf_automation_scope.py --operation discovery" in workflow
+    assert "capability_keys('discovery_enabled')" not in workflow
+    assert "minimum_completed=\"${minimum_completed:-$amc_count}\"" in workflow
     assert "--persist-run" in workflow
     assert "--minimum-completed" in workflow
     assert "actions/upload-artifact@v4" in workflow
