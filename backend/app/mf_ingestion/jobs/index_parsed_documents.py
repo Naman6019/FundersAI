@@ -59,10 +59,26 @@ def main() -> int:
     skipped: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
 
+    def checkpoint(status: str = "running") -> dict[str, Any]:
+        summary = _build_summary(
+            status=status,
+            requested_amcs=amc_keys,
+            candidate_pdf_count=len(documents),
+            previously_indexed_count=len(existing_ids),
+            indexed=indexed,
+            skipped=skipped,
+            failures=failures,
+        )
+        _write_summary(args.output, summary)
+        return summary
+
+    checkpoint()
+
     for document in documents:
         document_id = str(document.get("id") or "")
         if document_id in existing_ids:
             skipped.append({"document_id": document_id, "reason": "already_indexed"})
+            checkpoint()
             continue
         if len(indexed) >= args.limit:
             break
@@ -97,30 +113,50 @@ def main() -> int:
         finally:
             if temporary_path:
                 Path(temporary_path).unlink(missing_ok=True)
+            checkpoint()
 
-    available_count = len(existing_ids) + len(indexed)
-    summary = {
-        "requested_amcs": amc_keys,
-        "candidate_pdf_count": len(documents),
-        "previously_indexed_count": len(existing_ids),
-        "newly_indexed_count": len(indexed),
-        "available_document_count": available_count,
-        "indexed": indexed,
-        "skipped": skipped,
-        "failures": failures,
-    }
+    summary = checkpoint("failed" if failures else "completed")
+    available_count = int(summary["available_document_count"])
     rendered = json.dumps(summary, indent=2, default=str)
     print(rendered)
-    if args.output:
-        output_path = Path(args.output)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(rendered + "\n", encoding="utf-8")
 
     if available_count < args.minimum_available:
         return 1
     if args.strict and failures:
         return 1
     return 0
+
+
+def _build_summary(
+    *,
+    status: str,
+    requested_amcs: list[str],
+    candidate_pdf_count: int,
+    previously_indexed_count: int,
+    indexed: list[dict[str, Any]],
+    skipped: list[dict[str, Any]],
+    failures: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "status": status,
+        "requested_amcs": requested_amcs,
+        "candidate_pdf_count": candidate_pdf_count,
+        "processed_document_count": len(indexed) + len(skipped) + len(failures),
+        "previously_indexed_count": previously_indexed_count,
+        "newly_indexed_count": len(indexed),
+        "available_document_count": previously_indexed_count + len(indexed),
+        "indexed": indexed,
+        "skipped": skipped,
+        "failures": failures,
+    }
+
+
+def _write_summary(path: str | None, summary: dict[str, Any]) -> None:
+    if not path:
+        return
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(summary, indent=2, default=str) + "\n", encoding="utf-8")
 
 
 def _normalize_amcs(raw: str) -> list[str]:

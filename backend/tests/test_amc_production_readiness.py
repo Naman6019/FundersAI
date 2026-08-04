@@ -178,6 +178,7 @@ def test_staging_migration_and_workflows_keep_acquisition_and_promotion_separate
     promotion = Path(".github/workflows/promote-mf-disclosures.yml").read_text(encoding="utf-8")
     parser_workflow = Path(".github/workflows/sync-mf-disclosures.yml").read_text(encoding="utf-8")
     retry_workflow = Path(".github/workflows/retry-mf-parser-actions.yml").read_text(encoding="utf-8")
+    retry_matrix = Path("backend/scripts/list_actionable_mf_parser_amcs.py").read_text(encoding="utf-8")
     index_workflow = Path(".github/workflows/index-mf-research.yml").read_text(encoding="utf-8")
     parsing_service = Path("backend/app/mf_ingestion/services/parsing_service.py").read_text(encoding="utf-8")
 
@@ -211,8 +212,9 @@ def test_staging_migration_and_workflows_keep_acquisition_and_promotion_separate
     assert "check_mf_disclosure_coverage.py" not in parser_workflow
     assert "axis,hdfc,sbi,icici,ppfas,nippon" not in parser_workflow
     assert "fromJson(needs.registry-matrix.outputs.amcs)" in parser_workflow
-    assert "capability_keys('portfolio_parser_enabled')" in retry_workflow
-    assert "capability_keys('runtime_enabled')" in retry_workflow
+    assert "list_actionable_mf_parser_amcs.py" in retry_workflow
+    assert 'capability_keys("portfolio_parser_enabled")' in retry_matrix
+    assert "parse_status" in retry_matrix
     assert "capability_keys('runtime_enabled')" in index_workflow
     assert 'supabase.table("mutual_fund_holdings").upsert' not in parsing_service
     assert 'supabase.table("mutual_fund_sectors").upsert' not in parsing_service

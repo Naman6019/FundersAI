@@ -59,6 +59,7 @@ class AMCLinkDiscoveryAgent:
         document_types: tuple[str, ...],
         expected_month: date | None = None,
         expected_month_grace_days: int = 14,
+        observed_on: date | None = None,
         max_candidates_per_type: int = 1,
         probe_downloads: bool = True,
     ) -> DiscoveryAgentResult:
@@ -270,6 +271,7 @@ class AMCLinkDiscoveryAgent:
                     candidate,
                     expected_month=expected_month,
                     expected_month_grace_days=expected_month_grace_days,
+                    observed_on=observed_on,
                 )
                 if errors:
                     trace.append(
@@ -352,9 +354,13 @@ class AMCLinkDiscoveryAgent:
                     content_status = "passed"
                     readiness = "content_validated"
                     checksum = content_sha256(downloaded)
+                    pending_month_warning = next(
+                        (warning for warning in warnings if warning.startswith("report_month_pending_expected:")),
+                        None,
+                    )
                     parser_errors, content_report_month = inspect_parser_smoke(
                         downloaded,
-                        expected_report_month=expected_month,
+                        expected_report_month=(candidate.report_month if pending_month_warning else expected_month),
                     )
                     if content_report_month is not None:
                         confirmed_report_month = content_report_month
@@ -364,6 +370,8 @@ class AMCLinkDiscoveryAgent:
                             for warning in warnings
                             if not warning.startswith("report_month_")
                         ]
+                        if pending_month_warning:
+                            warnings.append(pending_month_warning)
                     if parser_errors:
                         warnings.extend(parser_errors)
                         parser_smoke_status = "failed"
@@ -437,7 +445,7 @@ class AMCLinkDiscoveryAgent:
         covered_types = {
             document.document_type
             for document in accepted
-            if document.readiness == "promotable"
+            if _is_operationally_covered(document)
         }
         if len(covered_types) == len(set(document_types)):
             status = "completed"
@@ -633,6 +641,17 @@ def _candidate_url_identity(url: str) -> str:
 def _is_factsheet_candidate(document: DiscoveredDocument) -> bool:
     text = f"{document.title} {document.url}".lower()
     return "factsheet" in text or "fact sheet" in text
+
+
+def _is_operationally_covered(document: ValidatedDiscovery) -> bool:
+    """A prior-month LKG can keep runtime healthy during the publication grace window."""
+    if document.readiness == "promotable":
+        return True
+    return (
+        document.parser_smoke_status == "passed"
+        and bool(document.warnings)
+        and all(warning.startswith("report_month_pending_expected:") for warning in document.warnings)
+    )
 
 
 def _minimum_actions_per_document_type(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
@@ -55,11 +55,12 @@ def validate_candidate(
     if document.report_month is None:
         warnings.append("report_month_unknown")
     elif expected_month and _month_index(document.report_month) != _month_index(expected_month):
-        grace_deadline = date(
-            expected_month.year,
-            expected_month.month,
-            min(max(int(expected_month_grace_days), 1), 28),
+        next_month = (
+            date(expected_month.year + 1, 1, 1)
+            if expected_month.month == 12
+            else date(expected_month.year, expected_month.month + 1, 1)
         )
+        grace_deadline = next_month + timedelta(days=max(int(expected_month_grace_days), 0) - 1)
         if (observed_on or date.today()) <= grace_deadline:
             warnings.append(f"report_month_pending_expected:{document.report_month.isoformat()}")
         elif _month_index(document.report_month) < _month_index(expected_month):

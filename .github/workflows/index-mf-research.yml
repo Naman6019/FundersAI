@@ -12,7 +12,7 @@ on:
       limit:
         description: 'Maximum new parsed PDFs to index'
         required: false
-        default: '25'
+        default: '5'
       force:
         description: 'Reindex documents that already have chunks'
         required: false
@@ -82,7 +82,7 @@ jobs:
           force="${{ inputs.force }}"
           require_embeddings="${{ inputs.require_embeddings }}"
           amcs="${amcs:-$(python -c "from app.mf_ingestion.sources.registry import capability_keys; print(','.join(capability_keys('runtime_enabled')))")}"
-          limit="${limit:-25}"
+          limit="${limit:-5}"
           force="${force:-false}"
           require_embeddings="${require_embeddings:-true}"
 

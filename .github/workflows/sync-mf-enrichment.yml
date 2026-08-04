@@ -28,4 +28,13 @@ jobs:
             exit 1
           fi
 
-          python -m backend.app.jobs.sync_mf_enrichment_unified
+          python -m backend.app.jobs.sync_mf_enrichment_unified --output mf-enrichment-health.json
+
+      - name: Upload enrichment health
+        if: always() && hashFiles('mf-enrichment-health.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: mf-enrichment-health-${{ github.run_id }}-${{ github.run_attempt }}
+          path: mf-enrichment-health.json
+          if-no-files-found: error
+          retention-days: 30

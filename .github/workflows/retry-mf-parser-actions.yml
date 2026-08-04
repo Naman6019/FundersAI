@@ -65,6 +65,9 @@ concurrency:
 jobs:
   registry-matrix:
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
     outputs:
       amcs: ${{ steps.registry.outputs.amcs }}
     steps:
@@ -72,7 +75,7 @@ jobs:
       - id: registry
         shell: bash
         run: |
-          matrix="$(PYTHONPATH=backend python -c "import json; from app.mf_ingestion.sources.registry import capability_keys; print(json.dumps(capability_keys('portfolio_parser_enabled')))")"
+          matrix="$(python backend/scripts/list_actionable_mf_parser_amcs.py --amcs '${{ inputs.amcs }}')"
           echo "amcs=$matrix" >> "$GITHUB_OUTPUT"
 
   retry:
@@ -97,6 +100,7 @@ jobs:
         run: pip install -r backend/requirements.txt
 
       - name: Retry parser action documents
+        if: matrix.amc != '__none__'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -156,7 +160,7 @@ jobs:
           SOURCE_DOCUMENT_IDS="${DISPATCH_SOURCE_DOCUMENT_IDS:-}"
           REPORT_MONTH="${DISPATCH_REPORT_MONTH:-}"
           STRICT_RETRY_FLAG=""
-          if [ "$EVENT_NAME" = "schedule" ] || [ "${DISPATCH_FAIL_ON_STILL_ACTIONABLE:-false}" = "true" ]; then
+          if [ "${DISPATCH_FAIL_ON_STILL_ACTIONABLE:-false}" = "true" ]; then
             STRICT_RETRY_FLAG="--fail-on-still-actionable"
           fi
           amc="${{ matrix.amc }}"

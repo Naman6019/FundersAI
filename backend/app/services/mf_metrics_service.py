@@ -6,7 +6,7 @@ from math import sqrt
 from typing import Any
 
 
-NAV_METRIC_SNAPSHOT_VERSION = "mf_nav_metrics_v2"
+NAV_METRIC_SNAPSHOT_VERSION = "mf_nav_metrics_v3"
 
 
 @dataclass
@@ -140,6 +140,22 @@ def compute_nav_metrics(
     *,
     benchmark_rows: list[dict[str, Any]] | None = None,
 ) -> dict[str, float | None]:
+    metrics, _ = compute_nav_metrics_with_diagnostics(
+        rows,
+        benchmark_daily_returns=benchmark_daily_returns,
+        risk_free_rate=risk_free_rate,
+        benchmark_rows=benchmark_rows,
+    )
+    return metrics
+
+
+def compute_nav_metrics_with_diagnostics(
+    rows: list[dict[str, Any]],
+    benchmark_daily_returns: list[float] | None = None,
+    risk_free_rate: float | None = None,
+    *,
+    benchmark_rows: list[dict[str, Any]] | None = None,
+) -> tuple[dict[str, float | None], dict[str, Any]]:
     points = normalize_nav_history(rows)
 
     metrics: dict[str, float | None] = {
@@ -165,6 +181,7 @@ def compute_nav_metrics(
 
     nav_sample: list[float] = []
     bench_sample: list[float] = []
+    benchmark_points: list[NavPoint] = []
     if benchmark_rows:
         benchmark_points = normalize_nav_history(benchmark_rows)
         nav_by_date = _daily_returns_by_date(points, 365)
@@ -195,4 +212,26 @@ def compute_nav_metrics(
                 metrics["beta"] = beta
                 metrics["alpha"] = alpha * 100
 
-    return metrics
+    if not points:
+        calculation_status = "fund_history_unavailable"
+    elif len(nav_sample) < 30:
+        calculation_status = (
+            "benchmark_unavailable"
+            if not benchmark_points and not benchmark_daily_returns
+            else "insufficient_overlap"
+        )
+    elif metrics["alpha"] is None or metrics["beta"] is None:
+        calculation_status = "benchmark_zero_variance"
+    else:
+        calculation_status = "computed"
+
+    diagnostics = {
+        "calculation_status": calculation_status,
+        "fund_start_date": points[0].nav_date.isoformat() if points else None,
+        "fund_end_date": points[-1].nav_date.isoformat() if points else None,
+        "benchmark_start_date": benchmark_points[0].nav_date.isoformat() if benchmark_points else None,
+        "benchmark_end_date": benchmark_points[-1].nav_date.isoformat() if benchmark_points else None,
+        "overlap_points": min(len(nav_sample), len(bench_sample)),
+        "minimum_overlap_points": 30,
+    }
+    return metrics, diagnostics

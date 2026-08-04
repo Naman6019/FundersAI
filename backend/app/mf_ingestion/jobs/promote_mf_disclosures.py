@@ -18,6 +18,7 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 from app.database import supabase
 from app.mf_ingestion.sources.registry import get_source_by_code
+from app.services.supported_amcs import supported_amc_label_from_text
 
 CORE_SCOPES = {"risk", "ter_aum", "benchmark", "manager"}
 PORTFOLIO_SCOPES = {"holdings", "sectors"}
@@ -270,6 +271,120 @@ def _sector_not_applicable(raw_scheme_name: object) -> bool:
     return any(marker in normalized for marker in NON_SECTOR_SCHEME_MARKERS)
 
 
+def build_family_invariant_propagation_plan(
+    candidate: dict[str, Any],
+    scopes: list[str],
+    expected_report_month: date,
+    *,
+    requested_by: str,
+) -> dict[str, Any]:
+    eligible_fields = {
+        "benchmark": candidate.get("benchmark") if "benchmark" in scopes else None,
+        "risk_level": candidate.get("risk_level") if "risk" in scopes else None,
+    }
+    eligible_fields = {key: value for key, value in eligible_fields.items() if value not in (None, "")}
+    family_id = str(candidate.get("mapped_family_id") or "").strip()
+    source_code = str(candidate.get("mapped_scheme_code") or "").strip()
+    source_amc = str(candidate.get("amc_code") or "").strip()
+    if not eligible_fields or not family_id or not source_code:
+        return {"status": "not_applicable", "updates": [], "conflicts": {}}
+
+    mapping_rows = (
+        supabase.table("mutual_fund_family_mapping")
+        .select("scheme_code,family_id")
+        .eq("family_id", family_id)
+        .execute()
+        .data
+        or []
+    )
+    sibling_codes = sorted({str(row.get("scheme_code")) for row in mapping_rows if row.get("scheme_code")})
+    if not sibling_codes:
+        return {"status": "not_applicable", "updates": [], "conflicts": {}}
+
+    snapshot_rows: list[dict[str, Any]] = []
+    for start in range(0, len(sibling_codes), 500):
+        snapshot_rows.extend(
+            (
+                supabase.table("mutual_fund_core_snapshot")
+                .select("scheme_code,amc_name,benchmark,risk_level,provider_payload")
+                .in_("scheme_code", sibling_codes[start : start + 500])
+                .execute()
+                .data
+                or []
+            )
+        )
+    source_label = supported_amc_label_from_text(source_amc)
+    safe_rows = [
+        row
+        for row in snapshot_rows
+        if source_label and supported_amc_label_from_text(row.get("amc_name")) == source_label
+    ]
+    conflicts: dict[str, list[dict[str, Any]]] = {}
+    safe_fields: dict[str, Any] = {}
+    for field, incoming in eligible_fields.items():
+        field_conflicts = [
+            {"scheme_code": str(row.get("scheme_code")), "existing": row.get(field), "incoming": incoming}
+            for row in safe_rows
+            if row.get(field) not in (None, "")
+            and " ".join(str(row.get(field)).lower().split()) != " ".join(str(incoming).lower().split())
+        ]
+        if field_conflicts:
+            conflicts[field] = field_conflicts
+        else:
+            safe_fields[field] = incoming
+
+    updates: list[dict[str, Any]] = []
+    for row in safe_rows:
+        scheme_code = str(row.get("scheme_code") or "")
+        values = {
+            field: value
+            for field, value in safe_fields.items()
+            if row.get(field) in (None, "")
+        }
+        if not scheme_code or not values:
+            continue
+        provider_payload = row.get("provider_payload")
+        provider_payload = dict(provider_payload) if isinstance(provider_payload, dict) else {}
+        propagation = provider_payload.get("official_family_propagation")
+        propagation = dict(propagation) if isinstance(propagation, dict) else {}
+        for field in values:
+            propagation[field] = {
+                "source_scheme_code": source_code,
+                "source_document_id": candidate.get("source_document_id"),
+                "family_id": family_id,
+                "report_month": expected_report_month.isoformat(),
+                "requested_by": requested_by,
+            }
+        provider_payload["official_family_propagation"] = propagation
+        updates.append({"scheme_code": scheme_code, **values, "provider_payload": provider_payload})
+
+    return {
+        "status": "ready" if updates else "no_updates",
+        "family_id": family_id,
+        "source_scheme_code": source_code,
+        "fields": sorted(safe_fields),
+        "updates": updates,
+        "conflicts": conflicts,
+    }
+
+
+def apply_family_invariant_propagation(plan: dict[str, Any]) -> dict[str, Any]:
+    applied: list[str] = []
+    for update in plan.get("updates") or []:
+        scheme_code = str(update["scheme_code"])
+        payload = {key: value for key, value in update.items() if key != "scheme_code"}
+        supabase.table("mutual_fund_core_snapshot").update(payload).eq("scheme_code", scheme_code).execute()
+        applied.append(scheme_code)
+    return {
+        "status": "applied" if applied else plan.get("status", "no_updates"),
+        "family_id": plan.get("family_id"),
+        "source_scheme_code": plan.get("source_scheme_code"),
+        "fields": plan.get("fields", []),
+        "applied_scheme_codes": applied,
+        "conflicts": plan.get("conflicts", {}),
+    }
+
+
 def _sector_family_coverage(
     holdings: list[dict[str, Any]],
     sector_rows: list[dict[str, Any]],
@@ -411,9 +526,14 @@ def build_dry_run(
             candidate_reports.append(
                 {
                     "candidate_id": candidate.get("id"),
+                    "source_document_id": candidate.get("source_document_id"),
+                    "amc_code": candidate.get("amc_code"),
+                    "report_month": candidate.get("report_month"),
                     "raw_scheme_name": candidate.get("raw_scheme_name"),
                     "mapped_scheme_code": candidate.get("mapped_scheme_code"),
                     "mapped_family_id": candidate.get("mapped_family_id"),
+                    "benchmark": candidate.get("benchmark"),
+                    "risk_level": candidate.get("risk_level"),
                     "eligible_scopes": eligible_scopes,
                     "unavailable_scopes": unavailable_scopes,
                     "issues": candidate_issues,
@@ -574,6 +694,18 @@ def apply_promotable_report(
             ).execute()
             applied.append(
                 {"candidate_id": candidate["candidate_id"], "result": result.data}
+            )
+            propagation_plan = build_family_invariant_propagation_plan(
+                candidate,
+                candidate_scopes,
+                expected_report_month,
+                requested_by=requested_by,
+            )
+            applied.append(
+                {
+                    "candidate_id": candidate["candidate_id"],
+                    "family_invariant_propagation": apply_family_invariant_propagation(propagation_plan),
+                }
             )
 
     portfolio_scopes = [scope for scope in scopes if scope in PORTFOLIO_SCOPES]

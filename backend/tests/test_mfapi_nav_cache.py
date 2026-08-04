@@ -234,6 +234,55 @@ def test_cache_upsert_writes_summary_metadata_and_refreshes_metrics(monkeypatch)
     assert captured["metric_scheme"] == "100"
 
 
+def test_retention_preserves_supported_metric_targets(monkeypatch):
+    deleted_codes = []
+
+    class Query:
+        def __init__(self, mode="select"):
+            self.mode = mode
+            self.codes = []
+
+        def select(self, _fields):
+            return self
+
+        def lt(self, _field, _value):
+            return self
+
+        def limit(self, _value):
+            return self
+
+        def delete(self):
+            self.mode = "delete"
+            return self
+
+        def in_(self, _field, values):
+            self.codes = list(values)
+            return self
+
+        def execute(self):
+            if self.mode == "delete":
+                deleted_codes.extend(self.codes)
+                return SimpleNamespace(data=[{"scheme_code": code} for code in self.codes])
+            return SimpleNamespace(data=[
+                {"scheme_code": "protected"},
+                {"scheme_code": "delete-me"},
+            ])
+
+    monkeypatch.setattr(
+        mfapi_service,
+        "supabase",
+        SimpleNamespace(table=lambda _name: Query()),
+    )
+
+    deleted = mfapi_service.delete_expired_nav_cache_rows(
+        NOW,
+        protected_scheme_codes={"protected"},
+    )
+
+    assert deleted == 1
+    assert deleted_codes == ["delete-me"]
+
+
 def test_production_runtime_has_no_legacy_nav_table_reference():
     backend_root = Path(__file__).parents[1]
     allowed = {
