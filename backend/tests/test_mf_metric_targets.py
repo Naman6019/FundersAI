@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from app.services.mf_metric_target_service import (
+    metric_history_is_ready,
     prioritized_metric_targets,
     supported_metric_targets,
 )
@@ -96,7 +98,28 @@ def test_supported_targets_keep_latest_validated_row_per_scheme():
     }]
 
 
-def test_metric_targets_prioritize_missing_then_stale_then_fresh():
+def test_request_cache_expiry_does_not_expire_metric_history():
+    now = datetime(2026, 8, 6, tzinfo=timezone.utc)
+
+    assert metric_history_is_ready(
+        {
+            "point_count": 400,
+            "fetched_at": "2026-08-01T00:00:00+00:00",
+            "expires_at": "2026-08-02T00:00:00+00:00",
+        },
+        now=now,
+    ) is True
+    assert metric_history_is_ready(
+        {
+            "point_count": 400,
+            "fetched_at": "2026-07-22T00:00:00+00:00",
+            "expires_at": "2099-01-01T00:00:00+00:00",
+        },
+        now=now,
+    ) is False
+
+
+def test_metric_targets_prioritize_missing_then_metric_stale_then_ready_oldest():
     candidates = [
         {
             "amc_code": "HDFC",
@@ -107,14 +130,15 @@ def test_metric_targets_prioritize_missing_then_stale_then_fresh():
             "mapping_confidence": 99,
             "promotion_status": "promoted",
         }
-        for code in ("101", "102", "103")
+        for code in ("101", "102", "103", "104")
     ]
     client = Client({
         "mf_factsheet_candidates": candidates,
         "nav_api_cache": [
-            {"scheme_code": "102", "expires_at": "2020-01-01T00:00:00+00:00", "updated_at": "2020-01-01"},
-            {"scheme_code": "103", "expires_at": "2099-01-01T00:00:00+00:00", "updated_at": "2026-01-01"},
+            {"scheme_code": "102", "point_count": 400, "fetched_at": "2020-01-01T00:00:00+00:00"},
+            {"scheme_code": "103", "point_count": 400, "fetched_at": "2099-01-02T00:00:00+00:00"},
+            {"scheme_code": "104", "point_count": 400, "fetched_at": "2099-01-01T00:00:00+00:00"},
         ],
     })
 
-    assert [row["scheme_code"] for row in prioritized_metric_targets(client)] == ["101", "102", "103"]
+    assert [row["scheme_code"] for row in prioritized_metric_targets(client)] == ["101", "102", "104", "103"]

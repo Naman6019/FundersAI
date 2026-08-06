@@ -1,11 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import os
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.mf_ingestion.sources.registry import get_source_by_code
 
 PAGE_SIZE = 1000
+MF_METRIC_HISTORY_MAX_AGE_DAYS = max(
+    1,
+    int(os.getenv("MF_METRIC_HISTORY_MAX_AGE_DAYS", "14")),
+)
+MF_METRIC_HISTORY_MINIMUM_POINTS = 31
 
 
 def _fetch_candidate_pages(client: Any) -> list[dict[str, Any]]:
@@ -91,10 +97,9 @@ def prioritized_metric_targets(client: Any) -> list[dict[str, Any]]:
         cache = cache_by_code.get(row["scheme_code"])
         if not cache:
             return (0, "", row["scheme_code"])
-        expires_at = _parse_timestamp(cache.get("expires_at"))
-        stale_rank = 1 if not expires_at or expires_at <= now else 2
-        updated_at = str(cache.get("updated_at") or cache.get("fetched_at") or "")
-        return (stale_rank, updated_at, row["scheme_code"])
+        stale_rank = 2 if metric_history_is_ready(cache, now=now) else 1
+        refreshed_at = str(cache.get("fetched_at") or cache.get("updated_at") or "")
+        return (stale_rank, refreshed_at, row["scheme_code"])
 
     enriched = [{**row, "cache": cache_by_code.get(row["scheme_code"])} for row in targets]
     return sorted(enriched, key=key)
@@ -108,3 +113,22 @@ def _parse_timestamp(value: Any) -> datetime | None:
         return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
     except ValueError:
         return None
+
+
+def metric_history_is_ready(
+    cache: dict[str, Any] | None,
+    *,
+    now: datetime | None = None,
+    minimum_points: int = MF_METRIC_HISTORY_MINIMUM_POINTS,
+    max_age_days: int = MF_METRIC_HISTORY_MAX_AGE_DAYS,
+) -> bool:
+    """Evaluate metric-history freshness independently of the serving-cache TTL."""
+    if not cache or int(cache.get("point_count") or 0) < minimum_points:
+        return False
+    refreshed_at = _parse_timestamp(cache.get("fetched_at") or cache.get("updated_at"))
+    if refreshed_at is None:
+        return False
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    return refreshed_at >= current - timedelta(days=max_age_days)

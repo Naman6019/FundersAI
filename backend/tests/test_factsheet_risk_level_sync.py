@@ -134,3 +134,59 @@ def test_factsheet_extraction_preserves_uti_raw_label_but_normalizes_mapping_nam
     payload = fake_supabase.upserts[0][1]
     assert payload["raw_scheme_name"] == "SCHEME: UTI - Flexi Cap Fund."
     assert payload["normalized_scheme_name"] == "uti - flexi cap fund"
+
+
+def test_promoted_candidate_mapping_change_is_sent_to_review():
+    payload = {
+        "mapped_scheme_code": "100639",
+        "mapped_family_id": "sbi-medium-to-long-duration",
+        "mapping_confidence": 100.0,
+        "mapping_status": "mapped",
+        "promotion_status": "staged",
+        "validation_issues": [],
+    }
+    existing = {
+        "mapped_scheme_code": "100639",
+        "mapped_family_id": "sbi-medium-to-long-duration",
+        "mapping_confidence": 100.0,
+        "promotion_status": "staged",
+        "promoted_scopes": ["risk"],
+        "promoted_scheme_code": "100640",
+        "validation_issues": [],
+    }
+
+    guarded, changed = parsing_service.guard_promoted_mapping_change(existing, payload)
+
+    assert changed is True
+    assert guarded["mapped_scheme_code"] == "100640"
+    assert guarded["mapping_status"] == "needs_review"
+    assert guarded["promotion_status"] == "needs_review"
+    assert "promoted_mapping_changed" in guarded["validation_issues"]
+
+
+def test_reviewed_promoted_mapping_is_preserved_without_reopening_review():
+    payload = {
+        "mapped_scheme_code": "100639",
+        "mapped_family_id": "sbi-medium-to-long-duration-fund",
+        "mapping_confidence": 100.0,
+        "mapping_status": "mapped",
+        "promotion_status": "staged",
+        "validation_issues": [],
+    }
+    existing = {
+        "mapped_scheme_code": "100640",
+        "mapped_family_id": "sbi-medium-to-long-duration-fund",
+        "mapping_confidence": 100.0,
+        "promotion_status": "promoted",
+        "promoted_scopes": ["benchmark", "manager", "risk", "ter_aum"],
+        "promoted_scheme_code": "100640",
+        "validation_issues": [parsing_service.MAPPING_REVIEW_KEEP_PROMOTED_TARGET],
+    }
+
+    guarded, changed = parsing_service.guard_promoted_mapping_change(existing, payload)
+
+    assert changed is False
+    assert guarded["mapped_scheme_code"] == "100640"
+    assert guarded["mapping_status"] == "mapped"
+    assert guarded["promotion_status"] == "promoted"
+    assert "promoted_mapping_changed" not in guarded["validation_issues"]

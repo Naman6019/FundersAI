@@ -47,6 +47,7 @@ FACTSHEET_SUPPORTED_DOCUMENT_TYPES = {"factsheet", "ter_disclosure"}
 AMC_DISCLOSURE_SOURCE = "amc_disclosure"
 OFFICIAL_CORE_SOURCE_MARKERS = ("AMFI TER API", "AMFI AUM API", "TER", "AUM", AMC_DISCLOSURE_SOURCE)
 OFFICIAL_HOLDING_SOURCES = ("AMFI scheme-wise disclosure", AMC_DISCLOSURE_SOURCE)
+MAPPING_REVIEW_KEEP_PROMOTED_TARGET = "mapping_review_keep_applied_promotion_target"
 
 
 def _execute_supabase(query: Any, operation_name: str) -> Any:
@@ -55,6 +56,59 @@ def _execute_supabase(query: Any, operation_name: str) -> Any:
         operation_name=operation_name,
         log=logger,
     )
+
+
+def guard_promoted_mapping_change(
+    existing: dict[str, Any] | None,
+    proposed: dict[str, Any],
+) -> tuple[dict[str, Any], bool]:
+    """Keep a promoted staging row on its reviewed identity when resolution drifts."""
+    if not existing:
+        return proposed, False
+    promoted = bool(existing.get("promoted_scopes")) or str(
+        existing.get("promotion_status") or ""
+    ).lower() in {"promoted", "partially_promoted"}
+    previous_identity = (
+        str(existing.get("promoted_scheme_code") or existing.get("mapped_scheme_code") or ""),
+        str(existing.get("promoted_family_id") or existing.get("mapped_family_id") or ""),
+    )
+    proposed_identity = (
+        str(proposed.get("mapped_scheme_code") or ""),
+        str(proposed.get("mapped_family_id") or ""),
+    )
+    if not promoted or previous_identity == proposed_identity:
+        return proposed, False
+
+    guarded = dict(proposed)
+    guarded["mapped_scheme_code"] = previous_identity[0] or None
+    guarded["mapped_family_id"] = previous_identity[1] or None
+    guarded["mapping_confidence"] = existing.get("mapping_confidence")
+    existing_issues = [str(issue) for issue in (existing.get("validation_issues") or [])]
+    review_resolved = MAPPING_REVIEW_KEEP_PROMOTED_TARGET in existing_issues
+    guarded["mapping_status"] = "mapped" if review_resolved else "needs_review"
+    guarded["promotion_status"] = (
+        str(existing.get("promotion_status") or "promoted")
+        if review_resolved
+        else "needs_review"
+    )
+    issues = list(dict.fromkeys([
+        *existing_issues,
+        *(proposed.get("validation_issues") or []),
+        *([] if review_resolved else ["promoted_mapping_changed"]),
+    ]))
+    guarded["validation_issues"] = issues
+    if review_resolved:
+        logger.info(
+            "event=reviewed_promoted_mapping_preserved scheme=%s",
+            previous_identity[0],
+        )
+        return guarded, False
+    logger.warning(
+        "event=promoted_mapping_change_blocked previous_scheme=%s proposed_scheme=%s",
+        previous_identity[0],
+        proposed_identity[0],
+    )
+    return guarded, True
 
 
 class ParsingService:
@@ -1146,12 +1200,59 @@ class ParsingService:
         except Exception:
             source_meta = {}
 
+        normalized_scheme_name = _normalize_scheme_text(_scheme_name_for_matching(scheme_name))
+        try:
+            existing_result = _execute_supabase(
+                supabase.table("mf_factsheet_candidates")
+                .select(
+                    "id,mapped_scheme_code,mapped_family_id,mapping_confidence,mapping_status,"
+                    "promotion_status,promoted_scopes,validation_issues"
+                )
+                .eq("source_document_id", source_document_id)
+                .eq("normalized_scheme_name", normalized_scheme_name)
+                .limit(1),
+                "load_existing_factsheet_candidate",
+            )
+            existing_candidate = (existing_result.data or [None])[0]
+            if existing_candidate and (
+                existing_candidate.get("promoted_scopes")
+                or str(existing_candidate.get("promotion_status") or "").lower()
+                in {"promoted", "partially_promoted"}
+            ):
+                try:
+                    promotion_result = _execute_supabase(
+                        supabase.table("mf_promotion_runs")
+                        .select("after_snapshot,created_at")
+                        .eq("candidate_id", existing_candidate.get("id"))
+                        .eq("status", "applied")
+                        .order("created_at", desc=True)
+                        .limit(1),
+                        "load_candidate_promotion_identity",
+                    )
+                    promotion_row = (promotion_result.data or [None])[0]
+                    snapshot = promotion_row.get("after_snapshot") if promotion_row else None
+                    promoted_scheme_code = (
+                        snapshot.get("scheme_code") if isinstance(snapshot, dict) else None
+                    )
+                    if promoted_scheme_code:
+                        existing_candidate = {
+                            **existing_candidate,
+                            "promoted_scheme_code": str(promoted_scheme_code),
+                        }
+                except Exception:
+                    logger.exception(
+                        "event=promotion_identity_lookup_failed candidate_id=%s",
+                        existing_candidate.get("id"),
+                    )
+        except Exception:
+            existing_candidate = None
+
         payload: dict[str, Any] = {
             "source_document_id": source_document_id,
             "amc_code": amc_code,
             "report_month": report_month.isoformat() if report_month else None,
             "raw_scheme_name": scheme_name,
-            "normalized_scheme_name": _normalize_scheme_text(_scheme_name_for_matching(scheme_name)),
+            "normalized_scheme_name": normalized_scheme_name,
             "mapped_scheme_code": scheme_code,
             "mapped_family_id": family_id,
             "mapping_confidence": mapping_confidence,
@@ -1169,6 +1270,7 @@ class ParsingService:
             "updated_at": datetime.now(timezone.utc).isoformat(),
             **parsed_fields,
         }
+        payload, mapping_changed = guard_promoted_mapping_change(existing_candidate, payload)
         _execute_supabase(
             supabase.table("mf_factsheet_candidates").upsert(
                 payload,
@@ -1176,7 +1278,7 @@ class ParsingService:
             ),
             "upsert_factsheet_candidate",
         )
-        return mapping_status == "mapped" and bool(report_month)
+        return mapping_status == "mapped" and bool(report_month) and not mapping_changed
 
     def _resolve_document_path(self, document: dict[str, Any]) -> tuple[str | None, str | None]:
         storage_backend = str(document.get("storage_backend") or "local").strip().lower()
