@@ -25,7 +25,11 @@ from app.services.chat_service import (
 )
 from app.services.provider_usage import build_usage_dashboard
 from app.services.supported_amcs import SUPPORTED_MF_AMC_MARKERS, supported_amc_label_from_text
-from app.services.mf_metric_target_service import supported_metric_targets
+from app.services.mf_metric_target_service import (
+    MF_METRIC_HISTORY_MAX_AGE_DAYS,
+    metric_history_is_ready,
+    supported_metric_targets,
+)
 from app.utils.date_helpers import age_days as _age_days
 from app.utils.date_helpers import fmt_age as _fmt_age
 from app.utils.date_helpers import iso_or_none as _iso_or_none
@@ -238,6 +242,7 @@ def _empty_mf_metric_coverage() -> dict[str, Any]:
         "supported_mapped_total": 0,
         "metric_eligible_total": 0,
         "history_ready_count": 0,
+        "history_freshness_window_days": MF_METRIC_HISTORY_MAX_AGE_DAYS,
         "alpha_beta_count": 0,
         "supported_history_alpha_beta_count": 0,
         "catalog_alpha_beta_coverage": 0.0,
@@ -300,7 +305,7 @@ def _mf_metric_coverage(now_utc: datetime) -> dict[str, Any]:
             codes = target_codes[start : start + 500]
             cache_rows = (
                 repository.table("nav_api_cache")
-                .select("scheme_code,point_count,last_nav_date,expires_at")
+                .select("scheme_code,point_count,last_nav_date,fetched_at,expires_at,updated_at")
                 .in_("scheme_code", codes)
                 .execute()
                 .data
@@ -326,12 +331,7 @@ def _mf_metric_coverage(now_utc: datetime) -> dict[str, Any]:
         last_known_good = 0
         for code in target_codes:
             cache = cache_by_code.get(code, {})
-            expires_at = _to_utc_datetime(cache.get("expires_at"))
-            history_is_ready = (
-                int(cache.get("point_count") or 0) >= 31
-                and expires_at is not None
-                and expires_at > now_utc
-            )
+            history_is_ready = metric_history_is_ready(cache, now=now_utc)
             if history_is_ready:
                 history_ready += 1
             core = core_by_code.get(code, {})

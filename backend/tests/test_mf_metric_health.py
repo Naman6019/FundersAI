@@ -75,7 +75,13 @@ def test_metric_health_reports_catalog_and_supported_denominators(monkeypatch):
     client = Client({
         "mf_factsheet_candidates": candidates,
         "nav_api_cache": [
-            {"scheme_code": code, "point_count": 400, "last_nav_date": "2026-08-03", "expires_at": "2026-08-05T00:00:00+00:00"}
+            {
+                "scheme_code": code,
+                "point_count": 400,
+                "last_nav_date": "2026-08-03",
+                "fetched_at": "2026-08-03T00:00:00+00:00",
+                "expires_at": "2026-08-05T00:00:00+00:00",
+            }
             for code in ("101", "102")
         ],
         "mutual_fund_core_snapshot": [
@@ -113,6 +119,7 @@ def test_metric_health_reports_catalog_and_supported_denominators(monkeypatch):
     assert coverage["supported_benchmark_coverage"] == 0.5
     assert coverage["supported_risk_coverage"] == 0.5
     assert coverage["benchmark_freshness"]["fresh"] is True
+    assert coverage["history_freshness_window_days"] == 14
 
 
 def test_metric_health_intersects_fresh_history_and_alpha_beta(monkeypatch):
@@ -131,9 +138,9 @@ def test_metric_health_intersects_fresh_history_and_alpha_beta(monkeypatch):
     client = Client({
         "mf_factsheet_candidates": candidates,
         "nav_api_cache": [
-            {"scheme_code": "101", "point_count": 400, "expires_at": "2026-08-05T00:00:00+00:00"},
-            {"scheme_code": "102", "point_count": 400, "expires_at": "2026-08-05T00:00:00+00:00"},
-            {"scheme_code": "103", "point_count": 400, "expires_at": "2026-08-03T00:00:00+00:00"},
+            {"scheme_code": "101", "point_count": 400, "fetched_at": "2026-08-03T00:00:00+00:00", "expires_at": "2026-08-05T00:00:00+00:00"},
+            {"scheme_code": "102", "point_count": 400, "fetched_at": "2026-08-03T00:00:00+00:00", "expires_at": "2026-08-05T00:00:00+00:00"},
+            {"scheme_code": "103", "point_count": 400, "fetched_at": "2026-07-20T00:00:00+00:00", "expires_at": "2099-08-03T00:00:00+00:00"},
         ],
         "mutual_fund_core_snapshot": [
             {"scheme_code": "101", "alpha": 1.0, "beta": 0.9, "provider_payload": {"metric_snapshot": {"overlap_points": 100, "minimum_overlap_points": 30}}},

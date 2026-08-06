@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 from app.database import supabase
-from app.mf_ingestion.services.parsing_service import ParsingService
+from app.mf_ingestion.services.parsing_service import ParsingService, guard_promoted_mapping_change
 
 
 def _page_rows(build_query: Callable[[], Any], page_size: int = 1000) -> list[dict[str, Any]]:
@@ -41,6 +41,54 @@ def _mapping_payload(
         "mapping_confidence": confidence,
         "mapping_status": "mapped",
     }
+
+
+def _candidate_mapping_payload(
+    *,
+    row: dict[str, Any],
+    scheme_code: str,
+    family_id: str,
+    confidence: float,
+) -> tuple[dict[str, Any], bool]:
+    payload = _mapping_payload(
+        scheme_code=scheme_code,
+        family_id=family_id,
+        confidence=confidence,
+    )
+    payload["validation_issues"] = [
+        str(issue)
+        for issue in (row.get("validation_issues") or [])
+        if not str(issue).startswith("scheme_mapping_")
+    ]
+    if row.get("promotion_status") not in {"promoted", "partially_promoted"}:
+        payload["promotion_status"] = "staged"
+    return guard_promoted_mapping_change(row, payload)
+
+
+def _candidate_with_promotion_identity(row: dict[str, Any]) -> dict[str, Any]:
+    if not row.get("promoted_scopes") and str(row.get("promotion_status") or "").lower() not in {
+        "promoted",
+        "partially_promoted",
+    }:
+        return row
+    try:
+        result = (
+            supabase.table("mf_promotion_runs")
+            .select("after_snapshot,created_at")
+            .eq("candidate_id", row.get("id"))
+            .eq("status", "applied")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        promotion = (result.data or [None])[0]
+        snapshot = promotion.get("after_snapshot") if promotion else None
+        scheme_code = snapshot.get("scheme_code") if isinstance(snapshot, dict) else None
+        if scheme_code:
+            return {**row, "promoted_scheme_code": str(scheme_code)}
+    except Exception:
+        pass
+    return row
 
 
 def reconcile_staged_mappings(
@@ -75,6 +123,7 @@ def reconcile_staged_mappings(
     applied_candidates = 0
     applied_holdings_groups = 0
     applied_sector_groups = 0
+    mapping_change_reviews = 0
     unresolved: list[dict[str, Any]] = []
 
     for document in documents:
@@ -85,7 +134,8 @@ def reconcile_staged_mappings(
                 supabase.table("mf_factsheet_candidates")
                 .select(
                     "id,raw_scheme_name,mapped_scheme_code,mapped_family_id,"
-                    "mapping_confidence,mapping_status,promotion_status,validation_issues"
+                    "mapping_confidence,mapping_status,promotion_status,promoted_scopes,"
+                    "validation_issues"
                 )
                 .eq("source_document_id", document_id)
             )
@@ -145,14 +195,23 @@ def reconcile_staged_mappings(
                 )
                 if row_type == "candidate":
                     proposed_candidates += 1
-                    issues = [
-                        str(issue)
-                        for issue in (row.get("validation_issues") or [])
-                        if not str(issue).startswith("scheme_mapping_")
-                    ]
-                    payload["validation_issues"] = issues
-                    if row.get("promotion_status") not in {"promoted", "partially_promoted"}:
-                        payload["promotion_status"] = "staged"
+                    payload, mapping_changed = _candidate_mapping_payload(
+                        row=_candidate_with_promotion_identity(row),
+                        scheme_code=scheme_code,
+                        family_id=family_id,
+                        confidence=confidence,
+                    )
+                    if mapping_changed:
+                        mapping_change_reviews += 1
+                        unresolved.append(
+                            {
+                                "source_document_id": document_id,
+                                "row_type": row_type,
+                                "raw_scheme_name": raw_name,
+                                "mapping_status": "needs_review",
+                                "reason": "promoted_mapping_changed",
+                            }
+                        )
                     if apply:
                         supabase.table("mf_factsheet_candidates").update(payload).eq(
                             "id", row["id"]
@@ -192,6 +251,7 @@ def reconcile_staged_mappings(
         "applied_candidates": applied_candidates,
         "applied_holdings_groups": applied_holdings_groups,
         "applied_sector_groups": applied_sector_groups,
+        "mapping_change_reviews": mapping_change_reviews,
         "unresolved_count": len(unresolved),
         "unresolved_sample": unresolved[:50],
     }
