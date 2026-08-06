@@ -47,6 +47,7 @@ FACTSHEET_SUPPORTED_DOCUMENT_TYPES = {"factsheet", "ter_disclosure"}
 AMC_DISCLOSURE_SOURCE = "amc_disclosure"
 OFFICIAL_CORE_SOURCE_MARKERS = ("AMFI TER API", "AMFI AUM API", "TER", "AUM", AMC_DISCLOSURE_SOURCE)
 OFFICIAL_HOLDING_SOURCES = ("AMFI scheme-wise disclosure", AMC_DISCLOSURE_SOURCE)
+MAPPING_REVIEW_KEEP_PROMOTED_TARGET = "mapping_review_keep_applied_promotion_target"
 
 
 def _execute_supabase(query: Any, operation_name: str) -> Any:
@@ -82,14 +83,26 @@ def guard_promoted_mapping_change(
     guarded["mapped_scheme_code"] = previous_identity[0] or None
     guarded["mapped_family_id"] = previous_identity[1] or None
     guarded["mapping_confidence"] = existing.get("mapping_confidence")
-    guarded["mapping_status"] = "needs_review"
-    guarded["promotion_status"] = "needs_review"
+    existing_issues = [str(issue) for issue in (existing.get("validation_issues") or [])]
+    review_resolved = MAPPING_REVIEW_KEEP_PROMOTED_TARGET in existing_issues
+    guarded["mapping_status"] = "mapped" if review_resolved else "needs_review"
+    guarded["promotion_status"] = (
+        str(existing.get("promotion_status") or "promoted")
+        if review_resolved
+        else "needs_review"
+    )
     issues = list(dict.fromkeys([
-        *(existing.get("validation_issues") or []),
+        *existing_issues,
         *(proposed.get("validation_issues") or []),
-        "promoted_mapping_changed",
+        *([] if review_resolved else ["promoted_mapping_changed"]),
     ]))
     guarded["validation_issues"] = issues
+    if review_resolved:
+        logger.info(
+            "event=reviewed_promoted_mapping_preserved scheme=%s",
+            previous_identity[0],
+        )
+        return guarded, False
     logger.warning(
         "event=promoted_mapping_change_blocked previous_scheme=%s proposed_scheme=%s",
         previous_identity[0],
