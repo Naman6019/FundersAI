@@ -107,10 +107,23 @@ export default function ReportsLayout({ children }: { children: ReactNode }) {
                             >
                                 Methodology
                             </Link>
+                            <Link
+                                href="#pricing"
+                                className="text-xs font-semibold px-3 py-1.5 rounded-md text-blue-400 hover:text-blue-300 hover:bg-blue-950/30 transition-all"
+                            >
+                                Pricing
+                            </Link>
                         </nav>
                     </div>
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
+                        <Link
+                            href="/billing"
+                            className="text-xs font-semibold text-white bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-500 hover:from-blue-500 hover:to-emerald-400 px-3.5 py-1.5 rounded-lg border border-blue-400/30 shadow-lg shadow-blue-500/20 transition-all flex items-center gap-1.5 group"
+                        >
+                            <span className="text-amber-300 group-hover:scale-110 transition-transform">⚡</span>
+                            <span>Upgrade</span>
+                        </Link>
                         <Link 
                             href="/dashboard" 
                             className="text-xs font-medium text-gray-400 hover:text-white transition-colors flex items-center gap-1 bg-gray-900/60 hover:bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-800"

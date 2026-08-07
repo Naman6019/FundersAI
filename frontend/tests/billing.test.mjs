@@ -78,7 +78,7 @@ test('billing UI renders tiers and opens checkout with returned subscription id'
   const billingPage = readFileSync(resolve('components/billing/BillingPage.tsx'), 'utf8');
 
   assert.match(tiers, /₹99\/month/);
-  assert.match(tiers, /₹149\/month/);
+  assert.match(tiers, /₹199\/month/);
   assert.match(billingPage, /checkout\.razorpay\.com\/v1\/checkout\.js/);
   assert.match(billingPage, /new window\.Razorpay/);
   assert.match(billingPage, /subscription_id/);

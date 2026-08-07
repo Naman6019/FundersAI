@@ -28,7 +28,7 @@ export type TokenReservation = {
 };
 
 export const DEFAULT_TOKEN_BUDGETS: Record<UserTier, TokenBudget> = {
-  free: { dailyTokens: 50_000, monthlyTokens: 250_000 },
+  free: { dailyTokens: 25_000, monthlyTokens: 100_000 },
   pro: { dailyTokens: 250_000, monthlyTokens: 2_000_000 },
   ultra: { dailyTokens: 750_000, monthlyTokens: 6_000_000 },
 };

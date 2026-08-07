@@ -119,8 +119,14 @@ export default function ReportsLandingPage() {
                                 </span>
                             </ShimmerButton>
                         </Link>
-                        <Link 
-                            href="/reports/dashboard" 
+                        <Link
+                            href="/billing"
+                            className="px-6 py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-500 text-white font-semibold text-sm rounded-full hover:brightness-110 transition-all backdrop-blur-md shadow-lg shadow-blue-500/20 flex items-center gap-1.5"
+                        >
+                            <span>⚡ Upgrade Plan</span>
+                        </Link>
+                        <Link
+                            href="/reports/dashboard"
                             className="px-6 py-3 bg-gray-900/80 border border-gray-800 text-gray-300 font-medium text-sm rounded-full hover:bg-gray-800 hover:text-white transition-all backdrop-blur-md"
                         >
                             View Saved Reports
@@ -343,6 +349,131 @@ export default function ReportsLandingPage() {
                                 <span className="text-[10px] font-mono text-gray-500">{amc.time}</span>
                             </div>
                         ))}
+                    </div>
+                </div>
+
+                {/* SECTION: Transparent Pricing & Tier Limits */}
+                <div id="pricing" className="space-y-8 max-w-5xl mx-auto pt-4 scroll-mt-24">
+                    <div className="text-center space-y-3">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-mono font-medium">
+                            <span>⚡ Unified Subscription</span>
+                        </div>
+                        <h2 className="text-3xl sm:text-4xl font-extrabold text-white">Simple, Transparent Pricing</h2>
+                        <p className="text-sm text-gray-400 max-w-xl mx-auto">
+                            Choose the right tier for your research workflows. Access Synthesis AI reports and Research Platform limits in one simple plan.
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Free Card */}
+                        <MagicCard className="p-6 bg-gray-950/80 border-gray-800 rounded-2xl flex flex-col justify-between space-y-6">
+                            <div className="space-y-4">
+                                <div>
+                                    <span className="text-xs font-mono font-semibold uppercase tracking-wider text-gray-400">Free Tier</span>
+                                    <div className="flex items-baseline gap-1 mt-2">
+                                        <span className="text-4xl font-extrabold text-white">₹0</span>
+                                        <span className="text-xs text-gray-400">/ forever</span>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-2">Starter research limits for fund research & synthesis reports.</p>
+                                </div>
+                                <div className="space-y-2 border-t border-gray-900 pt-4">
+                                    <div className="flex items-center gap-2 text-xs text-gray-200">
+                                        <span className="text-emerald-400 font-bold">✓</span>
+                                        <span><strong>1 report per day</strong> (Synthesis Studio)</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-gray-200">
+                                        <span className="text-emerald-400 font-bold">✓</span>
+                                        <span>Token-based queries in Research platform</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-gray-400">
+                                        <span className="text-emerald-400 font-bold">✓</span>
+                                        <span>25k daily / 100k monthly AI tokens</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <Link href="/reports/generate" className="w-full">
+                                <button className="w-full py-2.5 rounded-xl bg-gray-900 border border-gray-800 text-gray-300 font-medium text-xs hover:bg-gray-800 hover:text-white transition-all">
+                                    Start Synthesizing (Free)
+                                </button>
+                            </Link>
+                        </MagicCard>
+
+                        {/* Pro Card */}
+                        <MagicCard className="p-6 bg-gray-950/90 border-blue-500/50 rounded-2xl flex flex-col justify-between space-y-6 relative shadow-xl shadow-blue-500/10">
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-blue-600 text-[10px] font-mono font-bold text-white uppercase tracking-wider shadow-sm">
+                                Most Popular
+                            </div>
+                            <div className="space-y-4">
+                                <div>
+                                    <span className="text-xs font-mono font-semibold uppercase tracking-wider text-blue-400">Pro Tier</span>
+                                    <div className="flex items-baseline gap-1 mt-2">
+                                        <span className="text-4xl font-extrabold text-white">₹99</span>
+                                        <span className="text-xs text-gray-400">/ month</span>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-2">Higher limits for regular mutual-fund and stock research.</p>
+                                </div>
+                                <div className="space-y-2 border-t border-gray-900 pt-4">
+                                    <div className="flex items-center gap-2 text-xs text-gray-100">
+                                        <span className="text-blue-400 font-bold">✓</span>
+                                        <span><strong>5 reports per day</strong> (Synthesis Studio)</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-gray-100">
+                                        <span className="text-blue-400 font-bold">✓</span>
+                                        <span><strong>10X Higher usage</strong> in Research platform</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-gray-300">
+                                        <span className="text-blue-400 font-bold">✓</span>
+                                        <span>250k daily / 2M monthly AI tokens</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-gray-300">
+                                        <span className="text-blue-400 font-bold">✓</span>
+                                        <span>Dashboard, Canvas & Overlap Tool</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <Link href="/billing" className="w-full">
+                                <button className="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold text-xs hover:from-blue-500 hover:to-indigo-500 transition-all shadow-md shadow-blue-500/25">
+                                    Upgrade to Pro (₹99)
+                                </button>
+                            </Link>
+                        </MagicCard>
+
+                        {/* Ultra Card */}
+                        <MagicCard className="p-6 bg-gray-950/80 border-indigo-500/40 rounded-2xl flex flex-col justify-between space-y-6">
+                            <div className="space-y-4">
+                                <div>
+                                    <span className="text-xs font-mono font-semibold uppercase tracking-wider text-indigo-400">Ultra Tier</span>
+                                    <div className="flex items-baseline gap-1 mt-2">
+                                        <span className="text-4xl font-extrabold text-white">₹199</span>
+                                        <span className="text-xs text-gray-400">/ month</span>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-2">Highest limits for heavy institutional research workflows.</p>
+                                </div>
+                                <div className="space-y-2 border-t border-gray-900 pt-4">
+                                    <div className="flex items-center gap-2 text-xs text-gray-100">
+                                        <span className="text-indigo-400 font-bold">✓</span>
+                                        <span><strong>15 reports per day</strong> (Synthesis Studio)</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-gray-100">
+                                        <span className="text-indigo-400 font-bold">✓</span>
+                                        <span><strong>25X Higher usage than Free</strong> in Research</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-gray-300">
+                                        <span className="text-indigo-400 font-bold">✓</span>
+                                        <span>750k daily / 6M monthly AI tokens</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-gray-300">
+                                        <span className="text-indigo-400 font-bold">✓</span>
+                                        <span>Priority PDF export & high-priority budget</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <Link href="/billing" className="w-full">
+                                <button className="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs hover:bg-indigo-500 transition-all">
+                                    Upgrade to Ultra (₹199)
+                                </button>
+                            </Link>
+                        </MagicCard>
                     </div>
                 </div>
 

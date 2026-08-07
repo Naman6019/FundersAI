@@ -614,13 +614,11 @@ export default function FundersAILandingPage() {
   const [proofStats, setProofStats] = useState(defaultProofStats);
 
   useEffect(() => {
-    // Fetch live numbers from data-health to replace static defaults
-    fetch("/api/data-health")
+    // Fetch live numbers from public ticker to replace static defaults
+    fetch("/api/funds/ticker")
       .then((r) => r.json())
       .then((data) => {
-        // data.metrics is an array from the backend health endpoint
-        // We enrich the static defaults with any live numbers we can parse
-        if (!data || data.status === "degraded") return;
+        if (!data || !data.system_metrics) return;
         const navMetric = data.metrics?.find((m) => m.label === "MF NAV");
         if (navMetric?.last_updated) {
           const ts = new Date(navMetric.last_updated);
@@ -656,11 +654,11 @@ export default function FundersAILandingPage() {
             />
           </Link>
           <nav className="hidden items-center gap-8 text-sm font-semibold text-[var(--text-muted)] md:flex">
-            <a href="#sample" className="transition hover:text-[var(--text-primary)]">Sample</a>
-            <a href="#flow" className="transition hover:text-[var(--text-primary)]">Flow</a>
-            <a href="#intelligence" className="transition hover:text-[var(--text-primary)]">Intelligence</a>
-            <a href="#data-trust" className="transition hover:text-[var(--text-primary)]">Data &amp; Trust</a>
-            <a href="#proof" className="transition hover:text-[var(--text-primary)]">Proof</a>
+            <Link href="/sample" className="transition hover:text-[var(--text-primary)]">Sample</Link>
+            <Link href="/how-it-works" className="transition hover:text-[var(--text-primary)]">Flow</Link>
+            <Link href="/intelligence" className="transition hover:text-[var(--text-primary)]">Intelligence</Link>
+            <Link href="/pricing" className="transition hover:text-[var(--text-primary)]">Pricing</Link>
+            <Link href="/data-trust" className="transition hover:text-[var(--text-primary)]">Data &amp; Trust</Link>
             <Link href="/methodology" className="transition hover:text-[var(--text-primary)]">Methodology</Link>
             <Link href="/mutual-funds" className="transition hover:text-[var(--text-primary)]">Funds</Link>
           </nav>
@@ -684,12 +682,11 @@ export default function FundersAILandingPage() {
         {/* Mobile menu */}
         {isMobileMenuOpen && (
           <div className="md:hidden border-t border-[var(--line)] bg-[var(--bg-base)]/95 px-5 py-4 flex flex-col gap-4 backdrop-blur-xl">
-            <a href="#sample" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Sample</a>
-            <a href="#flow" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Flow</a>
-            <a href="#intelligence" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Intelligence</a>
-            <a href="#data-trust" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Data &amp; Trust</a>
-            <a href="#workspace" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Workspace</a>
-            <a href="#proof" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Proof</a>
+            <Link href="/sample" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Sample</Link>
+            <Link href="/how-it-works" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Flow</Link>
+            <Link href="/intelligence" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Intelligence</Link>
+            <Link href="/pricing" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Pricing</Link>
+            <Link href="/data-trust" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Data &amp; Trust</Link>
             <Link href="/methodology" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Methodology</Link>
             <div className="mt-2" onClick={() => setIsMobileMenuOpen(false)}>
               <EditorialButton href="/dashboard">Workspace</EditorialButton>
@@ -834,6 +831,132 @@ export default function FundersAILandingPage() {
         </div>
       </section>
 
+      <section id="pricing" className="relative border-t border-white/10 bg-white/[0.01]">
+        <div className="relative z-10 mx-auto w-full max-w-[1500px] px-5 py-24 sm:px-8 lg:py-32">
+          <Reveal className="text-center max-w-3xl mx-auto mb-16">
+            <MetadataLabel className="text-[var(--accent-glow)]">Pricing &amp; Plans</MetadataLabel>
+            <h2 className="mt-8 font-sans text-[10.5vw] font-bold leading-[1.05] tracking-tight text-white sm:text-[8vw] lg:text-[4.6vw]">
+              Simple, transparent pricing.
+            </h2>
+            <p className="mt-6 text-sm leading-7 text-[var(--text-muted)]">
+              Unified subscriptions covering both Research Platform AI tokens and Synthesis Studio comparison reports.
+            </p>
+          </Reveal>
+
+          <div className="grid gap-8 md:grid-cols-3 max-w-6xl mx-auto">
+            {/* Free */}
+            <Reveal className="flex flex-col justify-between rounded-3xl border border-white/10 bg-white/[0.02] p-8 backdrop-blur-md">
+              <div className="space-y-6">
+                <div>
+                  <MetadataLabel>Free Tier</MetadataLabel>
+                  <div className="mt-4 flex items-baseline gap-1">
+                    <span className="text-5xl font-bold text-white">₹0</span>
+                    <span className="text-sm text-[var(--text-muted)]">/ forever</span>
+                  </div>
+                  <p className="mt-4 text-sm leading-6 text-[var(--text-muted)]">Starter research limits for fund research &amp; synthesis reports.</p>
+                </div>
+                <div className="space-y-3 border-t border-white/10 pt-6">
+                  <div className="flex items-center gap-3 text-sm text-white">
+                    <span className="text-[#00FF9D] font-bold">✓</span>
+                    <span><strong>1 report per day</strong> (Synthesis Studio)</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-white">
+                    <span className="text-[#00FF9D] font-bold">✓</span>
+                    <span>Token-based queries in Research platform</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+                    <span className="text-[#00FF9D] font-bold">✓</span>
+                    <span>25k daily / 100k monthly AI tokens</span>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-8">
+                <Link href="/login" className="flex w-full items-center justify-center rounded-full border border-white/20 bg-white/5 py-3 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-white/10">
+                  Start Free
+                </Link>
+              </div>
+            </Reveal>
+
+            {/* Pro */}
+            <Reveal className="relative flex flex-col justify-between rounded-3xl border border-[#00FF9D]/40 bg-white/[0.04] p-8 backdrop-blur-md shadow-2xl shadow-[rgba(0,255,157,0.08)]">
+              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-[#00FF9D] px-4 py-1 text-[10px] font-bold uppercase tracking-wider text-black">
+                Most Popular
+              </div>
+              <div className="space-y-6">
+                <div>
+                  <MetadataLabel className="text-[#00FF9D]">Pro Tier</MetadataLabel>
+                  <div className="mt-4 flex items-baseline gap-1">
+                    <span className="text-5xl font-bold text-white">₹99</span>
+                    <span className="text-sm text-[var(--text-muted)]">/ month</span>
+                  </div>
+                  <p className="mt-4 text-sm leading-6 text-[var(--text-muted)]">Higher limits for regular mutual-fund and stock research.</p>
+                </div>
+                <div className="space-y-3 border-t border-white/10 pt-6">
+                  <div className="flex items-center gap-3 text-sm text-white">
+                    <span className="text-[#00FF9D] font-bold">✓</span>
+                    <span><strong>5 reports per day</strong> (Synthesis Studio)</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-white">
+                    <span className="text-[#00FF9D] font-bold">✓</span>
+                    <span><strong>10X Higher usage</strong> in Research platform</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+                    <span className="text-[#00FF9D] font-bold">✓</span>
+                    <span>250k daily / 2M monthly AI tokens</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+                    <span className="text-[#00FF9D] font-bold">✓</span>
+                    <span>Dashboard, Canvas &amp; Overlap Tool</span>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-8">
+                <Link href="/billing" className="flex w-full items-center justify-center rounded-full bg-[#00FF9D] py-3 text-sm font-bold text-black transition hover:bg-[#00FF9D]/90 shadow-lg shadow-[#00FF9D]/20">
+                  Upgrade to Pro (₹99)
+                </Link>
+              </div>
+            </Reveal>
+
+            {/* Ultra */}
+            <Reveal className="flex flex-col justify-between rounded-3xl border border-white/10 bg-white/[0.02] p-8 backdrop-blur-md">
+              <div className="space-y-6">
+                <div>
+                  <MetadataLabel className="text-blue-400">Ultra Tier</MetadataLabel>
+                  <div className="mt-4 flex items-baseline gap-1">
+                    <span className="text-5xl font-bold text-white">₹199</span>
+                    <span className="text-sm text-[var(--text-muted)]">/ month</span>
+                  </div>
+                  <p className="mt-4 text-sm leading-6 text-[var(--text-muted)]">Highest limits for heavy institutional research workflows.</p>
+                </div>
+                <div className="space-y-3 border-t border-white/10 pt-6">
+                  <div className="flex items-center gap-3 text-sm text-white">
+                    <span className="text-blue-400 font-bold">✓</span>
+                    <span><strong>15 reports per day</strong> (Synthesis Studio)</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-white">
+                    <span className="text-blue-400 font-bold">✓</span>
+                    <span><strong>25X Higher usage than Free</strong> in Research</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+                    <span className="text-blue-400 font-bold">✓</span>
+                    <span>750k daily / 6M monthly AI tokens</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+                    <span className="text-blue-400 font-bold">✓</span>
+                    <span>Priority serverless PDF export &amp; budget</span>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-8">
+                <Link href="/billing" className="flex w-full items-center justify-center rounded-full border border-blue-500/40 bg-blue-500/10 py-3 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-blue-500/20">
+                  Upgrade to Ultra (₹199)
+                </Link>
+              </div>
+            </Reveal>
+          </div>
+        </div>
+      </section>
+
       <section className="relative w-full border-t border-white/10 overflow-hidden bg-[var(--bg-base)]">
         <AmbientGlow className="left-1/2 top-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2" color="rgba(0, 255, 157, 0.15)" />
         <div className="relative z-10 mx-auto w-full max-w-[1500px] px-5 py-32 sm:px-8 lg:py-48 text-center">
@@ -848,8 +971,8 @@ export default function FundersAILandingPage() {
               <Link href="/login" className="inline-flex items-center justify-center rounded-full bg-[#00FF9D] px-8 py-4 text-base font-bold text-black transition-all hover:scale-105 hover:bg-[#00FF9D]/90 hover:shadow-[0_0_40px_rgba(0,255,157,0.4)]">
                 Get Started Free
               </Link>
-              <Link href="#flow" className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/5 px-8 py-4 text-base font-bold text-white transition-all hover:bg-white/10">
-                Explore the flow
+              <Link href="#pricing" className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/5 px-8 py-4 text-base font-bold text-white transition-all hover:bg-white/10">
+                View Pricing Plans
               </Link>
             </div>
           </Reveal>
@@ -870,10 +993,11 @@ export default function FundersAILandingPage() {
             />
           </div>
           <div className="flex flex-wrap gap-6 text-sm font-semibold text-[var(--text-muted)]">
-            <a href="#sample" className="transition hover:text-[var(--text-primary)]">Sample</a>
-            <a href="#flow" className="transition hover:text-[var(--text-primary)]">Flow</a>
-            <a href="#intelligence" className="transition hover:text-[var(--text-primary)]">Intelligence</a>
-            <a href="#data-trust" className="transition hover:text-[var(--text-primary)]">Data &amp; Trust</a>
+            <Link href="/sample" className="transition hover:text-[var(--text-primary)]">Sample</Link>
+            <Link href="/how-it-works" className="transition hover:text-[var(--text-primary)]">Flow</Link>
+            <Link href="/intelligence" className="transition hover:text-[var(--text-primary)]">Intelligence</Link>
+            <Link href="/pricing" className="transition hover:text-[var(--text-primary)]">Pricing</Link>
+            <Link href="/data-trust" className="transition hover:text-[var(--text-primary)]">Data &amp; Trust</Link>
             <Link href="/mutual-funds" className="transition hover:text-[var(--text-primary)]">Funds</Link>
             <Link href="/methodology" className="transition hover:text-[var(--text-primary)]">Methodology</Link>
             <Link href="/about" className="transition hover:text-[var(--text-primary)]">About</Link>
