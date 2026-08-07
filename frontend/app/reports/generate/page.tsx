@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
@@ -73,7 +73,7 @@ function MermaidChart({ chart, isStreaming }: { chart: string; isStreaming: bool
     );
 }
 
-export default function ReportChat() {
+function ReportChatContent() {
     const searchParams = useSearchParams();
     const initialPromptParam = searchParams.get("prompt");
 
@@ -570,3 +570,16 @@ export default function ReportChat() {
         </div>
     );
 }
+
+export default function ReportChat() {
+    return (
+        <Suspense fallback={
+            <div className="max-w-[1800px] mx-auto p-8 text-center text-gray-400 font-mono text-xs">
+                Loading Synthesis Workstation...
+            </div>
+        }>
+            <ReportChatContent />
+        </Suspense>
+    );
+}
+
