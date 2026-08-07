@@ -32,7 +32,7 @@ export default function PublicHeader() {
           <Link href="/pricing" className="transition text-emerald-400 hover:text-emerald-300">Pricing</Link>
           <Link href="/data-trust" className="transition hover:text-white">Data &amp; Trust</Link>
           <Link href="/methodology" className="transition hover:text-white">Methodology</Link>
-          <Link href="/reports" className="transition hover:text-blue-400">Synthesis Studio</Link>
+          <Link href="/synthesis" className="transition text-blue-400 hover:text-blue-300">Synthesis</Link>
         </nav>
 
         {/* Actions */}
@@ -68,7 +68,7 @@ export default function PublicHeader() {
           <Link href="/pricing" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-emerald-400 hover:text-emerald-300">Pricing &amp; Plans</Link>
           <Link href="/data-trust" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-gray-300 hover:text-white">Data &amp; Trust</Link>
           <Link href="/methodology" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-gray-300 hover:text-white">Methodology</Link>
-          <Link href="/reports" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-blue-400 hover:text-blue-300">Synthesis Studio</Link>
+          <Link href="/synthesis" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-blue-400 hover:text-blue-300">Synthesis Studio</Link>
           <div className="pt-2" onClick={() => setIsMobileMenuOpen(false)}>
             <Link
               href="/dashboard"

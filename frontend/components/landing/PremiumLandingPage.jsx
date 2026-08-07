@@ -654,6 +654,7 @@ export default function FundersAILandingPage() {
             />
           </Link>
           <nav className="hidden items-center gap-8 text-sm font-semibold text-[var(--text-muted)] md:flex">
+            <Link href="/synthesis" className="transition font-bold text-blue-400 hover:text-blue-300">Synthesis</Link>
             <Link href="/sample" className="transition hover:text-[var(--text-primary)]">Sample</Link>
             <Link href="/how-it-works" className="transition hover:text-[var(--text-primary)]">Flow</Link>
             <Link href="/intelligence" className="transition hover:text-[var(--text-primary)]">Intelligence</Link>
@@ -682,6 +683,7 @@ export default function FundersAILandingPage() {
         {/* Mobile menu */}
         {isMobileMenuOpen && (
           <div className="md:hidden border-t border-[var(--line)] bg-[var(--bg-base)]/95 px-5 py-4 flex flex-col gap-4 backdrop-blur-xl">
+            <Link href="/synthesis" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-bold text-blue-400 hover:text-blue-300">Synthesis Studio</Link>
             <Link href="/sample" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Sample</Link>
             <Link href="/how-it-works" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Flow</Link>
             <Link href="/intelligence" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Intelligence</Link>
@@ -993,6 +995,7 @@ export default function FundersAILandingPage() {
             />
           </div>
           <div className="flex flex-wrap gap-6 text-sm font-semibold text-[var(--text-muted)]">
+            <Link href="/synthesis" className="transition font-bold text-blue-400 hover:text-blue-300">Synthesis</Link>
             <Link href="/sample" className="transition hover:text-[var(--text-primary)]">Sample</Link>
             <Link href="/how-it-works" className="transition hover:text-[var(--text-primary)]">Flow</Link>
             <Link href="/intelligence" className="transition hover:text-[var(--text-primary)]">Intelligence</Link>

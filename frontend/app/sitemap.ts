@@ -63,6 +63,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
+      url: 'https://www.fundersai.co.in/synthesis',
+      lastModified: new Date(),
+      changeFrequency: 'daily',
+      priority: 1.0,
+    },
+    {
       url: 'https://www.fundersai.co.in/sample',
       lastModified: new Date(),
       changeFrequency: 'weekly',

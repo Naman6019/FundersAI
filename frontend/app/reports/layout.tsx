@@ -124,12 +124,12 @@ export default function ReportsLayout({ children }: { children: ReactNode }) {
                             <span className="text-amber-300 group-hover:scale-110 transition-transform">⚡</span>
                             <span>Upgrade</span>
                         </Link>
-                        <Link 
-                            href="/dashboard" 
-                            className="text-xs font-medium text-gray-400 hover:text-white transition-colors flex items-center gap-1 bg-gray-900/60 hover:bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-800"
+                        <Link
+                            href="/"
+                            className="text-xs font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-950/40 hover:bg-emerald-900/60 px-3.5 py-1.5 rounded-lg border border-emerald-500/40 backdrop-blur-md transition-all flex items-center gap-1.5 shadow-sm hover:border-emerald-400"
                         >
-                            <span>Back to Main App</span>
-                            <span className="text-gray-500 text-xs">→</span>
+                            <span>🌐 FundersAI Platform</span>
+                            <span className="text-emerald-400 font-bold">→</span>
                         </Link>
                     </div>
                 </div>
@@ -139,6 +139,26 @@ export default function ReportsLayout({ children }: { children: ReactNode }) {
             <main className="flex-1 flex flex-col relative">
                 {children}
             </main>
+
+            {/* Reports Global Footer with FundersAI Redirect Banner */}
+            <footer className="border-t border-gray-800/80 bg-gray-950/90 py-6 px-4 sm:px-6 lg:px-8 mt-auto text-xs text-gray-400">
+                <div className="max-w-[1800px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <span className="text-white font-semibold">Synthesis by FundersAI</span>
+                        <span className="text-gray-600">|</span>
+                        <span>Autonomous Financial Multi-Agent Research Engine</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <Link
+                            href="/"
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold hover:bg-emerald-500/20 transition-all"
+                        >
+                            <span>🌐 Return to FundersAI Main Platform</span>
+                            <span>→</span>
+                        </Link>
+                    </div>
+                </div>
+            </footer>
         </div>
     );
 }

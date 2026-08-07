@@ -131,6 +131,13 @@ export default function ReportsLandingPage() {
                         >
                             View Saved Reports
                         </Link>
+                        <Link
+                            href="/"
+                            className="px-6 py-3 bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 font-semibold text-sm rounded-full hover:bg-emerald-900/60 hover:text-emerald-300 transition-all backdrop-blur-md flex items-center gap-1.5"
+                        >
+                            <span>🌐 FundersAI Platform</span>
+                            <span>→</span>
+                        </Link>
                     </div>
                 </div>
 
