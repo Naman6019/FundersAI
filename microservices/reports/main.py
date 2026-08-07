@@ -13,9 +13,9 @@ app = FastAPI(title="Report AI Microservice")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"], # Allows your Next.js app to connect
+    allow_origins=["*"], # Allows connection from Next.js on Vercel and local
     allow_credentials=True,
-    allow_methods=["*"], # Allows POST, OPTIONS, GET, etc.
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
