@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import PublicHeader from '@/components/layout/PublicHeader';
 import PublicFooter from '@/components/layout/PublicFooter';
-import StandardCheckoutPanel from '@/components/billing/StandardCheckoutPanel';
 import { MagicCard } from '@/components/ui/magic-card';
 
 export const metadata: Metadata = {
@@ -196,12 +195,6 @@ export default function PricingPage() {
               </button>
             </Link>
           </MagicCard>
-        </div>
-
-        {/* Standard Order Checkout Panel Demo Component */}
-        <div className="max-w-2xl mx-auto p-6 rounded-2xl bg-gray-950/80 border border-gray-800 space-y-4 backdrop-blur-xl">
-          <h3 className="text-base font-bold text-white text-center">Quick Custom Order / Top-up Checkout</h3>
-          <StandardCheckoutPanel />
         </div>
 
         {/* FAQ Section */}

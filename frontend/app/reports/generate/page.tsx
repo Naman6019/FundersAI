@@ -203,7 +203,7 @@ function ReportChatContent() {
             if (!element) return;
             
             const htmlContent = element.innerHTML;
-            const response = await fetch("http://localhost:8001/api/v1/reports/pdf", {
+            const response = await fetch("/api/reports/pdf", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ html: htmlContent })
@@ -242,7 +242,7 @@ function ReportChatContent() {
         }
 
         try {
-            const response = await fetch("http://localhost:8001/api/v1/reports/stream", {
+            const response = await fetch("/api/reports/stream", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
