@@ -17,6 +17,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"], # Allows POST, OPTIONS, GET, etc.
     allow_headers=["*"],
+)
+
 @app.get("/")
 @app.get("/health")
 async def health_check():
