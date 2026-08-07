@@ -61,6 +61,10 @@ RATE_LIMIT_GROUPS: dict[str, list[RateLimitWindow]] = {
     "admin-mutation": [
         RateLimitWindow("minute", 20, 60),
     ],
+    "reports": [
+        RateLimitWindow("minute", 2, 60),
+        RateLimitWindow("day", 10, 86400),
+    ],
 }
 
 _memory_store: dict[str, tuple[int, float]] = {}

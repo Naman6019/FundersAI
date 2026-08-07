@@ -4,12 +4,12 @@
 
 ## Current Topology
 - Frontend: Vercel project rooted at `frontend/`
-- Backend: Render web service rooted at `backend/`
+- Backend: Google Cloud Run web service rooted at `backend/`
 - Database: Supabase
 - Object Storage: Cloudflare R2 (raw docs + cold archives)
 - Scheduler: GitHub Actions workflows in `.github/workflows/`
 
-This remains the production topology. Prefect and GCP artifacts are implemented as deployment proof, but they are not current production claims.
+This is the active production topology. Prefect artifacts are also implemented as deployment proofs.
 
 ## Reproducible Deployment Proof
 
@@ -20,7 +20,7 @@ The repository now contains:
 - `deploy/gcp/deploy.ps1` for Artifact Registry images, a private Cloud Run service, and a Cloud Run Job;
 - `deploy/gcp/configure-monitoring.ps1` for log-based failure/fallback counters and alert policies.
 
-These files are reproducible configuration, not evidence of a successful deployment. A production claim requires image digests, the Cloud Run revision/job execution, health output, an evaluation result, and a triggered test alert.
+These files provide reproducible configuration for the active Cloud Run deployment.
 
 Prerequisites are Docker with a running daemon, Google Cloud CLI, billing, the referenced Secret Manager secrets, and a Monitoring notification channel. From the repository root:
 
@@ -75,7 +75,7 @@ Do not migrate business data to Cloud SQL or raw documents to GCS solely to matc
 - Webhook secret goes in `RAZORPAY_WEBHOOK_SECRET`.
 - Never expose `RAZORPAY_KEY_SECRET` or `RAZORPAY_WEBHOOK_SECRET` in `NEXT_PUBLIC_*` env vars.
 
-## Backend (Render)
+## Backend (Google Cloud Run)
 - Local dev entry: `uvicorn app.main:app --reload --port 8000`
 - Health: `GET /health`
 - Required rate-limit envs in production:
@@ -89,7 +89,61 @@ Do not migrate business data to Cloud SQL or raw documents to GCS solely to matc
   - `GET /api/admin/ops-overview`
   - `GET /api/admin/mf-resolver-debug`
   - Require `X-Admin-Key` = `MF_INTERNAL_ADMIN_KEY`
-- `backend/render.yaml` starts `uvicorn app.main:app`.
+
+### Backend Secrets (Google Secret Manager)
+
+The Cloud Run service and the `fundersai-research-evidence` job inject every backend secret via Google Secret Manager (GSM) using `--set-secrets`. Each env var on the running container is backed by a Secret Manager resource of the same name; Cloud Run resolves `:latest` to the newest version at instance start.
+
+Bound secrets (`deploy/gcp/deploy.ps1`):
+
+- `SUPABASE_URL`, `SUPABASE_KEY` (service-role)
+- `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`
+- `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `GROQ_API_KEY`, `COHERE_API_KEY`
+- `FINEDGE_API_KEY`, `INDIAN_API_KEY`
+- `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`
+- `CHAT_INTERNAL_PROXY_KEY`, `MF_INTERNAL_ADMIN_KEY`, `MF_INGESTION_WEBHOOK_TOKEN`
+- `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
+- `MF_ENGINE_PARTNER_TOKEN`
+
+The runtime service account `fundersai-runtime@<project>.iam.gserviceaccount.com` has `roles/secretmanager.secretAccessor` on the project (`deploy/gcp/deploy.ps1:46`).
+
+Vercel-only secrets (Razorpay, `SUPABASE_KEY` for the frontend, `NEXT_PUBLIC_*`) stay in the Vercel project — Cloud Run does not need them.
+
+#### Provisioning / rotation
+
+Use the local helper to create or rotate from a gitignored env file:
+
+```powershell
+# One-time, per operator machine:
+#   Copy the secret names from deploy/gcp/create-secrets.ps1 $SecretNames into
+#   .env.backend-secrets (gitignored) as KEY=value lines, e.g.
+#     OPENAI_API_KEY=sk-...
+#     MF_INTERNAL_ADMIN_KEY=...
+
+.\deploy\gcp\create-secrets.ps1 -ProjectId <project-id> -EnvFile .env.backend-secrets
+```
+
+The helper enables `secretmanager.googleapis.com`, binds `fundersai-runtime` to `roles/secretmanager.secretAccessor`, creates missing secrets, and adds a new version for every present value. Skipped names are reported at the end.
+
+Manual equivalent for a single secret:
+
+```powershell
+echo -n "<value>" | gcloud secrets create OPENAI_API_KEY --replication-policy=automatic --data-file=-
+echo -n "<value>" | gcloud secrets versions add OPENAI_API_KEY --data-file=-
+```
+
+Rotation does not redeploy — Cloud Run resolves the version at next cold start. Restart the service when a cached value must be evicted immediately:
+
+```powershell
+gcloud run services update fundersai-api --region <region>
+```
+
+#### Adding a new secret
+
+1. Append the env name to `$SecretNames` in `deploy/gcp/create-secrets.ps1` and the binding line in `deploy/gcp/deploy.ps1`.
+2. Run `create-secrets.ps1` once with the value in `.env.backend-secrets`.
+3. Document the new binding in this section.
+4. Redeploy with `deploy.ps1`.
 
 ### NAV Cache Cutover
 - Apply `backend/migrations/20260717_nav_api_cache.sql` before deploying the NAV-cache runtime.

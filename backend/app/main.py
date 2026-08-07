@@ -18,6 +18,7 @@ from app.routes.indianapi import router as indianapi_router
 from app.routes.mf_ingestion import router as mf_ingestion_router
 from app.routes.providers import router as providers_router
 from app.routes.quant import router as quant_router
+from app.routes.reports import router as report_router
 from app.services.rate_limit import (
     check_rate_limit,
     client_identifier_from_request,
@@ -88,6 +89,8 @@ def _rate_limit_group_for_request(path: str, method: str) -> str | None:
         return "cron-sync-mf"
     if path.startswith("/api/admin/mf-documents/") and method == "POST":
         return "admin-mutation"
+    if path.startswith("/api/v1/reports/") and method == "POST":
+        return "reports"
     return None
 
 
@@ -153,6 +156,7 @@ app.include_router(providers_router)
 app.include_router(quant_router)
 app.include_router(indianapi_router)
 app.include_router(mf_ingestion_router)
+app.include_router(report_router)
 
 
 if __name__ == "__main__":

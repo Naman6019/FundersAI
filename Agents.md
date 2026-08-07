@@ -9,19 +9,23 @@ Use this guide for repository conventions and quick orientation. For the authori
 **Frontend**
 
 - Next.js `16.2.11` App Router, React `19.2.4`, and TypeScript
-- Tailwind CSS 4
+- Tailwind CSS 4, shadcn/ui, and Base UI
 - Zustand (`useCanvasStore`, `useChatStore`)
-- Recharts
+- Recharts for data visualization; Three.js for 3D graphics
+- Animations & Scrolling: Framer Motion, GSAP, and Lenis
 - Vercel production hosting
 
 **Backend**
 
 - Python, FastAPI, and Uvicorn
 - Route, service, and repository layers
+- Data processing: Pandas, NumPy, PyArrow
+- PDF Parsing & Scraping: PyMuPDF, pdfplumber, pypdf, Playwright, BeautifulSoup4
 - Supabase-first runtime reads
-- NSE/FinEdge scheduled stock data with YFinance fallback paths
+- NSE/FinEdge scheduled stock data with YFinance, nsetools, and jugaad-data fallback paths
 - AMFI, MFapi, and official AMC documents for mutual-fund data
-- OpenRouter and Groq chat/extraction paths; direct OpenAI `text-embedding-3-small` document/query embeddings; Langfuse tracing is optional and feature-flagged
+- OpenRouter and Groq chat/extraction paths; direct OpenAI `text-embedding-3-small` document/query embeddings
+- AI Orchestration & Tracing: LangGraph for agent workflows; Langfuse tracing is optional and feature-flagged
 - Google Cloud Run production hosting
 
 **Database, storage, and automation**

@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { MagicCard } from '@/components/ui/magic-card';
 import { NumberTicker } from '@/components/ui/number-ticker';
 import type { MFDetailApiResponse } from '@/types/funds';
+import FundResearchChat from '@/components/chat/FundResearchChat';
 
 const SUGGESTED_COMPARISONS = [
   { code: '119062', name: 'Axis Bluechip Fund' },
@@ -74,15 +75,12 @@ export default function MFDetailView({ schemeCode }: { schemeCode: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { openCanvas } = useCanvasStore();
-  const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
   useEffect(() => {
     if (!schemeCode) return;
     const fetchMF = async () => {
       setLoading(true);
       setError('');
-      setAiSummary(null);
       try {
         const res = await fetch(`/api/mf/${schemeCode}`);
         if (!res.ok) throw new Error('Failed to load Mutual Fund details');
@@ -95,20 +93,6 @@ export default function MFDetailView({ schemeCode }: { schemeCode: string }) {
     };
     fetchMF();
   }, [schemeCode]);
-
-  const generateSummary = async () => {
-    if (!data) return;
-    setIsGeneratingSummary(true);
-    // Simulated AI fetch for now. Real implementation would hit OpenRouter endpoint.
-    setTimeout(() => {
-      setAiSummary(
-        "This fund has demonstrated strong momentum over the past 3 years, consistently outperforming its category average. " +
-        "However, its high expense ratio and significant sector concentration in Financials introduce higher volatility. " +
-        "Best suited for aggressive long-term portfolios."
-      );
-      setIsGeneratingSummary(false);
-    }, 1500);
-  };
 
   if (!schemeCode) return <div className="p-6 text-slate-400">No fund selected.</div>;
 
@@ -145,31 +129,10 @@ export default function MFDetailView({ schemeCode }: { schemeCode: string }) {
               </div>
             </div>
           </div>
-
-          {/* AI One-Minute Read */}
-          <MagicCard 
-            className="w-full flex-col items-center justify-center shadow-2xl p-6"
-            gradientColor="rgba(0, 255, 157, 0.15)"
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="w-5 h-5 text-[#00FF9D]" />
-              <h3 className="text-sm font-semibold tracking-wide text-white uppercase">One-Minute AI Read</h3>
-            </div>
-            {!aiSummary ? (
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-slate-400">Generate an instant, contextual summary of this fund&apos;s performance and risk profile using Nemotron 3 Ultra.</p>
-                <button 
-                  onClick={generateSummary}
-                  disabled={isGeneratingSummary}
-                  className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors border border-white/5"
-                >
-                  {isGeneratingSummary ? 'Analyzing...' : 'Generate Summary'}
-                </button>
-              </div>
-            ) : (
-              <p className="text-sm text-slate-200 leading-relaxed border-l-2 border-[#00FF9D] pl-4">{aiSummary}</p>
-            )}
-          </MagicCard>
+          {/* AI Chat Widget */}
+          <div className="w-full">
+            <FundResearchChat schemeName={data.details.scheme_name || 'Mutual Fund'} />
+          </div>
 
           {/* Core Metrics Bento Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

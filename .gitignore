@@ -101,6 +101,7 @@ stitch_downloads/
 !frontend/data/*.yaml
 !backend/config/*.yaml
 !.github/workflows/*.yml
+!microservices/reports/k8s/*.yaml
 *.log
 *.markdown
 *.rst

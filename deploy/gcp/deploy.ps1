@@ -10,7 +10,31 @@ $registry = "$Region-docker.pkg.dev"
 $apiImage = "$registry/$ProjectId/$Repository/api:$Tag"
 $workerImage = "$registry/$ProjectId/$Repository/research-worker:$Tag"
 $serviceAccount = "fundersai-runtime@$ProjectId.iam.gserviceaccount.com"
-$secretBindings = "SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_KEY=SUPABASE_KEY:latest,R2_ENDPOINT=R2_ENDPOINT:latest,R2_ACCESS_KEY_ID=R2_ACCESS_KEY_ID:latest,R2_SECRET_ACCESS_KEY=R2_SECRET_ACCESS_KEY:latest,OPENROUTER_API_KEY=OPENROUTER_API_KEY:latest"
+
+# Backend secrets injected via Google Secret Manager.
+# Format per entry: ENV_VAR_NAME=SECRET_NAME:VERSION (use :latest for newest version).
+# See deploy/gcp/create-secrets.ps1 to create/rotate these.
+$secretBindings = @(
+    "SUPABASE_URL=SUPABASE_URL:latest",
+    "SUPABASE_KEY=SUPABASE_KEY:latest",
+    "R2_ENDPOINT=R2_ENDPOINT:latest",
+    "R2_ACCESS_KEY_ID=R2_ACCESS_KEY_ID:latest",
+    "R2_SECRET_ACCESS_KEY=R2_SECRET_ACCESS_KEY:latest",
+    "OPENROUTER_API_KEY=OPENROUTER_API_KEY:latest",
+    "OPENAI_API_KEY=OPENAI_API_KEY:latest",
+    "GROQ_API_KEY=GROQ_API_KEY:latest",
+    "COHERE_API_KEY=COHERE_API_KEY:latest",
+    "FINEDGE_API_KEY=FINEDGE_API_KEY:latest",
+    "INDIAN_API_KEY=INDIAN_API_KEY:latest",
+    "LANGFUSE_PUBLIC_KEY=LANGFUSE_PUBLIC_KEY:latest",
+    "LANGFUSE_SECRET_KEY=LANGFUSE_SECRET_KEY:latest",
+    "CHAT_INTERNAL_PROXY_KEY=CHAT_INTERNAL_PROXY_KEY:latest",
+    "MF_INTERNAL_ADMIN_KEY=MF_INTERNAL_ADMIN_KEY:latest",
+    "MF_INGESTION_WEBHOOK_TOKEN=MF_INGESTION_WEBHOOK_TOKEN:latest",
+    "UPSTASH_REDIS_REST_URL=UPSTASH_REDIS_REST_URL:latest",
+    "UPSTASH_REDIS_REST_TOKEN=UPSTASH_REDIS_REST_TOKEN:latest",
+    "MF_ENGINE_PARTNER_TOKEN=MF_ENGINE_PARTNER_TOKEN:latest"
+) -join ","
 
 gcloud config set project $ProjectId
 gcloud services enable artifactregistry.googleapis.com run.googleapis.com secretmanager.googleapis.com logging.googleapis.com monitoring.googleapis.com
