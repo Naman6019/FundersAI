@@ -65,7 +65,7 @@ export default function ReportsLayout({ children }: { children: ReactNode }) {
                         <Link href="/reports" className="flex items-center gap-3 group">
                             <div className="flex items-center group-hover:scale-105 transition-transform">
                                 <Image 
-                                    src="/Synthesis_FUNDERSAI1.png" 
+                                    src="/Synthesis_FUNDERSAI.png" 
                                     alt="Synthesis by FundersAI" 
                                     width={240} 
                                     height={60} 
