@@ -113,12 +113,11 @@ export default function FundResearchChat({ schemeName }: { schemeName: string })
                       : 'bg-white/5 text-slate-200 border border-white/10 rounded-tl-sm'
                   }`}
                 >
-                  <ReactMarkdown 
-                    remarkPlugins={[remarkGfm]}
-                    className="text-sm prose prose-invert max-w-none prose-p:leading-relaxed prose-a:text-[#00FF9D]"
-                  >
-                    {msg.content}
-                  </ReactMarkdown>
+                  <div className="text-sm prose prose-invert max-w-none prose-p:leading-relaxed prose-a:text-[#00FF9D]">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
                 </div>
                 {msg.role === 'assistant' && msg.sources && msg.sources.length > 0 && (
                   <div className="mt-2 pl-2 max-w-[85%]">
