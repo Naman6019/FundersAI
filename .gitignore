@@ -86,6 +86,10 @@ stitch_downloads/
 !frontend/public/logo.png
 !frontend/app/icon.png
 !frontend/app/apple-icon.png
+!frontend/public/FUNDERSAI-nobackground.png
+!frontend/public/FUNDERSAI-vertical.png
+!frontend/public/FUNDERSAI-background.png
+!frontend/public/Synthesis_FUNDERSAI.png
 !frontend/public/logos/
 *.jpg
 *.jpeg
