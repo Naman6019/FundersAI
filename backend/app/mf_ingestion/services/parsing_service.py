@@ -1546,6 +1546,7 @@ def _normalize_lookup_text(text: object) -> str:
     value = value.replace("unit linked insurance plan", " ")
     value = re.sub(r"[^a-z0-9\s]", " ", value)
     value = re.sub(r"(?<=[a-z])(?=\d)", " ", value)
+    value = re.sub(r"\b(\w+)(?:\s+\1\b)+", r"\1", value)
     return " ".join(value.split())
 
 

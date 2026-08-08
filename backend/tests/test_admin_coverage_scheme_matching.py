@@ -129,8 +129,16 @@ def test_normalize_lookup_text_strips_stray_symbols():
 
 def test_normalize_lookup_text_strips_ulip_wrapper_prefix():
     """Regression: the raw factsheet row 'UTI Unit Linked Insurance Plan UTI Long Duration
-    Fund' prefixes the real scheme name with a ULIP-wrapper disclosure phrase that
-    mutual_fund_core_snapshot's 'UTI Long Duration Fund' does not carry."""
+    Fund' prefixes the real scheme name with a ULIP-wrapper disclosure phrase that repeats
+    the AMC name ('...Plan UTI Long Duration Fund'). Stripping the phrase alone leaves a
+    doubled 'uti uti' that still can't match mutual_fund_core_snapshot's single-'UTI'
+    'UTI Long Duration Fund', so immediately-repeated words must also collapse."""
     assert _normalize_lookup_text(
         "UTI Unit Linked Insurance Plan UTI Long Duration Fund"
-    ) == _normalize_lookup_text("UTI UTI Long Duration Fund")
+    ) == _normalize_lookup_text("UTI Long Duration Fund")
+
+
+def test_normalize_lookup_text_collapses_immediately_repeated_words():
+    assert _normalize_lookup_text("UTI UTI Long Duration Fund") == _normalize_lookup_text(
+        "UTI Long Duration Fund"
+    )
