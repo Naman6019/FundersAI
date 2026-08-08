@@ -7,9 +7,9 @@ export function middleware(request: NextRequest) {
 
   // Handle synthesis.fundersai.co.in or synthesis.localhost:3000 subdomains
   if (hostname.startsWith('synthesis.')) {
-    // If user accesses root of synthesis subdomain, rewrite to /synthesis page
+    // If user accesses root of synthesis subdomain, rewrite directly to the Synthesis Landing Page (/reports)
     if (pathname === '/') {
-      return NextResponse.rewrite(new URL('/synthesis', request.url));
+      return NextResponse.rewrite(new URL('/reports', request.url));
     }
   }
 
