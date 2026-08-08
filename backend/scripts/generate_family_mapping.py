@@ -8,14 +8,11 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.database import supabase
 
-_REMOVE_PHRASES = [
-    r'\bdirect plan\b', r'\bdirect\b',
-    r'\bregular plan\b', r'\bregular\b',
-    r'\bgrowth plan\b', r'\bgrowth\b',
-    r'\bidcw\b', r'\bdividend\b', r'\breinvestment\b', r'\bpayout\b', r'\bpayment\b',
-    r'\binstitutional plan\b', r'\binstitutional\b',
-    r'\bbonus\b', r'\boption\b', r'\bplan\b', r'\bhalf yearly\b', r'\bquarterly\b', r'\bmonthly\b'
-]
+_REMOVABLE_WORDS = {
+    'direct', 'regular', 'growth', 'idcw', 'dividend', 'reinvestment', 'payout',
+    'payment', 'institutional', 'bonus', 'option', 'plan', 'half', 'yearly',
+    'quarterly', 'monthly',
+}
 
 
 def _base_cleanup(n: str) -> str:
@@ -30,32 +27,29 @@ def _base_cleanup(n: str) -> str:
 def clean_scheme_name(name: str) -> str:
     """Removes variant-specific noise from scheme names to generate a root family name.
 
-    AMFI scheme names follow "<Scheme Name> - <Plan> - <Option>" (e.g. "... - Growth -
-    Regular Plan"). Plan/option noise words like "regular", "growth", "direct" only ever
-    function as noise in the *qualifier* segment after the first hyphen. Stripping them
-    from the whole string is wrong when a word like "Regular" is part of the scheme's own
-    brand name (e.g. "Regular Savings Fund") rather than a plan qualifier -- that
-    collapsed genuinely different schemes into one family and made them inherit each
-    other's benchmark/risk values (GitHub issue #2). Only a hyphen with whitespace on
-    both sides is a segment separator; a bare hyphen joining a compound word (e.g.
-    "Multi-Cap Fund") must stay in the base name untouched.
+    Plan/option noise words like "regular", "growth", "direct" only ever function as
+    noise at the *end* of a scheme name (AMFI's "<Scheme Name> - <Plan> - <Option>"
+    convention, e.g. "... - Growth - Regular Plan"). Stripping them unconditionally is
+    wrong when a word like "Regular" is part of the scheme's own brand name (e.g.
+    "Regular Savings Fund") rather than a trailing plan qualifier -- that collapsed
+    genuinely different schemes into one family and made them inherit each other's
+    benchmark/risk values (GitHub issue #2). Peeling recognized qualifier words off the
+    *end* of the token list, one at a time, until a real word is hit handles this
+    correctly regardless of whether the source separates the qualifier suffix with a
+    spaced hyphen ("Fund - Direct Plan"), an unspaced one ("Fund-Direct Growth", as used
+    inconsistently in mutual_fund_core_snapshot), or no separator at all.
     """
     if not name:
         return ""
 
-    segments = re.split(r'\s+-\s+', name, maxsplit=1)
-    base = _base_cleanup(segments[0])
-    suffix = _base_cleanup(segments[1]) if len(segments) > 1 else ''
-
-    for phrase in _REMOVE_PHRASES:
-        suffix = re.sub(phrase, '', suffix)
-
-    n = f"{base} {suffix}"
-    # Clean up punctuation and extra spaces
+    n = _base_cleanup(name)
+    # Clean up punctuation into spaces before tokenizing.
     n = re.sub(r'[^a-z0-9\s]', ' ', n)
-    n = " ".join(n.split())
+    tokens = n.split()
+    while len(tokens) > 1 and tokens[-1] in _REMOVABLE_WORDS:
+        tokens.pop()
 
-    return n
+    return " ".join(tokens)
 
 def generate_family_id(clean_name: str) -> str:
     return clean_name.replace(" ", "-")

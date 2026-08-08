@@ -65,8 +65,21 @@ def test_select_best_scheme_candidate_does_not_merge_regular_savings_into_saving
 
 
 def test_normalize_family_scheme_name_does_not_split_compound_word_hyphens():
-    # "Multi-Cap" is a compound word (no surrounding spaces around the hyphen), not a
-    # "<Name> - <Plan>" segment boundary, so both forms must normalize identically.
+    # "Multi-Cap" is a compound word, not a "<Name> - <Plan>" segment boundary; adding a
+    # real plan/option suffix afterward must not change the resulting family.
     assert _normalize_family_scheme_name(
         "Aditya Birla Sun Life Multi-Cap Fund"
     ) == _normalize_family_scheme_name("Aditya Birla Sun Life Multi-Cap Fund - Growth - Direct Plan")
+
+
+def test_normalize_family_scheme_name_strips_unspaced_hyphen_qualifier_suffix():
+    """Regression: mutual_fund_core_snapshot.scheme_name inconsistently omits whitespace
+    around the plan-qualifier hyphen (e.g. "Fund-Direct Growth" instead of "Fund - Direct
+    Plan"). Verified live against scheme_code 148921 ('...Multi-Cap Fund-Direct Growth')
+    and 148635 ('...Fund-Regular Plan-Growth')."""
+    assert _normalize_family_scheme_name(
+        "Aditya Birla Sun Life Multi-Cap Fund-Direct Growth"
+    ) == _normalize_family_scheme_name("Aditya Birla Sun Life Multi-Cap Fund")
+    assert _normalize_family_scheme_name(
+        "Aditya Birla Sun Life ESG Integration Strategy Fund-Regular Plan-Growth"
+    ) == _normalize_family_scheme_name("Aditya Birla Sun Life ESG Integration Strategy Fund")

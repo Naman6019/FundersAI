@@ -1689,26 +1689,22 @@ def _apply_family_category_subs(text: str) -> str:
 
 
 def _normalize_family_scheme_name(value: object) -> str:
-    # AMFI scheme names follow "<Scheme Name> - <Plan> - <Option>" (e.g. "... - Growth
-    # - Regular Plan"). Plan/option qualifier words like "regular", "growth", "direct"
-    # only ever function as noise in the *qualifier* segments after the first hyphen.
-    # Stripping them from the whole string is wrong when a word like "Regular" is part
-    # of the scheme's own brand name (e.g. "Regular Savings Fund", "Regular Gold
-    # Savings Fund") rather than a plan qualifier — that collapsed two genuinely
-    # different schemes into one family (see GitHub issue #2: ABSL "Regular Savings
-    # Fund" was silently merged into "Savings Fund"'s family and inherited its
-    # benchmark). Raw factsheet scheme names typically carry no plan/option suffix at
-    # all, so the base segment is usually the entire string.
-    raw = str(value or "")
-    # Only a hyphen with whitespace on both sides is a segment separator; a bare
-    # hyphen joining a compound word (e.g. "Multi-Cap Fund") must stay in the base.
-    segments = re.split(r"\s+[–—-]\s+", raw, maxsplit=1)
-    base_raw = segments[0]
-    suffix_raw = segments[1] if len(segments) > 1 else ""
-    base = _apply_family_category_subs(_normalize_lookup_text(base_raw))
-    suffix = _apply_family_category_subs(_normalize_lookup_text(suffix_raw))
-    suffix_tokens = [token for token in suffix.split() if token not in _FAMILY_PLAN_QUALIFIER_WORDS]
-    return " ".join(base.split() + suffix_tokens)
+    # Plan/option qualifier words like "regular", "growth", "direct" only ever function
+    # as noise at the *end* of a scheme name (AMFI's "<Scheme Name> - <Plan> - <Option>"
+    # convention, e.g. "... - Growth - Regular Plan"). Stripping them unconditionally is
+    # wrong when a word like "Regular" is part of the scheme's own brand name (e.g.
+    # "Regular Savings Fund") rather than a trailing plan qualifier -- that collapsed
+    # two genuinely different schemes into one family and made one inherit the other's
+    # benchmark (GitHub issue #2). Peeling recognized qualifier words off the *end* of
+    # the token list, one at a time, until a real word is hit handles this correctly
+    # regardless of whether the source separates the qualifier suffix with a spaced
+    # hyphen ("Fund - Direct Plan"), an unspaced one ("Fund-Direct Growth", as used
+    # inconsistently in mutual_fund_core_snapshot), or no separator at all.
+    text = _apply_family_category_subs(_normalize_lookup_text(value))
+    tokens = text.split()
+    while len(tokens) > 1 and tokens[-1] in _FAMILY_PLAN_QUALIFIER_WORDS:
+        tokens.pop()
+    return " ".join(tokens)
 
 
 def _is_direct_growth_name(name: object) -> bool:

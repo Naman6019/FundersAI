@@ -58,3 +58,18 @@ def test_plan_qualifier_noise_still_stripped_from_suffix():
     assert "growth" not in cleaned
     assert "plan" not in cleaned
     assert "flexi cap fund" in cleaned
+
+
+def test_unspaced_hyphen_qualifier_suffix_is_still_stripped():
+    """Regression: mutual_fund_core_snapshot.scheme_name inconsistently omits whitespace
+    around the plan-qualifier hyphen (e.g. "Fund-Direct Growth" instead of "Fund - Direct
+    Plan"). An earlier fix that located the qualifier suffix by requiring a
+    whitespace-padded hyphen treated this as a compound word and silently stopped
+    stripping "direct"/"growth" for these rows -- verified live against the real
+    mutual_fund_core_snapshot values for scheme_code 148921 and 148635."""
+    assert gfm.clean_scheme_name("Aditya Birla Sun Life Multi-Cap Fund-Direct Growth") == gfm.clean_scheme_name(
+        "Aditya Birla Sun Life Multi-Cap Fund"
+    )
+    assert gfm.clean_scheme_name(
+        "Aditya Birla Sun Life ESG Integration Strategy Fund-Regular Plan-Growth"
+    ) == gfm.clean_scheme_name("Aditya Birla Sun Life ESG Integration Strategy Fund")
