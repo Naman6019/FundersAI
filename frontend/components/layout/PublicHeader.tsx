@@ -30,7 +30,7 @@ export default function PublicHeader() {
 
         {/* Desktop Nav */}
         <nav className="hidden items-center gap-6 font-mono text-[11px] font-medium tracking-wider uppercase text-gray-400 md:flex">
-          <Link href="/reports" className="transition hover:text-cyan-400 flex items-center gap-1">
+          <Link href="https://synthesis.fundersai.co.in" className="transition hover:text-cyan-400 flex items-center gap-1">
             <span className="text-cyan-400 font-bold">⚡</span>
             <span>Synthesis</span>
           </Link>
@@ -74,7 +74,7 @@ export default function PublicHeader() {
           <Link href="/pricing" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-emerald-400 hover:text-emerald-300">Pricing &amp; Plans</Link>
           <Link href="/data-trust" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-gray-300 hover:text-white">Data &amp; Trust</Link>
           <Link href="/methodology" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-gray-300 hover:text-white">Methodology</Link>
-          <Link href="/synthesis" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-blue-400 hover:text-blue-300">Synthesis Studio</Link>
+          <Link href="https://synthesis.fundersai.co.in" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-blue-400 hover:text-blue-300">Synthesis Studio</Link>
           <div className="pt-2" onClick={() => setIsMobileMenuOpen(false)}>
             <Link
               href="/dashboard"

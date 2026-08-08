@@ -33,7 +33,7 @@ export default function PublicFooter() {
             <li><Link href="/sample" className="hover:text-white transition-colors">Sample Research Report</Link></li>
             <li><Link href="/how-it-works" className="hover:text-white transition-colors">Architecture Flow</Link></li>
             <li><Link href="/intelligence" className="hover:text-white transition-colors">Source Intelligence</Link></li>
-            <li><Link href="/synthesis" className="hover:text-white transition-colors text-blue-400 font-semibold">Synthesis Studio</Link></li>
+            <li><Link href="https://synthesis.fundersai.co.in" className="hover:text-white transition-colors text-blue-400 font-semibold">Synthesis Studio</Link></li>
             <li><Link href="/pricing" className="hover:text-white transition-colors">Pricing &amp; Subscriptions</Link></li>
             <li><Link href="/reports" className="hover:text-white transition-colors">Synthesis Report Studio</Link></li>
             <li><Link href="/reports/tools/portfolio-overlap" className="hover:text-white transition-colors">Portfolio Overlap Tool</Link></li>
