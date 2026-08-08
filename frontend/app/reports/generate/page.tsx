@@ -143,8 +143,8 @@ function ReportChatContent() {
     }, [dbSearchResults, selectedSchemes]);
 
     const addScheme = (scheme: SchemeOption) => {
-        if (selectedSchemes.length >= 4) {
-            alert("You can compare up to 4 funds in a single report.");
+        if (selectedSchemes.length >= 3) {
+            alert("You can compare up to 3 funds in a single report.");
             return;
         }
         setSelectedSchemes(prev => [...prev, scheme]);
@@ -321,7 +321,7 @@ function ReportChatContent() {
             </div>
             
             {/* Main Interactive Dual Input Controls */}
-            <div className="bg-gray-950/90 border border-gray-800/80 rounded-2xl p-6 space-y-5 shadow-2xl backdrop-blur-xl print:hidden">
+            <div className="relative z-30 bg-gray-950/90 border border-gray-800/80 rounded-2xl p-6 space-y-5 shadow-2xl backdrop-blur-xl print:hidden">
                 {/* Mode Selector Tabs */}
                 <div className="flex items-center justify-between border-b border-gray-800/80 pb-4">
                     <div className="flex items-center gap-2">
@@ -343,7 +343,7 @@ function ReportChatContent() {
                                     : "bg-gray-900 text-gray-400 hover:bg-gray-800 hover:text-white border border-gray-800"
                             }`}
                         >
-                            <span>🎯 Option 2: Fund Selector</span>
+                            <span>🎯 Option 2: Fund Selector & Catalog</span>
                         </button>
                     </div>
 
@@ -360,7 +360,7 @@ function ReportChatContent() {
                 {generationMode === "PROMPT" && (
                     <div className="space-y-3">
                         <label className="block text-xs font-mono font-semibold text-gray-300 uppercase tracking-wider">
-                            Enter Natural Language Research Prompt
+                            Option 1: Enter Natural Language Research Prompt
                         </label>
                         <textarea
                             rows={3}
@@ -388,25 +388,33 @@ function ReportChatContent() {
                     </div>
                 )}
 
-                {/* Option 2: Manual Scheme Selector Mode */}
+                {/* Option 2: Manual Scheme Selector & Catalog Mode */}
                 {generationMode === "SELECTOR" && (
-                    <div className="space-y-4">
-                        <label className="block text-xs font-mono font-semibold text-gray-300 uppercase tracking-wider">
-                            Select Funds from Live Supabase Autocomplete (1,000+ Funds)
-                        </label>
-
-                        {/* Selected Scheme Badges */}
-                        <div className="flex flex-wrap items-center gap-2">
-                            {selectedSchemes.map(s => (
-                                <div key={s.code} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-900 border border-emerald-500/30 text-white text-xs font-semibold">
-                                    <span className="text-[10px] font-mono text-emerald-400">#{s.code}</span>
-                                    <span>{s.name}</span>
-                                    <button onClick={() => removeScheme(s.code)} className="text-gray-500 hover:text-red-400 text-sm">✕</button>
-                                </div>
-                            ))}
+                    <div className="space-y-5">
+                        <div className="flex items-center justify-between">
+                            <label className="block text-xs font-mono font-semibold text-gray-300 uppercase tracking-wider">
+                                Option 2: Select Up to 3 Funds for Comparison ({selectedSchemes.length}/3 Selected)
+                            </label>
+                            <span className="text-[11px] font-mono text-emerald-400">
+                                {3 - selectedSchemes.length} slots remaining
+                            </span>
                         </div>
 
-                        {/* Autocomplete Input */}
+                        {/* Selected Scheme Badges */}
+                        <div className="flex flex-wrap items-center gap-2 min-h-[38px] p-2 bg-gray-900/60 border border-gray-800 rounded-xl">
+                            {selectedSchemes.map(s => (
+                                <div key={s.code} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 border border-emerald-500/40 text-white text-xs font-semibold shadow-md">
+                                    <span className="text-[10px] font-mono text-emerald-400">#{s.code}</span>
+                                    <span>{s.name}</span>
+                                    <button onClick={() => removeScheme(s.code)} className="text-gray-400 hover:text-red-400 text-sm ml-1 font-bold">✕</button>
+                                </div>
+                            ))}
+                            {selectedSchemes.length === 0 && (
+                                <span className="text-xs text-gray-500 font-mono px-2">No funds selected. Search or click below to add up to 3 funds.</span>
+                            )}
+                        </div>
+
+                        {/* Autocomplete Search Input */}
                         <div className="relative">
                             <input 
                                 type="text"
@@ -416,12 +424,13 @@ function ReportChatContent() {
                                     setSchemeSearchQuery(e.target.value);
                                     setIsDropdownOpen(true);
                                 }}
-                                placeholder="Type any fund name (ICICI, HDFC, SBI, Quant, UTI, Axis, PPFAS)..."
+                                placeholder="Search live catalog of 1,000+ funds (e.g. ICICI, HDFC, SBI, Quant, UTI, Axis, PPFAS)..."
                                 className="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 transition-colors font-mono"
                             />
 
+                            {/* Dropdown Overlay with high z-index */}
                             {isDropdownOpen && filteredSchemes.length > 0 && (
-                                <div className="absolute left-0 right-0 top-full mt-2 bg-gray-950 border border-gray-800 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto divide-y divide-gray-900">
+                                <div className="absolute left-0 right-0 top-full mt-2 bg-gray-950 border border-gray-800 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto divide-y divide-gray-900">
                                     {filteredSchemes.map(scheme => (
                                         <button
                                             key={scheme.code}
@@ -433,12 +442,58 @@ function ReportChatContent() {
                                                 <span className="text-[10px] text-gray-500 font-mono">{scheme.amc}</span>
                                             </div>
                                             <span className="text-[10px] font-mono text-cyan-400 px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20">
-                                                #{scheme.code}
+                                                + Add #{scheme.code}
                                             </span>
                                         </button>
                                     ))}
                                 </div>
                             )}
+                        </div>
+
+                        {/* Supported Fund Catalog Grid */}
+                        <div className="space-y-2 pt-2 border-t border-gray-800/60">
+                            <span className="text-[11px] font-mono text-gray-400 uppercase tracking-wider block">
+                                Quick Selection Catalog
+                            </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                                {DEFAULT_POPULAR_SCHEMES.map(scheme => {
+                                    const isSelected = selectedSchemes.some(s => s.code === scheme.code);
+                                    return (
+                                        <button
+                                            key={scheme.code}
+                                            onClick={() => {
+                                                if (isSelected) {
+                                                    removeScheme(scheme.code);
+                                                } else {
+                                                    addScheme(scheme);
+                                                }
+                                            }}
+                                            className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
+                                                isSelected
+                                                    ? "bg-emerald-950/40 border-emerald-500/50 shadow-lg shadow-emerald-900/20"
+                                                    : "bg-gray-900/60 border-gray-800 hover:border-gray-700 hover:bg-gray-900"
+                                            }`}
+                                        >
+                                            <div className="flex items-start justify-between gap-2">
+                                                <span className="text-xs font-bold text-white leading-snug line-clamp-2">{scheme.name}</span>
+                                                {isSelected ? (
+                                                    <span className="shrink-0 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500 text-black">
+                                                        ✓ Selected
+                                                    </span>
+                                                ) : (
+                                                    <span className="shrink-0 px-2 py-0.5 rounded text-[10px] font-mono text-gray-400 bg-gray-800 border border-gray-700">
+                                                        + Select
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center justify-between text-[10px] font-mono text-gray-500">
+                                                <span>{scheme.amc}</span>
+                                                <span>#{scheme.code}</span>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
                 )}
