@@ -75,6 +75,17 @@ def test_retail_plan_and_of_idcw_qualifiers_are_stripped():
     ) == gfm.clean_scheme_name("Aditya Birla Sun Life Nifty Midcap 150 Index Fund")
 
 
+def test_cumulative_qualifier_is_stripped():
+    """Regression: 'Cumulative' (growth-option synonym, common in ICICI's '- Direct Plan
+    - Cumulative' suffix) was never in generate_family_mapping.py's noise-word list even
+    before this fix, unlike parsing_service.py's -- a pre-existing drift between the two
+    implementations that left ICICI candidates fragmented across '-cumulative'-suffixed
+    families during the issue #2 correction."""
+    assert gfm.clean_scheme_name(
+        "ICICI Prudential Equity Savings Fund - Direct Plan - Cumulative"
+    ) == gfm.clean_scheme_name("ICICI Prudential Equity Savings Fund")
+
+
 def test_unspaced_hyphen_qualifier_suffix_is_still_stripped():
     """Regression: mutual_fund_core_snapshot.scheme_name inconsistently omits whitespace
     around the plan-qualifier hyphen (e.g. "Fund-Direct Growth" instead of "Fund - Direct
