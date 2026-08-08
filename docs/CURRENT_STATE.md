@@ -1,6 +1,6 @@
 # Current State
 
-**Last Updated**: 2026-08-06
+**Last Updated**: 2026-08-08
 
 ## Project Summary
 FundersAI is a research-first Indian stocks + mutual funds app with deterministic comparison outputs, Supabase-first runtime reads, and workflow-driven data ingestion.
@@ -13,6 +13,16 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 - Automation: GitHub Actions workflows
 
 ## Implemented
+- Synthesis Studio Subdomain & Landing Page Overhaul (`synthesis.fundersai.co.in` & `/reports`):
+  - **Subdomain Routing & Edge Middleware**: Deployed dedicated custom subdomain `https://synthesis.fundersai.co.in` via Vercel CNAME. Added Next.js edge middleware (`frontend/middleware.ts`) that detects `synthesis.` hostnames and rewrites root requests to `/reports`. Configured HTTP 308 Permanent Redirect for legacy `/synthesis` requests on `www.fundersai.co.in`.
+  - **Hermes Cyber-Editorial Design Alignment**: Overhauled Synthesis landing page (`/reports`) and studio routes with Electric Cobalt palette (`#2563eb`), dark glassmorphism, serif displays (`font-serif-display`), monospaced technical labels (`font-mono`), and Magic UI components (`BorderBeam`, `FlickeringGrid`, `Sparkles`, `ShimmerButton`, `MagicCard`).
+  - **GPU-Accelerated Text Reveal**: Built `VerticalCutReveal` with character-by-character reveals, word-container preservation (`whitespace-nowrap`), and direct `elementClassName` CSS `bg-clip-text` binding for crystal-clear letter visibility without text selection.
+  - **Throttled Canvas Grid Performance**: Throttled `FlickeringGrid` canvas update loop to ~15 FPS (`elapsed >= 65ms`) and replaced JS spring hover effects with GPU-composited CSS transforms (`transform-gpu ease-out`), eliminating main-thread jank and achieving 60 FPS performance.
+  - **Interactive Hero Workstation Preview**: Levitating interactive studio frame mockup with live preset triggers (`HDFC Defence vs Quant Small Cap`, `PPFAS vs SBI Contra`, `ICICI Bluechip vs Mirae Large Cap`), live execution step ticker, and levitating telemetry badges (`100% Factsheet Verifiable`, `0.4s Serverless Latency`).
+  - **Bento Sections & Interactive Output Preview**: 1-click popular comparison pills, tabbed live report preview (Executive Verdict, Risk Matrix, Mermaid Diagrams, PDF Export), 4-ratio factor risk decomposition grid, 12-AMC factsheet ingestion status ticker, and animated FAQ accordion.
+  - **Unified Pricing Alignment (`/pricing`)**: Aligned `/pricing` page with Hermes aesthetic and Electric Cobalt theme, matching Free (₹0 - 1 report/day), Pro (₹99/mo - 5 reports/day), and Ultra (₹199/mo - 15 reports/day) tiers. Fixed header navigation links to `/pricing`.
+  - **Studio Workstation & Multi-Fund Selection (`/reports/generate` & `/reports/supported-funds`)**: Added user email badge (`thereaper6019@gmail.com`), dynamic target scheme selector sidebar, multi-tier search, URL parameter preset population (`?codes=...`), multi-fund selection toggles, and floating bottom dock `Synthesize Comparison (N) →`.
+  - **SEO & Search Indexing**: Added `https://synthesis.fundersai.co.in` (Priority 1.0) to `frontend/app/sitemap.ts` and structured JSON-LD `SoftwareApplication` schema.
 - Supabase-auth dashboard (`/dashboard`) with `/auth` sign-in/sign-up and password recovery.
   - The auth screen uses the FundersAI logo and the app-native black, charcoal, and neon-green palette, with accessible labeled fields, local icons, explicit error/success states, password visibility controls, a non-enumerating reset response, and a dedicated password-update route.
   - Unsupported adoption claims and stock user avatars were removed. The replacement trust strip describes only the product's research-only boundary, official evidence availability, and visible data limits.

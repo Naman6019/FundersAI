@@ -1,9 +1,12 @@
 # Deployment
 
-**Last updated:** 2026-07-21
+**Last updated:** 2026-08-08
 
 ## Current Topology
 - Frontend: Vercel project rooted at `frontend/`
+  - Main Production Domain: `https://www.fundersai.co.in` (`https://fundersai.co.in` redirects)
+  - Dedicated Subdomain: `https://synthesis.fundersai.co.in` (CNAME `cname.vercel-dns.com`)
+  - Edge Middleware: Next.js `frontend/middleware.ts` rewrites `synthesis.fundersai.co.in/` requests to `/reports` and issues HTTP 308 permanent redirects for legacy `www.fundersai.co.in/synthesis` paths.
 - Backend: Google Cloud Run web service rooted at `backend/`
 - Database: Supabase
 - Object Storage: Cloudflare R2 (raw docs + cold archives)
