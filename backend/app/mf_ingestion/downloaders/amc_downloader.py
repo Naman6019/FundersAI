@@ -424,17 +424,33 @@ class AMCDownloader(BaseDownloader):
             # These AMCs require their existing session/URL recovery download paths.
             return self.download(discovered)
         referer = discovered.discovery_page_url or _base_site_url(discovered.url)
-        response = _request_with_retry(
-            "GET",
-            discovered.url,
-            timeout_seconds=self.timeout_seconds,
-            headers={
-                "User-Agent": _download_user_agent(self.source, self.user_agent),
-                "Referer": referer,
-                "Accept": "application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*;q=0.8",
-                "Range": f"bytes=0-{max(int(max_bytes), 1024) - 1}",
-            },
-        )
+        base_headers = {
+            "User-Agent": _download_user_agent(self.source, self.user_agent),
+            "Referer": referer,
+            "Accept": "application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*;q=0.8",
+        }
+        try:
+            response = _request_with_retry(
+                "GET",
+                discovered.url,
+                timeout_seconds=self.timeout_seconds,
+                headers={
+                    **base_headers,
+                    "Range": f"bytes=0-{max(int(max_bytes), 1024) - 1}",
+                },
+            )
+        except RuntimeError as exc:
+            # Some AMC CDNs (observed: sbimf.com) reject byte-range requests with
+            # 416 Requested Range Not Satisfiable instead of serving a partial or
+            # full response. Fall back to an unranged GET and slice client-side.
+            if "reason=416" not in str(exc):
+                raise
+            response = _request_with_retry(
+                "GET",
+                discovered.url,
+                timeout_seconds=self.timeout_seconds,
+                headers=base_headers,
+            )
         body = response.content[:max(int(max_bytes), 1024)]
         source_url = response.url or discovered.url
         file_ext = _normalize_download_file_ext(discovered.file_ext, body)

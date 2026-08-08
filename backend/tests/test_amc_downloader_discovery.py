@@ -890,6 +890,72 @@ def test_hdfc_file_probe_uses_public_browser_user_agent(monkeypatch) -> None:
     assert str(captured["headers"]["User-Agent"]).startswith("Mozilla/5.0")
 
 
+def test_probe_download_falls_back_to_unranged_get_on_416(monkeypatch) -> None:
+    """Some AMC CDNs (observed: sbimf.com) reject the ranged probe GET with
+    416 Requested Range Not Satisfiable instead of a partial/full response.
+    The probe must retry without the Range header rather than failing discovery."""
+    source = get_source("sbi")
+    document = DiscoveredDocument(
+        amc_name=source.amc_name,
+        amc_code=source.amc_code,
+        document_type="factsheet",
+        title="SBI MF Factsheet - June 2026",
+        url="https://www.sbimf.com/docs/default-source/scheme-factsheets/all-sbimf-schemes-factsheet-june-2026.pdf",
+        discovery_page_url=source.factsheet_page_url or "",
+        file_ext=".pdf",
+        report_month=date(2026, 6, 1),
+        priority_score=1,
+    )
+    calls: list[dict[str, object]] = []
+
+    def fake_request(method, url, *, timeout_seconds, headers=None, **_kwargs):
+        calls.append({"headers": dict(headers or {})})
+        if "Range" in (headers or {}):
+            raise RuntimeError(
+                f"http_request_failed method={method} url={url} "
+                "reason=416 Client Error: Requested Range Not Satisfiable for url: " + url
+            )
+        return SimpleNamespace(content=b"%PDF-1.7 official", headers={"Content-Type": "application/pdf"}, url=url)
+
+    monkeypatch.setattr(amc_downloader, "_request_with_retry", fake_request)
+
+    downloaded = AMCDownloader(source, timeout_seconds=1, user_agent="FundersAIResearchBot/1.0").probe_download(
+        document
+    )
+
+    assert downloaded.file_bytes == b"%PDF-1.7 official"
+    assert len(calls) == 2
+    assert "Range" in calls[0]["headers"]
+    assert "Range" not in calls[1]["headers"]
+
+
+def test_probe_download_reraises_non_range_failures(monkeypatch) -> None:
+    source = get_source("sbi")
+    document = DiscoveredDocument(
+        amc_name=source.amc_name,
+        amc_code=source.amc_code,
+        document_type="factsheet",
+        title="SBI MF Factsheet - June 2026",
+        url="https://www.sbimf.com/docs/default-source/scheme-factsheets/all-sbimf-schemes-factsheet-june-2026.pdf",
+        discovery_page_url=source.factsheet_page_url or "",
+        file_ext=".pdf",
+        report_month=date(2026, 6, 1),
+        priority_score=1,
+    )
+
+    def fake_request(method, url, *, timeout_seconds, headers=None, **_kwargs):
+        raise RuntimeError(f"http_request_failed method={method} url={url} reason=404 Client Error: Not Found for url: {url}")
+
+    monkeypatch.setattr(amc_downloader, "_request_with_retry", fake_request)
+
+    try:
+        AMCDownloader(source, timeout_seconds=1, user_agent="FundersAIResearchBot/1.0").probe_download(document)
+    except RuntimeError as exc:
+        assert "reason=404" in str(exc)
+    else:
+        raise AssertionError("expected a non-416 probe failure to propagate")
+
+
 def test_ppfas_empty_form_action_posts_to_confirmation_page() -> None:
     assert _ppfas_confirmation_url("https://amc.ppfas.com/downloads/index.php") == "/downloads/ConfirmCitizenship.php"
     assert (
