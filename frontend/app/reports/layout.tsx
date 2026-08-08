@@ -62,7 +62,7 @@ export default function ReportsLayout({ children }: { children: ReactNode }) {
     return (
         <div className="relative min-h-screen bg-gray-950 text-gray-100 flex flex-col overflow-hidden selection:bg-blue-500/30 selection:text-blue-200">
             {/* Ambient Subtly Dimmed Flickering Grid Background Pattern */}
-            <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden [mask-image:radial-gradient(1400px_circle_at_center,white_70%,transparent_100%)]">
+            <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden [mask-image:linear-gradient(to_bottom,transparent_0%,white_8%,white_92%,transparent_100%)]">
                 <FlickeringGrid
                     squareSize={6}
                     gridGap={10}

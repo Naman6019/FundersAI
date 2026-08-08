@@ -216,7 +216,12 @@ export function MagicCard(props: MagicCardProps) {
           }}
         />
       )}
-      <div className="relative z-40">{children}</div>
+      {/* h-full only takes effect when the outer card itself has a definite height (e.g. a
+          grid-stretched pricing card) — otherwise 100% against an auto-height parent resolves
+          to auto, so this is a no-op everywhere else MagicCard is used. min-h-0 lets flexbox
+          stretch actually shrink it to that height instead of the default flex
+          min-height:auto forcing it to stay at its content's intrinsic size. */}
+      <div className="relative z-40 h-full min-h-0">{children}</div>
     </motion.div>
   )
 }

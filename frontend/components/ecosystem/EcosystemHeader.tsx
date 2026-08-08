@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   BarChart3, 
@@ -38,6 +39,13 @@ export function EcosystemHeader({
   const [commandOpen, setCommandOpen] = useState(false);
   const [activeTab] = useState<string>(currentApp);
 
+  // Synthesis gets its own mark; every other surface (Research, Data & Trust,
+  // marketing pages) uses the main FundersAI wordmark.
+  const isSynthesis = currentApp === "synthesis";
+  const logoSrc = isSynthesis ? "/Synthesis_FUNDERSAI.png" : "/FUNDERSAI-nobackground.png";
+  const logoAlt = isSynthesis ? "Synthesis by FundersAI" : "FundersAI";
+  const logoCaption = isSynthesis ? "Synthesis Studio" : "Research Ecosystem";
+
   // Keyboard shortcut listener for Cmd+K
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -58,14 +66,15 @@ export function EcosystemHeader({
         <div className="flex items-center gap-3 min-w-0">
           {leading}
           <Link href="/" className="flex items-center gap-2.5 group shrink-0">
-            <div className="relative w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center transition-all group-hover:border-emerald-400 group-hover:bg-emerald-500/20">
-              <span className="font-bold text-emerald-400 text-lg">📈</span>
-              <div className="absolute inset-0 rounded-lg bg-emerald-500/10 blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-            <div className="flex flex-col">
-              <span className="font-bold text-white text-base tracking-tight font-sans">FundersAI</span>
-              <span className="text-[10px] text-slate-400 font-mono -mt-1 tracking-wider uppercase">Research Ecosystem</span>
-            </div>
+            <Image
+              src={logoSrc}
+              alt={logoAlt}
+              width={isSynthesis ? 160 : 800}
+              height={160}
+              priority
+              className={isSynthesis ? "h-9 w-9 object-contain" : "h-8 w-auto object-contain"}
+            />
+            <span className="text-[10px] text-slate-400 font-mono tracking-wider uppercase whitespace-nowrap">{logoCaption}</span>
           </Link>
 
           {/* Ecosystem Navigation Switcher Pill */}

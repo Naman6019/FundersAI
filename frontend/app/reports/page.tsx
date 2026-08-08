@@ -115,7 +115,7 @@ export default function ReportsLandingPage() {
 
             <div className="relative flex-1 flex flex-col items-center px-4 sm:px-6 lg:px-8 py-12 overflow-hidden">
                 {/* Optimized High-Performance Flickering Grid Background */}
-                <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none [mask-image:radial-gradient(2000px_circle_at_center_top,white_75%,transparent_100%)]">
+                <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none [mask-image:linear-gradient(to_bottom,transparent_0%,white_6%,white_94%,transparent_100%)]">
                     <FlickeringGrid
                         squareSize={6}
                         gridGap={10}
@@ -126,11 +126,11 @@ export default function ReportsLandingPage() {
                     />
                 </div>
 
-                <div className="max-w-[1800px] w-full space-y-16 relative z-10 px-4 sm:px-6 lg:px-8">
+                <div className="max-w-[1800px] w-full space-y-20 sm:space-y-24 lg:space-y-32 relative z-10 px-4 sm:px-6 lg:px-8">
                     {/* Hero Header Section — centered within its own viewport-scale band so later
                         sections (agent graph, bento grid, studio frame) flow below the fold cleanly
                         instead of being forced to co-center with the hero and getting clipped. */}
-                    <div className="min-h-[80vh] flex flex-col items-center justify-center text-center space-y-6 max-w-4xl mx-auto">
+                    <div className="min-h-[80vh] flex flex-col items-center justify-center text-center space-y-8 max-w-4xl mx-auto">
                     {/* Status Badge */}
                     <motion.div
                         initial={{ opacity: 0, y: -8 }}
@@ -224,7 +224,7 @@ export default function ReportsLandingPage() {
                         initial={{ opacity: 0, y: 25 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.6, delay: 1.0, ease: "easeOut" }}
-                        className="relative max-w-5xl mx-auto w-full pt-6"
+                        className="relative max-w-5xl mx-auto w-full"
                     >
                         {/* Background Subtle Radial Aura */}
                         <div className="absolute inset-0 bg-blue-600/15 blur-[120px] rounded-full pointer-events-none" />
@@ -393,7 +393,7 @@ export default function ReportsLandingPage() {
                     transition={{ duration: 0.5 }}
                     className="space-y-4"
                 >
-                    <div className="text-center space-y-2">
+                    <div className="text-center space-y-3">
                         <span className="text-xs font-mono font-semibold uppercase tracking-wider text-cyan-400">Live Output Interactive Preview</span>
                         <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Experience Synthesis in Action</h2>
                     </div>
@@ -544,7 +544,7 @@ export default function ReportsLandingPage() {
                     transition={{ duration: 0.5 }}
                     className="space-y-6"
                 >
-                    <div className="text-center space-y-2 max-w-2xl mx-auto">
+                    <div className="text-center space-y-3 max-w-2xl mx-auto">
                         <span className="text-xs font-mono font-semibold uppercase tracking-wider text-emerald-400">Quantitative Depth</span>
                         <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Factor Risk & Overlap Decomposition</h2>
                     </div>
@@ -634,7 +634,7 @@ export default function ReportsLandingPage() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.5 }}
-                    className="space-y-8 max-w-5xl mx-auto pt-4 scroll-mt-24"
+                    className="space-y-8 max-w-5xl mx-auto scroll-mt-24"
                 >
                     <div className="text-center space-y-3">
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-mono font-medium">
@@ -648,8 +648,9 @@ export default function ReportsLandingPage() {
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Free Card */}
-                        <div className="transition-transform duration-200 hover:-translate-y-1 transform-gpu">
-                            <MagicCard className="p-6 bg-gray-950/80 border-gray-800 rounded-2xl flex flex-col justify-between space-y-6">
+                        <div className="h-full transition-transform duration-200 hover:-translate-y-1 transform-gpu">
+                            <MagicCard className="h-full p-6 bg-gray-950/80 border-gray-800 rounded-2xl flex flex-col">
+                            <div className="h-full flex flex-col justify-between gap-6">
                                 <div className="space-y-4">
                                     <div>
                                         <span className="text-xs font-mono font-semibold uppercase tracking-wider text-gray-400">Free Tier</span>
@@ -679,15 +680,17 @@ export default function ReportsLandingPage() {
                                         Start Synthesizing (Free)
                                     </button>
                                 </Link>
+                            </div>
                             </MagicCard>
                         </div>
 
                         {/* Pro Card */}
-                        <div className="transition-transform duration-200 hover:-translate-y-1 transform-gpu">
-                            <MagicCard className="p-6 bg-gray-950/90 border-blue-500/50 rounded-2xl flex flex-col justify-between space-y-6 relative shadow-xl shadow-blue-500/10">
+                        <div className="h-full transition-transform duration-200 hover:-translate-y-1 transform-gpu">
+                            <MagicCard className="h-full p-6 bg-gray-950/90 border-blue-500/50 rounded-2xl relative shadow-xl shadow-blue-500/10 flex flex-col">
                                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-blue-600 text-[10px] font-mono font-bold text-white uppercase tracking-wider shadow-sm">
                                     Most Popular
                                 </div>
+                            <div className="h-full flex flex-col justify-between gap-6">
                                 <div className="space-y-4">
                                     <div>
                                         <span className="text-xs font-mono font-semibold uppercase tracking-wider text-blue-400">Pro Tier</span>
@@ -721,12 +724,14 @@ export default function ReportsLandingPage() {
                                         Upgrade to Pro (₹99)
                                     </button>
                                 </Link>
+                            </div>
                             </MagicCard>
                         </div>
 
                         {/* Ultra Card */}
-                        <div className="transition-transform duration-200 hover:-translate-y-1 transform-gpu">
-                            <MagicCard className="p-6 bg-gray-950/80 border-indigo-500/40 rounded-2xl flex flex-col justify-between space-y-6">
+                        <div className="h-full transition-transform duration-200 hover:-translate-y-1 transform-gpu">
+                            <MagicCard className="h-full p-6 bg-gray-950/80 border-indigo-500/40 rounded-2xl flex flex-col">
+                            <div className="h-full flex flex-col justify-between gap-6">
                                 <div className="space-y-4">
                                     <div>
                                         <span className="text-xs font-mono font-semibold uppercase tracking-wider text-indigo-400">Ultra Tier</span>
@@ -760,6 +765,7 @@ export default function ReportsLandingPage() {
                                         Upgrade to Ultra (₹199)
                                     </button>
                                 </Link>
+                            </div>
                             </MagicCard>
                         </div>
                     </div>
@@ -773,7 +779,7 @@ export default function ReportsLandingPage() {
                     transition={{ duration: 0.5 }}
                     className="space-y-6 max-w-3xl mx-auto"
                 >
-                    <div className="text-center space-y-2">
+                    <div className="text-center space-y-3">
                         <span className="text-xs font-mono font-semibold uppercase tracking-wider text-cyan-400">Institutional FAQs</span>
                         <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Frequently Asked Questions</h2>
                     </div>

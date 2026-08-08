@@ -69,7 +69,7 @@ export function AgentGraphVisualizer({ onComplete }: AgentGraphVisualizerProps) 
   }, [onComplete]);
 
   return (
-    <div className="w-full my-6 p-6 rounded-2xl bg-[#0F111A]/90 border border-cyan-500/30 shadow-2xl relative overflow-hidden backdrop-blur-xl">
+    <div className="w-full p-6 sm:p-7 rounded-2xl bg-[#0F111A]/90 border border-cyan-500/30 shadow-2xl relative overflow-hidden backdrop-blur-xl">
       <BorderBeam size={250} duration={8} delay={0} colorFrom="#06b6d4" colorTo="#10b981" />
 
       <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-4">

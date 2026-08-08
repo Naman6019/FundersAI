@@ -16,7 +16,7 @@ export function BentoReportGrid({
   onExportPDF,
 }: BentoReportGridProps) {
   return (
-    <div className="space-y-6 my-6">
+    <div className="space-y-6">
       
       {/* Top Header Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-slate-900/60 border border-white/10">
