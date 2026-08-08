@@ -37,6 +37,53 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
   const [prompt, setPrompt] = useState("");
   const containerRef = useRef<HTMLDivElement | null>(null);
   const waveRef = useRef<HTMLDivElement | null>(null);
+  const heroBlockRef = useRef<HTMLDivElement | null>(null);
+  const tickerRef = useRef<HTMLDivElement | null>(null);
+  const [heroScale, setHeroScale] = useState(1);
+  const [tickerPullUp, setTickerPullUp] = useState(0);
+
+  // Runtime auto-fit: measure actual available height vs. the hero content's natural
+  // height and shrink it just enough to guarantee everything (including the ticker)
+  // fits without overlap or fold-clipping — a static CSS budget can't account for
+  // every combination of OS display scaling and browser chrome height in the wild.
+  // Only the content block is scaled (never the ticker — scaling it would shrink its
+  // width too and leave it disconnected from the page edges), so a computed negative
+  // margin pulls the always-full-width ticker up to meet the shrunk content directly.
+  useEffect(() => {
+    const section = containerRef.current;
+    const block = heroBlockRef.current;
+    if (!section || !block) return;
+
+    const measure = () => {
+      // section.clientHeight isn't usable here — with no forced sizing it auto-grows
+      // to match the block's own height (min-height:auto flex behavior), so it always
+      // reports "enough room" even when nothing actually fits. Measure the real
+      // viewport space below the section's top edge instead.
+      const sectionTop = section.getBoundingClientRect().top;
+      const availableHeight = window.innerHeight - sectionTop;
+      const contentHeight = block.scrollHeight;
+      const tickerHeight = tickerRef.current?.scrollHeight ?? 0;
+      if (!availableHeight || !contentHeight) return;
+      const budgetForContent = availableHeight - tickerHeight;
+      const nextScale = contentHeight > budgetForContent
+        ? Math.max(budgetForContent / contentHeight, 0.7)
+        : 1;
+      setHeroScale((prev) => (Math.abs(prev - nextScale) > 0.005 ? nextScale : prev));
+      const nextPullUp = contentHeight * (1 - nextScale);
+      setTickerPullUp((prev) => (Math.abs(prev - nextPullUp) > 0.5 ? nextPullUp : prev));
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(section);
+    ro.observe(block);
+    if (tickerRef.current) ro.observe(tickerRef.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
   // Typing placeholder animation (runs only when input is empty)
   const basePlaceholder = placeholder;
   const suggestionsRef = useRef<string[]>([
@@ -837,29 +884,36 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
     <section
       ref={containerRef}
       className={className}
-      style={{ position: "relative", width: "100%", minHeight: "100vh", overflow: "hidden", ...style }}
+      style={{ position: "relative", width: "100%", minHeight: "calc(100dvh - 68px)", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "center", ...style }}
       aria-label="Animated hero"
     >
-      {/* Content overlay */}
+      {/* Scaled content block — auto-shrunk by the ResizeObserver above whenever its
+          natural height exceeds what's actually available. Only this (never the
+          full-width ticker below) gets scaled, so the ticker keeps spanning edge to
+          edge; a computed negative margin on the ticker pulls it up to meet the
+          shrunk content directly instead of leaving a gap. */}
+      <div
+        ref={heroBlockRef}
+        style={{ position: "relative", zIndex: 3, transform: `scale(${heroScale})`, transformOrigin: "top center" }}
+      >
+      {/* Content overlay — sized to its own content, not pinned to a computed viewport
+          fraction, so the ticker below always follows it directly instead of landing
+          at a fixed height that can drift out of sync with real device rendering. */}
       <div
         style={{
           position: "relative",
           zIndex: 3,
-          display: "flex",
-          minHeight: "100vh",
-          alignItems: "center",
-          justifyContent: "center",
           pointerEvents: "none",
           padding: "24px",
-          paddingTop: "100px",
-          paddingBottom: "80px",
+          paddingTop: "clamp(56px, 9vh, 120px)",
+          paddingBottom: "clamp(16px, 3vh, 32px)",
         }}
       >
         <div
-          className="max-w-6xl w-full text-center"
-          style={{ pointerEvents: "auto", marginTop: "-18vh" }}
+          className="max-w-6xl w-full mx-auto text-center"
+          style={{ pointerEvents: "auto", marginTop: "1rem" }}
         >
-          <div className="flex flex-col items-center mb-8">
+          <div className="flex flex-col items-center mb-[clamp(16px,3vh,32px)]">
             <div className="rounded-full border border-[#00FF9D]/30 bg-[#00FF9D]/10 px-4 py-1.5 backdrop-blur-md">
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#00FF9D]">Mutual fund research · AI-powered</p>
             </div>
@@ -868,11 +922,11 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
           <h1 className="text-white text-5xl sm:text-[6.5vw] lg:text-[90px] xl:text-[110px] leading-[1.05] tracking-tight font-bold drop-shadow-[0_1px_8px_rgba(31,61,188,0.25)] text-transparent bg-clip-text bg-gradient-to-b from-white to-white/60">
             {title}
           </h1>
-          <p className="text-gray-300/90 mt-6 sm:mt-8 max-w-2xl mx-auto text-lg sm:text-2xl leading-relaxed">
+          <p className="text-gray-300/90 mt-[clamp(12px,2.5vh,32px)] max-w-2xl mx-auto text-lg sm:text-2xl leading-relaxed">
             {subtitle}
           </p>
           <form
-            className="mt-10 sm:mt-12 flex items-center justify-center"
+            className="mt-[clamp(20px,4.5vh,48px)] flex items-center justify-center"
             onSubmit={(e) => {
               e.preventDefault();
               const value = prompt.trim();
@@ -895,7 +949,7 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
                       if (value) onPromptSubmit?.(value);
                     }
                   }}
-                  className="w-full h-32 sm:h-36 resize-none rounded-2xl bg-black/40 border border-white/10 text-white placeholder:text-white/40 outline-none focus:ring-2 focus:ring-[#00FF9D]/20 focus:border-white/20 backdrop-blur-xl px-5 py-4 pr-16"
+                  className="w-full h-[clamp(96px,13vh,144px)] resize-none rounded-2xl bg-black/40 border border-white/10 text-white placeholder:text-white/40 outline-none focus:ring-2 focus:ring-[#00FF9D]/20 focus:border-white/20 backdrop-blur-xl px-5 py-4 pr-16"
                 />
               </div>
               <button
@@ -912,14 +966,19 @@ export function HeroWave({ className, style, extendLeftPx = 320, title = "Build 
             </div>
           </form>
           {children && (
-            <div className="mt-8">
+            <div className="mt-[clamp(16px,3vh,32px)]">
               {children}
             </div>
           )}
         </div>
       </div>
+      </div>
       {ticker && (
-        <div className="absolute bottom-0 left-0 w-full z-20">
+        <div
+          ref={tickerRef}
+          className="relative w-full z-20 shrink-0"
+          style={{ marginTop: `-${tickerPullUp}px` }}
+        >
           {ticker}
         </div>
       )}

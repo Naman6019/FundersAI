@@ -1,6 +1,6 @@
 # Agents Guide
 
-**Last updated:** 2026-07-21
+**Last updated:** 2026-08-08
 
 Use this guide for repository conventions and quick orientation. For the authoritative implementation snapshot, read `docs/CURRENT_STATE.md`; use the focused documents under `docs/` for API, schema, deployment, and ML details.
 
@@ -41,6 +41,7 @@ Use this guide for repository conventions and quick orientation. For the authori
 - Query-critical data comes from normalized Supabase tables and server-only caches.
 - OpenAI/OpenRouter/Groq provider keys, the Supabase service-role key, Razorpay secrets, and internal proxy keys stay server-side.
 - The supported production domain is `https://www.fundersai.co.in`; `https://fundersai.co.in` redirects to it.
+- `https://synthesis.fundersai.co.in` is a dedicated Synthesis Studio subdomain. `frontend/middleware.ts` rewrites its root request to `/reports` and issues an HTTP 308 redirect from `www.fundersai.co.in/synthesis` to the subdomain.
 - FundersAI is research-only. Deterministic metrics and official-source evidence must not be presented as personalized investment advice.
 
 ## API Routes
@@ -54,6 +55,7 @@ Use this guide for repository conventions and quick orientation. For the authori
 - **Funds:** `/api/mf/[schemeCode]`, `/api/search`, `/api/funds/category`, `/api/funds/category/compare`, `/api/funds/compare/verdict`, `/api/funds/research/answer`, `/api/funds/research/evaluation`
 - **Billing:** `/api/create-order`, `/api/verify-payment`, `/api/billing/subscriptions`, `/api/billing/webhook`
 - **Admin:** `/api/admin/session`, overview/usage/coverage routes, resolver diagnostics, and document reparse/resolve/skip actions
+- **Reports (Synthesis Studio):** `/api/reports/stream`, `/api/reports/pdf`, `/api/reports/supported-funds` — served under `/reports` and its dedicated `synthesis.fundersai.co.in` subdomain
 - **Cron:** `/api/cron/sync-mf`
 
 `POST /api/chat` requires an authenticated Supabase user and returns `status`, `final`, or `error` SSE events. When a `session_id` is supplied, the proxy validates ownership, persists the owned exchange before final delivery, and strips server-only usage metadata.
@@ -81,10 +83,11 @@ See `docs/03_API_CONTRACTS.md` for the complete route inventory and security beh
 7. **MF ingestion states:** `pending`, `downloaded`, `needs_reparse`, `parsed`, `parsed_partial`, `needs_review`, `failed`, and `skipped_not_supported`.
 8. **Official-document research:** deterministic lexical rerank v2 remains the fallback with abstention. Direct OpenAI vector retrieval is configured separately from optional v3 cross-encoder/LLM grading and must use the same 1,536-dimension embedding model for documents and queries.
 9. **R2-first storage:** raw AMC documents stay in R2; Supabase stores query-critical structured rows and metadata.
+10. **Subdomain routing:** `frontend/middleware.ts` inspects the request `host` header to route `synthesis.fundersai.co.in` traffic to the `/reports` Synthesis Studio surface, separate from the main `www.fundersai.co.in` app shell.
 
 ## Testing Conventions
 
-- Backend tests live under `backend/tests/` (`68` tracked `test_*.py` modules at this update).
+- Backend tests live under `backend/tests/` (`86` tracked `test_*.py` modules at this update).
 - Frontend contract tests live under `frontend/tests/` (`16` tracked `*.test.mjs` files at this update).
 - Run focused tests for touched behavior first, followed by the relevant full suite.
 - Typical full checks from the repository root:

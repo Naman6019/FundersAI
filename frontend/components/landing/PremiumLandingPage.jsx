@@ -5,12 +5,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
-import {
-  ArrowRight,
-  List,
-  X
-} from "@phosphor-icons/react";
+import { ArrowRight } from "@phosphor-icons/react";
 import { HeroWave } from "@/components/ui/ai-input-hero";
+import { EcosystemHeader } from "@/components/ecosystem/EcosystemHeader";
+import { InteractiveHeroSandbox } from "@/components/workspace/InteractiveHeroSandbox";
 
 function AmbientGlow({ className = "", color = "rgba(0, 255, 157, 0.12)" }) {
   return (
@@ -368,7 +366,7 @@ function NoiseOverlay() {
 
 function PromptChips({ onSelect }) {
   return (
-    <div className="relative z-10 mx-auto w-full max-w-3xl">
+    <div className="relative z-10 mx-auto w-full max-w-5xl">
       <div className="flex flex-wrap justify-center gap-2">
         {promptChips.map((chip) => (
           <button
@@ -610,7 +608,6 @@ function AMCCoverageMatrix() {
 
 export default function FundersAILandingPage() {
   const router = useRouter();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [proofStats, setProofStats] = useState(defaultProofStats);
 
   useEffect(() => {
@@ -640,62 +637,8 @@ export default function FundersAILandingPage() {
     <main className="landing-editorial relative min-h-screen overflow-x-hidden bg-[var(--bg-base)] text-[var(--text-primary)]  selection:bg-[var(--accent-crimson)] selection:text-[var(--bg-base)]">
       <NoiseOverlay />
 
-      <header className="fixed top-0 z-40 w-full border-b border-[var(--line)] bg-[var(--bg-base)]/88 backdrop-blur-xl">
-        <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between px-5 py-4 sm:px-8">
-          <Link href="/" className="flex items-center gap-3">
-            <Image 
-              src="/FUNDERSAI-nobackground.png" 
-              alt="FundersAI Logo" 
-              width={132}
-              height={34}
-              unoptimized 
-              className="h-8 w-auto object-contain sm:h-10"
-              style={{ width: 'auto' }}
-            />
-          </Link>
-          <nav className="hidden items-center gap-8 text-sm font-semibold text-[var(--text-muted)] md:flex">
-            <Link href="/synthesis" className="transition font-bold text-blue-400 hover:text-blue-300">Synthesis</Link>
-            <Link href="/sample" className="transition hover:text-[var(--text-primary)]">Sample</Link>
-            <Link href="/how-it-works" className="transition hover:text-[var(--text-primary)]">Flow</Link>
-            <Link href="/intelligence" className="transition hover:text-[var(--text-primary)]">Intelligence</Link>
-            <Link href="/pricing" className="transition hover:text-[var(--text-primary)]">Pricing</Link>
-            <Link href="/data-trust" className="transition hover:text-[var(--text-primary)]">Data &amp; Trust</Link>
-            <Link href="/methodology" className="transition hover:text-[var(--text-primary)]">Methodology</Link>
-            <Link href="/mutual-funds" className="transition hover:text-[var(--text-primary)]">Funds</Link>
-          </nav>
-          <div className="flex items-center gap-4">
-            <Link href="/login" className="text-sm font-semibold text-[var(--text-muted)] transition hover:text-[var(--text-primary)]">
-              Login
-            </Link>
-            <div className="hidden md:block">
-              <EditorialButton href="/dashboard">Workspace</EditorialButton>
-            </div>
-            <button 
-              className="md:hidden p-1 text-[var(--text-muted)] transition hover:text-[var(--text-primary)]"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              aria-label="Toggle mobile menu"
-            >
-              {isMobileMenuOpen ? <X weight="bold" size={24} /> : <List weight="bold" size={24} />}
-            </button>
-          </div>
-        </div>
-        
-        {/* Mobile menu */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden border-t border-[var(--line)] bg-[var(--bg-base)]/95 px-5 py-4 flex flex-col gap-4 backdrop-blur-xl">
-            <Link href="/synthesis" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-bold text-blue-400 hover:text-blue-300">Synthesis Studio</Link>
-            <Link href="/sample" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Sample</Link>
-            <Link href="/how-it-works" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Flow</Link>
-            <Link href="/intelligence" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Intelligence</Link>
-            <Link href="/pricing" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Pricing</Link>
-            <Link href="/data-trust" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Data &amp; Trust</Link>
-            <Link href="/methodology" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)]">Methodology</Link>
-            <div className="mt-2" onClick={() => setIsMobileMenuOpen(false)}>
-              <EditorialButton href="/dashboard">Workspace</EditorialButton>
-            </div>
-          </div>
-        )}
-      </header>
+      <EcosystemHeader currentApp="none" />
+
       <HeroWave 
         title={<>Research funds <br /><span className="bg-gradient-to-r from-white via-white/80 to-[#00FF9D] bg-clip-text text-transparent opacity-90 mix-blend-lighten">with evidence</span></>}
         subtitle="Compare Indian mutual funds with deterministic metrics, official-source evidence, and visible data limits."
@@ -706,6 +649,9 @@ export default function FundersAILandingPage() {
       >
         <PromptChips onSelect={(chip) => router.push(`/dashboard?query=${encodeURIComponent(chip)}`)} />
       </HeroWave>
+
+      {/* Interactive Sandbox Hero Component */}
+      <InteractiveHeroSandbox />
 
       <DataTrailRibbon />
 

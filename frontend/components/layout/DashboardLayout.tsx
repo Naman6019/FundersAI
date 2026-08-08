@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/layout/AppSidebar';
@@ -41,8 +40,8 @@ import type { UserTier } from '@/lib/billing/tiers';
 import { useDataHealthContext } from '@/components/data-health/DataHealthProvider';
 import { dataHealthSummary, statusDotClass } from '@/lib/dataHealth';
 import { Panel } from '@/components/ui/Panel';
-import { formatDistanceToNow } from 'date-fns';
 import LandingThemeToggle from '@/components/landing/LandingThemeToggle';
+import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
 
 const HEADER_HEIGHT = 64;
 const MAIN_PADDING = 24;
@@ -709,62 +708,58 @@ export default function DashboardLayout() {
         <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_0%,rgba(102,163,255,0.06),transparent_65%)]" />
 
         <div className="relative z-10 flex flex-col flex-1 h-full w-full overflow-hidden bg-transparent">
-          <header className="h-16 shrink-0 flex items-center justify-between border-b border-white/10 px-4 sm:px-6">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger className="text-slate-200 hover:text-white transition" />
-              <div className="hidden sm:flex items-center gap-3">
-                <Image src="/FUNDERSAI-nobackground.png" alt="FundersAI Logo" width={28} height={28} className="object-contain" />
-                <div>
-                  <p className="text-sm font-semibold text-white">FundersAI Research</p>
-                  <p className="text-xs text-slate-400">Research chat + intent-driven canvas</p>
+          <EcosystemHeader
+            currentApp="research"
+            dataTrustHref="/dashboard/data-trust"
+            containerClassName="w-full px-4 sm:px-6"
+            leading={<SidebarTrigger className="text-slate-200 hover:text-white transition shrink-0" />}
+            centerSlot={
+              <div className="hidden relative max-w-xs w-full sm:block">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 h-3.5 w-3.5" />
+                <input
+                  type="text"
+                  placeholder="Search tickers, funds, research..."
+                  className="w-full bg-black/20 border border-white/10 rounded-lg py-1.5 pl-8 pr-3 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const target = e.target as HTMLInputElement;
+                      const query = target.value.trim();
+                      if (query) {
+                        setPendingQuery(query);
+                        setActiveTab('research');
+                        target.value = '';
+                      }
+                    }
+                  }}
+                />
+              </div>
+            }
+            trailing={
+              <div className="flex items-center gap-3 shrink-0">
+                {currentTier === 'free' && (
+                  <Link
+                    href="/billing"
+                    className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 text-xs font-semibold text-white transition hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-950/40"
+                  >
+                    <Sparkles className="h-3.5 w-3.5 text-emerald-100" />
+                    <span className="hidden sm:inline tracking-wide">Upgrade</span>
+                  </Link>
+                )}
+                <Link
+                  href="/dashboard/data-trust"
+                  className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200 transition hover:border-amber-400/45 hover:text-white"
+                  title={`Data & Trust: ${healthSummary.label}. Last checked ${lastSuccessfulCheck || 'pending'}.`}
+                >
+                  <span className={`h-2 w-2 rounded-full ${statusDotClass(healthSummary.status)}`} aria-hidden="true" />
+                  <span className="hidden md:inline">Data &amp; Trust</span>
+                  <span className="hidden max-w-40 truncate font-normal text-slate-400 lg:inline">{healthSummary.label}</span>
+                </Link>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/15 bg-white/[0.04] hover:bg-white/10 transition-colors">
+                  <LandingThemeToggle />
                 </div>
               </div>
-            </div>
-
-            <div className="hidden relative max-w-xs w-full sm:block">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 h-3.5 w-3.5" />
-              <input
-                type="text"
-                placeholder="Search tickers, funds, research..."
-                className="w-full bg-black/20 border border-white/10 rounded-lg py-1.5 pl-8 pr-3 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#00FF9D]/50 focus:border-[#00FF9D]/50 transition-all"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const target = e.target as HTMLInputElement;
-                    const query = target.value.trim();
-                    if (query) {
-                      setPendingQuery(query);
-                      setActiveTab('research');
-                      target.value = '';
-                    }
-                  }
-                }}
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              {currentTier === 'free' && (
-                <Link
-                  href="/billing"
-                  className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 px-4 text-xs font-semibold text-white transition hover:from-blue-500 hover:to-blue-400 shadow-[0_0_15px_rgba(37,99,235,0.2)]"
-                >
-                  <Sparkles className="h-3.5 w-3.5 text-blue-100" />
-                  <span className="hidden sm:inline tracking-wide">Upgrade</span>
-                </Link>
-              )}
-              <Link
-                href="/dashboard/data-trust"
-                className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200 transition hover:border-[#66a3ff]/45 hover:text-white"
-                title={`Data & Trust: ${healthSummary.label}. Last checked ${lastSuccessfulCheck || 'pending'}.`}
-              >
-                <span className={`h-2 w-2 rounded-full ${statusDotClass(healthSummary.status)}`} aria-hidden="true" />
-                <span>Data &amp; Trust</span>
-                <span className="hidden max-w-40 truncate font-normal text-slate-400 lg:inline">{healthSummary.label}</span>
-              </Link>
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/15 bg-white/[0.04] hover:bg-white/10 transition-colors">
-                <LandingThemeToggle />
-              </div>
-            </div>
-          </header>
+            }
+          />
 
           <div className="flex overflow-hidden relative z-10 w-full" style={{ height: `calc(100vh - ${HEADER_HEIGHT}px)` }}>
             <div className="flex-1 min-w-0 h-full p-6 overflow-hidden">

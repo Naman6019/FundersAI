@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import PublicHeader from '@/components/layout/PublicHeader';
+import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
 import PublicFooter from '@/components/layout/PublicFooter';
 
 export const metadata: Metadata = {
@@ -43,7 +43,7 @@ const abstentionConditions = [
 export default function MethodologyGuardrailsPage() {
   return (
     <div className="min-h-screen bg-[#070b12] text-[#dce8fa] flex flex-col selection:bg-blue-500/30">
-      <PublicHeader />
+      <EcosystemHeader />
 
       <main className="flex-1 max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-20 w-full space-y-10">
         <div className="flex items-center gap-2 text-xs font-mono text-gray-400">

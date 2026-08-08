@@ -28,11 +28,13 @@ export interface ChatApiResponse extends CanvasPayload {
   response_message_id?: string;
 }
 
+// payload's shape depends on event.type: a lightweight { message } object for
+// agent_update progress events, but the full ChatApiResponse on the final event.
 type ChatStreamEvent = {
   type?: string;
   message?: string;
   agent?: string;
-  payload?: any;
+  payload?: { message?: string; [key: string]: unknown };
 };
 
 function parseEvent(frame: string): ChatStreamEvent | null {
@@ -81,7 +83,10 @@ export async function readChatStream(
       throw new Error(event.message || 'FundersAI research service could not complete the request.');
     }
     if (event.type === 'final' && event.payload) {
-      finalPayload = event.payload;
+      // The protocol guarantees a full ChatApiResponse shape specifically on the
+      // final event — not structurally provable from the lightweight payload type
+      // shared with progress events, hence the explicit assertion here only.
+      finalPayload = event.payload as ChatApiResponse;
     }
   };
 

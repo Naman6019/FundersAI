@@ -1,7 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { motion } from "framer-motion";
+
+const emptySubscribe = () => () => {};
+const getClientSnapshot = () => true;
+const getServerSnapshot = () => false;
 
 type Particle = {
   id: number;
@@ -44,6 +48,12 @@ export const Sparkles = ({
       })),
     [density, speed],
   );
+
+  // Purely decorative — mount client-only so framer-motion's SSR/hydration
+  // percentage-precision mismatch on these transforms never fires. useSyncExternalStore
+  // (rather than a useState+useEffect mount flag) avoids the extra render pass entirely.
+  const mounted = useSyncExternalStore(emptySubscribe, getClientSnapshot, getServerSnapshot);
+  if (!mounted) return null;
 
   return (
     <div className={className} style={{ position: "absolute", overflow: "hidden" }}>

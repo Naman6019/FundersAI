@@ -11,6 +11,7 @@ import {
   RefreshCw,
   ShieldCheck,
 } from 'lucide-react';
+import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
 import StatusLabel from '@/components/data-health/StatusLabel';
 import { useDataHealthContext } from '@/components/data-health/DataHealthProvider';
 import {
@@ -110,12 +111,13 @@ export default function DataTrustPage() {
   ];
 
   return (
-    <main className="min-h-screen bg-[#030711] text-white">
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#030711]/92 backdrop-blur-xl">
+    <main className="min-h-screen bg-terminal-bg text-white">
+      <EcosystemHeader currentApp="datatrust" dataTrustHref="/dashboard/data-trust" />
+      <div className="sticky top-16 z-40 border-b border-terminal-border bg-terminal-bg/92 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
           <div>
             <Link href="/dashboard" className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 transition hover:text-white">
-              <ArrowLeft className="h-3.5 w-3.5" /> Research workspace
+              <ArrowLeft className="h-3.5 w-3.5" /> Back to Research
             </Link>
             <h1 className="mt-1 text-xl font-semibold">Data &amp; Trust</h1>
           </div>
@@ -130,20 +132,20 @@ export default function DataTrustPage() {
               type="button"
               onClick={() => void refresh()}
               disabled={isRefreshing}
-              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[#66a3ff]/30 bg-[#66a3ff]/10 px-3 text-xs font-semibold text-[#cce0ff] transition hover:border-[#66a3ff]/60 disabled:opacity-60"
+              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 text-xs font-semibold text-cyan-100 transition hover:border-cyan-400/60 disabled:opacity-60"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
               {isRefreshing ? 'Checking…' : 'Refresh status'}
             </button>
           </div>
         </div>
-      </header>
+      </div>
 
       <div className="mx-auto max-w-7xl space-y-16 px-5 py-10 sm:px-8 sm:py-14">
         <section aria-labelledby="live-data-title">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00FF9D]">Read-only production view</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-400">Read-only production view</p>
               <h2 id="live-data-title" className="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl">What the workspace can use now</h2>
               <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
                 These labels are refreshed from stored production data every minute while this page is visible.
@@ -166,7 +168,7 @@ export default function DataTrustPage() {
         </section>
 
         <section aria-labelledby="pipeline-title">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#66a3ff]">Pipeline boundaries</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">Pipeline boundaries</p>
           <h2 id="pipeline-title" className="mt-3 text-3xl font-semibold tracking-tight">Acquisition and promotion stay separate</h2>
           <p className="mt-4 max-w-4xl text-sm leading-7 text-slate-300">
             Finding or downloading an official document is evidence of acquisition, not proof that its contents are ready for answers.
@@ -176,7 +178,7 @@ export default function DataTrustPage() {
             {PIPELINE_STAGES.map(({ title, body, icon: Icon }, index) => (
               <article key={title} className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                 <div className="flex items-center justify-between">
-                  <Icon className="h-5 w-5 text-[#00FF9D]" />
+                  <Icon className="h-5 w-5 text-amber-400" />
                   <span className="text-xs text-slate-500">0{index + 1}</span>
                 </div>
                 <h3 className="mt-5 text-lg font-semibold">{title}</h3>
@@ -189,7 +191,7 @@ export default function DataTrustPage() {
         <section aria-labelledby="documents-title" className="rounded-3xl border border-white/10 bg-white/[0.025] p-5 sm:p-8">
           <div className="flex flex-wrap items-start justify-between gap-5">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00FF9D]">Official AMC documents</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-400">Official AMC documents</p>
               <h2 id="documents-title" className="mt-3 text-2xl font-semibold">Acquisition and parser status</h2>
             </div>
             <div className="text-[11px] leading-5 text-slate-500">
@@ -241,7 +243,7 @@ export default function DataTrustPage() {
         </section>
 
         <section aria-labelledby="labels-title">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#66a3ff]">Label guide</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">Label guide</p>
           <h2 id="labels-title" className="mt-3 text-3xl font-semibold tracking-tight">What every status means</h2>
           <div className="mt-7 flex flex-wrap gap-3">
             {Object.entries(STATUS_GLOSSARY).map(([status, description]) => (
@@ -260,10 +262,10 @@ export default function DataTrustPage() {
           </div>
         </section>
 
-        <section aria-labelledby="why-title" className="overflow-hidden rounded-3xl border border-[#00FF9D]/20 bg-[linear-gradient(135deg,rgba(0,255,157,0.09),rgba(102,163,255,0.06))] p-7 sm:p-10">
+        <section aria-labelledby="why-title" className="overflow-hidden rounded-3xl border border-amber-400/20 bg-[linear-gradient(135deg,rgba(245,158,11,0.09),rgba(6,182,212,0.06))] p-7 sm:p-10">
           <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00FF9D]">Product motivation</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-400">Product motivation</p>
               <h2 id="why-title" className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Why FundersAI was built</h2>
               <p className="mt-5 text-sm leading-7 text-slate-200">
                 Mutual-fund research is fragmented across factsheets, portfolio disclosures, changing web pages, and market-data providers.
@@ -282,7 +284,7 @@ export default function DataTrustPage() {
                 'Unsupported claims are qualified or refused.',
               ].map((item) => (
                 <div key={item} className="flex items-start gap-3 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-slate-200">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#00FF9D]" />
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
                   {item}
                 </div>
               ))}

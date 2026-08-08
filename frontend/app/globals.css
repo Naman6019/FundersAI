@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -8,8 +8,20 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --color-background: #0b0c10;
+  --color-background: #07080c;
   --color-foreground: #c5c6c7;
+
+  /* Terminal Modernism Tokens - single accent system for the whole ecosystem shell */
+  --color-terminal-bg: #07080c;
+  --color-terminal-card: rgba(15, 17, 26, 0.75);
+  --color-terminal-card-hover: rgba(22, 25, 38, 0.85);
+  --color-terminal-emerald: #10b981;
+  --color-terminal-cyan: #06b6d4;
+  --color-terminal-amber: #f59e0b;
+  --color-terminal-rose: #f43f5e;
+  --color-terminal-border: rgba(255, 255, 255, 0.08);
+  --color-terminal-text: #e2e8f0;
+  --color-terminal-muted: #8a94a6;
 
   /* Stitch Design Tokens - Prefixed to avoid collision with standard Tailwind keywords */
   --color-on-surface: #e2e2e3;
@@ -361,9 +373,9 @@
     animation: none;
   }
 
-  .landing-editorial *,
-  .landing-editorial *::before,
-  .landing-editorial *::after {
+  html,
+  body,
+  * {
     scroll-behavior: auto !important;
   }
 }
@@ -415,7 +427,15 @@
 
   html {
     @apply font-sans;
+    scroll-behavior: smooth;
   }
+}
+
+/* Smooth scrolling for internal scroll containers (chat panes, canvas detail views,
+   report sections) — html's scroll-behavior only covers window-level scrolling, so
+   the same behavior is opted into explicitly wherever this class is used. */
+.custom-scrollbar {
+  scroll-behavior: smooth !important;
 }
 
 /* Material Symbols Rendering Fix */

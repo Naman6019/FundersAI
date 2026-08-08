@@ -10,6 +10,9 @@ import { AnimatedShinyText } from "@/components/ui/animated-shiny-text";
 import { Sparkles } from "@/components/ui/sparkles";
 import { FlickeringGrid } from "@/components/ui/flickering-grid";
 import { VerticalCutReveal } from "@/components/ui/vertical-cut-reveal";
+import { AgentGraphVisualizer } from "@/components/synthesis/AgentGraphVisualizer";
+import { BentoReportGrid } from "@/components/synthesis/BentoReportGrid";
+import { InstitutionalPDFTemplate } from "@/components/synthesis/InstitutionalPDFTemplate";
 
 // Data Definitions
 const heroPresets = [
@@ -107,22 +110,27 @@ export default function ReportsLandingPage() {
     };
 
     return (
-        <div className="relative flex-1 flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 py-16 overflow-hidden">
-            {/* Optimized High-Performance Flickering Grid Background */}
-            <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none [mask-image:radial-gradient(1400px_circle_at_center,white_75%,transparent_100%)]">
-                <FlickeringGrid
-                    squareSize={6}
-                    gridGap={10}
-                    color="rgb(37, 99, 235)"
-                    maxOpacity={0.22}
-                    flickerChance={0.2}
-                    className="w-full h-full"
-                />
-            </div>
+        <div className="relative min-h-screen flex flex-col bg-[#07080C] text-white">
+            <InstitutionalPDFTemplate />
 
-            <div className="max-w-[1800px] w-full space-y-24 relative z-10 px-4 sm:px-6 lg:px-8">
-                {/* Hero Header Section */}
-                <div className="text-center space-y-8 max-w-4xl mx-auto">
+            <div className="relative flex-1 flex flex-col items-center px-4 sm:px-6 lg:px-8 py-12 overflow-hidden">
+                {/* Optimized High-Performance Flickering Grid Background */}
+                <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none [mask-image:radial-gradient(2000px_circle_at_center_top,white_75%,transparent_100%)]">
+                    <FlickeringGrid
+                        squareSize={6}
+                        gridGap={10}
+                        color="rgb(6, 182, 212)"
+                        maxOpacity={0.22}
+                        flickerChance={0.2}
+                        className="w-full h-full"
+                    />
+                </div>
+
+                <div className="max-w-[1800px] w-full space-y-16 relative z-10 px-4 sm:px-6 lg:px-8">
+                    {/* Hero Header Section — centered within its own viewport-scale band so later
+                        sections (agent graph, bento grid, studio frame) flow below the fold cleanly
+                        instead of being forced to co-center with the hero and getting clipped. */}
+                    <div className="min-h-[80vh] flex flex-col items-center justify-center text-center space-y-6 max-w-4xl mx-auto">
                     {/* Status Badge */}
                     <motion.div
                         initial={{ opacity: 0, y: -8 }}
@@ -205,6 +213,11 @@ export default function ReportsLandingPage() {
                             Supported Directory
                         </Link>
                     </motion.div>
+                    </div>
+
+                    {/* Interactive Multi-Agent Studio Graph & Bento Grid */}
+                    <AgentGraphVisualizer />
+                    <BentoReportGrid onExportPDF={() => window.print()} />
 
                     {/* Interactive Hero Studio Workspace Frame */}
                     <motion.div
@@ -328,7 +341,6 @@ export default function ReportsLandingPage() {
                             </div>
                         </div>
                     </motion.div>
-                </div>
 
                 {/* SECTION 1: One-Click Popular Comparison Pills */}
                 <motion.div
@@ -824,6 +836,7 @@ export default function ReportsLandingPage() {
                     })
                 }}
             />
+        </div>
         </div>
     );
 }

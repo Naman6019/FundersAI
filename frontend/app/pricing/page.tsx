@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import PublicHeader from '@/components/layout/PublicHeader';
+import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
 import PublicFooter from '@/components/layout/PublicFooter';
 import { MagicCard } from '@/components/ui/magic-card';
 
@@ -48,7 +48,7 @@ export default function PricingPage() {
       {/* Background Subtle Radial Aura */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-blue-600/10 blur-[140px] pointer-events-none rounded-full" />
       
-      <PublicHeader />
+      <EcosystemHeader />
 
       <main className="flex-1 max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-20 w-full space-y-16 relative z-10">
         {/* Breadcrumb */}
