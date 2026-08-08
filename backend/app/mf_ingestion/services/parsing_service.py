@@ -1658,28 +1658,57 @@ def _select_best_scheme_candidate(target_name: str, candidates: list[dict[str, A
     return _pick_best_scheme_candidate(target_name, family_candidates)
 
 
+_FAMILY_CATEGORY_SUBS = (
+    (re.compile(r"\bfund\s+of\s+funds?\b"), "fof"),
+    (re.compile(r"\bflexi\s+cap\b"), "flexicap"),
+    (re.compile(r"\bmid\s+cap\b"), "midcap"),
+    (re.compile(r"\bsmall\s+cap\b"), "smallcap"),
+    (re.compile(r"\blarge\s+cap\b"), "largecap"),
+)
+
+_FAMILY_PLAN_QUALIFIER_WORDS = {
+    "plan",
+    "option",
+    "direct",
+    "regular",
+    "growth",
+    "idcw",
+    "dividend",
+    "cumulative",
+    "payout",
+    "payment",
+    "reinvestment",
+    "bonus",
+}
+
+
+def _apply_family_category_subs(text: str) -> str:
+    for pattern, replacement in _FAMILY_CATEGORY_SUBS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
 def _normalize_family_scheme_name(value: object) -> str:
-    text = _normalize_lookup_text(value)
-    text = re.sub(r"\bfund\s+of\s+funds?\b", "fof", text)
-    text = re.sub(r"\bflexi\s+cap\b", "flexicap", text)
-    text = re.sub(r"\bmid\s+cap\b", "midcap", text)
-    text = re.sub(r"\bsmall\s+cap\b", "smallcap", text)
-    text = re.sub(r"\blarge\s+cap\b", "largecap", text)
-    removable = {
-        "plan",
-        "option",
-        "direct",
-        "regular",
-        "growth",
-        "idcw",
-        "dividend",
-        "cumulative",
-        "payout",
-        "reinvestment",
-        "bonus",
-    }
-    tokens = [token for token in text.split() if token not in removable]
-    return " ".join(tokens)
+    # AMFI scheme names follow "<Scheme Name> - <Plan> - <Option>" (e.g. "... - Growth
+    # - Regular Plan"). Plan/option qualifier words like "regular", "growth", "direct"
+    # only ever function as noise in the *qualifier* segments after the first hyphen.
+    # Stripping them from the whole string is wrong when a word like "Regular" is part
+    # of the scheme's own brand name (e.g. "Regular Savings Fund", "Regular Gold
+    # Savings Fund") rather than a plan qualifier — that collapsed two genuinely
+    # different schemes into one family (see GitHub issue #2: ABSL "Regular Savings
+    # Fund" was silently merged into "Savings Fund"'s family and inherited its
+    # benchmark). Raw factsheet scheme names typically carry no plan/option suffix at
+    # all, so the base segment is usually the entire string.
+    raw = str(value or "")
+    # Only a hyphen with whitespace on both sides is a segment separator; a bare
+    # hyphen joining a compound word (e.g. "Multi-Cap Fund") must stay in the base.
+    segments = re.split(r"\s+[–—-]\s+", raw, maxsplit=1)
+    base_raw = segments[0]
+    suffix_raw = segments[1] if len(segments) > 1 else ""
+    base = _apply_family_category_subs(_normalize_lookup_text(base_raw))
+    suffix = _apply_family_category_subs(_normalize_lookup_text(suffix_raw))
+    suffix_tokens = [token for token in suffix.split() if token not in _FAMILY_PLAN_QUALIFIER_WORDS]
+    return " ".join(base.split() + suffix_tokens)
 
 
 def _is_direct_growth_name(name: object) -> bool:

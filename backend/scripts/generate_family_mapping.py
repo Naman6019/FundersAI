@@ -8,35 +8,53 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.database import supabase
 
-def clean_scheme_name(name: str) -> str:
-    """Removes variant-specific noise from scheme names to generate a root family name."""
-    if not name:
-        return ""
-    
-    # Base cleanup
-    n = name.lower()
+_REMOVE_PHRASES = [
+    r'\bdirect plan\b', r'\bdirect\b',
+    r'\bregular plan\b', r'\bregular\b',
+    r'\bgrowth plan\b', r'\bgrowth\b',
+    r'\bidcw\b', r'\bdividend\b', r'\breinvestment\b', r'\bpayout\b', r'\bpayment\b',
+    r'\binstitutional plan\b', r'\binstitutional\b',
+    r'\bbonus\b', r'\boption\b', r'\bplan\b', r'\bhalf yearly\b', r'\bquarterly\b', r'\bmonthly\b'
+]
+
+
+def _base_cleanup(n: str) -> str:
+    n = n.lower()
     n = n.replace("smallcap", "small cap")
     n = n.replace("midcap", "mid cap")
     n = n.replace("largecap", "large cap")
     n = n.replace("bluechip", "blue chip")
-    
-    # Remove common variants
-    remove_phrases = [
-        r'\bdirect plan\b', r'\bdirect\b',
-        r'\bregular plan\b', r'\bregular\b',
-        r'\bgrowth plan\b', r'\bgrowth\b',
-        r'\bidcw\b', r'\bdividend\b', r'\breinvestment\b', r'\bpayout\b',
-        r'\binstitutional plan\b', r'\binstitutional\b',
-        r'\bbonus\b', r'\boption\b', r'\bplan\b', r'\bhalf yearly\b', r'\bquarterly\b', r'\bmonthly\b'
-    ]
-    
-    for phrase in remove_phrases:
-        n = re.sub(phrase, '', n)
-        
+    return n
+
+
+def clean_scheme_name(name: str) -> str:
+    """Removes variant-specific noise from scheme names to generate a root family name.
+
+    AMFI scheme names follow "<Scheme Name> - <Plan> - <Option>" (e.g. "... - Growth -
+    Regular Plan"). Plan/option noise words like "regular", "growth", "direct" only ever
+    function as noise in the *qualifier* segment after the first hyphen. Stripping them
+    from the whole string is wrong when a word like "Regular" is part of the scheme's own
+    brand name (e.g. "Regular Savings Fund") rather than a plan qualifier -- that
+    collapsed genuinely different schemes into one family and made them inherit each
+    other's benchmark/risk values (GitHub issue #2). Only a hyphen with whitespace on
+    both sides is a segment separator; a bare hyphen joining a compound word (e.g.
+    "Multi-Cap Fund") must stay in the base name untouched.
+    """
+    if not name:
+        return ""
+
+    segments = re.split(r'\s+-\s+', name, maxsplit=1)
+    base = _base_cleanup(segments[0])
+    suffix = _base_cleanup(segments[1]) if len(segments) > 1 else ''
+
+    for phrase in _REMOVE_PHRASES:
+        suffix = re.sub(phrase, '', suffix)
+
+    n = f"{base} {suffix}"
     # Clean up punctuation and extra spaces
     n = re.sub(r'[^a-z0-9\s]', ' ', n)
     n = " ".join(n.split())
-    
+
     return n
 
 def generate_family_id(clean_name: str) -> str:
