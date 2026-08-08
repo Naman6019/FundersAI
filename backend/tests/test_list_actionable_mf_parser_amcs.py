@@ -29,7 +29,7 @@ def test_actionable_matrix_requires_exact_ids_for_restricted_lane() -> None:
     ) == ["nippon"]
 
 
-@pytest.mark.parametrize("amc", ["absl", "icici", "kotak"])
+@pytest.mark.parametrize("amc", ["icici", "kotak"])
 def test_actionable_matrix_rejects_frozen_amcs(amc) -> None:
     with pytest.raises(ValueError, match="github_issue_2"):
         actionable_matrix([], amc)

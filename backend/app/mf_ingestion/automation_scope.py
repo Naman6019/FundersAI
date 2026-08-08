@@ -9,8 +9,11 @@ AutomationOperation = Literal["discovery", "parser_retry", "disclosure_parse", "
 
 GREEN_AMCS = ("ppfas", "sbi", "mirae")
 APPROVED_RESTRICTED_AMCS = ("nippon", "uti")
-VALIDATION_ONLY_AMCS = ("axis", "dsp", "motilal", "hdfc")
-FROZEN_ISSUE_2_AMCS = ("aditya_birla", "icici", "kotak")
+# aditya_birla was unfrozen from FROZEN_ISSUE_2_AMCS after the shared family-merge bug
+# (see GitHub issue #2) was fixed and its June 2026 promotion dry-run passed with zero
+# internal/existing conflicts across all scopes.
+VALIDATION_ONLY_AMCS = ("axis", "dsp", "motilal", "hdfc", "aditya_birla")
+FROZEN_ISSUE_2_AMCS = ("icici", "kotak")
 
 LANE_AMCS: dict[str, tuple[str, ...]] = {
     "green": GREEN_AMCS,

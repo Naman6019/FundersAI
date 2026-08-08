@@ -26,10 +26,25 @@ def test_schedule_always_resolves_to_green_lane():
     ) == GREEN_AMCS
 
 
-@pytest.mark.parametrize("amc", ["absl", "aditya_birla", "icici", "kotak"])
+@pytest.mark.parametrize("amc", ["icici", "kotak"])
 def test_issue_2_amcs_are_always_rejected(amc):
     with pytest.raises(ValueError, match="github_issue_2"):
         resolve_automation_scope(operation="parser_retry", raw_amcs=amc)
+
+
+@pytest.mark.parametrize("amc", ["absl", "aditya_birla"])
+def test_aditya_birla_was_unfrozen_after_the_family_merge_fix(amc):
+    """aditya_birla (and its 'absl' alias) moved from FROZEN_ISSUE_2_AMCS to
+    VALIDATION_ONLY_AMCS after the shared family-merge bug (GitHub issue #2) was fixed
+    and its June 2026 promotion dry-run passed with zero internal/existing conflicts.
+    icici and kotak remain frozen pending their own remaining conflicts."""
+    resolved = resolve_automation_scope(
+        operation="parser_retry",
+        lane="validation_only",
+        raw_amcs=amc,
+        source_document_ids="doc-1",
+    )
+    assert resolved == ("aditya_birla",)
 
 
 def test_restricted_and_validation_mutations_require_exact_document_ids():
