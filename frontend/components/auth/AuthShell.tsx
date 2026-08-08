@@ -11,63 +11,71 @@ type AuthShellProps = {
 
 export default function AuthShell({ title, description, children }: AuthShellProps) {
   return (
-    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#050505] px-4 py-10 text-white selection:bg-[#00FF9D]/30 sm:px-6">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,255,157,0.12),transparent_38rem)]" />
-      <div className="pointer-events-none absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#00FF9D]/5 blur-[110px]" />
+    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#050810] px-4 py-10 text-white selection:bg-blue-500/30 sm:px-6">
+      {/* Cobalt Radial Background & Grid */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(37,99,235,0.14),transparent_42rem)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(rgba(59,130,246,0.08)_1px,transparent_1px)] [background-size:24px_24px] opacity-40" />
 
-      <div className="relative z-10 w-full max-w-[430px]">
-        <section className="rounded-2xl border border-white/10 bg-[#111415]/95 p-6 shadow-[0_28px_80px_rgba(0,0,0,0.55)] backdrop-blur-xl sm:p-8">
-          <div className="mb-7 flex flex-col items-center text-center">
+      <div className="relative z-10 w-full max-w-[440px]">
+        {/* Structural Slab Vault Card */}
+        <section className="rounded-2xl border border-gray-800/90 bg-[#070b12]/95 p-6 shadow-2xl backdrop-blur-xl sm:p-8 border-t-blue-500/30 shadow-blue-950/20">
+          <div className="mb-6 flex flex-col items-center text-center">
             <Link
               href="/"
               aria-label="FundersAI home"
-              className="relative mb-5 block h-[72px] w-[250px] max-w-full overflow-hidden rounded-xl border border-white/10 bg-[#343337] shadow-[0_12px_32px_rgba(0,0,0,0.35)] transition hover:border-[#00FF9D]/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FF9D]"
+              className="relative mb-4 block h-[68px] w-[240px] max-w-full overflow-hidden rounded-xl border border-gray-800 bg-[#0b0f19] p-2 transition hover:border-blue-500/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <Image
-                src="/FUNDERSAI-background.png"
+                src="/FUNDERSAI-nobackground.png"
                 alt="FundersAI"
                 fill
                 priority
-                sizes="250px"
-                className="object-cover object-center"
+                sizes="240px"
+                className="object-contain p-2"
+                unoptimized
               />
             </Link>
-            <h1 className="text-2xl font-semibold tracking-[-0.025em] text-white">{title}</h1>
-            <p className="mt-2 max-w-sm text-sm leading-6 text-[#9aa3a1]">{description}</p>
+            
+            <div className="font-mono text-[10px] uppercase font-bold tracking-widest text-blue-400 px-2.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 mb-3">
+              [ SECURE_IDENTITY_VAULT ]
+            </div>
+
+            <h1 className="text-2xl font-bold tracking-tight text-white font-serif-display">{title}</h1>
+            <p className="mt-1.5 max-w-sm text-xs leading-5 text-gray-400 font-sans">{description}</p>
           </div>
 
           {children}
 
-          <p className="mt-6 text-center text-[11px] leading-5 text-[#78817f]">
-            By continuing, you agree to the{' '}
-            <Link href="/terms" className="underline underline-offset-2 transition hover:text-white">
+          <p className="mt-6 text-center font-mono text-[10px] leading-5 text-gray-500 uppercase tracking-wider">
+            By continuing, you agree to{' '}
+            <Link href="/terms" className="text-gray-400 underline underline-offset-2 hover:text-blue-400">
               Terms
             </Link>{' '}
-            and acknowledge the{' '}
-            <Link href="/privacy" className="underline underline-offset-2 transition hover:text-white">
+            &amp;{' '}
+            <Link href="/privacy" className="text-gray-400 underline underline-offset-2 hover:text-blue-400">
               Privacy Policy
             </Link>
             .
           </p>
         </section>
 
-        <div className="mt-5 rounded-xl border border-white/[0.07] bg-[#111415]/70 px-4 py-3">
-          <div className="flex items-center justify-center gap-2 text-xs font-medium text-[#c3ccca]">
-            <ShieldCheck aria-hidden="true" className="h-4 w-4 text-[#00FF9D]" />
-            Research workspace with visible evidence and limits
+        <div className="mt-4 rounded-xl border border-gray-800/80 bg-[#070b12]/80 p-3.5 backdrop-blur-md">
+          <div className="flex items-center justify-center gap-2 font-mono text-[11px] font-semibold text-gray-300">
+            <ShieldCheck aria-hidden="true" className="h-4 w-4 text-blue-400" />
+            <span>Institutional Research Workspace</span>
           </div>
-          <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-[11px] text-[#78817f]">
+          <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 font-mono text-[10px] text-gray-500 uppercase tracking-wider">
             <span className="inline-flex items-center gap-1">
-              <Check aria-hidden="true" className="h-3 w-3 text-[#00FF9D]" />
-              Research-only
+              <Check aria-hidden="true" className="h-3 w-3 text-emerald-400" />
+              Verified Evidence
             </span>
             <span className="inline-flex items-center gap-1">
-              <Check aria-hidden="true" className="h-3 w-3 text-[#00FF9D]" />
-              Official evidence where available
+              <Check aria-hidden="true" className="h-3 w-3 text-emerald-400" />
+              SEBI Ingested
             </span>
             <span className="inline-flex items-center gap-1">
-              <Check aria-hidden="true" className="h-3 w-3 text-[#00FF9D]" />
-              Data limits shown
+              <Check aria-hidden="true" className="h-3 w-3 text-emerald-400" />
+              RLS Encrypted
             </span>
           </div>
         </div>

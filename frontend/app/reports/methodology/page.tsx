@@ -25,22 +25,22 @@ export default function MethodologyPage() {
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full space-y-10">
             {/* Breadcrumb */}
             <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
+                <Link href="/" className="hover:text-blue-400">FundersAI</Link>
+                <span>/</span>
                 <Link href="/reports" className="hover:text-blue-400">Synthesis</Link>
                 <span>/</span>
-                <span className="text-gray-200">Architecture</span>
-                <span>/</span>
-                <span className="text-blue-400">AI Methodology & E-E-A-T</span>
+                <span className="text-blue-400 font-bold">[ METHODOLOGY ]</span>
             </div>
 
             {/* Header */}
             <div className="space-y-4 max-w-3xl">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono">
-                    <span>🛡️ Zero-Hallucination Policy</span>
+                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-mono font-bold uppercase tracking-widest">
+                    <span>[ GUARANTEE: ZERO_HALLUCINATION_POLICY ]</span>
                 </div>
-                <h1 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight">
-                    Deterministic <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400">Financial Intelligence</span>
+                <h1 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight font-serif-display">
+                    Deterministic <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-400 to-emerald-400">Financial Intelligence</span>
                 </h1>
-                <p className="text-sm sm:text-base text-gray-400 leading-relaxed">
+                <p className="text-sm sm:text-base text-gray-400 leading-relaxed font-sans">
                     Synthesis by FundersAI operates on strict quantitative boundaries. Every metric, Sharpe ratio, and portfolio weighting in our reports is verified against official AMC disclosures.
                 </p>
             </div>

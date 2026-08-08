@@ -9,44 +9,50 @@ export default function PublicHeader() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
-    <header className="fixed top-0 z-50 w-full border-b border-white/10 bg-[#070b12]/90 backdrop-blur-xl transition-all">
-      <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between px-5 py-4 sm:px-8">
-        <Link href="/" className="flex items-center gap-3">
+    <header className="fixed top-0 z-50 w-full border-b border-gray-800/80 bg-[#050810]/90 backdrop-blur-xl transition-all">
+      <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between px-5 py-3.5 sm:px-8">
+        <Link href="/" className="flex items-center gap-2.5 group">
           <Image
             src="/FUNDERSAI-nobackground.png"
             alt="FundersAI Logo"
-            width={132}
-            height={34}
+            width={128}
+            height={32}
             unoptimized
-            className="h-8 w-auto object-contain sm:h-10"
+            className="h-8 w-auto object-contain transition-transform group-hover:scale-[1.02]"
             style={{ width: 'auto' }}
             priority
           />
+          <span className="text-gray-700 font-light text-xs">/</span>
+          <span className="font-mono text-[10px] uppercase font-bold tracking-widest text-blue-400 px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20">
+            [ TERMINAL ]
+          </span>
         </Link>
 
         {/* Desktop Nav */}
-        <nav className="hidden items-center gap-7 text-xs font-semibold uppercase tracking-wider text-gray-400 md:flex">
-          <Link href="/sample" className="transition hover:text-white">Sample</Link>
-          <Link href="/how-it-works" className="transition hover:text-white">Flow</Link>
-          <Link href="/intelligence" className="transition hover:text-white">Intelligence</Link>
-          <Link href="/pricing" className="transition text-emerald-400 hover:text-emerald-300">Pricing</Link>
-          <Link href="/data-trust" className="transition hover:text-white">Data &amp; Trust</Link>
+        <nav className="hidden items-center gap-6 font-mono text-[11px] font-medium tracking-wider uppercase text-gray-400 md:flex">
+          <Link href="/reports" className="transition hover:text-cyan-400 flex items-center gap-1">
+            <span className="text-cyan-400 font-bold">⚡</span>
+            <span>Synthesis</span>
+          </Link>
+          <Link href="/reports/generate" className="transition hover:text-blue-400">Workstation</Link>
+          <Link href="/tools/portfolio-overlap" className="transition hover:text-white">Overlap</Link>
+          <Link href="/pricing" className="transition text-emerald-400 hover:text-emerald-300 font-bold">Pricing</Link>
           <Link href="/methodology" className="transition hover:text-white">Methodology</Link>
-          <Link href="/synthesis" className="transition text-blue-400 hover:text-blue-300">Synthesis</Link>
+          <Link href="/sample" className="transition hover:text-white">Sample</Link>
         </nav>
 
         {/* Actions */}
-        <div className="flex items-center gap-4">
-          <Link href="/login" className="text-xs font-semibold text-gray-400 transition hover:text-white">
-            Login
+        <div className="flex items-center gap-3">
+          <Link href="/login" className="font-mono text-[11px] uppercase tracking-wider font-semibold text-gray-400 transition hover:text-white px-2 py-1">
+            Sign In
           </Link>
           <div className="hidden sm:block">
             <Link
               href="/dashboard"
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-5 text-xs font-semibold text-emerald-400 backdrop-blur-md transition-all hover:bg-emerald-500/20 hover:border-emerald-500/50"
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-blue-500/40 bg-blue-600/10 px-4 font-mono text-[11px] font-bold uppercase tracking-wider text-blue-400 shadow-md transition-all hover:bg-blue-600 hover:text-white hover:border-blue-600 shadow-blue-900/20"
             >
               <span>Workspace</span>
-              <ArrowRight className="h-3.5 w-3.5" />
+              <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
           <button

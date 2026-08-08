@@ -90,7 +90,7 @@ export function AppSidebar({
                     onClick={item.onClick}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${
                       item.isActive
-                        ? "text-white font-bold bg-[#00FF9D]/10 text-[#00FF9D] hover:bg-[#00FF9D]/20 hover:text-[#00FF9D]"
+                        ? "text-blue-300 font-bold bg-blue-500/15 border border-blue-500/30 shadow-sm"
                         : "text-slate-400 hover:bg-white/5 hover:text-white"
                     }`}
                   >

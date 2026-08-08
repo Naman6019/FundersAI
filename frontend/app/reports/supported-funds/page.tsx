@@ -25,6 +25,20 @@ export default function SupportedFundsDirectoryPage() {
     const [selectedAmc, setSelectedAmc] = useState<string>("ALL");
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("ALL");
+    const [selectedFunds, setSelectedFunds] = useState<FundRow[]>([]);
+
+    const toggleFundSelection = (fund: FundRow) => {
+        const isAlreadySelected = selectedFunds.some(f => String(f.scheme_code) === String(fund.scheme_code));
+        if (isAlreadySelected) {
+            setSelectedFunds(prev => prev.filter(f => String(f.scheme_code) !== String(fund.scheme_code)));
+        } else {
+            if (selectedFunds.length >= 3) {
+                alert("You can select up to 3 funds for side-by-side comparison.");
+                return;
+            }
+            setSelectedFunds(prev => [...prev, fund]);
+        }
+    };
 
     useEffect(() => {
         async function fetchSupportedFunds() {
@@ -198,49 +212,60 @@ export default function SupportedFundsDirectoryPage() {
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                                        {group.schemes.map(fund => (
-                                            <MagicCard 
-                                                key={fund.scheme_code}
-                                                className="p-5 bg-gray-950/80 border-gray-800/80 rounded-2xl space-y-3 flex flex-col justify-between"
-                                                gradientFrom="#3b82f6"
-                                                gradientTo="#10b981"
-                                                gradientColor="rgba(16, 185, 129, 0.08)"
-                                            >
-                                                <div className="space-y-2">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20 font-semibold">
-                                                            #{fund.scheme_code}
-                                                        </span>
-                                                        <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                                            <span>Factsheet Active</span>
-                                                        </span>
-                                                    </div>
-
-                                                    <h3 className="text-xs font-bold text-white leading-snug line-clamp-2">
-                                                        {fund.scheme_name}
-                                                    </h3>
-                                                </div>
-
-                                                <div className="space-y-3 pt-2">
-                                                    <div className="flex items-center justify-between border-t border-gray-800/60 pt-2 text-[11px]">
-                                                        <span className="text-gray-400 font-mono truncate max-w-[120px]">{fund.category || "Equity"}</span>
-                                                        {fund.return_3y && (
-                                                            <span className="font-mono text-emerald-400 font-bold">
-                                                                {typeof fund.return_3y === 'number' ? `+${fund.return_3y}%` : fund.return_3y} <span className="text-[9px] text-gray-500 font-normal">3Y</span>
+                                        {group.schemes.map(fund => {
+                                            const isSelected = selectedFunds.some(f => String(f.scheme_code) === String(fund.scheme_code));
+                                            return (
+                                                <MagicCard 
+                                                    key={fund.scheme_code}
+                                                    className={`p-5 bg-gray-950/80 rounded-2xl space-y-3 flex flex-col justify-between transition-all ${
+                                                        isSelected 
+                                                            ? "border-emerald-500/70 shadow-lg shadow-emerald-950/40 bg-emerald-950/20" 
+                                                            : "border-gray-800/80 hover:border-gray-700"
+                                                    }`}
+                                                    gradientFrom="#3b82f6"
+                                                    gradientTo="#10b981"
+                                                    gradientColor="rgba(16, 185, 129, 0.08)"
+                                                >
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20 font-semibold">
+                                                                #{fund.scheme_code}
                                                             </span>
-                                                        )}
+                                                            <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                                                <span>Factsheet Active</span>
+                                                            </span>
+                                                        </div>
+
+                                                        <h3 className="text-xs font-bold text-white leading-snug line-clamp-2">
+                                                            {fund.scheme_name}
+                                                        </h3>
                                                     </div>
 
-                                                    <Link 
-                                                        href={`/reports/generate?prompt=Comprehensive analysis of ${encodeURIComponent(fund.scheme_name)}`}
-                                                        className="w-full block text-center py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-xl text-xs font-semibold transition-all"
-                                                    >
-                                                        Synthesize Fund Report →
-                                                    </Link>
-                                                </div>
-                                            </MagicCard>
-                                        ))}
+                                                    <div className="space-y-3 pt-2">
+                                                        <div className="flex items-center justify-between border-t border-gray-800/60 pt-2 text-[11px]">
+                                                            <span className="text-gray-400 font-mono truncate max-w-[120px]">{fund.category || "Equity"}</span>
+                                                            {fund.return_3y && (
+                                                                <span className="font-mono text-emerald-400 font-bold">
+                                                                    {typeof fund.return_3y === 'number' ? `+${fund.return_3y}%` : fund.return_3y} <span className="text-[9px] text-gray-500 font-normal">3Y</span>
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        <button 
+                                                            onClick={() => toggleFundSelection(fund)}
+                                                            className={`w-full text-center py-2.5 rounded-xl text-xs font-mono font-bold transition-all flex items-center justify-center gap-2 ${
+                                                                isSelected 
+                                                                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
+                                                                    : "bg-blue-600/10 hover:bg-blue-600 hover:text-white text-blue-400 border border-blue-500/30"
+                                                            }`}
+                                                        >
+                                                            <span>{isSelected ? "✓ Selected for Comparison" : "+ Add to Comparison"}</span>
+                                                        </button>
+                                                    </div>
+                                                </MagicCard>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             ))}
@@ -297,6 +322,35 @@ export default function SupportedFundsDirectoryPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Floating Multi-Fund Comparison Dock */}
+            {selectedFunds.length > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-4 animate-in slide-in-from-bottom duration-300">
+                    <div className="bg-[#070b12]/95 border border-emerald-500/50 p-4 rounded-2xl shadow-2xl backdrop-blur-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-emerald-950/40">
+                        <div className="flex items-center gap-3 overflow-x-auto w-full sm:w-auto">
+                            <span className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider whitespace-nowrap">
+                                ({selectedFunds.length}/3) Selected:
+                            </span>
+                            <div className="flex items-center gap-2">
+                                {selectedFunds.map(f => (
+                                    <div key={f.scheme_code} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-900 border border-gray-700 text-xs text-white">
+                                        <span className="font-mono text-[10px] text-cyan-400">#{f.scheme_code}</span>
+                                        <span className="truncate max-w-[110px] font-semibold">{f.scheme_name}</span>
+                                        <button onClick={() => toggleFundSelection(f)} className="text-gray-400 hover:text-red-400 text-xs ml-1 font-bold">✕</button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <Link 
+                            href={`/reports/generate?codes=${selectedFunds.map(f => f.scheme_code).join(",")}`}
+                            className="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-emerald-600/30 whitespace-nowrap text-center"
+                        >
+                            Synthesize Comparison ({selectedFunds.length}) →
+                        </Link>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

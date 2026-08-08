@@ -44,132 +44,135 @@ const faqs = [
 
 export default function PricingPage() {
   return (
-    <div className="min-h-screen bg-[#070b12] text-[#dce8fa] flex flex-col selection:bg-blue-500/30">
+    <div className="min-h-screen bg-[#050810] text-[#dce8fa] flex flex-col selection:bg-blue-500/30 cyber-grid-bg relative">
+      {/* Background Subtle Radial Aura */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-blue-600/10 blur-[140px] pointer-events-none rounded-full" />
+      
       <PublicHeader />
 
-      <main className="flex-1 max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-20 w-full space-y-16">
+      <main className="flex-1 max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-20 w-full space-y-16 relative z-10">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
-          <Link href="/" className="hover:text-emerald-400">Home</Link>
+          <Link href="/" className="hover:text-blue-400">FundersAI</Link>
           <span>/</span>
-          <span className="text-gray-200">Billing</span>
+          <Link href="/reports" className="hover:text-blue-400">Synthesis</Link>
           <span>/</span>
-          <span className="text-emerald-400">Pricing Plans</span>
+          <span className="text-blue-400 font-bold">[ PRICING_PLANS ]</span>
         </div>
 
         {/* Hero Header */}
         <div className="text-center space-y-4 max-w-3xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono font-medium">
-            <span>⚡ Unified Research &amp; Synthesis Subscription</span>
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-mono font-medium">
+            <span>⚡ UNIFIED RESEARCH &amp; SYNTHESIS SUBSCRIPTION</span>
           </div>
-          <h1 className="text-4xl sm:text-6xl font-extrabold text-white tracking-tight leading-tight">
+          <h1 className="text-4xl sm:text-6xl font-extrabold text-white tracking-tight leading-tight font-serif-display">
             Simple, Transparent Pricing. <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-cyan-400">
               No Hidden Fees.
             </span>
           </h1>
           <p className="text-sm sm:text-base text-gray-400 max-w-xl mx-auto leading-relaxed">
-            One subscription unlocks both Research Platform token quotas and Synthesis Studio daily report creation.
+            One unified subscription unlocks both Research Platform AI query quotas and Synthesis Studio daily report creation.
           </p>
         </div>
 
         {/* Pricing Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
           {/* Free Tier Card */}
-          <MagicCard className="p-8 bg-gray-950/80 border-gray-800 rounded-3xl flex flex-col justify-between space-y-8">
+          <MagicCard className="p-8 bg-[#070b12]/80 border-gray-800/80 rounded-3xl flex flex-col justify-between space-y-8 backdrop-blur-xl">
             <div className="space-y-6">
               <div>
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-gray-400">Free Tier</span>
                 <div className="flex items-baseline gap-1 mt-3">
-                  <span className="text-5xl font-extrabold text-white">₹0</span>
-                  <span className="text-xs text-gray-400">/ forever</span>
+                  <span className="text-5xl font-extrabold text-white font-mono">₹0</span>
+                  <span className="text-xs text-gray-400 font-mono">/ forever</span>
                 </div>
                 <p className="text-xs text-gray-400 mt-3">Starter research limits for fund research &amp; synthesis reports.</p>
               </div>
 
-              <div className="space-y-3 border-t border-gray-900 pt-6 text-xs text-gray-300">
+              <div className="space-y-3 border-t border-gray-800/80 pt-6 text-xs text-gray-300">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-emerald-400 font-bold">✓</span>
+                  <span className="text-blue-400 font-bold">✓</span>
                   <span><strong>1 report per day</strong> (Synthesis Studio)</span>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <span className="text-emerald-400 font-bold">✓</span>
+                  <span className="text-blue-400 font-bold">✓</span>
                   <span>Token-based queries in Research platform</span>
                 </div>
                 <div className="flex items-center gap-2.5 text-gray-400">
-                  <span className="text-emerald-400 font-bold">✓</span>
+                  <span className="text-blue-400 font-bold">✓</span>
                   <span>25k daily / 100k monthly AI tokens</span>
                 </div>
                 <div className="flex items-center gap-2.5 text-gray-400">
-                  <span className="text-emerald-400 font-bold">✓</span>
+                  <span className="text-blue-400 font-bold">✓</span>
                   <span>Full dashboard &amp; factsheet research access</span>
                 </div>
               </div>
             </div>
 
             <Link href="/login" className="w-full">
-              <button className="w-full py-3 rounded-xl bg-gray-900 border border-gray-800 text-gray-300 font-medium text-xs hover:bg-gray-800 hover:text-white transition-all">
+              <button className="w-full py-3 rounded-xl bg-gray-900 border border-gray-800 text-gray-300 font-mono font-bold text-xs hover:bg-gray-800 hover:text-white transition-all uppercase tracking-wider">
                 Get Started Free
               </button>
             </Link>
           </MagicCard>
 
-          {/* Pro Tier Card */}
-          <MagicCard className="p-8 bg-gray-950/90 border-emerald-500/50 rounded-3xl flex flex-col justify-between space-y-8 relative shadow-2xl shadow-emerald-500/10">
-            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-emerald-500 text-[10px] font-mono font-bold text-black uppercase tracking-wider shadow-sm">
+          {/* Pro Tier Card (Electric Cobalt Highlight) */}
+          <MagicCard className="p-8 bg-[#070b12]/95 border-blue-500/60 rounded-3xl flex flex-col justify-between space-y-8 relative shadow-2xl shadow-blue-600/20 backdrop-blur-xl border-t-blue-500">
+            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-blue-600 text-[10px] font-mono font-bold text-white uppercase tracking-wider shadow-md shadow-blue-900/40">
               Most Popular
             </div>
 
             <div className="space-y-6">
               <div>
-                <span className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-400">Pro Tier</span>
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-blue-400">Pro Tier</span>
                 <div className="flex items-baseline gap-1 mt-3">
-                  <span className="text-5xl font-extrabold text-white">₹99</span>
-                  <span className="text-xs text-gray-400">/ month</span>
+                  <span className="text-5xl font-extrabold text-white font-mono">₹99</span>
+                  <span className="text-xs text-gray-400 font-mono">/ month</span>
                 </div>
                 <p className="text-xs text-gray-400 mt-3">Higher limits for regular mutual-fund and stock research.</p>
               </div>
 
-              <div className="space-y-3 border-t border-gray-900 pt-6 text-xs text-gray-200">
+              <div className="space-y-3 border-t border-gray-800/80 pt-6 text-xs text-gray-200">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-emerald-400 font-bold">✓</span>
+                  <span className="text-blue-400 font-bold">✓</span>
                   <span><strong>5 reports per day</strong> (Synthesis Studio)</span>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <span className="text-emerald-400 font-bold">✓</span>
+                  <span className="text-blue-400 font-bold">✓</span>
                   <span><strong>10X Higher usage</strong> in Research platform</span>
                 </div>
                 <div className="flex items-center gap-2.5 text-gray-300">
-                  <span className="text-emerald-400 font-bold">✓</span>
+                  <span className="text-blue-400 font-bold">✓</span>
                   <span>250k daily / 2M monthly AI tokens</span>
                 </div>
                 <div className="flex items-center gap-2.5 text-gray-300">
-                  <span className="text-emerald-400 font-bold">✓</span>
+                  <span className="text-blue-400 font-bold">✓</span>
                   <span>Dashboard, Canvas &amp; Portfolio Overlap Tool</span>
                 </div>
               </div>
             </div>
 
             <Link href="/billing" className="w-full">
-              <button className="w-full py-3 rounded-xl bg-emerald-500 text-black font-bold text-xs hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/25">
+              <button className="w-full py-3 rounded-xl bg-blue-600 text-white font-mono font-bold text-xs hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/30 uppercase tracking-wider">
                 Upgrade to Pro (₹99)
               </button>
             </Link>
           </MagicCard>
 
           {/* Ultra Tier Card */}
-          <MagicCard className="p-8 bg-gray-950/80 border-cyan-500/40 rounded-3xl flex flex-col justify-between space-y-8">
+          <MagicCard className="p-8 bg-[#070b12]/90 border-cyan-500/50 rounded-3xl flex flex-col justify-between space-y-8 backdrop-blur-xl border-t-cyan-400">
             <div className="space-y-6">
               <div>
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-cyan-400">Ultra Tier</span>
                 <div className="flex items-baseline gap-1 mt-3">
-                  <span className="text-5xl font-extrabold text-white">₹199</span>
-                  <span className="text-xs text-gray-400">/ month</span>
+                  <span className="text-5xl font-extrabold text-white font-mono">₹199</span>
+                  <span className="text-xs text-gray-400 font-mono">/ month</span>
                 </div>
                 <p className="text-xs text-gray-400 mt-3">Highest limits for heavy institutional research workflows.</p>
               </div>
 
-              <div className="space-y-3 border-t border-gray-900 pt-6 text-xs text-gray-200">
+              <div className="space-y-3 border-t border-gray-800/80 pt-6 text-xs text-gray-200">
                 <div className="flex items-center gap-2.5">
                   <span className="text-cyan-400 font-bold">✓</span>
                   <span><strong>15 reports per day</strong> (Synthesis Studio)</span>
@@ -190,7 +193,7 @@ export default function PricingPage() {
             </div>
 
             <Link href="/billing" className="w-full">
-              <button className="w-full py-3 rounded-xl bg-cyan-600 text-white font-bold text-xs hover:bg-cyan-500 transition-all">
+              <button className="w-full py-3 rounded-xl bg-cyan-600 text-white font-mono font-bold text-xs hover:bg-cyan-500 transition-all shadow-lg shadow-cyan-600/30 uppercase tracking-wider">
                 Upgrade to Ultra (₹199)
               </button>
             </Link>
@@ -200,15 +203,18 @@ export default function PricingPage() {
         {/* FAQ Section */}
         <div className="max-w-3xl mx-auto space-y-6">
           <div className="text-center space-y-2">
-            <span className="text-xs font-mono font-semibold uppercase tracking-wider text-emerald-400">Billing FAQs</span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Frequently Asked Questions</h2>
+            <span className="text-xs font-mono font-semibold uppercase tracking-wider text-blue-400">[ BILLING_FAQS ]</span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white font-serif-display">Frequently Asked Questions</h2>
           </div>
 
           <div className="space-y-4">
             {faqs.map((faq, idx) => (
-              <div key={idx} className="p-5 rounded-2xl bg-gray-950/80 border border-gray-800 space-y-2">
-                <h3 className="text-sm font-bold text-white">{faq.q}</h3>
-                <p className="text-xs text-gray-400 leading-relaxed">{faq.a}</p>
+              <div key={idx} className="p-5 rounded-2xl bg-[#070b12]/80 border border-gray-800/80 space-y-2 backdrop-blur-md">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <span className="text-xs font-mono text-blue-400">#0{idx + 1}</span>
+                  <span>{faq.q}</span>
+                </h3>
+                <p className="text-xs text-gray-400 leading-relaxed pl-7">{faq.a}</p>
               </div>
             ))}
           </div>

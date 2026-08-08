@@ -15,10 +15,11 @@ function staggerIndex(index: number, count: number, origin: StaggerOrigin): numb
 export const VerticalCutReveal = ({
   children,
   splitBy = "words",
-  staggerDuration = 0.1,
+  staggerDuration = 0.025,
   staggerFrom = "first",
   reverse = false,
   containerClassName,
+  elementClassName,
   transition,
 }: {
   children: string;
@@ -27,32 +28,74 @@ export const VerticalCutReveal = ({
   staggerFrom?: StaggerOrigin;
   reverse?: boolean;
   containerClassName?: string;
+  elementClassName?: string;
   transition?: Transition;
 }) => {
+  if (splitBy === "characters") {
+    const words = children.split(" ");
+    let globalCharIndex = 0;
+    const totalChars = children.length;
+
+    return (
+      <div className={cn("inline-flex flex-wrap justify-center", containerClassName)}>
+        {words.map((word, wordIdx) => {
+          const charSpans = Array.from(word).map((char) => {
+            const index = globalCharIndex++;
+            return (
+              <span key={`${char}-${index}`} className="inline-block overflow-hidden py-0.5">
+                <motion.span
+                  className={cn("inline-block transform-gpu will-change-transform", elementClassName)}
+                  initial={{ y: reverse ? "-100%" : "110%", opacity: 0 }}
+                  animate={{ y: "0%", opacity: 1 }}
+                  transition={{
+                    duration: transition?.duration ?? 0.45,
+                    ease: transition?.ease ?? [0.25, 1, 0.5, 1],
+                    delay:
+                      (typeof transition?.delay === "number" ? transition.delay : 0) +
+                      staggerIndex(index, totalChars, staggerFrom) * staggerDuration,
+                  }}
+                >
+                  {char}
+                </motion.span>
+              </span>
+            );
+          });
+
+          globalCharIndex++; // accounted for space
+
+          return (
+            <span key={`${word}-${wordIdx}`} className="inline-flex overflow-hidden mr-[0.28em] whitespace-nowrap">
+              {charSpans}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
+
   const segments =
-    splitBy === "characters"
-      ? Array.from(children)
-      : splitBy === "lines"
-        ? children.split("\n")
-        : children.split(/\s+/);
+    splitBy === "lines"
+      ? children.split("\n")
+      : children.split(/\s+/);
 
   return (
     <div
       className={cn(
-        "flex flex-wrap",
-        splitBy === "words" && "gap-x-[0.25em]",
+        "inline-flex flex-wrap justify-center",
+        splitBy === "words" && "gap-x-[0.28em]",
         splitBy === "lines" && "flex-col",
         containerClassName,
       )}
     >
       {segments.map((segment, index) => (
-        <div key={`${segment}-${index}`} className="overflow-hidden">
+        <div key={`${segment}-${index}`} className="overflow-hidden py-0.5">
           <motion.div
-            initial={{ y: reverse ? "-100%" : "100%" }}
-            whileInView={{ y: "0%" }}
-            viewport={{ once: true }}
+            className={cn("inline-block transform-gpu will-change-transform", elementClassName)}
+            initial={{ y: reverse ? "-100%" : "110%", opacity: 0 }}
+            animate={{ y: "0%", opacity: 1 }}
             transition={{
-              ...transition,
+              duration: transition?.duration ?? 0.45,
+              ease: transition?.ease ?? [0.25, 1, 0.5, 1],
               delay:
                 (typeof transition?.delay === "number" ? transition.delay : 0) +
                 staggerIndex(index, segments.length, staggerFrom) * staggerDuration,

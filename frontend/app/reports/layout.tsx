@@ -2,6 +2,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { ReactNode } from "react";
 import type { Metadata } from "next";
+import { AnimatedGridPattern } from "@/components/ui/animated-grid-pattern";
+import { FlickeringGrid } from "@/components/ui/flickering-grid";
 
 export const metadata: Metadata = {
     title: {
@@ -57,23 +59,42 @@ export const metadata: Metadata = {
 
 export default function ReportsLayout({ children }: { children: ReactNode }) {
     return (
-        <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col selection:bg-blue-500/30 selection:text-blue-200">
+        <div className="relative min-h-screen bg-gray-950 text-gray-100 flex flex-col overflow-hidden selection:bg-blue-500/30 selection:text-blue-200">
+            {/* Ambient Subtly Dimmed Flickering Grid Background Pattern */}
+            <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden [mask-image:radial-gradient(1400px_circle_at_center,white_70%,transparent_100%)]">
+                <FlickeringGrid
+                    squareSize={6}
+                    gridGap={10}
+                    color="rgb(37, 99, 235)"
+                    maxOpacity={0.18}
+                    flickerChance={0.15}
+                    className="w-full h-full"
+                />
+            </div>
+
             {/* Top Navigation for Reports Product */}
             <header className="border-b border-gray-800/60 bg-gray-950/80 backdrop-blur-xl sticky top-0 z-50 transition-colors">
                 <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                     <div className="flex items-center gap-8">
                         <Link href="/reports" className="flex items-center gap-3 group">
-                            <div className="flex items-center group-hover:scale-105 transition-transform">
+                            <div className="flex items-center gap-2.5 group-hover:scale-[1.02] transition-transform">
                                 <Image 
-                                    src="/Synthesis_FUNDERSAI.png" 
-                                    alt="Synthesis by FundersAI" 
-                                    width={240} 
-                                    height={60} 
-                                    className="h-10 w-auto object-contain rounded-md border border-gray-800 shadow-md" 
+                                    src="/FUNDERSAI-nobackground.png" 
+                                    alt="FundersAI Logo" 
+                                    width={120} 
+                                    height={32} 
+                                    unoptimized
+                                    className="h-8 w-auto object-contain" 
                                     priority
                                 />
+                                <span className="text-gray-600 font-light text-sm">/</span>
+                                <span className="text-white font-extrabold text-sm tracking-tight">
+                                    Synthesis
+                                </span>
                             </div>
-                            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">⚡ Synthesis v2</span>
+                            <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 shadow-sm">
+                                ⚡ v2
+                            </span>
                         </Link>
                         
                         <nav className="hidden md:flex items-center gap-1">
@@ -108,8 +129,8 @@ export default function ReportsLayout({ children }: { children: ReactNode }) {
                                 Methodology
                             </Link>
                             <Link
-                                href="#pricing"
-                                className="text-xs font-semibold px-3 py-1.5 rounded-md text-blue-400 hover:text-blue-300 hover:bg-blue-950/30 transition-all"
+                                href="/pricing"
+                                className="text-xs font-semibold px-3 py-1.5 rounded-md text-gray-400 hover:text-white hover:bg-gray-800/50 transition-all"
                             >
                                 Pricing
                             </Link>

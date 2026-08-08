@@ -63,38 +63,41 @@ const FUND_CATEGORIES = [
 
 function CanvasPlaceholder() {
   return (
-    <div className="flex h-full flex-col rounded-[1.35rem] border border-white/10 bg-[linear-gradient(160deg,rgba(15,23,42,0.95),rgba(2,8,24,0.98))] p-6 shadow-[0_20px_44px_rgba(0,0,0,0.35)]">
-      <div>
-        <h2 className="text-3xl font-semibold tracking-tight text-white">Comparison canvas</h2>
-        <p className="mt-1 text-sm text-slate-300">Ask FundersAI to compare funds and open side-by-side metrics from stored data.</p>
-        <span className="mt-4 inline-flex rounded-full border border-[#00FF9D]/30 bg-[#00FF9D]/10 px-3 py-1 text-xs text-[#00FF9D]">
-          Waiting for data-backed comparison
-        </span>
+    <div className="flex h-full flex-col rounded-2xl border border-gray-800/80 bg-[#050810]/95 p-6 shadow-2xl backdrop-blur-xl">
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="font-mono text-[10px] uppercase font-bold tracking-widest text-blue-400 px-2.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 mb-2 inline-block">
+            [ RESEARCH_ONLY • DATA_BACKED ]
+          </div>
+          <h2 className="text-2xl font-bold tracking-tight text-white font-serif-display">Comparison Canvas</h2>
+          <p className="mt-1 text-xs text-gray-400 font-sans">Ask FundersAI to compare funds and open side-by-side quantitative metrics from stored SEBI disclosures.</p>
+        </div>
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-4">
         {[
-          { label: 'Read', value: 'Stored data', note: 'Search and compare use normalized records' },
-          { label: 'Check', value: 'Freshness', note: 'Stale or missing data is flagged' },
-          { label: 'Compare', value: 'Side-by-side', note: 'Returns, risk, costs, and coverage' },
-          { label: 'Explain', value: 'Research-only', note: 'AI explains data without advice' },
+          { label: 'RECORD_SEARCH', value: 'Normalized', note: 'Strict DB records' },
+          { label: 'DATA_HEALTH', value: 'Verified', note: 'Stale fields flagged' },
+          { label: 'COMPARE', value: 'Side-by-side', note: 'Returns, risk, overlap' },
+          { label: 'EXPLAIN', value: 'Research Only', note: 'Zero financial advice' },
         ].map((item) => (
-          <div key={item.label} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-            <p className="text-xs text-slate-300">{item.label}</p>
-            <p className="mt-2 text-lg font-semibold tracking-tight text-white">{item.value}</p>
-            <p className="mt-1 text-xs text-slate-400">{item.note}</p>
+          <div key={item.label} className="rounded-xl border border-gray-800/80 bg-[#070b12]/80 p-3.5">
+            <p className="font-mono text-[10px] uppercase tracking-wider text-blue-400">{item.label}</p>
+            <p className="mt-1 text-base font-bold tracking-tight text-white">{item.value}</p>
+            <p className="mt-0.5 text-[11px] text-gray-500">{item.note}</p>
           </div>
         ))}
       </div>
 
-      <div className="mt-5 flex-1 rounded-[1.2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(0,80,158,0.15),rgba(15,23,42,0.25))] p-4">
-        <svg viewBox="0 0 700 260" className="h-full w-full" aria-hidden>
-          <path d="M30 210 C110 180, 150 192, 220 160 C270 138, 300 150, 360 122 C410 98, 450 112, 510 86 C560 66, 620 82, 670 72" fill="none" stroke="#00FF9D" strokeWidth="4" strokeLinecap="round"/>
-          <path d="M30 224 C105 202, 150 198, 220 188 C280 178, 310 166, 360 172 C412 178, 455 144, 510 150 C560 156, 620 126, 670 132" fill="none" stroke="#00cc7d" strokeWidth="3" strokeLinecap="round"/>
+      <div className="mt-5 flex-1 rounded-xl border border-gray-800/80 bg-[#070b12]/60 p-4 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(rgba(59,130,246,0.06)_1px,transparent_1px)] [background-size:20px_20px]" />
+        <svg viewBox="0 0 700 260" className="h-full w-full relative z-10" aria-hidden>
+          <path d="M30 210 C110 180, 150 192, 220 160 C270 138, 300 150, 360 122 C410 98, 450 112, 510 86 C560 66, 620 82, 670 72" fill="none" stroke="#2563eb" strokeWidth="3.5" strokeLinecap="round"/>
+          <path d="M30 224 C105 202, 150 198, 220 188 C280 178, 310 166, 360 172 C412 178, 455 144, 510 150 C560 156, 620 126, 670 132" fill="none" stroke="#06b6d4" strokeWidth="2.5" strokeLinecap="round"/>
         </svg>
       </div>
-      <div className="mt-5 rounded-xl border border-amber-300/20 bg-amber-300/10 p-4 text-xs leading-5 text-amber-100">
-        FundersAI shows &quot;Not available&quot; for missing fields, flags partial or stale data, and keeps AI output as explanation only.
+      <div className="mt-4 rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-[11px] font-mono leading-5 text-blue-300">
+        FundersAI shows &quot;Not available&quot; for missing fields, flags partial data, and maintains 100% deterministic transparency.
       </div>
     </div>
   );
