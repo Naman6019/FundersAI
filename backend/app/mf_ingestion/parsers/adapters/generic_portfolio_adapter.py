@@ -89,6 +89,9 @@ class GenericPortfolioAdapter(BaseAMCAdapter):
         records: list[ParsedDocument] = []
         for header_position, (header_index, columns) in enumerate(headers):
             next_header = headers[header_position + 1][0] if header_position + 1 < len(headers) else len(rows)
+            grand_total_index = _find_grand_total_row(rows, header_index + 1, next_header)
+            if grand_total_index is not None:
+                next_header = min(next_header, grand_total_index + 1)
             preceding_start = headers[header_position - 1][0] + 1 if header_position else 0
             scheme_context_rows = [
                 list(frame.columns),
@@ -159,6 +162,16 @@ class GenericPortfolioAdapter(BaseAMCAdapter):
         return ""
 
 
+# Some portfolio disclosures carry a second, unrelated table further down the sheet
+# (e.g. historical distribution/default disclosures) whose long, sentence-length column
+# header incidentally contains a substring like "...as % to NAV)..." deep inside legal
+# boilerplate. Without a length cap that row is misdetected as a second holdings header,
+# and everything after it (including the NAV-per-unit table) gets parsed as bogus
+# holdings for the same scheme, inflating its total well past 100%. Real column headers
+# are always short, so cap substring matches to a plausible header length.
+_HEADER_CELL_MAX_LEN = 40
+
+
 def _find_headers(rows: list[list[object]]) -> list[tuple[int, dict[str, int]]]:
     headers: list[tuple[int, dict[str, int]]] = []
     for index, row in enumerate(rows):
@@ -168,17 +181,23 @@ def _find_headers(rows: list[list[object]]) -> list[tuple[int, dict[str, int]]]:
             normalized,
             lowered,
             lambda norm, low: norm == "instrument_name"
-            or "name of the instrument" in low
-            or "name of instrument" in low
-            or "security name" in low,
+            or (
+                len(low) <= _HEADER_CELL_MAX_LEN
+                and (
+                    "name of the instrument" in low
+                    or "name of instrument" in low
+                    or "security name" in low
+                )
+            ),
         )
         percent = _find_column(
             normalized,
             lowered,
             lambda norm, low: norm == "percent_aum"
-            or "% to nav" in low
-            or "% of nav" in low
-            or "% to net assets" in low,
+            or (
+                len(low) <= _HEADER_CELL_MAX_LEN
+                and ("% to nav" in low or "% of nav" in low or "% to net assets" in low)
+            ),
         )
         if instrument is None or percent is None:
             continue
@@ -198,6 +217,18 @@ def _find_headers(rows: list[list[object]]) -> list[tuple[int, dict[str, int]]]:
             )
         )
     return headers
+
+
+def _find_grand_total_row(rows: list[list[object]], start: int, end: int) -> int | None:
+    """Bounds a holdings table at its closing "Grand Total" row so trailing,
+    unrelated tables further down the same sheet (NAV-per-unit history, historical
+    distribution disclosures, riskometer notes) never get swept into this scheme's
+    holdings just because no other header appears before the end of the sheet."""
+    for index in range(start, min(end, len(rows))):
+        for cell in rows[index]:
+            if _clean(cell).lower().startswith("grand total"):
+                return index
+    return None
 
 
 def _extract_rows(rows: list[list[object]], columns: dict[str, int]) -> list[dict[str, Any]]:
