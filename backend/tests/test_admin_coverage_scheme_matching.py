@@ -1,6 +1,7 @@
 from app.mf_ingestion.services.parsing_service import (
     _build_relaxed_ilike_pattern,
     _normalize_family_scheme_name,
+    _normalize_lookup_text,
     _select_best_scheme_candidate,
 )
 
@@ -83,3 +84,53 @@ def test_normalize_family_scheme_name_strips_unspaced_hyphen_qualifier_suffix():
     assert _normalize_family_scheme_name(
         "Aditya Birla Sun Life ESG Integration Strategy Fund-Regular Plan-Growth"
     ) == _normalize_family_scheme_name("Aditya Birla Sun Life ESG Integration Strategy Fund")
+
+
+def test_build_relaxed_ilike_pattern_treats_etf_and_exchange_traded_fund_as_equivalent():
+    """Regression against real mutual_fund_core_snapshot/factsheet fixtures surfaced while
+    diagnosing UTI's unmapped candidates: the same AMC inconsistently spells out "Exchange
+    Traded Fund" in some scheme names ("UTI Nifty Midcap 150 Exchange Traded Fund") and
+    abbreviates to "ETF" in others ("UTI Nifty Bank ETF"), while the raw factsheet rows use
+    yet another mix ("UTI NIFTY MIDCAP 150 ETF", "UTI Nifty Bank Exchange Traded Fund ETF").
+    Stripping "etf"/"exchange"/"traded" as noise (like "fund" already is) lets both spellings
+    resolve to the same relaxed pattern instead of requiring an exact wording match."""
+    assert _build_relaxed_ilike_pattern("UTI NIFTY MIDCAP 150 ETF") == _build_relaxed_ilike_pattern(
+        "UTI Nifty Midcap 150 Exchange Traded Fund"
+    )
+    assert _build_relaxed_ilike_pattern(
+        "UTI Nifty Bank Exchange Traded Fund ETF"
+    ) == _build_relaxed_ilike_pattern("UTI Nifty Bank ETF")
+
+
+def test_build_relaxed_ilike_pattern_strips_mf_prefix_noise():
+    """Regression: the raw factsheet row 'UTI MF- Gold Exchange Traded Fund ETF' carries an
+    'MF-' AMC-abbreviation prefix that mutual_fund_core_snapshot's 'UTI GOLD Exchange Traded
+    Fund' does not. 'mf' must be stripped as noise, not required to appear in the candidate."""
+    assert _build_relaxed_ilike_pattern(
+        "UTI MF- Gold Exchange Traded Fund ETF"
+    ) == _build_relaxed_ilike_pattern("UTI GOLD Exchange Traded Fund")
+
+
+def test_normalize_lookup_text_splits_glued_number_suffix():
+    """Regression: the raw factsheet row 'UTI NIFTY200 QUALITY 30 INDEX FUND' glues the
+    index number onto 'NIFTY' with no space, while mutual_fund_core_snapshot spells it
+    'UTI Nifty 200 Quality 30 Index Fund'. An unspaced ilike pattern token ('nifty200')
+    never matches the spaced canonical text, so letter/digit boundaries must be split."""
+    assert _normalize_lookup_text("NIFTY200 QUALITY 30") == _normalize_lookup_text("NIFTY 200 QUALITY 30")
+
+
+def test_normalize_lookup_text_strips_stray_symbols():
+    """Regression: a raw factsheet row was extracted as 'UTI BANKING & PSU FUND@' with a
+    stray trailing '@' (a PDF-extraction artifact). The old punctuation regex only stripped
+    a fixed list of characters and left '@' glued to 'fund', producing an ilike token
+    ('fund@') that could never match any real scheme_name and left the whole row unmapped."""
+    assert _normalize_lookup_text("UTI BANKING & PSU FUND@") == _normalize_lookup_text("UTI BANKING & PSU FUND")
+
+
+def test_normalize_lookup_text_strips_ulip_wrapper_prefix():
+    """Regression: the raw factsheet row 'UTI Unit Linked Insurance Plan UTI Long Duration
+    Fund' prefixes the real scheme name with a ULIP-wrapper disclosure phrase that
+    mutual_fund_core_snapshot's 'UTI Long Duration Fund' does not carry."""
+    assert _normalize_lookup_text(
+        "UTI Unit Linked Insurance Plan UTI Long Duration Fund"
+    ) == _normalize_lookup_text("UTI UTI Long Duration Fund")

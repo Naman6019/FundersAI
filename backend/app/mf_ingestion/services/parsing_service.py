@@ -1543,7 +1543,9 @@ def _normalize_scheme_text(text: str) -> str:
 
 def _normalize_lookup_text(text: object) -> str:
     value = str(text or "").lower().replace("&", " and ")
-    value = re.sub(r"[.,’'()/_–—-]+", " ", value)
+    value = value.replace("unit linked insurance plan", " ")
+    value = re.sub(r"[^a-z0-9\s]", " ", value)
+    value = re.sub(r"(?<=[a-z])(?=\d)", " ", value)
     return " ".join(value.split())
 
 
@@ -1596,6 +1598,10 @@ def _build_relaxed_ilike_pattern(text: str) -> str:
         "yearly",
         "annual",
         "and",
+        "etf",
+        "exchange",
+        "traded",
+        "mf",
     }
     filtered = [token for token in tokens if token not in removable]
     base = filtered if filtered else tokens
