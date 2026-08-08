@@ -5,6 +5,8 @@
 **Pushed commit inspected:** `763ace5d`  
 **Current result:** 5 of 12 AMCs pass the June staging coverage gate. No June disclosure scope has been promoted or activated for users.
 
+> **Superseded by `docs/CURRENT_STATE.md` (2026-08-08 entry).** After a discovery-workflow reliability fix and an HDFC parser fix, all 12 AMCs pass the June coverage gate and 8 (HDFC, SBI, Axis, PPFAS, Nippon, Motilal, Mirae, DSP) have been promoted and verified live. ABSL/ICICI/Kotak remain frozen by GitHub issue #2; UTI needs a human mapping review before promotion. This runbook's process (dry-run, approval phrase, one-AMC-at-a-time apply) is still the correct procedure — its numeric snapshot below is not current.
+
 This is the execution and verification guide for taking HDFC, SBI, ICICI, Axis, PPFAS, Nippon, Motilal, Mirae, UTI, DSP, Kotak, and Aditya Birla Sun Life from official-source discovery to production runtime data.
 
 ## 1. Non-negotiable boundaries
