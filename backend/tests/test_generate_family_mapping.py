@@ -60,6 +60,21 @@ def test_plan_qualifier_noise_still_stripped_from_suffix():
     assert "flexi cap fund" in cleaned
 
 
+def test_retail_plan_and_of_idcw_qualifiers_are_stripped():
+    """Regression against real mutual_fund_core_snapshot values that surfaced during the
+    issue #2 correction: 'Retail Plan' and 'Payout of IDCW' / 'Reinvestment of IDCW' are
+    plan/option qualifiers, not brand words, and must not leak into the family id."""
+    assert gfm.clean_scheme_name(
+        "Aditya Birla Sun Life Floating Rate Fund-Retail Plan-Growth"
+    ) == gfm.clean_scheme_name("Aditya Birla Sun Life Floating Rate Fund")
+    assert gfm.clean_scheme_name(
+        "ADITYA BIRLA SUN LIFE OVERNIGHT FUND- Direct - Daily Reinvestment of IDCW"
+    ) == gfm.clean_scheme_name("Aditya Birla Sun Life Overnight Fund")
+    assert gfm.clean_scheme_name(
+        "Aditya Birla Sun Life Nifty Midcap 150 Index Fund - Direct - Payout of IDCW"
+    ) == gfm.clean_scheme_name("Aditya Birla Sun Life Nifty Midcap 150 Index Fund")
+
+
 def test_unspaced_hyphen_qualifier_suffix_is_still_stripped():
     """Regression: mutual_fund_core_snapshot.scheme_name inconsistently omits whitespace
     around the plan-qualifier hyphen (e.g. "Fund-Direct Growth" instead of "Fund - Direct

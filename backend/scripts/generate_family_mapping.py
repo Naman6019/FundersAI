@@ -9,9 +9,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from app.database import supabase
 
 _REMOVABLE_WORDS = {
-    'direct', 'regular', 'growth', 'idcw', 'dividend', 'reinvestment', 'payout',
-    'payment', 'institutional', 'bonus', 'option', 'plan', 'half', 'yearly',
-    'quarterly', 'monthly',
+    'direct', 'regular', 'retail', 'growth', 'idcw', 'dividend', 'reinvestment', 'payout',
+    'payment', 'institutional', 'bonus', 'option', 'plan', 'of', 'daily', 'weekly',
+    'half', 'yearly', 'annual', 'quarterly', 'monthly',
 }
 
 

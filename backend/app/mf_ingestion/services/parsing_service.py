@@ -1671,6 +1671,8 @@ _FAMILY_PLAN_QUALIFIER_WORDS = {
     "option",
     "direct",
     "regular",
+    "retail",
+    "institutional",
     "growth",
     "idcw",
     "dividend",
@@ -1679,6 +1681,14 @@ _FAMILY_PLAN_QUALIFIER_WORDS = {
     "payment",
     "reinvestment",
     "bonus",
+    "of",
+    "daily",
+    "weekly",
+    "monthly",
+    "quarterly",
+    "half",
+    "yearly",
+    "annual",
 }
 
 
