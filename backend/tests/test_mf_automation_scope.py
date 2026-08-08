@@ -26,25 +26,25 @@ def test_schedule_always_resolves_to_green_lane():
     ) == GREEN_AMCS
 
 
-@pytest.mark.parametrize("amc", ["icici", "kotak"])
-def test_issue_2_amcs_are_always_rejected(amc):
-    with pytest.raises(ValueError, match="github_issue_2"):
-        resolve_automation_scope(operation="parser_retry", raw_amcs=amc)
+def test_no_amcs_remain_frozen_by_issue_2():
+    """All three AMCs originally frozen by GitHub issue #2 (aditya_birla/absl, icici,
+    kotak) had the shared family-merge bug fixed and moved to VALIDATION_ONLY_AMCS. Each
+    has its own residual, unrelated data question (icici: 10 families with a fresh vs.
+    live risk_level disagreement; kotak: a holdings/portfolio-ISIN coverage shortfall)
+    that the promotion job's own conflict gates already handle directly -- neither needs
+    the blanket automation freeze anymore."""
+    assert FROZEN_ISSUE_2_AMCS == ()
 
 
-@pytest.mark.parametrize("amc", ["absl", "aditya_birla"])
-def test_aditya_birla_was_unfrozen_after_the_family_merge_fix(amc):
-    """aditya_birla (and its 'absl' alias) moved from FROZEN_ISSUE_2_AMCS to
-    VALIDATION_ONLY_AMCS after the shared family-merge bug (GitHub issue #2) was fixed
-    and its June 2026 promotion dry-run passed with zero internal/existing conflicts.
-    icici and kotak remain frozen pending their own remaining conflicts."""
+@pytest.mark.parametrize("amc", ["absl", "aditya_birla", "icici", "kotak"])
+def test_formerly_frozen_amcs_are_now_allowed_in_validation_only_lane(amc):
     resolved = resolve_automation_scope(
         operation="parser_retry",
         lane="validation_only",
         raw_amcs=amc,
         source_document_ids="doc-1",
     )
-    assert resolved == ("aditya_birla",)
+    assert resolved == (("aditya_birla",) if amc in ("absl", "aditya_birla") else (amc,))
 
 
 def test_restricted_and_validation_mutations_require_exact_document_ids():

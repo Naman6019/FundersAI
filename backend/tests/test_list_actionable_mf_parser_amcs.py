@@ -30,6 +30,11 @@ def test_actionable_matrix_requires_exact_ids_for_restricted_lane() -> None:
 
 
 @pytest.mark.parametrize("amc", ["icici", "kotak"])
-def test_actionable_matrix_rejects_frozen_amcs(amc) -> None:
-    with pytest.raises(ValueError, match="github_issue_2"):
-        actionable_matrix([], amc)
+def test_formerly_frozen_amcs_are_actionable_in_validation_only_lane(amc) -> None:
+    rows = [{"id": "doc-1", "amc_code": amc.upper()}]
+    assert actionable_matrix(
+        rows,
+        amc,
+        lane="validation_only",
+        source_document_ids="doc-1",
+    ) == [amc]

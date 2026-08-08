@@ -9,11 +9,15 @@ AutomationOperation = Literal["discovery", "parser_retry", "disclosure_parse", "
 
 GREEN_AMCS = ("ppfas", "sbi", "mirae")
 APPROVED_RESTRICTED_AMCS = ("nippon", "uti")
-# aditya_birla was unfrozen from FROZEN_ISSUE_2_AMCS after the shared family-merge bug
-# (see GitHub issue #2) was fixed and its June 2026 promotion dry-run passed with zero
-# internal/existing conflicts across all scopes.
-VALIDATION_ONLY_AMCS = ("axis", "dsp", "motilal", "hdfc", "aditya_birla")
-FROZEN_ISSUE_2_AMCS = ("icici", "kotak")
+# aditya_birla, icici, and kotak were unfrozen from FROZEN_ISSUE_2_AMCS after the shared
+# family-merge bug (see GitHub issue #2) was fixed. Each AMC has its own residual, unrelated
+# data question that the promotion job's own conflict gates already handle by excluding just
+# the affected scope rather than blocking the batch: icici has 10 families where the fresh
+# June 2026 risk_level disagrees with the currently-live value (needs manual riskometer
+# verification, tracked separately from issue #2); kotak has a holdings/portfolio-ISIN
+# coverage shortfall unrelated to benchmark/risk mapping.
+VALIDATION_ONLY_AMCS = ("axis", "dsp", "motilal", "hdfc", "aditya_birla", "icici", "kotak")
+FROZEN_ISSUE_2_AMCS = ()
 
 LANE_AMCS: dict[str, tuple[str, ...]] = {
     "green": GREEN_AMCS,
