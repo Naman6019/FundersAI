@@ -1756,6 +1756,13 @@ def _extract_fund_manager(chunk: str) -> str | None:
     )
     if managed_by:
         return " ".join(managed_by.group(1).split())
+    unanchored_match = re.search(
+        r"(?i)Fund\s+Manager(?:\(s\)|s)?\**\s*:?\s*([\s\S]{0,2200})", chunk
+    )
+    if unanchored_match:
+        scrambled_names = _extract_scrambled_column_manager_names(unanchored_match.group(1))
+        if scrambled_names:
+            return "; ".join(scrambled_names)
     return None
 
 
@@ -1857,6 +1864,88 @@ def _clean_manager_name(value: str) -> str:
         maxsplit=1,
     )[0]
     return re.split(r"\s+-\s+|\s*\(", name, maxsplit=1)[0].strip(" ,;:-")
+
+
+_SCRAMBLED_MANAGER_NAME_RUN_PATTERN = re.compile(r"\b([A-Z][a-z]+[ \t]+[A-Z][a-z]+)\b")
+
+_SCRAMBLED_MANAGER_COMPANY_SUFFIX_WORDS = {
+    "limited", "ltd", "corporation", "corp", "bank", "finance", "financial",
+    "housing", "reit", "fund", "development", "company", "co", "group",
+    "trust", "industries", "holdings", "power", "energy", "metal", "metals",
+    "traders", "renewables", "infrastructure", "capital", "services",
+    "systems", "national", "rural", "agriculture", "india", "private", "pvt",
+    "prime", "airport", "airports", "steel", "cement", "cements", "ports",
+    "terminals", "utilities", "grid", "wealth", "insurance", "mutual",
+    "parks", "estate", "realty", "telecom", "motors", "chemicals", "pharma",
+    "pharmaceuticals", "textiles", "mills", "works", "projects",
+    "engineering", "construction", "consultants", "solutions",
+    "technologies", "tech", "electronics", "electricals", "automobiles",
+    "auto", "management", "securities", "life", "general", "clearing",
+    "parent", "properties", "advisors", "advisory", "assets", "asset",
+    "fincorp", "leasing", "logistics", "shipping", "textile", "cotton",
+    "sugar", "paper", "petro", "petroleum", "oil", "gas", "cables", "wires",
+    "pipes", "glass", "electric", "investment", "investments", "portion",
+    "reverse", "repo", "commercial", "papers", "treasury",
+}
+
+# Known multi-word conglomerate/bank names that recur as bond issuers in debt-fund
+# portfolios and don't contain a single blocklisted suffix word within a 2-word
+# window (e.g. "Aditya Birla Renewables", "Kotak Mahindra Bank"). Matched as exact
+# phrases rather than blocklisting the individual words, since words like "Aditya"
+# are also common personal first names and would cause false negatives on real
+# fund managers.
+_SCRAMBLED_MANAGER_KNOWN_COMPANY_PHRASES = {
+    "aditya birla", "kotak mahindra", "bharti airtel", "bharti telecom",
+    "state bank", "punjab national", "canara bank", "axis bank", "hdfc bank",
+    "icici bank", "union bank", "reliance industries", "tata motors",
+    "tata capital", "tata steel", "mahindra finance", "bajaj finance",
+    "bajaj auto", "bajaj housing", "godrej properties", "larsen toubro",
+    "sundaram finance", "cholamandalam investment", "small industries",
+    "national bank", "indian railway", "power finance", "export import",
+    "indian oil", "life insurance", "max financial", "hdfc life", "sbi life",
+    "canara hsbc", "niva bupa", "adani power", "adani airport",
+    "torrent power", "torrent pharmaceuticals", "gmr airports",
+    "mindspace business", "nuvama wealth", "nuvoco vistas",
+    "jamnagar utilities", "sikka ports", "grasim industries",
+    "muthoot finance", "muthoot fincorp", "piramal finance",
+    "indostar capital", "kogta financial", "tata housing", "lic housing",
+    "shriram finance", "shriram pistons", "bahadur chand", "motilal oswal",
+    "angel one", "nuvama clearing", "indian bank", "federal bank",
+    "indusind bank", "equitas small",
+}
+
+
+def _looks_like_scrambled_manager_person_name(candidate: str) -> bool:
+    words = candidate.split()
+    if not (2 <= len(words) <= 3):
+        return False
+    if any(word.lower().strip(".") in _SCRAMBLED_MANAGER_COMPANY_SUFFIX_WORDS for word in words):
+        return False
+    if any(len(word) < 2 for word in words):
+        return False
+    if candidate.lower() in _SCRAMBLED_MANAGER_KNOWN_COMPANY_PHRASES:
+        return False
+    return True
+
+
+def _extract_scrambled_column_manager_names(body: str) -> list[str]:
+    """Recovers manager names from multi-column factsheet pages (e.g. DSP's debt-fund
+    pages) where pdfplumber's reading-order reconstruction interleaves a narrow
+    manager-info sidebar with a wide portfolio-holdings table, breaking the normal
+    line-anchored "Fund Manager:" patterns. "Total work experience of N years." is a
+    reliable, unambiguous per-manager marker regardless of column position; the
+    manager's name is taken as the nearest preceding same-line 2-word Title-Case run
+    that doesn't look like a portfolio holding's corporate/instrument name.
+    """
+    marker_pattern = re.compile(r"(?i)Total\s+work\s+experience\s+of\s+\d+\s+years\.?")
+    names: list[str] = []
+    for match in marker_pattern.finditer(body):
+        window = body[max(0, match.start() - 250):match.start()]
+        candidates = [m.group(1) for m in _SCRAMBLED_MANAGER_NAME_RUN_PATTERN.finditer(window)]
+        valid = [candidate for candidate in candidates if _looks_like_scrambled_manager_person_name(candidate)]
+        if valid and valid[-1] not in names:
+            names.append(valid[-1])
+    return names
 
 
 def _parse_number(raw: str) -> float | None:

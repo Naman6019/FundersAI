@@ -478,6 +478,71 @@ BENCHMARK Nifty Large Midcap 250 (TRI)
     assert records[0].fund_manager == "Rohit Singhania; Nilesh Aiya"
 
 
+def test_factsheet_parser_extracts_dsp_debt_fund_managers_from_scrambled_columns():
+    """Regression for 12 DSP debt/fixed-income schemes that came up with fund_manager
+    missing entirely: unlike DSP's equity-fund pages (see the test above), DSP's
+    debt-fund pages lay the manager sidebar out in a second column alongside the
+    portfolio-holdings table. pdfplumber's extract_text() interleaves the two columns
+    into a single scrambled reading order, so "FUND MANAGER" never lands at the start
+    of a line and the line-anchored block_patterns never match. Verified against the
+    real dsp-factsheet-june-2026.pdf text for DSP Credit Risk Fund and DSP Regular
+    Savings Fund (the "(Equity portion)"/"(Debt Portion)" qualifier case)."""
+    credit_risk_text = """DSP Credit Risk Fund
+An open ended debt scheme predominantly investing in AA and below rated corporate bonds (excluding AA+ rated corporate bonds).
+A relatively high interest rate risk and relatively high credit risk.
+INCEPTION DATE Portfolio
+May 13, 2003
+% to Net % to Net
+Name of Instrument Rating Name of Instrument Rating
+BENCHMARK Assets Assets
+CRISIL Credit Risk Debt B-II Index DEBT INSTRUMENTS 7.10% GOI 2034 SOV 1.89%
+BOND & NCD's Total 14.86%
+FUND MANAGER Listed / awaiting listing on the stock exchanges
+ JTPM Metal Traders Limited CRISIL AA 5.84% MONEY MARKET INSTRUMENTS
+Vivekanand Ramakrishnan  Aditya Birla Renewables Limited CRISIL AA 5.82% Certificate of Deposit
+Total work experience of 29 years.  Nuvoco Vistas Corporation Limited CRISIL AA 5.75%  Kotak Mahindra Bank Limited CRISIL A1+ 8.73%
+Managing this Scheme since July  Tata Housing Development Company Limited CARE AA 5.64% Total 8.73%
+2021.  National Bank for Agriculture and Rural Development CRISIL AAA 5.61%
+Shalini Vasanta  Adani Airport Holdings Limited IND AA- 5.44% TREPS / Reverse Repo Investments 8.26%
+Total work experience of 12 years.  Nuvama Wealth Finance Limited CARE AA 3.94% Total 8.26%
+Managing this Scheme since January  360 One Prime Limited ICRA AA 3.87%
+2025. GMR AIRPORTS LIMITED CRISIL A+ 3.86% Alternative Investment Funds (AIF)
+Piramal Finance Limited ICRA AA+ 3.86% SBI Funds Management Pvt Ltd/Fund Parent 0.25%
+Kunal Khudania Aadhar Housing Finance Limited ICRA AA 3.77% Total 0.25%
+Total work experience of 8 years. REC Limited CRISIL AAA 3.76%
+Managing this Scheme since January Kogta Financial (India) Limited CARE A+ 3.67% Cash & Cash Equivalent
+2026. Tata Projects Limited CRISIL AA 3.66% Net Receivables/Payables -2.19%
+NAV AS ON Indostar Capital Finance Limited CARE AA- 1.97% GRAND TOTAL 100.00%
+"""
+    regular_savings_text = """DSP Regular Savings Fund
+An open ended hybrid scheme investing predominantly in debt instruments
+INCEPTION DATE Portfolio
+Jun 11, 2004
+% to Net % to Net
+Name of Instrument Name of Instrument Rating
+BENCHMARK Assets Assets
+CRISIL Hybrid 85+15-Conservative EQUITY & EQUITY RELATED DEBT INSTRUMENTS
+Index Listed / awaiting listing on the stock exchanges BOND & NCD's
+Banks 6.88% Listed / awaiting listing on the stock exchanges
+FUND MANAGER  HDFC Bank Limited 2.98%  Muthoot Finance Limited CRISIL AA+ 4.25%
+Abhishek Singh (Equity portion) ICICI Bank Limited 1.86%  Cholamandalam Investment and Finance Company Limited ICRA AA+ 2.98%
+Total work experience of 18 years. Kotak Mahindra Bank Limited 1.23% Total 7.23%
+Managing the Scheme since May 2021. Axis Bank Limited 0.81%
+Pharmaceuticals & Biotechnology 2.50% Government Securities (Central/State)
+Shantanu Godambe Cipla Limited 1.30%  7.32% GOI 2030 SOV 11.64%
+Total work experience of 18 years. Cohance Lifesciences Limited 0.51%  8.51% GOI FRB 2033 SOV 8.86%
+Managing this Scheme since August IPCA Laboratories Limited 0.31%  7.03% Maharashtra SDL 2038 SOV 8.06%
+2024. Alembic Pharmaceuticals Limited 0.23%  7.06% GOI 2028 SOV 5.76%
+NAV AS ON Insurance 2.23% 7.10% GOI 2034 SOV 2.90%
+"""
+
+    credit_risk_records = FactsheetParser().parse_text(text=credit_risk_text, report_month=date(2026, 6, 1))
+    regular_savings_records = FactsheetParser().parse_text(text=regular_savings_text, report_month=date(2026, 6, 1))
+
+    assert credit_risk_records[0].fund_manager == "Vivekanand Ramakrishnan; Shalini Vasanta; Kunal Khudania"
+    assert regular_savings_records[0].fund_manager == "Abhishek Singh; Shantanu Godambe"
+
+
 def test_factsheet_parser_extracts_motilal_co_managers_and_product_risk():
     scheme_page = """
 Motilal Oswal Midcap Fund
