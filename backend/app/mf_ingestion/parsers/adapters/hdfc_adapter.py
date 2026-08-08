@@ -12,7 +12,17 @@ from app.mf_ingestion.normalizers.instrument_normalizer import normalize_instrum
 from app.mf_ingestion.parsers.adapters.base_adapter import BaseAMCAdapter
 from app.mf_ingestion.parsers.base_parser import ParseContext, ParsedDocument
 
-SCHEME_PATTERN = re.compile(r"\b(HDFC\s+[A-Za-z0-9&,'\-\.\(\) ]{2,100}?(?:Fund|FOF|ETF))\b", re.IGNORECASE)
+SCHEME_PATTERN = re.compile(
+    r"\b(HDFC\s+(?:"
+    r"[A-Za-z0-9&,'\-\.\(\) ]{2,100}?(?:Fund|FOF|ETF)\b"
+    # Some schemes (e.g. "HDFC ELSS Tax saver", "HDFC FMP 1269D March 2023",
+    # "HDFC Long Term Advantage Plan") never contain Fund/FOF/ETF; their
+    # official title instead ends right before the parenthetical scheme-type
+    # description ("... (An open ended ...)").
+    r"|[A-Za-z0-9&,'\-\. ]{2,80}?(?=\s*\()"
+    r"))",
+    re.IGNORECASE,
+)
 INLINE_NAME_PCT_PATTERN = re.compile(
     r"(?P<name>[A-Za-z][A-Za-z0-9&,'\-\.\(\)/ ]{2,}?)\s+(?P<pct>\d{1,2}\.\d{2})(?=\s+[A-Za-z]|$)"
 )

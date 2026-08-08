@@ -110,6 +110,79 @@ def test_hdfc_parse_holdings_extracts_rows_from_monthly_excel_frame():
     assert parsed.metrics["total_percent_aum"] == 11.92
 
 
+def test_hdfc_parse_holdings_extracts_scheme_names_without_fund_fof_etf_suffix():
+    """Regression for source_document_id e3816d5c-44bf-403a-90ac-e22e12aa43f2 (HDFC ELSS Tax
+    saver, June 2026): schemes whose official title never contains Fund/FOF/ETF (ELSS "Tax
+    saver", "FMP <tenure>D <month> <year>", "Long Term Advantage Plan") were silently dropped
+    because SCHEME_PATTERN required one of those words. The title's parenthetical scheme-type
+    description is a reliable name boundary even without that keyword."""
+    frame = pd.DataFrame(
+        [
+            ["Portfolio as on 30-Jun-2026", None, None, None, None, None, None, None],
+            [None, "ISIN", "Coupon (%)", "Name Of the Instrument", "Industry+ /Rating", "Quantity", "Market/ Fair Value", "% to NAV"],
+            [None, "INE090A01021", None, "ICICI Bank Ltd.", "Banks", 11000000, 151272, 9.64],
+            [None, "INE040A01034", None, "HDFC Bank Ltd.", "Banks", 16600000, 132459.7, 8.44],
+        ],
+        columns=[
+            "HDFC ELSS Tax saver (An Open-ended Equity Linked Savings Scheme with a statutory lock in of 3 years and tax benefit)",
+            "HDFC ELSS Tax saver (An Open-ended Equity Linked Savings Scheme with a statutory lock in of 3 years and tax benefit).1",
+            "HDFC ELSS Tax saver (An Open-ended Equity Linked Savings Scheme with a statutory lock in of 3 years and tax benefit).2",
+            "HDFC ELSS Tax saver (An Open-ended Equity Linked Savings Scheme with a statutory lock in of 3 years and tax benefit).3",
+            "HDFC ELSS Tax saver (An Open-ended Equity Linked Savings Scheme with a statutory lock in of 3 years and tax benefit).4",
+            "HDFC ELSS Tax saver (An Open-ended Equity Linked Savings Scheme with a statutory lock in of 3 years and tax benefit).5",
+            "HDFC ELSS Tax saver (An Open-ended Equity Linked Savings Scheme with a statutory lock in of 3 years and tax benefit).6",
+            "HDFC ELSS Tax saver (An Open-ended Equity Linked Savings Scheme with a statutory lock in of 3 years and tax benefit).7",
+        ],
+    )
+
+    adapter = HDFCAdapter()
+    parsed = adapter.parse_holdings(
+        excel_frames=[frame],
+        pdf_table_frames=[],
+        pdf_text="",
+        context=SimpleNamespace(source_document_id="doc-elss", source_url="local", report_month=date(2026, 6, 1)),
+    )
+
+    assert parsed.scheme_name == "HDFC ELSS Tax saver"
+    assert len(parsed.holdings) == 2
+    assert parsed.holdings[0]["isin"] == "INE090A01021"
+
+
+def test_hdfc_parse_holdings_extracts_fmp_scheme_names():
+    """Regression for source_document_id a977da99-7553-4c9d-859c-ee9245d7782a (HDFC FMP 1269D
+    March 2023, June 2026): same missing-Fund-suffix bug as the ELSS case above, affecting every
+    FMP portfolio disclosure."""
+    frame = pd.DataFrame(
+        [
+            ["Portfolio as on 30-Jun-2026", None, None, None, None, None, None, None],
+            [None, "ISIN", "Coupon (%)", "Name Of the Instrument", "Industry+ /Rating", "Quantity", "Market/ Fair Value", "% to NAV"],
+            [None, "IN2020X01234", 7.5, "7.5% Government of India 2032", "Sovereign", 500000, 50000, 98.5],
+        ],
+        columns=[
+            "HDFC FMP 1269D March 2023 (A Close Ended Income Scheme With Tenure 1269 Days. A Relatively High Interest Rate Risk And Relatively Low Credit Risk)",
+            "HDFC FMP 1269D March 2023 (A Close Ended Income Scheme With Tenure 1269 Days. A Relatively High Interest Rate Risk And Relatively Low Credit Risk).1",
+            "HDFC FMP 1269D March 2023 (A Close Ended Income Scheme With Tenure 1269 Days. A Relatively High Interest Rate Risk And Relatively Low Credit Risk).2",
+            "HDFC FMP 1269D March 2023 (A Close Ended Income Scheme With Tenure 1269 Days. A Relatively High Interest Rate Risk And Relatively Low Credit Risk).3",
+            "HDFC FMP 1269D March 2023 (A Close Ended Income Scheme With Tenure 1269 Days. A Relatively High Interest Rate Risk And Relatively Low Credit Risk).4",
+            "HDFC FMP 1269D March 2023 (A Close Ended Income Scheme With Tenure 1269 Days. A Relatively High Interest Rate Risk And Relatively Low Credit Risk).5",
+            "HDFC FMP 1269D March 2023 (A Close Ended Income Scheme With Tenure 1269 Days. A Relatively High Interest Rate Risk And Relatively Low Credit Risk).6",
+            "HDFC FMP 1269D March 2023 (A Close Ended Income Scheme With Tenure 1269 Days. A Relatively High Interest Rate Risk And Relatively Low Credit Risk).7",
+        ],
+    )
+
+    adapter = HDFCAdapter()
+    parsed = adapter.parse_holdings(
+        excel_frames=[frame],
+        pdf_table_frames=[],
+        pdf_text="",
+        context=SimpleNamespace(source_document_id="doc-fmp", source_url="local", report_month=date(2026, 6, 1)),
+    )
+
+    assert parsed.scheme_name == "HDFC FMP 1269D March 2023"
+    assert len(parsed.holdings) == 1
+    assert parsed.holdings[0]["isin"] == "IN2020X01234"
+
+
 def test_hdfc_parse_holdings_splits_inline_name_percent_sequences_and_detects_month():
     frame = pd.DataFrame(
         [
