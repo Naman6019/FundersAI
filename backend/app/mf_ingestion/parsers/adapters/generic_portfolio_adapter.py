@@ -20,6 +20,12 @@ DATE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 ISIN_PATTERN = re.compile(r"^[A-Z]{2}[A-Z0-9]{9}\d$")
+# No "treps" entry here (unlike some AMC-specific adapters): rows without their own
+# percent_aum are already dropped upstream, so a bare "TREPS" header row never reaches
+# this filter. In this shared table format "TREPS / Reverse Repo Investments" is the
+# terminal instrument-level row carrying the real percentage for money-market/overnight
+# schemes -- blocking it drops their dominant (often only) holding. Its duplicate
+# "Total" subtotal row is still excluded by the "total" marker below.
 SUMMARY_MARKERS = (
     "grand total",
     "sub total",
@@ -31,7 +37,6 @@ SUMMARY_MARKERS = (
     "money market instruments",
     "cash and cash equivalents",
     "mutual fund units",
-    "treps",
 )
 
 
