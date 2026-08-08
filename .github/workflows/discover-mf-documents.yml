@@ -68,9 +68,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  registry-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      amcs: ${{ steps.registry.outputs.amcs }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: registry
+        shell: bash
+        run: |
+          matrix="$(python backend/scripts/resolve_mf_automation_scope.py --operation discovery --lane '${{ inputs.lane || 'green' }}' --amcs '${{ inputs.amcs }}' --event-name '${{ github.event_name }}' --format json)"
+          echo "amcs=$matrix" >> "$GITHUB_OUTPUT"
+
   discover:
+    needs: registry-matrix
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        amc: ${{ fromJson(needs.registry-matrix.outputs.amcs) }}
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -138,8 +155,7 @@ jobs:
           set -euo pipefail
           mkdir -p discovery-output
 
-          amcs="${{ inputs.amcs }}"
-          lane="${{ inputs.lane }}"
+          amc="${{ matrix.amc }}"
           document_scope="${{ inputs.document_scope }}"
           expected_month="${{ inputs.expected_month }}"
           expected_month_grace_days="${{ inputs.expected_month_grace_days }}"
@@ -147,14 +163,14 @@ jobs:
           max_actions="${{ inputs.max_actions }}"
           max_candidates="${{ inputs.max_candidates }}"
           probe_downloads="${{ inputs.probe_downloads }}"
+          lane="${{ inputs.lane || 'green' }}"
 
-          lane="${lane:-green}"
-          amcs="$(python backend/scripts/resolve_mf_automation_scope.py --operation discovery --lane "$lane" --amcs "$amcs" --event-name "$GITHUB_EVENT_NAME")"
           document_scope="${document_scope:-all}"
           expected_month="${expected_month:-$(date -u -d '1 month ago' +%Y-%m)}"
           expected_month_grace_days="${expected_month_grace_days:-14}"
-          amc_count="$(python -c "print(len('$amcs'.split(',')))")"
-          minimum_completed="${minimum_completed:-$amc_count}"
+          # registry-matrix already resolved and lane-validated this single AMC,
+          # so completion is scoped to this one agent and never blocked by siblings.
+          minimum_completed="${minimum_completed:-1}"
           max_actions="${max_actions:-12}"
           max_candidates="${max_candidates:-3}"
           probe_downloads="${probe_downloads:-true}"
@@ -165,7 +181,7 @@ jobs:
           fi
 
           args=(
-            --amcs "$amcs"
+            --amcs "$amc"
             --expected-month "$expected_month"
             --expected-month-grace-days "$expected_month_grace_days"
             --max-actions "$max_actions"
@@ -174,7 +190,7 @@ jobs:
             --output discovery-output/report.json
             --manifest-output discovery-output/manifest.json
             --persist-run
-            --run-id "github-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            --run-id "github-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${amc}"
             --trigger-source "github_actions:${GITHUB_EVENT_NAME}"
           )
 
@@ -197,7 +213,7 @@ jobs:
         if: always() && hashFiles('discovery-output/**') != ''
         uses: actions/upload-artifact@v4
         with:
-          name: amc-discovery-${{ github.run_id }}-${{ github.run_attempt }}
+          name: amc-discovery-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.amc }}
           path: discovery-output/
           if-no-files-found: error
           retention-days: 30

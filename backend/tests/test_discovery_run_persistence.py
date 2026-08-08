@@ -131,7 +131,12 @@ def test_discovery_workflow_is_persistence_only_and_uses_resolved_lane_gate() ->
 
     assert "resolve_mf_automation_scope.py --operation discovery" in workflow
     assert "capability_keys('discovery_enabled')" not in workflow
-    assert "minimum_completed=\"${minimum_completed:-$amc_count}\"" in workflow
+    # One GitHub Actions job runs per AMC (registry-matrix resolves the lane once;
+    # each matrix job then completes independently, so one AMC's failure never
+    # masks another AMC's success the way a single shared job used to).
+    assert "matrix:\n        amc: ${{ fromJson(needs.registry-matrix.outputs.amcs) }}" in workflow
+    assert "fail-fast: false" in workflow
+    assert "minimum_completed=\"${minimum_completed:-1}\"" in workflow
     assert "--persist-run" in workflow
     assert "--minimum-completed" in workflow
     assert "actions/upload-artifact@v4" in workflow
