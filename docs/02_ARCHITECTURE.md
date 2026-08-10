@@ -1,13 +1,14 @@
 # Architecture
 
-**Last updated:** 2026-08-04
+**Last updated:** 2026-08-10
 
 ## System Shape
 FundersAI is a split web architecture:
 - Next.js frontend for UI + server-side proxy/admin routes
 - FastAPI backend for analysis orchestration and internal admin diagnostics
+- A standalone LangGraph report-synthesis microservice (`microservices/reports/`), containerized and deployed on an AWS EC2 instance running K3s (lightweight Kubernetes)
 - Supabase as primary structured runtime store
-- Cloudflare R2 for raw MF documents and cold archives
+- Cloudflare R2 for raw MF documents and cold archives, accessed through the S3-compatible API (`boto3` in the backend, `aws4fetch` SigV4 signing in edge functions) — not AWS S3 itself
 - GitHub Actions for recurring sync/ingestion/compaction jobs
 
 The next infrastructure work extends this shape rather than replacing it. The target is a versioned Fund Research Evidence Pipeline built on the existing Supabase, R2, FastAPI, and background-job boundaries.
@@ -33,6 +34,13 @@ The next infrastructure work extends this shape rather than replacing it. The ta
 - `repositories/stock_repository.py` centralizes Supabase stock table access.
 - `services/quant_service.py` and `services/comparison_reasoning.py` build deterministic compare payloads.
 - MF ingestion modules (`mf_ingestion/*`) handle AMC discovery, parsing, validation, review queue, and R2/archive writes.
+
+### Reports Microservice (`microservices/reports/`)
+- Separate FastAPI + LangGraph service (`main.py`, `report_graph.py`, `service.py`) that streams fund-comparison report synthesis independently of the main backend.
+- Containerized via `microservices/reports/Dockerfile` (Python 3.11-slim, Playwright/Chromium for rendering) and deployed with the manifests in `microservices/reports/k8s/` (`deployment.yaml`, `service.yaml`).
+- Runs 2 replicas on a single AWS EC2 (`t3.small`) instance running K3s; see `docs/AWS_K3S_DEPLOYMENT.md` for the provisioning/deploy steps (gitignored locally, not tracked in this repo).
+- Reached by the frontend via `REPORTS_MICROSERVICE_URL`, pointed at the EC2 host's NodePort `30001`.
+- Talks to Supabase and OpenAI directly via Kubernetes-secret-managed credentials (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `OPENAI_API_KEY`); does not go through the FastAPI backend.
 
 ## Data Paths
 

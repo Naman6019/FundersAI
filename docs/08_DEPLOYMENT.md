@@ -1,6 +1,6 @@
 # Deployment
 
-**Last updated:** 2026-08-08
+**Last updated:** 2026-08-10
 
 ## Current Topology
 - Frontend: Vercel project rooted at `frontend/`
@@ -8,8 +8,9 @@
   - Dedicated Subdomain: `https://synthesis.fundersai.co.in` (CNAME `cname.vercel-dns.com`)
   - Edge Middleware: Next.js `frontend/middleware.ts` rewrites `synthesis.fundersai.co.in/` requests to `/reports` and issues HTTP 308 permanent redirects for legacy `www.fundersai.co.in/synthesis` paths.
 - Backend: Google Cloud Run web service rooted at `backend/`
+- Reports Microservice: AWS EC2 (`t3.small`, Ubuntu 22.04) running K3s (lightweight Kubernetes), rooted at `microservices/reports/`
 - Database: Supabase
-- Object Storage: Cloudflare R2 (raw docs + cold archives)
+- Object Storage: Cloudflare R2 (raw docs + cold archives), accessed via the S3-compatible API
 - Scheduler: GitHub Actions workflows in `.github/workflows/`
 
 This is the active production topology. Prefect artifacts are also implemented as deployment proofs.
@@ -147,6 +148,16 @@ gcloud run services update fundersai-api --region <region>
 2. Run `create-secrets.ps1` once with the value in `.env.backend-secrets`.
 3. Document the new binding in this section.
 4. Redeploy with `deploy.ps1`.
+
+## Reports Microservice (AWS EC2 + K3s)
+- Instance: AWS EC2 `t3.small`, Ubuntu 22.04 LTS.
+- Cluster: K3s installed via `curl -sfL https://get.k3s.io | sh -`.
+- Security group: SSH (22), HTTP (80), and NodePort `30001` (the reports service's exposed port) opened for inbound traffic.
+- Image: built from `microservices/reports/Dockerfile` and pushed to a container registry, referenced by `microservices/reports/k8s/deployment.yaml` (2 replicas, container port `8001`).
+- Secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `OPENAI_API_KEY` injected via a Kubernetes secret (`reports-secrets`), not env files on the pod.
+- Frontend integration: `REPORTS_MICROSERVICE_URL` (set in the frontend environment) points at `http://<ec2-host>:30001` and is proxied by the Synthesis Studio (`/reports`) routes.
+- Full step-by-step provisioning/deploy guide: `docs/AWS_K3S_DEPLOYMENT.md` (present locally; excluded from git by a `*.MD` `.gitignore` rule — treat it as an operator runbook, not a tracked repo doc).
+- This service is intentionally separate from the Cloud Run backend: it owns its own DB/LLM credentials and streaming endpoint (`POST /api/v1/reports/stream`) rather than routing through FastAPI.
 
 ### NAV Cache Cutover
 - Apply `backend/migrations/20260717_nav_api_cache.sql` before deploying the NAV-cache runtime.
