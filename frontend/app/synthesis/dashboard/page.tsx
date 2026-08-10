@@ -39,7 +39,7 @@ export default function ReportsDashboard() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800/80 pb-6">
                 <div>
                     <div className="flex items-center gap-2 text-xs font-mono text-gray-400 mb-1">
-                        <Link href="/reports" className="hover:text-blue-400">Synthesis</Link>
+                        <Link href="/synthesis" className="hover:text-blue-400">Synthesis</Link>
                         <span>/</span>
                         <span className="text-gray-200">Dashboard</span>
                     </div>
@@ -51,7 +51,7 @@ export default function ReportsDashboard() {
                     </h1>
                 </div>
 
-                <Link href="/reports/generate">
+                <Link href="/synthesis/generate">
                     <ShimmerButton
                         className="px-6 py-2.5 shadow-xl"
                         shimmerColor="#ffffff"
@@ -95,7 +95,7 @@ export default function ReportsDashboard() {
                                 <p className="text-sm font-semibold text-gray-300">No saved reports found.</p>
                                 <p className="text-xs text-gray-500 mt-1">Generate a side-by-side comparison in Synthesis Studio to save your first report.</p>
                                 <Link 
-                                    href="/reports/generate" 
+                                    href="/synthesis/generate" 
                                     className="mt-5 inline-block px-5 py-2.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20"
                                 >
                                     Open Synthesis Studio →
@@ -137,7 +137,7 @@ export default function ReportsDashboard() {
 
                                         <div className="pt-3 border-t border-gray-800/60 flex items-center justify-between">
                                             <Link 
-                                                href={`/reports/generate?report_id=${report.id}`}
+                                                href={`/synthesis/generate?report_id=${report.id}`}
                                                 className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1"
                                             >
                                                 <span>View Report</span>
@@ -188,7 +188,7 @@ export default function ReportsDashboard() {
                         <h4 className="text-sm font-bold text-white">Portfolio Overlap Calculator</h4>
                         <p className="text-xs text-gray-400 leading-relaxed">Check common holdings and overlap percentage between mutual funds.</p>
                         <Link 
-                            href="/reports/tools/portfolio-overlap"
+                            href="/synthesis/tools/portfolio-overlap"
                             className="inline-block text-xs font-semibold text-emerald-400 hover:text-emerald-300 pt-1"
                         >
                             Open Calculator →

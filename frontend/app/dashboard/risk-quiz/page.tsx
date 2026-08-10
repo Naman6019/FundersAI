@@ -118,19 +118,38 @@ function profileForScore(score: number) {
 }
 
 function RiskQuizContent() {
+  const totalQuestions = QUESTIONS.length;
   const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [currentStep, setCurrentStep] = useState(0);
+
   const answeredCount = Object.keys(answers).length;
-  const isComplete = answeredCount === QUESTIONS.length;
+  const isComplete = currentStep >= totalQuestions;
   const totalScore = useMemo(() => Object.values(answers).reduce((sum, score) => sum + score, 0), [answers]);
   const profile = profileForScore(totalScore);
   const defensive = 100 - profile.growth;
   const chatQuery = encodeURIComponent(
-    `My risk quiz result is ${profile.name} with score ${totalScore}/${QUESTIONS.length * 5}. Explain what this means for mutual fund research, category mix, and risk checks. Keep it research-only, not advice.`,
+    `My risk quiz result is ${profile.name} with score ${totalScore}/${totalQuestions * 5}. Explain what this means for mutual fund research, category mix, and risk checks. Keep it research-only, not advice.`,
   );
+
+  function selectOption(questionIndex: number, score: number) {
+    setAnswers((current) => ({ ...current, [questionIndex]: score }));
+    setCurrentStep(questionIndex + 1);
+  }
+
+  function goBack() {
+    setCurrentStep((step) => Math.max(0, step - 1));
+  }
+
+  function reset() {
+    setAnswers({});
+    setCurrentStep(0);
+  }
+
+  const currentQuestion = !isComplete ? QUESTIONS[currentStep] : null;
 
   return (
     <main className="min-h-screen bg-[#05070f] px-4 py-6 text-slate-100 sm:px-8">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-2xl">
         <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-[#66a3ff]">
           <ArrowLeft className="h-4 w-4" />
           Back to dashboard
@@ -148,112 +167,130 @@ function RiskQuizContent() {
             <ShieldQuestion className="h-8 w-8 text-[#66a3ff]" />
           </div>
 
-          <div className="mt-8 grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-            <div className="space-y-4">
-              {QUESTIONS.map((question, questionIndex) => (
-                <div key={question.prompt} className="rounded-xl border border-white/10 bg-[#080d1a] p-4">
-                  <div className="flex gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#66a3ff]/25 bg-[#66a3ff]/10 text-xs font-semibold text-[#66a3ff]">
-                      {questionIndex + 1}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h2 className="text-sm font-semibold text-white">{question.prompt}</h2>
-                      <div className="mt-3 grid gap-2">
-                        {question.options.map((option) => {
-                          const selected = answers[questionIndex] === option.score;
-                          return (
-                            <button
-                              key={option.label}
-                              type="button"
-                              onClick={() => setAnswers((current) => ({ ...current, [questionIndex]: option.score }))}
-                              className={`rounded-lg border px-3 py-2 text-left text-sm transition ${
-                                selected
-                                  ? 'border-[#66a3ff] bg-[#66a3ff]/15 text-white'
-                                  : 'border-white/10 bg-white/[0.03] text-slate-300 hover:border-[#66a3ff]/40 hover:bg-[#66a3ff]/10'
-                              }`}
-                            >
-                              {option.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+          <div className="mt-8 flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              {isComplete ? 'Complete' : `Question ${currentStep + 1} of ${totalQuestions}`}
+            </p>
+            <button
+              type="button"
+              onClick={reset}
+              className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-[#66a3ff]/40 hover:text-white"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset
+            </button>
+          </div>
 
-            <aside className="h-fit rounded-xl border border-[#66a3ff]/20 bg-[#0d1728] p-5 lg:sticky lg:top-6">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Progress</p>
-                  <p className="mt-1 text-sm font-semibold text-white">{answeredCount}/{QUESTIONS.length} answered</p>
-                </div>
+          <div className="mt-3 flex gap-1.5">
+            {QUESTIONS.map((question, index) => (
+              <div
+                key={question.prompt}
+                className={`h-1.5 flex-1 rounded-full transition-colors ${
+                  index < answeredCount || isComplete ? 'bg-[#66a3ff]' : index === currentStep ? 'bg-[#66a3ff]/40' : 'bg-slate-800'
+                }`}
+              />
+            ))}
+          </div>
+
+          {currentQuestion ? (
+            <div className="mt-8">
+              <h2 className="text-xl font-semibold text-white">{currentQuestion.prompt}</h2>
+              <div className="mt-5 grid gap-2.5">
+                {currentQuestion.options.map((option) => {
+                  const selected = answers[currentStep] === option.score;
+                  return (
+                    <button
+                      key={option.label}
+                      type="button"
+                      onClick={() => selectOption(currentStep, option.score)}
+                      className={`rounded-xl border px-4 py-3.5 text-left text-sm transition ${
+                        selected
+                          ? 'border-[#66a3ff] bg-[#66a3ff]/15 text-white'
+                          : 'border-white/10 bg-white/[0.03] text-slate-300 hover:border-[#66a3ff]/40 hover:bg-[#66a3ff]/10'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 flex items-center justify-between">
                 <button
                   type="button"
-                  onClick={() => setAnswers({})}
-                  className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-[#66a3ff]/40 hover:text-white"
+                  onClick={goBack}
+                  disabled={currentStep === 0}
+                  className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2.5 text-sm font-semibold text-slate-300 transition hover:border-[#66a3ff]/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  Reset
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep((step) => step + 1)}
+                  disabled={answers[currentStep] === undefined}
+                  className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2.5 text-sm font-semibold text-slate-300 transition hover:border-[#66a3ff]/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Next
+                  <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
+            </div>
+          ) : (
+            <div className="mt-8">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Your risk profile</p>
+              <h2 className="mt-2 text-3xl font-semibold text-white">{profile.name}</h2>
+              <p className="mt-3 text-sm leading-6 text-slate-300">{profile.body}</p>
 
-              <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-800">
-                <div className="h-full rounded-full bg-[#66a3ff]" style={{ width: `${(answeredCount / QUESTIONS.length) * 100}%` }} />
+              <div className="mt-5 space-y-3">
+                <div>
+                  <div className="mb-1 flex justify-between text-xs text-slate-400">
+                    <span>Growth assets</span>
+                    <span>{profile.growth}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-800">
+                    <div className="h-full rounded-full bg-[#66a3ff]" style={{ width: `${profile.growth}%` }} />
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 flex justify-between text-xs text-slate-400">
+                    <span>Defensive assets</span>
+                    <span>{defensive}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-800">
+                    <div className="h-full rounded-full bg-emerald-300" style={{ width: `${defensive}%` }} />
+                  </div>
+                </div>
               </div>
 
-              {isComplete ? (
-                <div className="mt-6">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Your risk profile</p>
-                  <h2 className="mt-2 text-3xl font-semibold text-white">{profile.name}</h2>
-                  <p className="mt-3 text-sm leading-6 text-slate-300">{profile.body}</p>
+              <div className="mt-5 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] p-3 text-xs leading-5 text-amber-50/80">
+                This is an indicative profile, not a suitability recommendation. Use it as context for research.
+              </div>
 
-                  <div className="mt-5 space-y-3">
-                    <div>
-                      <div className="mb-1 flex justify-between text-xs text-slate-400">
-                        <span>Growth assets</span>
-                        <span>{profile.growth}%</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-slate-800">
-                        <div className="h-full rounded-full bg-[#66a3ff]" style={{ width: `${profile.growth}%` }} />
-                      </div>
-                    </div>
-                    <div>
-                      <div className="mb-1 flex justify-between text-xs text-slate-400">
-                        <span>Defensive assets</span>
-                        <span>{defensive}%</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-slate-800">
-                        <div className="h-full rounded-full bg-emerald-300" style={{ width: `${defensive}%` }} />
-                      </div>
-                    </div>
-                  </div>
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={goBack}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-4 py-3 text-sm font-semibold text-slate-300 transition hover:border-[#66a3ff]/40 hover:text-white"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Review answers
+                </button>
+                <Link
+                  href={`/dashboard?query=${chatQuery}&asset_type=mutual_fund`}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#66a3ff] px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-[#8bbcff]"
+                >
+                  Discuss this in chat
+                  <MessageSquareText className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+          )}
 
-                  <div className="mt-5 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] p-3 text-xs leading-5 text-amber-50/80">
-                    This is an indicative profile, not a suitability recommendation. Use it as context for research.
-                  </div>
-
-                  <Link
-                    href={`/dashboard?query=${chatQuery}&asset_type=mutual_fund`}
-                    className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#66a3ff] px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-[#8bbcff]"
-                  >
-                    Discuss this in chat
-                    <MessageSquareText className="h-4 w-4" />
-                  </Link>
-                </div>
-              ) : (
-                <div className="mt-6 rounded-lg border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-slate-300">
-                  Finish all questions to see your profile and open the result in chat.
-                </div>
-              )}
-
-              <Link href="/dashboard/sip-calculator" className="mt-4 inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-[#66a3ff]">
-                Open SIP Calculator
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </aside>
-          </div>
+          <Link href="/dashboard/sip-calculator" className="mt-6 inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-[#66a3ff]">
+            Open SIP Calculator
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         </section>
       </div>
     </main>

@@ -401,14 +401,14 @@ function ReportChatContent() {
                     <div className="flex items-center gap-2 text-xs font-mono tracking-wider text-gray-400">
                         <Link href="/" className="hover:text-blue-400">FundersAI</Link>
                         <span>/</span>
-                        <Link href="/reports" className="hover:text-blue-400">Synthesis</Link>
+                        <Link href="/synthesis" className="hover:text-blue-400">Synthesis</Link>
                         <span>/</span>
                         <span className="text-blue-400 font-bold">[ WORKSTATION ]</span>
                     </div>
                     <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight flex items-center gap-3 font-serif-display">
                         <span>Synthesis Studio</span>
                         <span className="text-xs font-mono font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/30">
-                            LangGraph Multi-Agent Engine
+                            AI Multi-Agent Research Engine
                         </span>
                     </h1>
                 </div>
@@ -450,7 +450,7 @@ function ReportChatContent() {
                         </div>
                     ) : (
                         <a 
-                            href="/login?next=/reports/generate" 
+                            href="/login?next=/synthesis/generate"
                             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-mono font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-blue-900/30 flex items-center gap-1.5"
                         >
                             <span>Log In to Save</span>
@@ -489,7 +489,7 @@ function ReportChatContent() {
                     </div>
 
                     <Link 
-                        href="/reports/supported-funds" 
+                        href="/synthesis/supported-funds" 
                         className="text-xs font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
                     >
                         <span>Browse 1,000+ Funds Directory</span>
@@ -664,7 +664,7 @@ function ReportChatContent() {
 
             {/* Dual Pane Studio Output Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                {/* Left Sidebar: LangGraph Terminal Execution Progress Monitor */}
+                {/* Left Sidebar: Execution Progress Monitor */}
                 <div className="lg:col-span-3 xl:col-span-3 space-y-4 print:hidden">
                     <div className="bg-[#070b12]/95 border border-gray-800/90 rounded-2xl p-5 space-y-4 shadow-xl backdrop-blur-xl border-t-blue-500/20">
                         <div className="flex items-center justify-between border-b border-gray-800/80 pb-3">
@@ -675,19 +675,19 @@ function ReportChatContent() {
                         <div className="space-y-3 font-mono text-[11px]">
                             <div className="flex items-center gap-2.5 text-gray-300">
                                 <span className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${isLoading ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'}`}>#01</span>
-                                <span className="font-semibold">INGEST_AMC_DISCLOSURES</span>
+                                <span className="font-semibold">Ingesting AMC Disclosures</span>
                             </div>
                             <div className="flex items-center gap-2.5 text-gray-300">
                                 <span className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${isLoading ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40 animate-pulse' : reportText ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-gray-900 text-gray-600 border border-gray-800'}`}>#02</span>
-                                <span className="font-semibold">RISK_METRICS_MATRIX</span>
+                                <span className="font-semibold">Calculating Risk Metrics</span>
                             </div>
                             <div className="flex items-center gap-2.5 text-gray-300">
                                 <span className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${isLoading ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40 animate-pulse' : reportText ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-gray-900 text-gray-600 border border-gray-800'}`}>#03</span>
-                                <span className="font-semibold">MERMAID_TREES_GRAPH</span>
+                                <span className="font-semibold">Building Visual Diagrams</span>
                             </div>
                             <div className="flex items-center gap-2.5 text-gray-300">
                                 <span className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${reportText && !isLoading ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-gray-900 text-gray-600 border border-gray-800'}`}>#04</span>
-                                <span className="font-semibold">FORMAT_AND_EXPORT</span>
+                                <span className="font-semibold">Formatting & Export</span>
                             </div>
                         </div>
                     </div>

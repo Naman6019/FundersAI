@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
-import ReportsLandingPage from '../reports/page';
-import ReportsLayout from '../reports/layout';
+import SynthesisLandingPage from '@/components/synthesis/SynthesisLandingPage';
 
 export const metadata: Metadata = {
   title: 'Synthesis by FundersAI | Autonomous AI Mutual Fund Research Studio',
@@ -20,7 +19,7 @@ export const metadata: Metadata = {
     title: 'Synthesis by FundersAI | Autonomous AI Mutual Fund Research Studio',
     description:
       'Instant institutional-grade mutual fund comparison reports with quantitative risk metrics, portfolio overlap, and direct serverless PDF exports.',
-    url: 'https://www.fundersai.co.in/synthesis',
+    url: 'https://synthesis.fundersai.co.in/synthesis',
     siteName: 'Synthesis by FundersAI',
     locale: 'en_IN',
     type: 'website',
@@ -43,9 +42,5 @@ export const metadata: Metadata = {
 };
 
 export default function SynthesisPage() {
-  return (
-    <ReportsLayout>
-      <ReportsLandingPage />
-    </ReportsLayout>
-  );
+  return <SynthesisLandingPage />;
 }

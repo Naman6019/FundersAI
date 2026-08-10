@@ -231,10 +231,13 @@ function LiveDataTicker() {
           });
         });
         
-        // System Status
-        if (data.system_metrics) {
+        // System Status — only claim live coverage when the backend actually reports funds.
+        // A zero count usually means the metrics endpoint is degraded, not that coverage is
+        // genuinely empty, so surfacing "0 AMCs, 0 Funds tracked" next to "Live Data Feed
+        // Active" would be actively misleading. Skip both items rather than show that.
+        if (data.system_metrics?.total_amcs > 0 && data.system_metrics?.total_funds > 0) {
           newItems.push({
-            label: "Coverage", 
+            label: "Coverage",
             value: `${data.system_metrics.total_amcs} AMCs, ${data.system_metrics.total_funds.toLocaleString('en-IN')} Funds tracked`,
             isNeutral: true
           });
@@ -244,12 +247,15 @@ function LiveDataTicker() {
             isNeutral: true
           });
         }
-        
+
         if (newItems.length > 0) {
           setTickerItems(newItems);
+        } else {
+          setTickerItems([{ label: "System", value: "Market data temporarily unavailable", isNeutral: true }]);
         }
       } catch (e) {
         console.error("Failed to fetch ticker data", e);
+        setTickerItems([{ label: "System", value: "Market data temporarily unavailable", isNeutral: true }]);
       }
     };
     

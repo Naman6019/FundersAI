@@ -99,7 +99,7 @@ export default function SamplePage() {
             <span>Source: July 2026 Factsheets</span>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/reports/generate">
+            <Link href="/synthesis/generate">
               <ShimmerButton className="px-5 py-2 text-xs font-semibold" borderRadius="0.5rem" background="#2563eb">
                 <span>Run Your Own Comparison →</span>
               </ShimmerButton>

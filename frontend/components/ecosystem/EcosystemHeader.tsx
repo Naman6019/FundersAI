@@ -4,13 +4,20 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  BarChart3, 
-  ShieldCheck, 
-  Search, 
-  ArrowUpRight, 
+import {
+  BarChart3,
+  ShieldCheck,
+  Search,
+  ArrowUpRight,
   Zap
 } from "lucide-react";
+import { supabaseBrowser } from "@/lib/supabaseBrowser";
+
+// The Synthesis product has no separate "home" for signed-in users — logged-out
+// visitors see the marketing landing page, logged-in users should land straight
+// in the studio instead of being routed back through the pitch.
+const SYNTHESIS_LANDING_HREF = "/synthesis";
+const SYNTHESIS_STUDIO_HREF = "/synthesis/generate";
 
 interface EcosystemHeaderProps {
   currentApp?: "research" | "synthesis" | "datatrust" | "none";
@@ -38,6 +45,7 @@ export function EcosystemHeader({
 }: EcosystemHeaderProps) {
   const [commandOpen, setCommandOpen] = useState(false);
   const [activeTab] = useState<string>(currentApp);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   // Synthesis gets its own mark; every other surface (Research, Data & Trust,
   // marketing pages) uses the main FundersAI wordmark.
@@ -45,6 +53,17 @@ export function EcosystemHeader({
   const logoSrc = isSynthesis ? "/Synthesis_FUNDERSAI.png" : "/FUNDERSAI-nobackground.png";
   const logoAlt = isSynthesis ? "Synthesis by FundersAI" : "FundersAI";
   const logoCaption = isSynthesis ? "Synthesis Studio" : "Research Ecosystem";
+
+  // Logged-in users skip the Synthesis pitch page and land directly in the studio.
+  const synthesisHref = isAuthenticated ? SYNTHESIS_STUDIO_HREF : SYNTHESIS_LANDING_HREF;
+
+  // The logo should always return to the current app's own home, never bounce
+  // through the *other* product's landing page.
+  const logoHref =
+    currentApp === "research" ? "/dashboard" :
+    currentApp === "synthesis" ? synthesisHref :
+    currentApp === "datatrust" ? dataTrustHref :
+    "/";
 
   // Keyboard shortcut listener for Cmd+K
   useEffect(() => {
@@ -58,6 +77,22 @@ export function EcosystemHeader({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Track auth state so the Synthesis Studio switcher and logo can route
+  // signed-in users straight into the studio instead of the marketing landing page.
+  useEffect(() => {
+    let isActive = true;
+    supabaseBrowser.auth.getUser().then(({ data }) => {
+      if (isActive) setIsAuthenticated(!!data.user);
+    });
+    const { data: listener } = supabaseBrowser.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(!!session?.user);
+    });
+    return () => {
+      isActive = false;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#07080C]/80 backdrop-blur-xl transition-all">
       <div className={`${containerClassName} h-16 flex items-center justify-between gap-4`}>
@@ -65,7 +100,7 @@ export function EcosystemHeader({
         {/* Brand Logo & Product Identifier */}
         <div className="flex items-center gap-3 min-w-0">
           {leading}
-          <Link href="/" className="flex items-center gap-2.5 group shrink-0">
+          <Link href={logoHref} className="flex items-center gap-2.5 group shrink-0">
             <Image
               src={logoSrc}
               alt={logoAlt}
@@ -92,8 +127,8 @@ export function EcosystemHeader({
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             </Link>
 
-            <Link 
-              href="/synthesis"
+            <Link
+              href={synthesisHref}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all ${
                 activeTab === "synthesis" 
                   ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm" 

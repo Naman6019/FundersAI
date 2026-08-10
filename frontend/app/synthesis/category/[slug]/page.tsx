@@ -30,7 +30,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
         openGraph: {
             title,
             description,
-            url: `https://www.fundersai.co.in/reports/category/${resolvedParams.slug}`,
+            url: `https://synthesis.fundersai.co.in/synthesis/category/${resolvedParams.slug}`,
             siteName: "Synthesis by FundersAI",
         }
     };
@@ -44,7 +44,7 @@ export default async function CategoryPage({ params }: PageProps) {
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full space-y-10">
             {/* Breadcrumb */}
             <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
-                <Link href="/reports" className="hover:text-blue-400">Synthesis</Link>
+                <Link href="/synthesis" className="hover:text-blue-400">Synthesis</Link>
                 <span>/</span>
                 <span className="text-gray-200">Category Hub</span>
                 <span>/</span>
@@ -70,7 +70,7 @@ export default async function CategoryPage({ params }: PageProps) {
                     <h3 className="text-base font-bold text-white">Compare {name} Funds with AI</h3>
                     <p className="text-xs text-gray-400">Select any two funds in this category to generate an instant synthesis report.</p>
                 </div>
-                <Link href="/reports/generate">
+                <Link href="/synthesis/generate">
                     <ShimmerButton
                         className="px-6 py-2.5 shadow-xl whitespace-nowrap"
                         shimmerColor="#ffffff"

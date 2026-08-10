@@ -95,7 +95,7 @@ const faqs = [
     }
 ];
 
-export default function ReportsLandingPage() {
+export default function SynthesisLandingPage() {
     const [activeTab, setActiveTab] = useState("verdict");
     const [openFaq, setOpenFaq] = useState<number | null>(0);
     const [heroSelectedPreset, setHeroSelectedPreset] = useState(0);
@@ -186,7 +186,7 @@ export default function ReportsLandingPage() {
                         transition={{ duration: 0.4, delay: 0.85, ease: "easeOut" }}
                         className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2"
                     >
-                        <Link href="/reports/generate">
+                        <Link href="/synthesis/generate">
                             <ShimmerButton
                                 className="px-8 py-3.5 shadow-2xl transition-transform duration-200 hover:-translate-y-0.5"
                                 shimmerColor="#ffffff"
@@ -207,7 +207,7 @@ export default function ReportsLandingPage() {
                             <span>⚡ Upgrade Plan</span>
                         </Link>
                         <Link
-                            href="/reports/supported-funds"
+                            href="/synthesis/supported-funds"
                             className="px-6 py-3 bg-gray-950/90 border border-gray-800 text-gray-300 font-mono font-medium text-xs uppercase tracking-wider rounded-xl hover:bg-gray-800 hover:text-white transition-all duration-200 hover:-translate-y-0.5 backdrop-blur-md"
                         >
                             Supported Directory
@@ -304,25 +304,25 @@ export default function ReportsLandingPage() {
                                     heroSimulatedProgress >= 1 ? 'bg-blue-500/10 border-blue-500/40 text-blue-400 shadow-md shadow-blue-500/10' : 'bg-gray-900/40 border-gray-800 text-gray-600'
                                 }`}>
                                     <span className="font-bold text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20">#01</span>
-                                    <span className="font-semibold text-[11px]">INGEST_AMC</span>
+                                    <span className="font-semibold text-[11px]">Ingest Disclosures</span>
                                 </div>
                                 <div className={`p-3 rounded-xl border flex items-center gap-2.5 transition-all duration-200 ${
                                     heroSimulatedProgress >= 2 ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400 shadow-md shadow-emerald-500/10' : 'bg-gray-900/40 border-gray-800 text-gray-600'
                                 }`}>
                                     <span className="font-bold text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20">#02</span>
-                                    <span className="font-semibold text-[11px]">RISK_MATRIX</span>
+                                    <span className="font-semibold text-[11px]">Risk Metrics</span>
                                 </div>
                                 <div className={`p-3 rounded-xl border flex items-center gap-2.5 transition-all duration-200 ${
                                     heroSimulatedProgress >= 3 ? 'bg-purple-500/10 border-purple-500/40 text-purple-400 shadow-md shadow-purple-500/10' : 'bg-gray-900/40 border-gray-800 text-gray-600'
                                 }`}>
                                     <span className="font-bold text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20">#03</span>
-                                    <span className="font-semibold text-[11px]">MERMAID_TREES</span>
+                                    <span className="font-semibold text-[11px]">Visual Diagrams</span>
                                 </div>
                                 <div className={`p-3 rounded-xl border flex items-center gap-2.5 transition-all duration-200 ${
                                     heroSimulatedProgress >= 4 ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-400 shadow-md shadow-cyan-500/10' : 'bg-gray-900/40 border-gray-800 text-gray-600'
                                 }`}>
                                     <span className="font-bold text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20">#04</span>
-                                    <span className="font-semibold text-[11px]">FORMAT_PDF</span>
+                                    <span className="font-semibold text-[11px]">Format & Export</span>
                                 </div>
                             </div>
 
@@ -332,7 +332,7 @@ export default function ReportsLandingPage() {
                                     <span>Preset Active: <strong className="text-blue-400">{heroPresets[heroSelectedPreset].title}</strong></span>
                                 </div>
 
-                                <Link href={`/reports/generate?codes=${heroPresets[heroSelectedPreset].codes}`} className="w-full sm:w-auto">
+                                <Link href={`/synthesis/generate?codes=${heroPresets[heroSelectedPreset].codes}`} className="w-full sm:w-auto">
                                     <button className="w-full sm:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-mono font-bold text-xs uppercase tracking-wider rounded-xl transition-all duration-200 hover:-translate-y-0.5 shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2">
                                         <span>Launch Workstation with Selected Presets</span>
                                         <span>→</span>
@@ -359,7 +359,7 @@ export default function ReportsLandingPage() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         {trendingComparisons.map((item, idx) => (
-                            <Link key={idx} href={`/reports/vs/${item.slug}`}>
+                            <Link key={idx} href={`/synthesis/vs/${item.slug}`}>
                                 <div className="transition-transform duration-200 hover:-translate-y-1 transform-gpu">
                                     <MagicCard 
                                         className="p-4 bg-gray-950/80 border-gray-800/80 hover:border-emerald-500/40 rounded-xl space-y-2 group transition-colors"
@@ -526,7 +526,7 @@ export default function ReportsLandingPage() {
                                     >
                                         <h3 className="text-base font-bold text-white">Playwright Serverless PDF Generator</h3>
                                         <p className="text-xs text-gray-400 max-w-md mx-auto">Generates crisp, multi-page vector PDFs with formatted tables, graphs, and SEBI research disclaimers in 1 click.</p>
-                                        <Link href="/reports/generate" className="inline-block px-5 py-2.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/30">
+                                        <Link href="/synthesis/generate" className="inline-block px-5 py-2.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/30">
                                             Try Generating PDF →
                                         </Link>
                                     </motion.div>
@@ -675,7 +675,7 @@ export default function ReportsLandingPage() {
                                         </div>
                                     </div>
                                 </div>
-                                <Link href="/reports/generate" className="w-full">
+                                <Link href="/synthesis/generate" className="w-full">
                                     <button className="w-full py-2.5 rounded-xl bg-gray-900 border border-gray-800 text-gray-300 font-medium text-xs hover:bg-gray-800 hover:text-white transition-all">
                                         Start Synthesizing (Free)
                                     </button>

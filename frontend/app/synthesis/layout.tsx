@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     openGraph: {
         title: "Synthesis by FundersAI | AI Mutual Fund & Stock Research Studio",
         description: "Instant institutional-grade mutual fund comparison reports with risk metrics, portfolio overlap, and PDF export.",
-        url: "https://www.fundersai.co.in/reports",
+        url: "https://synthesis.fundersai.co.in/synthesis",
         siteName: "Synthesis by FundersAI",
         locale: "en_IN",
         type: "website",
@@ -58,7 +58,7 @@ export const metadata: Metadata = {
     },
 };
 
-export default function ReportsLayout({ children }: { children: ReactNode }) {
+export default function SynthesisLayout({ children }: { children: ReactNode }) {
     return (
         <div className="relative min-h-screen bg-gray-950 text-gray-100 flex flex-col overflow-hidden selection:bg-blue-500/30 selection:text-blue-200">
             {/* Ambient Subtly Dimmed Flickering Grid Background Pattern */}
@@ -73,7 +73,7 @@ export default function ReportsLayout({ children }: { children: ReactNode }) {
                 />
             </div>
 
-            {/* Shared ecosystem header, plus product-specific sub-nav for the Reports/Synthesis surface */}
+            {/* Shared ecosystem header, plus product-specific sub-nav for the Synthesis Studio surface */}
             <EcosystemHeader currentApp="synthesis" />
             <ReportsSubNav />
 
@@ -82,7 +82,7 @@ export default function ReportsLayout({ children }: { children: ReactNode }) {
                 {children}
             </main>
 
-            {/* Reports Global Footer with FundersAI Redirect Banner */}
+            {/* Synthesis Studio Global Footer with FundersAI Redirect Banner */}
             <footer className="border-t border-gray-800/80 bg-gray-950/90 py-6 px-4 sm:px-6 lg:px-8 mt-auto text-xs text-gray-400">
                 <div className="max-w-[1800px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-3">

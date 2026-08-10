@@ -37,7 +37,7 @@ export default function AuthShell({ title, description, children }: AuthShellPro
             </Link>
             
             <div className="font-mono text-[10px] uppercase font-bold tracking-widest text-blue-400 px-2.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 mb-3">
-              [ SECURE_IDENTITY_VAULT ]
+              [ SECURE SIGN-IN ]
             </div>
 
             <h1 className="text-2xl font-bold tracking-tight text-white font-serif-display">{title}</h1>
@@ -75,7 +75,7 @@ export default function AuthShell({ title, description, children }: AuthShellPro
             </span>
             <span className="inline-flex items-center gap-1">
               <Check aria-hidden="true" className="h-3 w-3 text-emerald-400" />
-              RLS Encrypted
+              Data Encrypted
             </span>
           </div>
         </div>

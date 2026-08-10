@@ -366,3 +366,15 @@ export const CATEGORY_LIST = [
   'Index Fund',
   'Sectoral/Thematic',
 ] as const;
+
+export function categorySlug(category: string): string {
+  return category
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/\//g, '-')
+    .replace(/\s+/g, '-');
+}
+
+export function getCategoryBySlug(slug: string): (typeof CATEGORY_LIST)[number] | undefined {
+  return CATEGORY_LIST.find((cat) => categorySlug(cat) === slug);
+}

@@ -2,6 +2,20 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  async redirects() {
+    // Synthesis Studio moved from /reports/* to /synthesis/* so the whole product
+    // (marketing splash + tool) lives under one consistent URL namespace.
+    return [
+      { source: '/reports', destination: '/synthesis', permanent: true },
+      { source: '/reports/generate', destination: '/synthesis/generate', permanent: true },
+      { source: '/reports/dashboard', destination: '/synthesis/dashboard', permanent: true },
+      { source: '/reports/methodology', destination: '/synthesis/methodology', permanent: true },
+      { source: '/reports/supported-funds', destination: '/synthesis/supported-funds', permanent: true },
+      { source: '/reports/tools/portfolio-overlap', destination: '/synthesis/tools/portfolio-overlap', permanent: true },
+      { source: '/reports/vs/:slug', destination: '/synthesis/vs/:slug', permanent: true },
+      { source: '/reports/category/:slug', destination: '/synthesis/category/:slug', permanent: true },
+    ];
+  },
   async headers() {
     return [{
       source: '/:path*',

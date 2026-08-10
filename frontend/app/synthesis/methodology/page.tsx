@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     openGraph: {
         title: "AI Research Methodology | Synthesis by FundersAI",
         description: "Institutional-grade financial AI methodology, deterministic risk metrics, and zero-hallucination guardrails.",
-        url: "https://www.fundersai.co.in/reports/methodology",
+        url: "https://synthesis.fundersai.co.in/synthesis/methodology",
         siteName: "Synthesis by FundersAI",
     }
 };
@@ -27,7 +27,7 @@ export default function MethodologyPage() {
             <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
                 <Link href="/" className="hover:text-blue-400">FundersAI</Link>
                 <span>/</span>
-                <Link href="/reports" className="hover:text-blue-400">Synthesis</Link>
+                <Link href="/synthesis" className="hover:text-blue-400">Synthesis</Link>
                 <span>/</span>
                 <span className="text-blue-400 font-bold">[ METHODOLOGY ]</span>
             </div>
@@ -67,7 +67,7 @@ export default function MethodologyPage() {
                     gradientColor="rgba(37, 99, 235, 0.12)"
                 >
                     <div className="text-xs font-mono text-cyan-400">Pillar 2</div>
-                    <h3 className="text-lg font-bold text-white">LangGraph Multi-Agent Workflows</h3>
+                    <h3 className="text-lg font-bold text-white">Multi-Agent Research Workflows</h3>
                     <p className="text-xs text-gray-400 leading-relaxed">
                         Autonomous agents execute separate tasks: Data Acquisition, Risk Indexing (Beta, Alpha, Sharpe), News Sentiment, and Visual Diagram Rendering via Mermaid SVGs.
                     </p>
@@ -93,7 +93,7 @@ export default function MethodologyPage() {
                     <h3 className="text-base font-bold text-white">Ready to Synthesize Your First Report?</h3>
                     <p className="text-xs text-gray-400">Experience autonomous multi-agent quantitative mutual fund research in action.</p>
                 </div>
-                <Link href="/reports/generate">
+                <Link href="/synthesis/generate">
                     <ShimmerButton
                         className="px-6 py-3 shadow-xl whitespace-nowrap"
                         shimmerColor="#ffffff"

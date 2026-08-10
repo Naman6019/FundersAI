@@ -35,8 +35,8 @@ export default function PublicFooter() {
             <li><Link href="/intelligence" className="hover:text-white transition-colors">Source Intelligence</Link></li>
             <li><Link href="https://synthesis.fundersai.co.in" className="hover:text-white transition-colors text-blue-400 font-semibold">Synthesis Studio</Link></li>
             <li><Link href="/pricing" className="hover:text-white transition-colors">Pricing &amp; Subscriptions</Link></li>
-            <li><Link href="/reports" className="hover:text-white transition-colors">Synthesis Report Studio</Link></li>
-            <li><Link href="/reports/tools/portfolio-overlap" className="hover:text-white transition-colors">Portfolio Overlap Tool</Link></li>
+            <li><Link href="/synthesis" className="hover:text-white transition-colors">Synthesis Report Studio</Link></li>
+            <li><Link href="/synthesis/tools/portfolio-overlap" className="hover:text-white transition-colors">Portfolio Overlap Tool</Link></li>
           </ul>
         </div>
 
@@ -57,7 +57,7 @@ export default function PublicFooter() {
         <div className="space-y-3">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">Company &amp; Resources</p>
           <ul className="space-y-2 text-xs font-medium">
-            <li><Link href="/reports/supported-funds" className="hover:text-white transition-colors">Supported AMC Directory</Link></li>
+            <li><Link href="/synthesis/supported-funds" className="hover:text-white transition-colors">Supported AMC Directory</Link></li>
             <li><Link href="/mutual-funds" className="hover:text-white transition-colors">Mutual Fund Index</Link></li>
             <li><Link href="/about" className="hover:text-white transition-colors">About FundersAI</Link></li>
             <li><Link href="/contact" className="hover:text-white transition-colors">Contact Support</Link></li>

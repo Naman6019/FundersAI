@@ -55,7 +55,7 @@ export default function PricingPage() {
         <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
           <Link href="/" className="hover:text-blue-400">FundersAI</Link>
           <span>/</span>
-          <Link href="/reports" className="hover:text-blue-400">Synthesis</Link>
+          <Link href="/synthesis" className="hover:text-blue-400">Synthesis</Link>
           <span>/</span>
           <span className="text-blue-400 font-bold">[ PRICING_PLANS ]</span>
         </div>

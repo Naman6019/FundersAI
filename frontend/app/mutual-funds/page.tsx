@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { AMC_REGISTRY, CATEGORY_LIST, FUND_REGISTRY } from '@/lib/fund-registry';
+import { AMC_REGISTRY, CATEGORY_LIST, FUND_REGISTRY, categorySlug } from '@/lib/fund-registry';
 
 export const metadata: Metadata = {
   title: 'Mutual Funds | FundersAI',
@@ -91,18 +91,16 @@ export default function MutualFundsPage() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {categoryFunds.map(({ category, count }) => (
-              <div
+              <Link
                 key={category}
-                className="flex flex-col rounded-xl border border-white/10 bg-white/[0.02] p-4"
+                href={`/mutual-funds/category/${categorySlug(category)}`}
+                className="group flex flex-col rounded-xl border border-white/10 bg-white/[0.02] p-4 transition hover:border-white/20 hover:bg-white/[0.04]"
               >
-                <p className="font-semibold text-white text-sm mb-1">{category}</p>
+                <p className="font-semibold text-white text-sm mb-1 group-hover:text-[#00FF9D] transition-colors">{category}</p>
                 <p className="text-xs text-[#7183a0]">{count} fund{count !== 1 ? 's' : ''} in registry</p>
-              </div>
+              </Link>
             ))}
           </div>
-          <p className="mt-4 text-xs text-[#7183a0]">
-            Category browsing by direct URL coming soon. Use the workspace search to find funds in any SEBI category.
-          </p>
         </section>
 
         {/* All indexed funds table */}

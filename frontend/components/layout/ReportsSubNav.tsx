@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// Bare landing surfaces — the sub-nav is studio-only chrome and would be redundant here.
-const LANDING_PATHS = new Set(["/reports", "/synthesis"]);
+// Bare landing surface — the sub-nav is studio-only chrome and would be redundant here.
+const LANDING_PATHS = new Set(["/synthesis"]);
 
 export function ReportsSubNav() {
   const pathname = usePathname();
@@ -15,31 +15,31 @@ export function ReportsSubNav() {
       <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 h-11 flex items-center justify-between">
         <nav className="flex items-center gap-1 overflow-x-auto">
           <Link
-            href="/reports/dashboard"
+            href="/synthesis/dashboard"
             className="text-xs font-semibold px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-white/5 transition-all whitespace-nowrap"
           >
             Dashboard
           </Link>
           <Link
-            href="/reports/generate"
+            href="/synthesis/generate"
             className="text-xs font-semibold px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-white/5 transition-all whitespace-nowrap"
           >
             New Report
           </Link>
           <Link
-            href="/reports/tools/portfolio-overlap"
+            href="/synthesis/tools/portfolio-overlap"
             className="text-xs font-semibold px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-white/5 transition-all whitespace-nowrap"
           >
             Overlap Tool
           </Link>
           <Link
-            href="/reports/supported-funds"
+            href="/synthesis/supported-funds"
             className="text-xs font-semibold px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-white/5 transition-all whitespace-nowrap"
           >
             Supported Funds
           </Link>
           <Link
-            href="/reports/methodology"
+            href="/synthesis/methodology"
             className="text-xs font-semibold px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-white/5 transition-all whitespace-nowrap"
           >
             Methodology

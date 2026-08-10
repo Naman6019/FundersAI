@@ -96,7 +96,7 @@ export default function SupportedFundsDirectoryPage() {
             {/* Header & Title */}
             <div className="border-b border-gray-800/80 pb-6 space-y-4">
                 <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
-                    <Link href="/reports" className="hover:text-blue-400">Synthesis</Link>
+                    <Link href="/synthesis" className="hover:text-blue-400">Synthesis</Link>
                     <span>/</span>
                     <span className="text-blue-400">Supported Funds Directory</span>
                 </div>
@@ -114,7 +114,7 @@ export default function SupportedFundsDirectoryPage() {
                         </p>
                     </div>
 
-                    <Link href="/reports/generate">
+                    <Link href="/synthesis/generate">
                         <ShimmerButton
                             className="px-6 py-2.5 shadow-xl"
                             shimmerColor="#ffffff"
@@ -343,7 +343,7 @@ export default function SupportedFundsDirectoryPage() {
                         </div>
 
                         <Link 
-                            href={`/reports/generate?codes=${selectedFunds.map(f => f.scheme_code).join(",")}`}
+                            href={`/synthesis/generate?codes=${selectedFunds.map(f => f.scheme_code).join(",")}`}
                             className="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-emerald-600/30 whitespace-nowrap text-center"
                         >
                             Synthesize Comparison ({selectedFunds.length}) →
