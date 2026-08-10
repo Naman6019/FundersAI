@@ -7,16 +7,23 @@ from typing import Literal
 AutomationLane = Literal["green", "approved_restricted", "validation_only"]
 AutomationOperation = Literal["discovery", "parser_retry", "disclosure_parse", "research_index"]
 
-GREEN_AMCS = ("ppfas", "sbi", "mirae")
-APPROVED_RESTRICTED_AMCS = ("nippon", "uti")
-# aditya_birla, icici, and kotak were unfrozen from FROZEN_ISSUE_2_AMCS after the shared
-# family-merge bug (see GitHub issue #2) was fixed. Each AMC has its own residual, unrelated
-# data question that the promotion job's own conflict gates already handle by excluding just
-# the affected scope rather than blocking the batch: icici has 10 families where the fresh
-# June 2026 risk_level disagrees with the currently-live value (needs manual riskometer
-# verification, tracked separately from issue #2); kotak has a holdings/portfolio-ISIN
-# coverage shortfall unrelated to benchmark/risk mapping.
-VALIDATION_ONLY_AMCS = ("axis", "dsp", "motilal", "hdfc", "aditya_birla", "icici", "kotak")
+GREEN_AMCS = (
+    "ppfas", "sbi", "mirae", "hdfc", "axis", "nippon", "motilal", "dsp", "aditya_birla",
+    "icici", "kotak",
+)
+# uti is the only AMC still held back from unattended discovery/parsing: its June
+# promotion is on hold pending a human decision on stale source documents (not a code
+# bug), so it must keep requiring explicit source_document_ids rather than running
+# automatically. nippon, and then hdfc/axis/motilal/dsp/aditya_birla/icici/kotak (whose
+# parser/mapping issues, including the GitHub issue #2 family-merge bug, are fixed),
+# graduated to GREEN_AMCS once their staging coverage passed cleanly. Note this only
+# widens unattended discovery/parsing/research-indexing into staging tables -- runtime
+# promotion always stays a manual workflow_dispatch run with a typed approval phrase,
+# regardless of lane, so icici's excluded risk scope (10 families need a manual
+# riskometer-vs-PDF check) and kotak's excluded holdings/sectors scope (ISIN coverage
+# shortfall) still can't reach production data unreviewed.
+APPROVED_RESTRICTED_AMCS = ("uti",)
+VALIDATION_ONLY_AMCS = ()
 FROZEN_ISSUE_2_AMCS = ()
 
 LANE_AMCS: dict[str, tuple[str, ...]] = {
