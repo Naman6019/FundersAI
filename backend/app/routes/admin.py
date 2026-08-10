@@ -3,7 +3,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Header, Query
 
 from app.repositories.admin_ops_repository import AdminOpsRepository
-from app.services.admin_service import AdminDocumentReviewAction, AdminService
+from app.services.admin_service import (
+    AdminDocumentReviewAction,
+    AdminService,
+    PromotionReviewDecisionRequest,
+    PromotionReviewPromoteRequest,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -72,3 +77,40 @@ def admin_mf_resolver_debug(
     service: AdminService = Depends(get_admin_service),
 ):
     return service.resolver_debug(query, horizon, limit, x_admin_key)
+
+
+@router.get("/mf-promotion-review/flags")
+def admin_mf_promotion_review_flags(
+    amc: str = Query(...),
+    scope: str = Query(..., pattern="^(risk|holdings)$"),
+    report_month: str = Query(...),
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+    service: AdminService = Depends(get_admin_service),
+):
+    return service.promotion_review_flags(amc, scope, report_month, x_admin_key)
+
+
+@router.post("/mf-promotion-review/decisions")
+def admin_mf_promotion_review_decide(
+    payload: PromotionReviewDecisionRequest,
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+    service: AdminService = Depends(get_admin_service),
+):
+    return service.promotion_review_decide(payload, x_admin_key)
+
+
+@router.post("/mf-promotion-review/promote")
+def admin_mf_promotion_review_promote(
+    payload: PromotionReviewPromoteRequest,
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+    service: AdminService = Depends(get_admin_service),
+):
+    return service.promotion_review_promote(payload, x_admin_key)
+
+
+@router.get("/mf-promotion-review/pending-count")
+def admin_mf_promotion_review_pending_count(
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+    service: AdminService = Depends(get_admin_service),
+):
+    return service.promotion_review_pending_count(x_admin_key)

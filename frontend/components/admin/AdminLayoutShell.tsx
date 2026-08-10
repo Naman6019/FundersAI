@@ -12,15 +12,19 @@ const NAV_ITEMS = [
   { href: '/admin/users', label: 'Users' },
   { href: '/admin/ai-usage', label: 'AI Usage' },
   { href: '/admin/data-coverage', label: 'Data Coverage' },
+  { href: '/admin/promotion-review', label: 'Promotion Review' },
+  { href: '/admin/issues', label: 'Issues' },
   { href: '/admin/nav-sync', label: 'NAV Sync' },
   { href: '/admin/resolver-debug', label: 'Resolver Debug' },
 ];
 
 const PAGE_DESCRIPTIONS: Record<string, string> = {
   '/admin': 'Core KPIs, alerts, and sync health summary.',
-  '/admin/users': 'View user roles, tiers, and usage summary.',
+  '/admin/users': 'Roles, tiers, last login, per-user usage history, and submitted feedback.',
   '/admin/ai-usage': 'Track request volume, failures, and quota burn.',
   '/admin/data-coverage': 'AMC-level mutual fund field coverage and freshness.',
+  '/admin/promotion-review': 'Review staged-vs-live conflicts and promote reviewed decisions.',
+  '/admin/issues': 'Cross-cutting triage: data quality, provider run failures, pending promotion reviews.',
   '/admin/nav-sync': 'Monitor NAV sync runs, status, and failures.',
   '/admin/resolver-debug': 'Validate scheme resolver selections and candidates.',
 };

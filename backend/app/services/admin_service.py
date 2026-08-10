@@ -433,6 +433,24 @@ class AdminDocumentReviewAction(BaseModel):
     issue_category: str | None = None
 
 
+class PromotionReviewDecisionRequest(BaseModel):
+    amc: str
+    report_month: str
+    scope: str
+    subject_key: str
+    subject_label: str | None = None
+    resolution: str
+    decided_value: dict[str, Any] = {}
+    source_document_id: str | None = None
+    reviewed_by: str
+    note: str | None = None
+
+
+class PromotionReviewPromoteRequest(BaseModel):
+    decision_id: str
+    requested_by: str
+
+
 def _review_action_notes(payload: AdminDocumentReviewAction | None) -> str | None:
     if not payload or payload.reviewer_notes is None:
         return None
@@ -1224,6 +1242,127 @@ def admin_mf_resolver_debug(
     }
 
 
+def admin_mf_promotion_review_flags(
+    amc: str = Query(...),
+    scope: str = Query(..., pattern="^(risk|holdings)$"),
+    report_month: str = Query(...),
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+):
+    _require_admin_key(x_admin_key)
+    from app.mf_ingestion.services import promotion_review_service as review_service
+
+    if not get_admin_repository():
+        raise DataUnavailableError("supabase_unavailable")
+
+    if scope == "risk":
+        rows = review_service.find_risk_conflicts(amc=amc, report_month=report_month)
+    else:
+        rows = review_service.find_holdings_out_of_band(amc=amc, report_month=report_month)
+    return {"status": "ok", "amc": amc, "scope": scope, "report_month": report_month, "count": len(rows), "rows": rows}
+
+
+def admin_mf_promotion_review_decide(
+    payload: PromotionReviewDecisionRequest,
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+):
+    _require_admin_key(x_admin_key)
+    from app.mf_ingestion.services import promotion_review_service as review_service
+
+    if not get_admin_repository():
+        raise DataUnavailableError("supabase_unavailable")
+
+    try:
+        decision = review_service.upsert_decision(
+            amc=payload.amc,
+            report_month=payload.report_month,
+            scope=payload.scope,
+            subject_key=payload.subject_key,
+            subject_label=payload.subject_label,
+            resolution=payload.resolution,
+            decided_value=payload.decided_value,
+            source_document_id=payload.source_document_id,
+            reviewed_by=payload.reviewed_by,
+            note=payload.note,
+        )
+    except ValueError as exc:
+        raise ConflictError(str(exc)) from exc
+    return {"status": "ok", "decision": decision}
+
+
+def admin_mf_promotion_review_promote(
+    payload: PromotionReviewPromoteRequest,
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+):
+    _require_admin_key(x_admin_key)
+    from app.mf_ingestion.services import promotion_review_service as review_service
+
+    repository = get_admin_repository()
+    if not repository:
+        raise DataUnavailableError("supabase_unavailable")
+
+    decision_rows = (
+        repository.table("mf_promotion_review_decisions")
+        .select("scope")
+        .eq("id", payload.decision_id)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if not decision_rows:
+        raise EntityNotFoundError("decision_not_found")
+    scope = decision_rows[0]["scope"]
+    if scope == "risk":
+        result = review_service.promote_risk_decision(decision_id=payload.decision_id, requested_by=payload.requested_by)
+    else:
+        result = review_service.promote_holdings_decision(decision_id=payload.decision_id, requested_by=payload.requested_by)
+    if result.get("status") != "ok":
+        raise ConflictError(result.get("reason", "promotion_failed"))
+    return result
+
+
+def admin_pending_promotion_review_count(
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+) -> dict[str, Any]:
+    """Cheap cross-AMC count of mf_promotion_review_decisions rows still awaiting the
+    Promote step (promoted_at is null), broken down by AMC and resolution. Feeds the
+    Issues tab's link-out to Promotion Review without duplicating its per-AMC/scope
+    flag-finding logic."""
+    _require_admin_key(x_admin_key)
+    repository = get_admin_repository()
+    if not repository:
+        raise DataUnavailableError("supabase_unavailable")
+
+    rows = (
+        repository.table("mf_promotion_review_decisions")
+        .select("amc_code,scope,resolution")
+        .is_("promoted_at", "null")
+        .execute()
+        .data
+        or []
+    )
+
+    by_amc: dict[str, dict[str, int]] = {}
+    actionable_total = 0
+    for row in rows:
+        amc_code = str(row.get("amc_code") or "unknown")
+        resolution = str(row.get("resolution") or "unknown")
+        bucket = by_amc.setdefault(amc_code, {"use_staged": 0, "use_live": 0, "exclude": 0})
+        bucket[resolution] = bucket.get(resolution, 0) + 1
+        if resolution == "use_staged":
+            actionable_total += 1
+
+    pending_by_amc = [
+        {"amc_code": amc_code, **counts} for amc_code, counts in sorted(by_amc.items())
+    ]
+    return {
+        "status": "ok",
+        "total_pending": len(rows),
+        "actionable_pending": actionable_total,
+        "pending_by_amc": pending_by_amc,
+    }
+
+
 def provider_usage_dashboard():
     enabled = os.getenv("ENABLE_PROVIDER_USAGE_ENDPOINT", "false").strip().lower() in {"1", "true", "yes", "on"}
     if not enabled:
@@ -1303,6 +1442,18 @@ class AdminService:
             return admin_mf_resolver_debug(query, horizon, limit, x_admin_key)
         finally:
             _current_admin_repository.reset(token)
+
+    def promotion_review_flags(self, amc: str, scope: str, report_month: str, x_admin_key: str | None) -> dict[str, Any]:
+        return admin_mf_promotion_review_flags(amc, scope, report_month, x_admin_key)
+
+    def promotion_review_decide(self, payload: PromotionReviewDecisionRequest, x_admin_key: str | None) -> dict[str, Any]:
+        return admin_mf_promotion_review_decide(payload, x_admin_key)
+
+    def promotion_review_promote(self, payload: PromotionReviewPromoteRequest, x_admin_key: str | None) -> dict[str, Any]:
+        return admin_mf_promotion_review_promote(payload, x_admin_key)
+
+    def promotion_review_pending_count(self, x_admin_key: str | None) -> dict[str, Any]:
+        return admin_pending_promotion_review_count(x_admin_key)
 
 
 class ProviderUsageService:

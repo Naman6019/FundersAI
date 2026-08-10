@@ -81,29 +81,33 @@ export async function GET(request: Request) {
     }
   }
 
-  let emailMap = new Map<string, string>();
+  let authMap = new Map<string, { email: string; last_sign_in_at: string | null }>();
   try {
     const authUsersRes = await supabase.auth.admin.listUsers({
       page: 1,
       perPage: 2000,
     });
     const users = authUsersRes.data?.users || [];
-    emailMap = new Map(users.map((u) => [u.id, u.email || '']));
+    authMap = new Map(
+      users.map((u) => [u.id, { email: u.email || '', last_sign_in_at: u.last_sign_in_at || null }])
+    );
   } catch {
-    emailMap = new Map();
+    authMap = new Map();
   }
 
   const rows = profileRows.map((profile) => {
     const userId = String(profile.user_id);
     const tier = String(profile.tier || 'free');
     const subscription = subscriptionMap.get(userId) || null;
+    const auth = authMap.get(userId) || null;
     return {
       user_id: userId,
-      email: emailMap.get(userId) || null,
+      email: auth?.email || null,
       role: profile.role || 'user',
       tier,
       created_at: profile.created_at || null,
       last_active_at: profile.last_active_at || null,
+      last_sign_in_at: auth?.last_sign_in_at || null,
       requests_today: byUserTodayRequests.get(userId) || 0,
       monthly_tokens: byUserMonthTokens.get(userId) || 0,
       subscription_status: subscription?.status || (tier === 'free' ? 'free' : 'manual'),
