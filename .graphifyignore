@@ -1,6 +1,7 @@
 # Documents (require LLM)
-*.md
-*.MD
+# NOTE: *.md / **/*.md intentionally NOT excluded — project docs (docs/, root,
+# prompts/) are graphed for architecture-vs-docs verification. Vendor/cache
+# dirs below already keep stray vendor READMEs out.
 *.txt
 *.csv
 *.pdf
@@ -27,10 +28,48 @@ LICENSE
 license
 references
 
-**/*.md
-**/*.MD
 **/*.txt
 **/*.csv
 **/*.pdf
 
 **/*.html
+
+# Vendor / cache / build artifacts (never project source)
+.uv-cache
+.uv-cache/**
+.uv-tools
+.uv-tools/**
+.venv
+.venv/**
+node_modules
+node_modules/**
+.git
+.git/**
+__pycache__
+__pycache__/**
+**/__pycache__/**
+.ruff_cache
+.ruff_cache/**
+.pytest_cache
+.pytest_cache/**
+.pytest_temp
+.pytest_temp/**
+.pytest_tmp
+.pytest_tmp/**
+.vercel
+.vercel/**
+.next
+.next/**
+**/.next/**
+frontend/.next
+frontend/.next/**
+tmp
+tmp/**
+.tmp
+.tmp/**
+logs
+logs/**
+research-index-output
+research-index-output/**
+graphify-out
+graphify-out/**
