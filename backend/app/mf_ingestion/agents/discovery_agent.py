@@ -53,6 +53,10 @@ class AMCLinkDiscoveryAgent:
     def agent_id(self) -> str:
         return f"{self.source.adapter_key.lower()}_link_discovery_agent_v1"
 
+    def required_operational_candidates(self, document_type: str) -> int:
+        """Return how many independent sources are needed before a type is covered."""
+        return 1
+
     def run(
         self,
         *,
@@ -67,10 +71,13 @@ class AMCLinkDiscoveryAgent:
         trace: list[AgentTraceEvent] = []
         accepted: list[ValidatedDiscovery] = []
         actions_used = 0
-        max_candidates = max(max_candidates_per_type, 1)
         reusable_factsheets: list[DiscoveredDocument] = []
+        required_by_type: dict[str, int] = {}
 
         for document_type_index, document_type in enumerate(document_types):
+            required_candidates = self.required_operational_candidates(document_type)
+            required_by_type[document_type] = required_candidates
+            max_candidates = max(max_candidates_per_type, required_candidates, 1)
             if actions_used >= self.max_actions:
                 trace.append(
                     AgentTraceEvent(
@@ -443,10 +450,36 @@ class AMCLinkDiscoveryAgent:
                 )
 
         covered_types = {
-            document.document_type
-            for document in accepted
-            if _is_operationally_covered(document)
+            document_type
+            for document_type, required_count in required_by_type.items()
+            if sum(
+                1
+                for document in accepted
+                if document.document_type == document_type
+                and _is_operationally_covered(document)
+            )
+            >= required_count
         }
+        for document_type, required_count in required_by_type.items():
+            operational_count = sum(
+                1
+                for document in accepted
+                if document.document_type == document_type
+                and _is_operationally_covered(document)
+            )
+            if operational_count < required_count:
+                trace.append(
+                    AgentTraceEvent(
+                        step="escalate",
+                        status="error",
+                        detail=(
+                            f"Requires {required_count} independent operational candidate(s); "
+                            f"only {operational_count} passed."
+                        ),
+                        document_type=document_type,
+                        strategy="source_bundle_gate",
+                    )
+                )
         if len(covered_types) == len(set(document_types)):
             status = "completed"
         elif covered_types:
@@ -507,6 +540,12 @@ class AdityaBirlaLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
 class UTILinkDiscoveryAgent(AMCLinkDiscoveryAgent):
     expected_adapter_key = "uti"
 
+    def required_operational_candidates(self, document_type: str) -> int:
+        # UTI publishes its monthly core data in separate English Active and
+        # Passive Fund Watch PDFs. The generic one-best-candidate policy drops
+        # passive schemes, so both independently validated documents are needed.
+        return 2 if document_type == "factsheet" else 1
+
 
 class DSPLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
     expected_adapter_key = "dsp"
@@ -514,6 +553,26 @@ class DSPLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
 
 class MotilalLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
     expected_adapter_key = "motilal"
+
+
+class TataLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "tata"
+
+
+class BandhanLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "bandhan"
+
+
+class EdelweissLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "edelweiss"
+
+
+class InvescoLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "invesco"
+
+
+class HSBCLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "hsbc"
 
 
 PRODUCTION_TARGET_AMC_AGENT_KEYS = (
@@ -529,6 +588,11 @@ PRODUCTION_TARGET_AMC_AGENT_KEYS = (
     "aditya_birla",
     "uti",
     "dsp",
+    "tata",
+    "bandhan",
+    "edelweiss",
+    "invesco",
+    "hsbc",
 )
 
 # Compatibility roster retained for callers and reports that still mean ten AMCs.
@@ -558,6 +622,11 @@ AGENT_CLASSES: dict[str, type[AMCLinkDiscoveryAgent]] = {
     "ppfas": PPFASLinkDiscoveryAgent,
     "sbi": SBILinkDiscoveryAgent,
     "uti": UTILinkDiscoveryAgent,
+    "tata": TataLinkDiscoveryAgent,
+    "bandhan": BandhanLinkDiscoveryAgent,
+    "edelweiss": EdelweissLinkDiscoveryAgent,
+    "invesco": InvescoLinkDiscoveryAgent,
+    "hsbc": HSBCLinkDiscoveryAgent,
 }
 
 AGENT_KEY_ALIASES = {

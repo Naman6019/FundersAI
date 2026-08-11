@@ -20,6 +20,11 @@ on:
           - dsp
           - kotak
           - aditya_birla
+          - tata
+          - bandhan
+          - edelweiss
+          - invesco
+          - hsbc
       document_scope:
         description: Document type to acquire
         required: true

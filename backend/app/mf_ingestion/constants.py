@@ -17,6 +17,11 @@ AMC_UTI = "uti"
 AMC_DSP = "dsp"
 AMC_KOTAK = "kotak"
 AMC_ADITYA_BIRLA = "aditya_birla"
+AMC_TATA = "tata"
+AMC_BANDHAN = "bandhan"
+AMC_EDELWEISS = "edelweiss"
+AMC_INVESCO = "invesco"
+AMC_HSBC = "hsbc"
 
 
 SUPPORTED_AMCS = list(capability_keys("portfolio_parser_enabled"))

@@ -15,7 +15,8 @@ from app.mf_ingestion.parsers.pdf_text_parser import PDFTextParser
 
 AMC_SCHEME_PREFIX_PATTERN = (
     r"(?:ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset|Axis|Motilal Oswal|"
-    r"Nippon India|UTI(?:\s*-\s*)?|DSP|Kotak|Aditya Birla Sun Life)"
+    r"Nippon India|UTI(?:\s*-\s*)?|DSP|Kotak|Aditya Birla Sun Life|"
+    r"Invesco|Edelweiss|HSBC|Tata|Bandhan)"
 )
 SCHEME_NAME_PATTERN = re.compile(
     rf"(?im)^(?:\((?:Formerly|Erstwhile)[^\n]*\)\s*)?(?P<name>{AMC_SCHEME_PREFIX_PATTERN}[^\n]{{3,140}}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{{1,60}}\))?(?:\s*[\*\^$#@~§]+)?\s*$"
@@ -47,6 +48,11 @@ FACTSHEET_AMC_NAME_PREFIXES: dict[str, tuple[str, ...]] = {
     "dsp": ("dsp ",),
     "kotak": ("kotak ",),
     "absl": ("aditya birla sun life",),
+    "invesco": ("invesco",),
+    "edelweiss": ("edelweiss",),
+    "hsbc": ("hsbc",),
+    "tata": ("tata",),
+    "bandhan": ("bandhan",),
 }
 FACTSHEET_AMC_ALIASES = {
     "aditya_birla": "absl",
@@ -66,6 +72,7 @@ class FactsheetRecord:
     benchmark: str | None = None
     fund_manager: str | None = None
     risk_level: str | None = None
+    scheme_isin: str | None = None
     confidence_score: float = 0.0
 
 
@@ -167,6 +174,7 @@ class FactsheetParser:
                 benchmark=fields.get("benchmark"),
                 fund_manager=fields.get("fund_manager"),
                 risk_level=fields.get("risk_level"),
+                scheme_isin=_extract_labeled_scheme_isin(chunk),
                 confidence_score=float(min(99.0, 60 + (score * 10))),
             )
             current = best_by_scheme.get(scheme_key)
@@ -608,11 +616,35 @@ def _merge_factsheet_records(existing: FactsheetRecord, incoming: FactsheetRecor
         benchmark=existing.benchmark or incoming.benchmark,
         fund_manager=_merge_manager_names(existing.fund_manager, incoming.fund_manager),
         risk_level=existing.risk_level or incoming.risk_level,
+        scheme_isin=_merge_scheme_isin(existing.scheme_isin, incoming.scheme_isin),
         confidence_score=max(existing.confidence_score, incoming.confidence_score),
     )
     if incoming.expense_ratio is not None and (existing.expense_ratio is None or incoming.confidence_score >= existing.confidence_score):
         merged.expense_ratio = incoming.expense_ratio
     return merged
+
+
+def _extract_labeled_scheme_isin(chunk: str) -> str | None:
+    """Extract only a labelled mutual-fund unit ISIN, never a portfolio security ISIN."""
+    for match in re.finditer(
+        r"\b(?:scheme\s+)?isin(?:\s+(?:growth|idcw|dividend|payout|reinvestment))?"
+        r"\s*(?::|-)\s*(?P<isin>INF[A-Z0-9]{8}\d)\b",
+        str(chunk or ""),
+        re.IGNORECASE,
+    ):
+        # PDF text extraction can turn a holding-table column heading such as
+        # "Holding ISIN" into an otherwise identical label.
+        preceding = str(chunk or "")[max(0, match.start() - 32) : match.start()].lower()
+        if re.search(r"(?:holding|security|instrument)\s+$", preceding):
+            continue
+        return match.group("isin").upper()
+    return None
+
+
+def _merge_scheme_isin(left: str | None, right: str | None) -> str | None:
+    if left and right and left != right:
+        return None
+    return left or right
 
 
 def _preferred_scheme_name(left: str, right: str) -> str:

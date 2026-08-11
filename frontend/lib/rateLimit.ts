@@ -16,7 +16,8 @@ export type RateLimitGroup =
   | 'data-health'
   | 'feedback'
   | 'cron-sync-mf'
-  | 'admin-mutation';
+  | 'admin-mutation'
+  | 'reports';
 
 export type RateLimitResult = {
   allowed: boolean;
@@ -61,6 +62,13 @@ export const RATE_LIMIT_GROUPS: Record<RateLimitGroup, RateLimitWindow[]> = {
   'admin-mutation': [
     { name: 'minute', limit: 20, seconds: 60 },
   ],
+  // Matches the "reports" group in backend/app/services/rate_limit.py and
+  // microservices/reports/rate_limit.py — report generation invokes an LLM
+  // and a headless-browser PDF render, so it's capped tighter than everything else.
+  reports: [
+    { name: 'minute', limit: 2, seconds: 60 },
+    { name: 'day', limit: 10, seconds: 86400 },
+  ],
 };
 
 export const RATE_LIMIT_TIERS: Record<UserTier, Partial<Record<RateLimitGroup, RateLimitWindow[]>>> = {
@@ -91,6 +99,10 @@ export const RATE_LIMIT_TIERS: Record<UserTier, Partial<Record<RateLimitGroup, R
     feedback: [
       { name: 'minute', limit: 5, seconds: 60 },
       { name: 'day', limit: 30, seconds: 86400 },
+    ],
+    reports: [
+      { name: 'minute', limit: 1, seconds: 60 },
+      { name: 'day', limit: 3, seconds: 86400 },
     ],
   },
   pro: RATE_LIMIT_GROUPS,
@@ -124,6 +136,10 @@ export const RATE_LIMIT_TIERS: Record<UserTier, Partial<Record<RateLimitGroup, R
     ],
     'cron-sync-mf': RATE_LIMIT_GROUPS['cron-sync-mf'],
     'admin-mutation': RATE_LIMIT_GROUPS['admin-mutation'],
+    reports: [
+      { name: 'minute', limit: 5, seconds: 60 },
+      { name: 'day', limit: 30, seconds: 86400 },
+    ],
   },
 };
 

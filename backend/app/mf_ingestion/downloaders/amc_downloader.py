@@ -14,7 +14,12 @@ from urllib.parse import quote, unquote, urljoin, urlsplit, urlunsplit
 
 import requests
 from bs4 import BeautifulSoup
-from app.mf_ingestion.downloaders.base_downloader import BaseDownloader, DiscoveredDocument, DownloadedDocument
+from app.mf_ingestion.downloaders.base_downloader import (
+    BaseDownloader,
+    DiscoveredDocument,
+    DownloadedDocument,
+    local_file_sources_allowed,
+)
 from app.mf_ingestion.parsers.adapters.ppfas_adapter import PPFASAdapter
 from app.mf_ingestion.parsers.adapters.axis_adapter import AxisAdapter
 from app.mf_ingestion.sources.registry import AMCDocumentSource
@@ -221,7 +226,42 @@ class AMCDownloader(BaseDownloader):
             "kotak",
             "nippon",
             "sbi",
+            "edelweiss",
+            "invesco",
+            "tata",
+            "bandhan",
+            "hsbc",
         }:
+            if adapter_key == "invesco":
+                docs = _discover_invesco_documents(
+                    self.source,
+                    document_type=document_type,
+                    timeout_seconds=self.timeout_seconds,
+                    user_agent=self.user_agent,
+                )
+                logger.info(
+                    "event=amc_discovery_complete amc_code=%s adapter=%s document_type=%s count=%s",
+                    self.source.amc_code,
+                    adapter_key,
+                    document_type,
+                    len(docs),
+                )
+                return docs
+            if adapter_key == "hsbc":
+                docs = _discover_hsbc_documents(
+                    self.source,
+                    document_type=document_type,
+                    timeout_seconds=self.timeout_seconds,
+                    user_agent=self.user_agent,
+                )
+                logger.info(
+                    "event=amc_discovery_complete amc_code=%s adapter=%s document_type=%s count=%s",
+                    self.source.amc_code,
+                    adapter_key,
+                    document_type,
+                    len(docs),
+                )
+                return docs
             if adapter_key == "aditya_birla" and (
                 document_type or ""
             ).strip().lower() == "portfolio_disclosure":
@@ -345,6 +385,11 @@ class AMCDownloader(BaseDownloader):
             "nippon",
             "sbi",
             "uti",
+            "edelweiss",
+            "invesco",
+            "tata",
+            "bandhan",
+            "hsbc",
         }:
             referer = discovered.discovery_page_url or _base_site_url(discovered.url)
             response = _request_with_retry(
@@ -837,6 +882,9 @@ def _discover_kotak_browser_documents(
         listing_url,
         candidates,
     )
+
+
+_discover_kotak_combined_factsheets = _discover_kotak_browser_documents
 
 
 def _activate_kotak_portfolio_controls(page) -> None:
@@ -2273,6 +2321,21 @@ def _request_with_retry(
     params: dict[str, object] | None = None,
     json_payload: dict[str, object] | None = None,
 ) -> requests.Response:
+    if str(url).startswith("file://"):
+        if not local_file_sources_allowed():
+            raise PermissionError("local_file_source_not_allowed")
+        file_path = Path(urlsplit(url).path.lstrip("/\\"))
+        if not file_path.is_file():
+            file_path = Path(str(url).replace("file:///", "").replace("file://", ""))
+        if file_path.is_file():
+            content = file_path.read_bytes()
+            resp = requests.Response()
+            resp.status_code = 200
+            resp._content = content
+            resp.url = url
+            resp.headers["Content-Type"] = "application/pdf"
+            return resp
+
     method_upper = method.upper()
     last_exc: Exception | None = None
     
@@ -2360,3 +2423,52 @@ def _request_with_retry(
                 continue
             break
     raise RuntimeError(f"http_request_failed method={method_upper} url={url} reason={last_exc}")
+
+
+def _discover_invesco_documents(
+    source: AMCDocumentSource,
+    document_type: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    """Invesco serves factsheets from a predictable /docs/default-source/factsheet/ path.
+
+    An earlier revision appended a single hardcoded June-2026 URL at priority 100 with
+    `report_month` asserted rather than detected, whenever anchor discovery came back
+    empty. That is a point-in-time value: from July onward it would keep injecting a
+    stale June document at maximum priority, bypassing the stale-candidate protections
+    in `_filter_expected_month_documents`/`_rank_discovered_documents` that exist
+    precisely to stop that. Discovery stays live-only; a known-exact official URL for a
+    specific month belongs in the reviewed source manifest instead.
+    """
+    return _discover_generic_anchor_documents(
+        source,
+        document_type=document_type,
+        timeout_seconds=timeout_seconds,
+        user_agent=user_agent,
+    )
+
+
+def _discover_hsbc_documents(
+    source: AMCDocumentSource,
+    document_type: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    """HSBC publishes its monthly factsheet as "The Asset" on assetmanagement.hsbc.co.in.
+
+    An earlier revision of this function returned a single hardcoded absolute path on
+    one developer's Downloads folder. That silently returned zero documents in any
+    hosted run -- indistinguishable from "the AMC has not published yet" -- and produced
+    a document with no official host and no reproducible provenance. Discovery must go
+    through the official page; a known-exact official URL belongs in the reviewed source
+    manifest (`backend/config/mf_document_sources.json`, loaded via
+    MF_SOURCE_MANIFEST_PATH), which is the sanctioned mechanism for that, and local PDFs
+    belong in `scripts/smoke_parse_mf_raw_documents.py --download-only`.
+    """
+    return _discover_generic_anchor_documents(
+        source,
+        document_type=document_type,
+        timeout_seconds=timeout_seconds,
+        user_agent=user_agent,
+    )

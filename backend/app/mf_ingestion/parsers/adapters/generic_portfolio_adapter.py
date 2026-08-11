@@ -93,8 +93,11 @@ class GenericPortfolioAdapter(BaseAMCAdapter):
             if grand_total_index is not None:
                 next_header = min(next_header, grand_total_index + 1)
             preceding_start = headers[header_position - 1][0] + 1 if header_position else 0
+            page_text_head = getattr(frame, "attrs", {}).get("page_text_head") or ""
+            extra_context = [[line] for line in str(page_text_head).splitlines() if line.strip()]
             scheme_context_rows = [
                 list(frame.columns),
+                *extra_context,
                 *rows[max(preceding_start, header_index - 15):header_index],
             ]
             scheme_name = self._find_scheme_name(scheme_context_rows)
@@ -187,6 +190,10 @@ def _find_headers(rows: list[list[object]]) -> list[tuple[int, dict[str, int]]]:
                     "name of the instrument" in low
                     or "name of instrument" in low
                     or "security name" in low
+                    or "company name" in low
+                    or "company" in low
+                    or "scrip" in low
+                    or "issuer" in low
                 )
             ),
         )
@@ -196,7 +203,13 @@ def _find_headers(rows: list[list[object]]) -> list[tuple[int, dict[str, int]]]:
             lambda norm, low: norm == "percent_aum"
             or (
                 len(low) <= _HEADER_CELL_MAX_LEN
-                and ("% to nav" in low or "% of nav" in low or "% to net assets" in low)
+                and (
+                    "% to nav" in low
+                    or "% of nav" in low
+                    or "% to net assets" in low
+                    or "allocation" in low
+                    or "weightage" in low
+                )
             ),
         )
         if instrument is None or percent is None:

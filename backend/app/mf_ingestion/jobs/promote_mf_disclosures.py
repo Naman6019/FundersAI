@@ -569,6 +569,10 @@ def build_dry_run(
     if CORE_SCOPES.intersection(scopes):
         if not candidates:
             issues.append("factsheet_candidates_missing")
+        mapped_count = sum(1 for c in candidates if c.get("mapping_status") == "mapped")
+        candidate_coverage = (mapped_count / len(candidates) * 100.0) if candidates else 0.0
+        if candidate_coverage < 95.0:
+            issues.append("candidate_mapping_coverage_below_95_percent")
         for candidate in candidates:
             candidate_issues = _validate_candidate(
                 candidate,

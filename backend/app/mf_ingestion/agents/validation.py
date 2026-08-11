@@ -5,12 +5,22 @@ from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlsplit
+import re
+import zipfile
 
-from app.mf_ingestion.downloaders.base_downloader import DiscoveredDocument, DownloadedDocument
+from app.mf_ingestion.downloaders.base_downloader import (
+    DiscoveredDocument,
+    DownloadedDocument,
+    local_file_sources_allowed,
+)
 from app.mf_ingestion.sources.registry import AMCDocumentSource
 
 SUPPORTED_DOCUMENT_TYPES = {"factsheet", "portfolio_disclosure"}
 SUPPORTED_EXTENSIONS = {".pdf", ".xls", ".xlsx", ".xlsm", ".csv", ".zip", ".html", ".htm"}
+UTI_PORTFOLIO_MONTH_PATTERN = re.compile(
+    r"portfolio\s+disclosure\s+as\s+of\s+(?P<day>\d{1,2})[/-](?P<month>\d{1,2})[/-](?P<year>20\d{2})",
+    re.IGNORECASE,
+)
 
 EXTRA_OFFICIAL_HOST_SUFFIXES: dict[str, tuple[str, ...]] = {
     "aditya_birla": ("adityabirlacapital.com",),
@@ -24,6 +34,11 @@ EXTRA_OFFICIAL_HOST_SUFFIXES: dict[str, tuple[str, ...]] = {
     "ppfas": ("ppfas.com",),
     "sbi": ("sbimf.com",),
     "uti": ("utimf.com", "d3ce1o48hc5oli.cloudfront.net"),
+    "tata": ("tatamutualfund.com",),
+    "bandhan": ("bandhanmutual.com",),
+    "edelweiss": ("edelweissmf.com",),
+    "invesco": ("invescomutualfund.com",),
+    "hsbc": ("assetmanagement.hsbc.co.in",),
 }
 
 
@@ -43,7 +58,10 @@ def validate_candidate(
         errors.append(f"unsupported_document_type:{document_type or 'missing'}")
 
     parsed = urlsplit(str(document.url or ""))
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+    if parsed.scheme == "file":
+        if not local_file_sources_allowed():
+            errors.append("local_file_source_not_allowed")
+    elif parsed.scheme not in {"http", "https"} or not parsed.hostname:
         errors.append("invalid_source_url")
     elif not _is_official_host(source, parsed.hostname):
         errors.append(f"non_official_host:{parsed.hostname.lower()}")
@@ -80,7 +98,13 @@ def validate_download(
 ) -> list[str]:
     errors: list[str] = []
     parsed = urlsplit(str(downloaded.source_url or ""))
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+    if parsed.scheme == "file":
+        # Kept consistent with validate_candidate: without this the two validators
+        # disagree, and a locally sourced document passes candidate validation only to
+        # fail here, stranding it mid-pipeline instead of being rejected up front.
+        if not local_file_sources_allowed():
+            errors.append("local_file_source_not_allowed")
+    elif parsed.scheme not in {"http", "https"} or not parsed.hostname:
         errors.append("invalid_download_url")
     elif not _is_official_host(source, parsed.hostname):
         errors.append(f"download_redirected_to_non_official_host:{parsed.hostname.lower()}")
@@ -155,7 +179,79 @@ def inspect_parser_smoke(
         # The compound-file signature was checked above. Full XLS parsing remains
         # owned by the existing ingestion parser, which supports its configured engine.
         return [], None
+    elif extension == ".zip" and (
+        str(downloaded.amc_code or "").strip().upper() == "UTI"
+        and str(downloaded.document_type or "").strip().lower() == "portfolio_disclosure"
+    ):
+        return _inspect_uti_portfolio_zip(
+            downloaded.file_bytes,
+            expected_report_month=expected_report_month,
+        )
     return [], None
+
+
+def _inspect_uti_portfolio_zip(
+    payload: bytes,
+    *,
+    expected_report_month: date | None,
+) -> tuple[list[str], date | None]:
+    """Require the UTI consolidated ZIP to contain a real all-scheme portfolio member.
+
+    UTI's monthly archive also carries dividend, derivative, and riskometer files.
+    Those are valid spreadsheets but cannot establish holdings readiness. The package
+    is accepted only when a member contains both a scheme marker and the official
+    portfolio-disclosure date heading.
+    """
+    try:
+        import pandas as pd
+
+        with zipfile.ZipFile(BytesIO(payload)) as archive:
+            members = [
+                member
+                for member in archive.infolist()
+                if Path(member.filename).suffix.lower() in {".xls", ".xlsx", ".xlsm"}
+                and not member.is_dir()
+            ]
+            if not members:
+                return ["parser_smoke_uti_zip_no_excel_members"], None
+
+            detected_months: set[date] = set()
+            for member in members:
+                frame = pd.read_excel(
+                    BytesIO(archive.read(member.filename)),
+                    sheet_name=0,
+                    header=None,
+                    nrows=250,
+                    dtype=str,
+                )
+                text = "\n".join(
+                    " ".join(str(value or "") for value in row)
+                    for row in frame.fillna("").values.tolist()
+                )
+                match = UTI_PORTFOLIO_MONTH_PATTERN.search(text)
+                if not match or "scheme:" not in text.lower():
+                    continue
+                detected_months.add(
+                    date(
+                        int(match.group("year")),
+                        int(match.group("month")),
+                        1,
+                    )
+                )
+    except Exception as exc:
+        return [f"parser_smoke_uti_zip_failed:{type(exc).__name__}"], None
+
+    if not detected_months:
+        return ["parser_smoke_uti_zip_portfolio_member_missing"], None
+    if len(detected_months) != 1:
+        return ["parser_smoke_uti_zip_multiple_portfolio_months"], None
+
+    detected_month = next(iter(detected_months))
+    month_errors = _validate_detected_factsheet_month(
+        detected_month,
+        expected_report_month=expected_report_month,
+    )
+    return month_errors, detected_month
 
 
 def validate_factsheet_content_month(

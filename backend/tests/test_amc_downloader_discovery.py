@@ -8,6 +8,7 @@ from app.mf_ingestion.downloaders import amc_downloader
 from app.mf_ingestion.downloaders.amc_downloader import (
     AMCDownloader,
     _browser_fallback_allowed_for_source,
+    _discover_kotak_combined_factsheets,
     _guess_hdfc_combined_factsheets,
     _kotak_candidates_from_payload,
     _kotak_documents_from_candidates,
@@ -153,6 +154,20 @@ def test_hdfc_official_bucket_fallback_builds_prior_month_combined_factsheet() -
     assert portfolios[0].url == factsheets[0].url
     assert portfolios[1].url == factsheets[1].url
     assert portfolios[0].document_type == "portfolio_disclosure"
+
+
+def test_kotak_dropdown_month_remains_the_report_month_after_publication() -> None:
+    docs = _discover_kotak_combined_factsheets(
+        get_source("kotak"),
+        now_utc=datetime(2026, 8, 10, tzinfo=UTC),
+    )
+
+    assert docs[0].report_month == date(2026, 7, 1)
+    assert docs[0].url == (
+        "https://vatseelabs-s3.kotakmf.com/FormsDownloads/Factsheet/"
+        "Factsheet-for-July-2026/KotakMFFactsheetJuly2026.pdf"
+    )
+    assert docs[0].discovery_page_url == "https://www.kotakmf.com/Information/forms-and-downloads"
 
 
 def test_hdfc_reviewed_inventory_builds_exact_june_portfolio_urls() -> None:
@@ -626,7 +641,7 @@ def test_dsp_official_portfolio_page_discovers_month_end_zip(monkeypatch) -> Non
     assert docs[0].report_month == date(2026, 6, 1)
 
 
-def test_uti_official_api_ranks_english_active_before_other_variants(monkeypatch) -> None:
+def test_uti_official_api_keeps_english_active_and_passive_variants(monkeypatch) -> None:
     rows = [
         {
             "name": "UTI Fund Watch (Passive)-July 2026",
@@ -662,7 +677,6 @@ def test_uti_official_api_ranks_english_active_before_other_variants(monkeypatch
     assert [doc.title for doc in docs] == [
         "UTI Fund Watch(Active)-July 2026",
         "UTI Fund Watch (Passive)-July 2026",
-        "UTI Fund Watch(Active)-July 2026 Hindi",
     ]
     assert docs[0].report_month == date(2026, 6, 1)
 

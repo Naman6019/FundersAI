@@ -12,6 +12,7 @@ from app.mf_ingestion.parsers.factsheet_parser import (
     _extract_absl_page_vector_riskometer_level,
     _extract_axis_page_vector_riskometer_levels,
     _extract_axis_ter_ratios,
+    _extract_labeled_scheme_isin,
     _extract_page_aligned_risk_levels,
     _extract_uti_ter_map,
     _map_document_order_risk_labels,
@@ -160,6 +161,13 @@ Fund Manager: Mr. Sample Manager
     )[0]
 
     assert record.aum == 71.68
+
+
+def test_scheme_isin_extraction_accepts_unit_labels_but_rejects_holding_isins():
+    assert _extract_labeled_scheme_isin("Scheme ISIN Growth: INF123456789") == "INF123456789"
+    assert _extract_labeled_scheme_isin("ISIN: INF123456789") == "INF123456789"
+    assert _extract_labeled_scheme_isin("Holding ISIN: INF123456789") is None
+    assert _extract_labeled_scheme_isin("Security ISIN: INE123456789") is None
 
 
 def test_factsheet_parser_extracts_ppfas_core_fields_from_text():
