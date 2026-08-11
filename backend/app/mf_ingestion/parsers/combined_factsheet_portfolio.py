@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from datetime import date
 
 from app.mf_ingestion.normalizers.instrument_normalizer import normalize_instrument_name
@@ -9,7 +10,12 @@ from app.mf_ingestion.parsers.pdf_text_parser import PDFTextParser
 
 NUMBER_PATTERN = re.compile(r"^-?\d{1,3}(?:,\d{3})*(?:\.\d+)?%?$")
 SECURITY_PATTERN = re.compile(
-    r"(?:\b(?:ltd|limited|bank|bk|corporation|industries|enterprises|technologies)\b|"
+    # "trust" catches PTC (pass-through certificate) securitisation trusts and
+    # InvIT-adjacent trust structures, e.g. "PTC SIDDHIVINAYAK SECURITISATION
+    # TRUST" / "CUBE HIGHWAYS TRUST" -- common debt-fund holdings that otherwise
+    # match none of the other markers and get silently misclassified as a sector
+    # label instead of a holding row.
+    r"(?:\b(?:ltd|limited|bank|bk|corporation|industries|enterprises|technologies|trust)\b|"
     r"\b(?:etf|reit|invIT|index-[A-Z0-9]+|direct growth|goi|sdl|g-sec|t[\s-]?bill)\b|"
     r"\d+(?:\.\d+)?%\s+)",
     re.IGNORECASE,
@@ -25,11 +31,26 @@ SUMMARY_MARKERS = (
     "mutual fund units",
     "mutual fund units - total",
     "futures",
+)
+# These print as a bare category name directly followed by its own single
+# percent_aum value, with no further row-level breakdown underneath -- e.g. "Net
+# Current Assets/(Liabilities)" / "2.60", "Triparty Repo" / "0.22" (observed live
+# in the real Kotak Bond Short Term Fund page: both were previously in
+# SUMMARY_MARKERS and treated as pure section headers to discard, silently
+# dropping the only row that ever carries their percentage -- the exact same
+# class of bug already fixed for "TREPS" in generic_portfolio_adapter.py's
+# SUMMARY_MARKERS, just not synced to this separate parser). Matched only via
+# _is_standalone_category_holding, which also guards against a genuine
+# "<category> - Total" redundant line for AMCs whose layout does break these out
+# into their own row-level detail.
+STANDALONE_CATEGORY_HOLDINGS = (
     "triparty repo",
     "treps",
     "cblo/repo/treps",
     "net current assets",
+    "net current assets/(liabilities)",
     "net receivables",
+    "net receivables/payables",
 )
 HEADER_MARKERS = (
     "issuer/instrument",
@@ -113,10 +134,7 @@ def parse_combined_factsheet_page(
     candidates = [candidate for candidate in candidates if candidate[0]]
     if not candidates:
         return None
-    rows, total_percent = max(
-        candidates,
-        key=lambda candidate: _portfolio_quality(candidate[1], len(candidate[0])),
-    )
+    rows, total_percent = _merge_portfolio_candidates(candidates)
 
     warnings: list[str] = []
     if not 70.0 <= total_percent <= 115.0:
@@ -149,7 +167,7 @@ def _extract_portfolio_candidate(
     *,
     continue_after_grand_total: bool,
 ) -> tuple[list[dict], float]:
-    holdings: dict[str, dict] = {}
+    holdings: list[dict] = []
     current_sector: str | None = None
     pending: list[str] = []
     for line in lines[body_start + 1 :]:
@@ -167,8 +185,18 @@ def _extract_portfolio_candidate(
 
         value = _number(line)
         if value is None:
+            if _is_summary(low):
+                pending.clear()
+                if low.startswith("grand total"):
+                    current_sector = None
+                continue
             pending.append(line)
-            pending = pending[-3:]
+            # Wide enough for the longest real issuer names in these tables (e.g.
+            # "NATIONAL BANK FOR FINANCING / INFRASTRUCTURE AND / DEVELOPMENT (^)"
+            # spans 3 lines before its rating line) without spilling into the
+            # previous row -- pending is cleared at every row/header boundary below,
+            # so a wider cap can't leak content across rows.
+            pending = pending[-6:]
             continue
 
         candidate = _candidate_name(pending)
@@ -182,25 +210,30 @@ def _extract_portfolio_candidate(
             if low_candidate.startswith("grand total"):
                 current_sector = None
             continue
-        if _looks_like_security(normalized):
-            key = _scheme_key(normalized)
-            item = {
-                "instrument_name": normalized,
-                "isin": None,
-                "sector": current_sector,
-                "percent_aum": round(value, 6),
-                "quantity": None,
-                "market_value": None,
-            }
-            previous = holdings.get(key)
-            if not previous or value > float(previous["percent_aum"]):
-                holdings[key] = item
+        if _looks_like_security(normalized) or _is_standalone_category_holding(low_candidate):
+            # Keep every row instead of deduping by normalized name: these tables
+            # print no ISIN, so two genuinely different bonds from the same issuer
+            # at the same rating (common -- multiple tranches/series) can share the
+            # exact same printed text apart from a cosmetic "(^)" marker that
+            # normalization treats as noise. Deduping by name silently dropped the
+            # smaller of the two, understating the fund's true holdings coverage
+            # (observed: Kotak Bond Short Term Fund staged at 83% of AUM against a
+            # source PDF that sums to 100%).
+            holdings.append(
+                {
+                    "instrument_name": normalized,
+                    "isin": None,
+                    "sector": current_sector,
+                    "percent_aum": round(value, 6),
+                    "quantity": None,
+                    "market_value": None,
+                }
+            )
         elif len(normalized) <= 90:
             current_sector = normalized
 
-    rows = list(holdings.values())
-    total_percent = round(sum(float(row["percent_aum"]) for row in rows), 6)
-    return rows, total_percent
+    total_percent = round(sum(float(row["percent_aum"]) for row in holdings), 6)
+    return holdings, total_percent
 
 
 def _find_scheme_name(lines: list[str], prefixes: tuple[str, ...]) -> str:
@@ -240,6 +273,54 @@ def _portfolio_quality(total_percent: float, holding_count: int) -> tuple[int, f
     )
 
 
+def _merge_portfolio_candidates(candidates: list[tuple[list[dict], float]]) -> tuple[list[dict], float]:
+    """Each body_start re-scans this page's single portfolio table from a different
+    anchor line: the literal "Portfolio" heading, or -- for AMCs like Kotak whose
+    factsheets print the table across side-by-side page columns -- extra anchors at
+    "Equity & Equity Related" and "Scan to Invest Now" (see continue_after_grand_total
+    callers). Picking only the single best-scoring candidate (the old `max(...,
+    key=_portfolio_quality)`) throws away any row a weaker-scoring candidate captured
+    that the winner missed -- e.g. a two-column layout where no single anchor's
+    forward scan covers both columns, undercounting the true total (observed: Kotak
+    Bond Short Term Fund staged at 83% of AUM against a source PDF that sums to
+    100%). Merge every candidate's holdings instead of discarding whichever one
+    scores worse -- but never compare rows *across* candidates to decide which to
+    keep. Verified live against the real Kotak Bond Short Term Fund page: its two
+    anchors ("Scan to Invest Now" and "PORTFOLIO", adjacent) each independently
+    scan the *entire* table and produce identical results, so this isn't really a
+    complementary-partial-coverage case at all. Deduping across candidates by
+    instrument key -- or even by (key, value) pair -- broke on it anyway: these
+    tables print no ISIN, so two *different* bonds from the same issuer at the
+    same rating share a normalized name, and here two of them (two separate "TATA
+    CAPITAL LTD" holdings) even coincidentally share the same percent_aum (0.70),
+    so a value-aware pairwise dedup still collapsed them into one. Instead, decide
+    per instrument key which *single* candidate's account of that key to trust --
+    picking whichever candidate observed the most rows under that key -- and take
+    all of that one candidate's rows for it. Candidates that scan the same table
+    (the common case here) agree on the count and simply reproduce each other;
+    a candidate whose scan range doesn't reach a given part of the table
+    contributes a count of 0 for those keys and is skipped in favour of the one
+    that does, still recovering genuinely complementary partial coverage without
+    ever comparing two different real rows to each other."""
+    rows_by_candidate = [rows for rows, _ in candidates]
+    counts_by_candidate = [
+        Counter(_scheme_key(str(row["instrument_name"])) for row in rows)
+        for rows in rows_by_candidate
+    ]
+    all_keys = list(dict.fromkeys(key for counts in counts_by_candidate for key in counts))
+
+    merged_rows: list[dict] = []
+    for key in all_keys:
+        best_index = max(range(len(rows_by_candidate)), key=lambda i: counts_by_candidate[i][key])
+        merged_rows.extend(
+            row
+            for row in rows_by_candidate[best_index]
+            if _scheme_key(str(row["instrument_name"])) == key
+        )
+    total_percent = round(sum(float(row["percent_aum"]) for row in merged_rows), 6)
+    return merged_rows, total_percent
+
+
 def _record_quality(record: ParsedDocument) -> tuple[int, float, int]:
     total_percent = float(record.metrics.get("total_percent_aum") or 0.0)
     return _portfolio_quality(total_percent, len(record.holdings))
@@ -253,15 +334,34 @@ def _candidate_name(pending: list[str]) -> str:
     ]
     if not meaningful:
         return ""
-    for width in range(1, min(3, len(meaningful)) + 1):
-        candidate = " ".join(meaningful[-width:])
-        if _looks_like_security(candidate):
-            return candidate
+    # Use the full pending window whenever any of it looks like a security --
+    # SECURITY_PATTERN.search() matches anywhere in the string, so this doesn't
+    # require the trigger word to be at the end. The previous shortest-width-first
+    # loop returned as soon as e.g. just "CORPORATION LTD. (^) ICRA AAA" matched,
+    # silently dropping the preceding "HOUSING & URBAN DEVELOPMENT" line that
+    # actually identified the issuer -- real PDF observed: HOUSING & URBAN
+    # DEVELOPMENT CORPORATION LTD. came out as just "CORPORATION LTD. (^) ICRA
+    # AAA", losing the distinguishing part of the name.
+    full = " ".join(meaningful)
+    if _looks_like_security(full):
+        return full
     return meaningful[-1]
 
 
 def _looks_like_security(value: str) -> bool:
     return bool(SECURITY_PATTERN.search(value))
+
+
+def _is_standalone_category_holding(value: str) -> bool:
+    # Excludes anything containing "total" so a "<category> - Total" redundant
+    # line (an AMC layout that DOES break the category into its own row-level
+    # detail, unlike this one) isn't double-counted alongside the real rows.
+    if "total" in value:
+        return False
+    return any(
+        value == marker or value.startswith(f"{marker} ") or value.startswith(f"{marker}/")
+        for marker in STANDALONE_CATEGORY_HOLDINGS
+    )
 
 
 def _is_summary(value: str) -> bool:

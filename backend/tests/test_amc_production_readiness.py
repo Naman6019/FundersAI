@@ -61,6 +61,11 @@ EXPECTED_AMCS = {
     "dsp",
     "kotak",
     "aditya_birla",
+    "tata",
+    "bandhan",
+    "edelweiss",
+    "invesco",
+    "hsbc",
 }
 
 
@@ -78,7 +83,7 @@ def _document(url: str, report_month: date | None, priority: int) -> DiscoveredD
     )
 
 
-def test_registry_covers_all_twelve_agents_and_moves_discovery_rules_out_of_downloader():
+def test_registry_covers_all_registered_agents_and_moves_discovery_rules_out_of_downloader():
     assert set(SOURCES) == EXPECTED_AMCS
     assert set(PRODUCTION_TARGET_AMC_AGENT_KEYS) == EXPECTED_AMCS
     for source in SOURCES.values():

@@ -28,6 +28,11 @@ from app.mf_ingestion.parsers.adapters.uti_adapter import UTIAdapter
 from app.mf_ingestion.parsers.adapters.dsp_adapter import DSPAdapter
 from app.mf_ingestion.parsers.adapters.kotak_adapter import KotakAdapter
 from app.mf_ingestion.parsers.adapters.aditya_birla_adapter import AdityaBirlaAdapter
+from app.mf_ingestion.parsers.adapters.tata_adapter import TataAdapter
+from app.mf_ingestion.parsers.adapters.bandhan_adapter import BandhanAdapter
+from app.mf_ingestion.parsers.adapters.edelweiss_adapter import EdelweissAdapter
+from app.mf_ingestion.parsers.adapters.invesco_adapter import InvescoAdapter
+from app.mf_ingestion.parsers.adapters.hsbc_adapter import HSBCAdapter
 from app.mf_ingestion.parsers.base_parser import ParseContext
 from app.mf_ingestion.parsers.factsheet_parser import FactsheetParser, filter_factsheet_records_for_amc
 from app.mf_ingestion.parsers.holdings_parser import HoldingsParser
@@ -139,6 +144,11 @@ class ParsingService:
             "kotak": KotakAdapter(),
             "aditya_birla": AdityaBirlaAdapter(),
             "absl": AdityaBirlaAdapter(),
+            "tata": TataAdapter(),
+            "bandhan": BandhanAdapter(),
+            "edelweiss": EdelweissAdapter(),
+            "invesco": InvescoAdapter(),
+            "hsbc": HSBCAdapter(),
         }
         self.llm_extractor = StrictJSONLLMExtractor(
             enabled=self.config.llm_extractor_enabled,
@@ -552,6 +562,15 @@ class ParsingService:
                         }
                     )
                 if rows:
+                    unique_rows = []
+                    seen_hashes = set()
+                    for r in rows:
+                        key = (r["source_document_id"], r["source_row_hash"])
+                        if key not in seen_hashes:
+                            seen_hashes.add(key)
+                            unique_rows.append(r)
+                    rows = unique_rows
+
                     upsert_resp = _execute_supabase(
                         supabase.table("mf_scheme_holdings")
                         .upsert(rows, on_conflict="source_document_id,source_row_hash"),
@@ -747,6 +766,7 @@ class ParsingService:
                 benchmark=record.benchmark,
                 fund_manager=record.fund_manager,
                 risk_level=record.risk_level,
+                scheme_isin=record.scheme_isin,
             )
             if matched:
                 updated += 1
@@ -782,6 +802,7 @@ class ParsingService:
                             "benchmark": record.benchmark,
                             "fund_manager": record.fund_manager,
                             "risk_level": record.risk_level,
+                            "scheme_isin": record.scheme_isin,
                         }
                         for record in records
                     ],
@@ -1152,6 +1173,28 @@ class ParsingService:
         code = str(best.get("scheme_code") or "").strip()
         return code or None
 
+    def _resolve_scheme_code_for_scheme_isin(self, scheme_isin: str) -> str | None:
+        """Resolve a fund-unit ISIN without name similarity or external AMFI calls."""
+        isin = str(scheme_isin or "").strip().upper()
+        if not isin:
+            return None
+        try:
+            result = _execute_supabase(
+                supabase.table("mutual_funds")
+                .select("scheme_code")
+                .eq("isin", isin)
+                .limit(2),
+                "resolve_parser_scheme_isin",
+            )
+        except Exception:
+            logger.exception("event=scheme_isin_lookup_failed isin=%s", isin)
+            return None
+        rows = result.data or []
+        if len(rows) != 1:
+            return None
+        code = str(rows[0].get("scheme_code") or "").strip()
+        return code or None
+
     def _stage_amc_core_fields(
         self,
         amc_code: str,
@@ -1165,6 +1208,7 @@ class ParsingService:
         benchmark: str | None,
         fund_manager: str | None,
         risk_level: str | None,
+        scheme_isin: str | None = None,
         extractor_type: str = "deterministic",
         extractor_model: str | None = None,
         confidence_score: float | None = None,
@@ -1182,6 +1226,7 @@ class ParsingService:
         scheme_code, family_id, mapping_confidence, mapping_status = self._resolve_staged_mapping(
             amc_code,
             scheme_name,
+            scheme_isin=scheme_isin,
         )
         issues: list[str] = []
         if mapping_status != "mapped":
@@ -1252,6 +1297,7 @@ class ParsingService:
             "amc_code": amc_code,
             "report_month": report_month.isoformat() if report_month else None,
             "raw_scheme_name": scheme_name,
+            "scheme_isin": scheme_isin,
             "normalized_scheme_name": normalized_scheme_name,
             "mapped_scheme_code": scheme_code,
             "mapped_family_id": family_id,
@@ -1321,10 +1367,22 @@ class ParsingService:
         self,
         amc_code: str,
         raw_scheme_name: str,
+        *,
+        scheme_isin: str | None = None,
     ) -> tuple[str | None, str | None, float, str]:
-        scheme_code = self._resolve_scheme_code_for_scheme(raw_scheme_name)
+        norm_raw = " ".join(str(raw_scheme_name or "").lower().split())
+        code_key = str(amc_code or "").strip().lower()
+        if code_key in KNOWN_PARSING_AMC_SCHEME_ALIASES and norm_raw in KNOWN_PARSING_AMC_SCHEME_ALIASES[code_key]:
+            sc, fam = KNOWN_PARSING_AMC_SCHEME_ALIASES[code_key][norm_raw]
+            return sc, fam, 100.0, "mapped"
+
+        scheme_code = (
+            self._resolve_scheme_code_for_scheme_isin(scheme_isin)
+            if code_key == "kotak" and scheme_isin
+            else self._resolve_scheme_code_for_scheme(raw_scheme_name)
+        )
         if not scheme_code:
-            return None, None, 0.0, "unmapped"
+            return None, None, 0.0, "needs_review" if scheme_isin else "unmapped"
 
         snapshot = self.repository.get_mutual_fund_core_snapshot(scheme_code) or {}
         snapshot_name = str(snapshot.get("scheme_name") or "").strip()
@@ -1336,7 +1394,7 @@ class ParsingService:
             _normalize_family_scheme_name(raw_scheme_name),
             candidates=[_normalize_family_scheme_name(snapshot_name)],
         )
-        mapping_confidence = float(match.confidence)
+        mapping_confidence = 100.0 if scheme_isin and match.confidence >= 90.0 else float(match.confidence)
         family_id = self._resolve_family_id_for_scheme(scheme_code)
         if not family_id or mapping_confidence < 90.0:
             return scheme_code, family_id, mapping_confidence, "needs_review"
@@ -1552,6 +1610,7 @@ def _normalize_lookup_text(text: object) -> str:
 
 def _scheme_name_for_matching(text: str) -> str:
     value = " ".join(str(text or "").replace("\xa0", " ").split()).strip()
+    value = re.sub(r"(?i)\(erstwhile known as [^)]+\)", "", value).strip()
     value = re.sub(r"(?i)^scheme(?:\s+name)?\s*:\s*", "", value)
     return value.rstrip(" .")
 
@@ -1705,19 +1764,43 @@ def _apply_family_category_subs(text: str) -> str:
     return text
 
 
+KNOWN_PARSING_AMC_SCHEME_ALIASES: dict[str, dict[str, tuple[str, str]]] = {
+    "uti": {
+        "uti nifty midcap 150 etf": ("145293", "uti-nifty-midcap-150-etf"),
+        "uti nifty next 50 etf": ("145295", "uti-nifty-next-50-etf"),
+        "uti bse sensex next 50 etf": ("145296", "uti-bse-sensex-next-50-etf"),
+        "uti nifty bank exchange traded fund etf": ("120750", "uti-nifty-bank-etf"),
+        "uti mastershare unit scheme": ("100668", "uti-large-cap-fund"),
+    },
+    "sbi": {
+        "sbi smallcap 250 etf": ("152695", "sbi-nifty-smallcap-250-etf"),
+        "sbi crisil-ibx financial services 9-12 months debt index fund": ("153377", "sbi-crisil-ibx-financial-services-9-12-months-debt-index-fund"),
+        "sbi crisil ibx financial services 9 12 months debt index fund": ("153377", "sbi-crisil-ibx-financial-services-9-12-months-debt-index-fund"),
+        "sbi crisil-ibx financial services 3-6 months debt index fund": ("153376", "sbi-crisil-ibx-financial-services-3-6-months-debt-index-fund"),
+        "sbi crisil ibx financial services 3 6 months debt index fund": ("153376", "sbi-crisil-ibx-financial-services-3-6-months-debt-index-fund"),
+        "sbi retirement benefit fund": ("148679", "sbi-retirement-benefit-fund-aggressive-plan"),
+    },
+    "motilal": {
+        "motilal oswal consumption fund": ("153914", "motilal-oswal-consumption-fund"),
+        "motilal oswal ultra short term fund": ("124233", "motilal-oswal-ultra-short-term-fund-mofustf"),
+        "motilal oswal balanced advantage fund": ("139872", "motilal-oswal-balanced-advantage-fund-mofdynamic"),
+        "motilal oswal infrastructure fund": ("153484", "motilal-oswal-infrastructure-fund"),
+        "motilal oswal arbitrage fund": ("153187", "motilal-oswal-arbitrage-fund"),
+    },
+    "kotak": {
+        "kotak nifty alpha low volatility 30 index fund": ("150822", "kotak-nifty-alpha-low-volatility-30-index-fund"),
+        "kotak nifty alpha low-volatility 30 index fund": ("150822", "kotak-nifty-alpha-low-volatility-30-index-fund"),
+        "kotak multi asset active fof": ("153372", "kotak-multi-asset-active-fof"),
+        "kotak silver etf fof": ("150948", "kotak-silver-etf-fof"),
+        "kotak income plus arbitrage omni fof": ("153375", "kotak-income-plus-arbitrage-omni-fof"),
+        "kotak crisil-ibx financial services 3-6 months debt index fund": ("153376", "kotak-crisil-ibx-financial-services-3-6-months-debt-index-fund"),
+    },
+}
+
+
 def _normalize_family_scheme_name(value: object) -> str:
-    # Plan/option qualifier words like "regular", "growth", "direct" only ever function
-    # as noise at the *end* of a scheme name (AMFI's "<Scheme Name> - <Plan> - <Option>"
-    # convention, e.g. "... - Growth - Regular Plan"). Stripping them unconditionally is
-    # wrong when a word like "Regular" is part of the scheme's own brand name (e.g.
-    # "Regular Savings Fund") rather than a trailing plan qualifier -- that collapsed
-    # two genuinely different schemes into one family and made one inherit the other's
-    # benchmark (GitHub issue #2). Peeling recognized qualifier words off the *end* of
-    # the token list, one at a time, until a real word is hit handles this correctly
-    # regardless of whether the source separates the qualifier suffix with a spaced
-    # hyphen ("Fund - Direct Plan"), an unspaced one ("Fund-Direct Growth", as used
-    # inconsistently in mutual_fund_core_snapshot), or no separator at all.
-    text = _apply_family_category_subs(_normalize_lookup_text(value))
+    raw_str = re.sub(r"(\d+)-(\d+)", r"\1 \2", str(value or ""))
+    text = _apply_family_category_subs(_normalize_lookup_text(raw_str))
     tokens = text.split()
     while len(tokens) > 1 and tokens[-1] in _FAMILY_PLAN_QUALIFIER_WORDS:
         tokens.pop()

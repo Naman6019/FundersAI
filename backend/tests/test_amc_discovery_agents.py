@@ -295,7 +295,7 @@ def test_top_ten_specialists_accept_only_their_official_source(amc: str, officia
     result = agent.run(document_types=("factsheet",), expected_month=date(2026, 4, 1))
 
     assert result.agent_id == f"{amc}_link_discovery_agent_v1"
-    assert result.status == "completed"
+    assert result.status == ("escalated" if amc == "uti" else "completed")
     assert result.documents[0].source_url == official_url
     assert result.documents[0].probe_status == "passed"
 
@@ -314,6 +314,50 @@ def test_top_ten_agent_roster_matches_requested_amcs() -> None:
         "dsp",
     )
     assert all(AGENT_CLASSES[key].expected_adapter_key == key for key in TOP_10_AMC_AGENT_KEYS)
+
+
+def test_uti_requires_both_english_monthly_factsheet_bundles() -> None:
+    expected_month = date(2026, 6, 1)
+    active = _discovered(
+        "uti",
+        "factsheet",
+        "https://www.utimf.com/documents/uti-fund-watch-active-july-2026.pdf",
+        score=200,
+        report_month=expected_month,
+    )
+    passive = _discovered(
+        "uti",
+        "factsheet",
+        "https://www.utimf.com/documents/uti-fund-watch-passive-july-2026.pdf",
+        score=100,
+        report_month=expected_month,
+    )
+    agent = AGENT_CLASSES["uti"](
+        source=get_source("uti"),
+        downloader=_FakeDownloader(documents={"factsheet": [active, passive]}),
+    )
+
+    result = agent.run(document_types=("factsheet",), expected_month=expected_month)
+
+    assert result.status == "completed"
+    assert [document.source_url for document in result.documents] == [active.url, passive.url]
+
+
+def test_uti_escalates_when_the_passive_factsheet_bundle_is_missing() -> None:
+    active = _discovered(
+        "uti",
+        "factsheet",
+        "https://www.utimf.com/documents/uti-fund-watch-active-july-2026.pdf",
+    )
+    agent = AGENT_CLASSES["uti"](
+        source=get_source("uti"),
+        downloader=_FakeDownloader(documents={"factsheet": [active]}),
+    )
+
+    result = agent.run(document_types=("factsheet",))
+
+    assert result.status == "escalated"
+    assert any(event.strategy == "source_bundle_gate" for event in result.trace)
 
 
 @pytest.mark.parametrize("amc", TOP_10_AMC_AGENT_KEYS)

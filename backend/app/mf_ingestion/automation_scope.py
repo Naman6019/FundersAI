@@ -23,7 +23,13 @@ GREEN_AMCS = (
 # riskometer-vs-PDF check) and kotak's excluded holdings/sectors scope (ISIN coverage
 # shortfall) still can't reach production data unreviewed.
 APPROVED_RESTRICTED_AMCS = ("uti",)
-VALIDATION_ONLY_AMCS = ()
+# Next-by-AUM batch (2026-08-11): registered in SOURCES so reporting/promotion tooling
+# can target them, but never scheduled and never runnable without explicit
+# source_document_ids until a live discovery run against their real URLs is reviewed and
+# their generic-adapter holdings parsing is checked against real documents. Graduate to
+# GREEN_AMCS the same way hdfc/axis/motilal/dsp/aditya_birla/icici/kotak did: only after
+# staging coverage passes cleanly.
+VALIDATION_ONLY_AMCS = ("tata", "bandhan", "edelweiss", "invesco", "hsbc")
 FROZEN_ISSUE_2_AMCS = ()
 
 LANE_AMCS: dict[str, tuple[str, ...]] = {

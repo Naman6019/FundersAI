@@ -175,6 +175,17 @@ def reconcile_staged_mappings(
                 resolution = cache.get(raw_name)
                 if resolution is None:
                     resolution = service._resolve_staged_mapping(normalized_amc, raw_name)
+                    scheme_code, family_id, confidence, status = resolution
+                    if status != "mapped" or not scheme_code or not family_id or confidence < 90.0:
+                        from scripts.auto_resolve_review_candidates import FMP_PATTERN, GENERIC_FMP_FAMILIES, KNOWN_AMC_SCHEME_ALIASES
+                        norm_raw = " ".join(raw_name.lower().split())
+                        code = str(normalized_amc or "").lower()
+                        if code in KNOWN_AMC_SCHEME_ALIASES and norm_raw in KNOWN_AMC_SCHEME_ALIASES[code]:
+                            sc, fam = KNOWN_AMC_SCHEME_ALIASES[code][norm_raw]
+                            resolution = (sc, fam, 100.0, "mapped")
+                        elif FMP_PATTERN.search(raw_name) and code in GENERIC_FMP_FAMILIES:
+                            fam, sc = GENERIC_FMP_FAMILIES[code]
+                            resolution = (sc, fam, 90.0, "mapped")
                     cache[raw_name] = resolution
                 scheme_code, family_id, confidence, status = resolution
                 if status != "mapped" or not scheme_code or not family_id or confidence < 90.0:

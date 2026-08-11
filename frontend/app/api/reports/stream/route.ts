@@ -1,8 +1,23 @@
 import { NextResponse } from 'next/server';
-import { getClientIp } from '@/lib/rateLimit';
+import { getClientIp, enforceRateLimit } from '@/lib/rateLimit';
+import { requireUserContext } from '@/lib/auth/server';
 
 export async function POST(req: Request) {
   try {
+    // Same auth as the research chat endpoint (see app/api/chat/route.ts): a
+    // valid Supabase session is required before we'll spend LLM/compute
+    // budget on a report.
+    const auth = await requireUserContext(req);
+    if (!auth.ok) return auth.response;
+    const userContext = auth.context;
+
+    const limited = await enforceRateLimit(req, 'reports', {
+      identifier: userContext.user.id,
+      tier: userContext.profile.tier,
+      role: userContext.profile.role,
+    });
+    if (limited) return limited;
+
     const body = await req.json();
     const targetBase =
       process.env.REPORTS_MICROSERVICE_URL ||
@@ -15,11 +30,20 @@ export async function POST(req: Request) {
 
     console.log(`[Reports Stream Proxy] Proxying report request to ${targetUrl}`);
 
+    const internalProxyKey = process.env.REPORTS_INTERNAL_PROXY_KEY || '';
+    if (!internalProxyKey) {
+      console.error('[Reports Stream Proxy] REPORTS_INTERNAL_PROXY_KEY is not set on the frontend server.');
+      return NextResponse.json({ error: 'Reports service is not configured' }, { status: 503 });
+    }
+
     const upstreamRes = await fetch(targetUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Forwarded-For': getClientIp(req),
+        'X-User-Id': userContext.user.id,
+        'X-User-Tier': userContext.profile.tier,
+        'X-Internal-Proxy-Key': internalProxyKey,
       },
       body: JSON.stringify(body),
     });

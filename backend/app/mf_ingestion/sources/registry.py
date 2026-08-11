@@ -193,7 +193,7 @@ SOURCES: dict[str, AMCDocumentSource] = {
         adapter_key="kotak",
         factsheet_page_url=_env_url(
             "MF_KOTAK_FACTSHEET_PAGE_URL",
-            "https://www.kotakmf.com/factsheet/June_2026/",
+            "https://www.kotakmf.com/Information/forms-and-downloads",
         ),
         portfolio_disclosure_page_url=_env_url(
             "MF_KOTAK_PORTFOLIO_PAGE_URL",
@@ -278,6 +278,136 @@ SOURCES: dict[str, AMCDocumentSource] = {
         excluded_keywords=("fortnightly", "half-yearly", "performance disclosure", "scheme performance"),
         allowed_host_suffixes=("dspim.com",),
     ),
+    # The following five (tata, bandhan, edelweiss, invesco, hsbc) are the next batch by
+    # AUM after the original 12. They start in automation_scope.VALIDATION_ONLY_AMCS
+    # (not GREEN_AMCS): discovery/parsing may only run via explicit, non-scheduled
+    # dispatch until a live discovery run against these URLs is reviewed. runtime_enabled
+    # stays False so nothing reaches users regardless of lane. See docs/CURRENT_STATE.md.
+    "tata": AMCDocumentSource(
+        amc_name="Tata Mutual Fund",
+        amc_code="TATA",
+        adapter_key="tata",
+        factsheet_page_url=_env_url(
+            "MF_TATA_FACTSHEET_PAGE_URL",
+            "https://www.tatamutualfund.com/information-documents/factsheets",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_TATA_PORTFOLIO_PAGE_URL",
+            "https://www.tatamutualfund.com/information-documents/portfolio-disclosures",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=False,
+        factsheet_required_keywords=("factsheet", "fact sheet", "scheme factsheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
+        factsheet_contains_holdings=True,
+        allowed_host_suffixes=("tatamutualfund.com",),
+    ),
+    "bandhan": AMCDocumentSource(
+        amc_name="Bandhan Mutual Fund",
+        amc_code="BANDHAN",
+        adapter_key="bandhan",
+        factsheet_page_url=_env_url(
+            "MF_BANDHAN_FACTSHEET_PAGE_URL",
+            "https://bandhanmutual.com/downloads/factsheet/all-schemes",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_BANDHAN_PORTFOLIO_PAGE_URL",
+            "https://bandhanmutual.com/downloads/monthly-portfolio-disclosures",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=False,
+        factsheet_required_keywords=("factsheet", "fact sheet", "monthly factsheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
+        factsheet_contains_holdings=True,
+        browser_recovery_allowed=True,
+        allowed_host_suffixes=("bandhanmutual.com",),
+    ),
+    "edelweiss": AMCDocumentSource(
+        amc_name="Edelweiss Mutual Fund",
+        amc_code="EDELWEISS",
+        adapter_key="edelweiss",
+        factsheet_page_url=_env_url(
+            "MF_EDELWEISS_FACTSHEET_PAGE_URL",
+            "https://www.edelweissmf.com/downloads/factsheets",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_EDELWEISS_PORTFOLIO_PAGE_URL",
+            "https://www.edelweissmf.com/statutory-disclosures/monthly-portfolio",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=False,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
+        factsheet_contains_holdings=True,
+        browser_recovery_allowed=True,
+        allowed_host_suffixes=("edelweissmf.com",),
+    ),
+    "invesco": AMCDocumentSource(
+        amc_name="Invesco Mutual Fund",
+        amc_code="INVESCO",
+        adapter_key="invesco",
+        factsheet_page_url=_env_url(
+            "MF_INVESCO_FACTSHEET_PAGE_URL",
+            "https://www.invescomutualfund.com/literature-and-form",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_INVESCO_PORTFOLIO_PAGE_URL",
+            "https://www.invescomutualfund.com/literature-and-form",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=False,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "holdings", "disclosure"),
+        factsheet_contains_holdings=True,
+        allowed_host_suffixes=("invescomutualfund.com",),
+    ),
+    "hsbc": AMCDocumentSource(
+        amc_name="HSBC Mutual Fund",
+        amc_code="HSBC",
+        adapter_key="hsbc",
+        factsheet_page_url=_env_url(
+            "MF_HSBC_FACTSHEET_PAGE_URL",
+            "https://www.assetmanagement.hsbc.co.in/en/mutual-funds/investor-resources?Date=&Cap=&Doc=fund-factsheets",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_HSBC_PORTFOLIO_PAGE_URL",
+            "https://www.assetmanagement.hsbc.co.in/en/mutual-funds/investor-resources?Date=&Cap=&Doc=monthly-portfolio-disclosures",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes="HSBC Mutual Fund serves direct PDF downloads without inline HTML previews.",
+        enabled=True,
+        runtime_enabled=False,
+        # HSBC names its monthly factsheet "The Asset as on - <Month> <Year>" (slug
+        # `the-asset-<month>-<year>.pdf`), so neither the title nor the URL contains
+        # "factsheet" -- without "the asset" here the real document is filtered out and
+        # discovery finds nothing. A bare "asset" keyword must NOT be added back: every
+        # HSBC document URL contains "/assets/documents/", so it matched 4,336 of the
+        # library's files against 75 for "the asset", which would burn the whole
+        # discovery action budget on non-factsheets.
+        factsheet_required_keywords=("factsheet", "fact sheet", "the asset"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
+        factsheet_contains_holdings=True,
+        # The document library renders every document server-side into one ~12 MB HTML
+        # page (its type/date filters are client-side only), so an earlier plain fetch
+        # timed out on page weight rather than bot protection. Anchors are present in
+        # the served HTML, so scraping works; browser recovery is retained only as a
+        # fallback for that size-related fetch risk.
+        browser_recovery_allowed=True,
+        allowed_host_suffixes=("assetmanagement.hsbc.co.in", "hsbc.co.in"),
+    ),
 }
 
 PRODUCTION_TARGET_AMC_KEYS = (
@@ -293,6 +423,11 @@ PRODUCTION_TARGET_AMC_KEYS = (
     "dsp",
     "kotak",
     "aditya_birla",
+    "tata",
+    "bandhan",
+    "edelweiss",
+    "invesco",
+    "hsbc",
 )
 
 
