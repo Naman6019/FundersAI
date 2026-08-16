@@ -26,6 +26,14 @@ pytest-cache-files-*/
 # TypeScript
 *.tsbuildinfo
 
+# design-sync (claude.ai/design)
+.ds-sync/
+ds-bundle/
+frontend/.ds-compiled/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+
 # Misc
 .DS_Store
 .vscode/
@@ -111,6 +119,11 @@ stitch_downloads/
 *.rst
 *.xls
 *.xlsx
+
+# design-sync durable files (repo-wide *.json/*.MD rules above would otherwise hide these)
+!.design-sync/config.json
+!.design-sync/NOTES.md
+!.design-sync/conventions.md
 
 # Temporary debugging scripts
 check_db2.py
