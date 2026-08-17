@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { MagicCard } from "@/components/ui/magic-card";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
+import { ReportsSubNav } from "@/components/layout/ReportsSubNav";
 
 interface FundRow {
     scheme_code: string | number;
@@ -129,6 +130,9 @@ export default function SupportedFundsDirectoryPage() {
                     </Link>
                 </div>
             </div>
+
+            {/* In-Page Navigation Options Menu */}
+            <ReportsSubNav />
 
             {/* Main Dual Layout: Left Funds Grid + Right AMC Selector Sidebar */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">

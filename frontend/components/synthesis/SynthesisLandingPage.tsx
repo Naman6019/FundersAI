@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { MagicCard } from "@/components/ui/magic-card";
@@ -13,6 +13,7 @@ import { VerticalCutReveal } from "@/components/ui/vertical-cut-reveal";
 import { AgentGraphVisualizer } from "@/components/synthesis/AgentGraphVisualizer";
 import { BentoReportGrid } from "@/components/synthesis/BentoReportGrid";
 import { InstitutionalPDFTemplate } from "@/components/synthesis/InstitutionalPDFTemplate";
+import PublicFooter from "@/components/layout/PublicFooter";
 
 // Data Definitions
 const heroPresets = [
@@ -100,6 +101,12 @@ export default function SynthesisLandingPage() {
     const [openFaq, setOpenFaq] = useState<number | null>(0);
     const [heroSelectedPreset, setHeroSelectedPreset] = useState(0);
     const [heroSimulatedProgress, setHeroSimulatedProgress] = useState(4);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem("fundersai_last_landing", "/synthesis");
+        } catch {}
+    }, []);
 
     const runHeroPreset = (idx: number) => {
         setHeroSelectedPreset(idx);
@@ -843,6 +850,8 @@ export default function SynthesisLandingPage() {
                 }}
             />
         </div>
+        {/* Common Public Footer */}
+        <PublicFooter />
         </div>
     );
 }

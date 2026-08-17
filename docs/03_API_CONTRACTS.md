@@ -89,6 +89,13 @@ These routes proxy to their matching `/api/quant/*` FastAPI endpoints.
   - `POST /api/admin/data-coverage/documents/[documentId]/reparse`
   - `POST /api/admin/data-coverage/documents/[documentId]/resolve`
   - `POST /api/admin/data-coverage/documents/[documentId]/skip`
+- MF promotion review (staged-vs-live discrepancy review before promoting parsed AMC data to production):
+  - `GET /api/admin/promotion-review/pending-count`
+  - `GET /api/admin/promotion-review/flags?amc=...&scope=risk|holdings&report_month=...`
+  - `POST /api/admin/promotion-review/decisions`: records a reviewer decision (`use_staged` / `use_live` / `exclude`); `reviewed_by` is set server-side from the authenticated admin.
+  - `POST /api/admin/promotion-review/promote`: applies a recorded decision to production; requires `decision_id` and a literal `confirm_phrase: "PROMOTE"`, rate-limited under the `admin-mutation` bucket.
+
+All promotion-review routes proxy to the backend `mf-promotion-review` service (see Internal Admin below) using the internal `MF_INTERNAL_ADMIN_KEY`, after the frontend's own admin session/role check.
 
 Missing authentication returns `401`; an authenticated non-admin returns `403`.
 
@@ -153,6 +160,10 @@ Mutation and signed-object routes require the configured internal admin key or s
 - `POST /api/admin/mf-documents/{document_id}/request-reparse`
 - `POST /api/admin/mf-documents/{document_id}/resolve`
 - `POST /api/admin/mf-documents/{document_id}/skip`
+- `GET /api/admin/mf-promotion-review/flags`
+- `GET /api/admin/mf-promotion-review/pending-count`
+- `POST /api/admin/mf-promotion-review/decisions`
+- `POST /api/admin/mf-promotion-review/promote`
 
 All require `X-Admin-Key`.
 

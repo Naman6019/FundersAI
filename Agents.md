@@ -1,6 +1,6 @@
 # Agents Guide
 
-**Last updated:** 2026-08-08
+**Last updated:** 2026-08-16
 
 Use this guide for repository conventions and quick orientation. For the authoritative implementation snapshot, read `docs/CURRENT_STATE.md`; use the focused documents under `docs/` for API, schema, deployment, and ML details.
 
@@ -87,7 +87,7 @@ See `docs/03_API_CONTRACTS.md` for the complete route inventory and security beh
 
 ## Testing Conventions
 
-- Backend tests live under `backend/tests/` (`86` tracked `test_*.py` modules at this update).
+- Backend tests live under `backend/tests/` (`98` tracked `test_*.py` modules at this update).
 - Frontend contract tests live under `frontend/tests/` (`16` tracked `*.test.mjs` files at this update).
 - Run focused tests for touched behavior first, followed by the relevant full suite.
 - Typical full checks from the repository root:

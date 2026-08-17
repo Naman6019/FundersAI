@@ -18,7 +18,7 @@ const authShell = readFileSync(
 test('auth screen uses truthful local product trust signals', () => {
   assert.doesNotMatch(authForm, /Join thousands|randomuser\.me|svgrepo\.com/);
   assert.match(authShell, /FUNDERSAI-nobackground\.png/);
-  assert.match(authShell, /SECURE_IDENTITY_VAULT/);
+  assert.match(authShell, /SECURE SIGN-IN|SECURE_IDENTITY_VAULT/);
   assert.match(authShell, /Institutional Research Workspace/);
   assert.match(authShell, /href="\/terms"/);
   assert.match(authShell, /href="\/privacy"/);

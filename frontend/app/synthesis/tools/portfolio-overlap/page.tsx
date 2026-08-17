@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { MagicCard } from "@/components/ui/magic-card";
+import { ReportsSubNav } from "@/components/layout/ReportsSubNav";
 
 export default function PortfolioOverlapToolPage() {
     const [fundA, setFundA] = useState("Parag Parikh Flexi Cap Fund");
@@ -37,6 +38,9 @@ export default function PortfolioOverlapToolPage() {
                     </h1>
                 </div>
             </div>
+
+            {/* In-Page Navigation Options Menu */}
+            <ReportsSubNav />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                 {/* Left Column: Scheme Selection Controls */}

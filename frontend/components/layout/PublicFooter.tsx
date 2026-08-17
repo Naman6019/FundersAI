@@ -61,6 +61,11 @@ export default function PublicFooter() {
             <li><Link href="/mutual-funds" className="hover:text-white transition-colors">Mutual Fund Index</Link></li>
             <li><Link href="/about" className="hover:text-white transition-colors">About FundersAI</Link></li>
             <li><Link href="/contact" className="hover:text-white transition-colors">Contact Support</Link></li>
+            <li>
+              <a href="mailto:support@fundersai.co.in" className="text-[#82aff6] hover:underline font-mono text-[11px] inline-flex items-center gap-1">
+                ✉ support@fundersai.co.in
+              </a>
+            </li>
             <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
             <li><Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link></li>
           </ul>
@@ -68,7 +73,16 @@ export default function PublicFooter() {
       </div>
 
       <div className="mx-auto max-w-[1500px] mt-12 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-gray-500">
-        <p>© {new Date().getFullYear()} FundersAI. All rights reserved.</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p>© {new Date().getFullYear()} FundersAI. All rights reserved.</p>
+          <span className="hidden sm:inline text-gray-700">|</span>
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold hover:bg-emerald-500/20 transition-all text-[11px]"
+          >
+            <span>← Back to Research</span>
+          </Link>
+        </div>
         <p className="uppercase tracking-widest text-[10px] text-gray-400 font-mono">
           Research only · Not personalized financial advice · Verify independently
         </p>

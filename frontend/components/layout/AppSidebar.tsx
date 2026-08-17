@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import Image from "next/image";
 import {
   Sidebar,
@@ -18,7 +19,7 @@ import {
   Brain,
 } from "lucide-react";
 import { useChatStore } from "@/store/useChatStore";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import UserProfileDropdown from "@/components/auth/UserProfileDropdown";
 import { InfoCard, InfoCardContent, InfoCardDescription, InfoCardTitle, InfoCardMedia } from "@/components/ui/info-card";
 import { UserTier } from "@/lib/billing/tiers";
@@ -38,6 +39,14 @@ export function AppSidebar({
   const loadSessionMessages = useChatStore((state) => state.loadSessionMessages);
   const currentSessionId = useChatStore((state) => state.currentSessionId);
   const resetMessages = useChatStore((state) => state.resetMessages);
+  const [rememberedLanding, setRememberedLanding] = useState<string>("/");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("fundersai_last_landing");
+      if (saved) setRememberedLanding(saved);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     fetchSessions();
@@ -67,14 +76,16 @@ export function AppSidebar({
     <Sidebar className="border-r border-white/10 bg-[#0a0a0a]">
       <SidebarHeader className="p-5 border-b border-white/10">
         <div className="flex flex-col gap-1 items-start">
-          <Image
-            src="/FUNDERSAI-vertical.png"
-            alt="FundersAI Logo"
-            width={173}
-            height={80}
-            priority
-            className="h-8 w-auto object-contain origin-left"
-          />
+          <Link href={rememberedLanding} className="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg p-0.5 transition-opacity hover:opacity-80">
+            <Image
+              src="/FUNDERSAI-vertical.png"
+              alt="FundersAI Logo"
+              width={173}
+              height={80}
+              priority
+              className="h-8 w-auto object-contain origin-left"
+            />
+          </Link>
           <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400 pl-1">Research terminal</p>
         </div>
       </SidebarHeader>

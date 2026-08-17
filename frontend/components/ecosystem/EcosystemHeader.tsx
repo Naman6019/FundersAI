@@ -57,13 +57,18 @@ export function EcosystemHeader({
   // Logged-in users skip the Synthesis pitch page and land directly in the studio.
   const synthesisHref = isAuthenticated ? SYNTHESIS_STUDIO_HREF : SYNTHESIS_LANDING_HREF;
 
-  // The logo should always return to the current app's own home, never bounce
-  // through the *other* product's landing page.
-  const logoHref =
-    currentApp === "research" ? "/dashboard" :
-    currentApp === "synthesis" ? synthesisHref :
-    currentApp === "datatrust" ? dataTrustHref :
-    "/";
+  const [rememberedLanding, setRememberedLanding] = useState<string>("/");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("fundersai_last_landing");
+      if (saved) setRememberedLanding(saved);
+    } catch {}
+  }, []);
+
+  // The logo returns to the Synthesis landing page (/synthesis) if in Synthesis,
+  // or to the user's remembered landing page (/ or /synthesis).
+  const logoHref = isSynthesis ? "/synthesis" : rememberedLanding;
 
   // Keyboard shortcut listener for Cmd+K
   useEffect(() => {

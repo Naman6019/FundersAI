@@ -27,13 +27,19 @@ export default function ContactPage() {
               For questions about the product, data accuracy issues, feature requests, or account problems, use
               the in-product feedback form — it reaches us fastest and keeps the context attached.
             </p>
-            <div className="mt-4">
+            <div className="mt-4 flex flex-wrap items-center gap-3">
               <Link
                 href="/feedback"
                 className="inline-flex items-center rounded-full bg-[#82aff6]/10 border border-[#82aff6]/20 px-4 py-2 text-sm font-semibold text-[#82aff6] hover:bg-[#82aff6]/20 transition-colors"
               >
                 Open feedback form →
               </Link>
+              <a
+                href="mailto:support@fundersai.co.in"
+                className="inline-flex items-center rounded-full bg-white/5 border border-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 transition-colors font-mono"
+              >
+                ✉ Email support@fundersai.co.in
+              </a>
             </div>
           </section>
 

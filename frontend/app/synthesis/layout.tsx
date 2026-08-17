@@ -73,33 +73,13 @@ export default function SynthesisLayout({ children }: { children: ReactNode }) {
                 />
             </div>
 
-            {/* Shared ecosystem header, plus product-specific sub-nav for the Synthesis Studio surface */}
+            {/* Shared ecosystem header */}
             <EcosystemHeader currentApp="synthesis" />
-            <ReportsSubNav />
 
             {/* Main Content */}
             <main className="flex-1 flex flex-col relative">
                 {children}
             </main>
-
-            {/* Synthesis Studio Global Footer with FundersAI Redirect Banner */}
-            <footer className="border-t border-gray-800/80 bg-gray-950/90 py-6 px-4 sm:px-6 lg:px-8 mt-auto text-xs text-gray-400">
-                <div className="max-w-[1800px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <span className="text-white font-semibold">Synthesis by FundersAI</span>
-                        <span className="text-gray-600">|</span>
-                        <span>Autonomous Financial Multi-Agent Research Engine</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <Link
-                            href="/dashboard"
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold hover:bg-emerald-500/20 transition-all"
-                        >
-                            <span>← Back to Research</span>
-                        </Link>
-                    </div>
-                </div>
-            </footer>
         </div>
     );
 }

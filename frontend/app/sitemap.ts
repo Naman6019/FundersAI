@@ -1,210 +1,168 @@
 import type { MetadataRoute } from 'next';
+import {
+  AMC_REGISTRY,
+  FUND_REGISTRY,
+  CATEGORY_LIST,
+  categorySlug,
+  COMPARE_PAIRS,
+} from '@/lib/fund-registry';
+
+const BASE_URL = 'https://www.fundersai.co.in';
+const SYNTHESIS_BASE_URL = 'https://synthesis.fundersai.co.in';
+
+// Stable baseline release timestamp to prevent lastmod churn on uncached crawler fetches
+const RELEASE_DATE = new Date('2026-08-15T00:00:00.000Z');
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  return [
-    {
-      url: 'https://www.fundersai.co.in',
-      lastModified: new Date(),
-      changeFrequency: 'daily',
-      priority: 1.0,
-    },
-    {
-      url: 'https://synthesis.fundersai.co.in',
-      lastModified: new Date(),
-      changeFrequency: 'daily',
-      priority: 1.0,
-    },
-    {
-      url: 'https://synthesis.fundersai.co.in/synthesis/supported-funds',
-      lastModified: new Date(),
-      changeFrequency: 'daily',
-      priority: 0.95,
-    },
-    {
-      url: 'https://synthesis.fundersai.co.in/synthesis/tools/portfolio-overlap',
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.9,
-    },
-    {
-      url: 'https://synthesis.fundersai.co.in/synthesis/methodology',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-    {
-      url: 'https://synthesis.fundersai.co.in/synthesis/dashboard',
-      lastModified: new Date(),
-      changeFrequency: 'daily',
-      priority: 0.85,
-    },
-    {
-      url: 'https://synthesis.fundersai.co.in/synthesis/generate',
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.85,
-    },
-    {
-      url: 'https://synthesis.fundersai.co.in/synthesis/vs/hdfc-flexi-cap-vs-parag-parikh-flexi-cap',
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.85,
-    },
-    {
-      url: 'https://synthesis.fundersai.co.in/synthesis/category/flexi-cap',
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.8,
-    },
-    {
-      url: 'https://synthesis.fundersai.co.in/synthesis/category/small-cap',
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.8,
-    },
-    {
-      url: 'https://www.fundersai.co.in/sample',
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.9,
-    },
-    {
-      url: 'https://www.fundersai.co.in/how-it-works',
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.9,
-    },
-    {
-      url: 'https://www.fundersai.co.in/intelligence',
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.9,
-    },
-    {
-      url: 'https://www.fundersai.co.in/pricing',
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.95,
-    },
-    {
-      url: 'https://www.fundersai.co.in/data-trust',
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.9,
-    },
-    {
-      url: 'https://www.fundersai.co.in/methodology',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-    {
-      url: 'https://www.fundersai.co.in/methodology/data-sources',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.85,
-    },
-    {
-      url: 'https://www.fundersai.co.in/methodology/formulas',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.85,
-    },
-    {
-      url: 'https://www.fundersai.co.in/methodology/resolution',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.85,
-    },
-    {
-      url: 'https://www.fundersai.co.in/methodology/guardrails',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.85,
-    },
-    {
-      url: 'https://www.fundersai.co.in/mutual-funds',
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.85,
-    },
-    {
-      url: 'https://www.fundersai.co.in/compare/hdfc-flexi-cap-fund-vs-parag-parikh-flexi-cap-fund',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.75,
-    },
-    {
-      url: 'https://www.fundersai.co.in/about',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.7,
-    },
-    {
-      url: 'https://www.fundersai.co.in/contact',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.6,
-    },
-    {
-      url: 'https://www.fundersai.co.in/login',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.5,
-    },
-    {
-      url: 'https://www.fundersai.co.in/privacy',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.4,
-    },
-    {
-      url: 'https://www.fundersai.co.in/terms',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.4,
-    },
-    {
-      url: 'https://www.fundersai.co.in/emergent-replica',
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.8,
-    },
-    {
-      url: 'https://www.fundersai.co.in/learn',
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.9,
-    },
-    {
-      url: 'https://www.fundersai.co.in/learn/pe-ratio',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.8,
-    },
-    {
-      url: 'https://www.fundersai.co.in/learn/mutual-fund-comparison',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.8,
-    },
-    {
-      url: 'https://www.fundersai.co.in/learn/alpha-beta-sharpe',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.8,
-    },
-    {
-      url: 'https://www.fundersai.co.in/learn/large-cap-vs-flexi-cap',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.8,
-    },
-    {
-      url: 'https://www.fundersai.co.in/learn/reading-stock-fundamentals',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.8,
-    },
+  const routes: MetadataRoute.Sitemap = [];
+
+  // 1. Core Institutional & Marketing Pages (www.fundersai.co.in)
+  const corePages: { path: string; priority: number; changeFrequency: MetadataRoute.Sitemap[number]['changeFrequency'] }[] = [
+    { path: '', priority: 1.0, changeFrequency: 'daily' },
+    { path: '/how-it-works', priority: 0.9, changeFrequency: 'weekly' },
+    { path: '/intelligence', priority: 0.9, changeFrequency: 'weekly' },
+    { path: '/pricing', priority: 0.95, changeFrequency: 'weekly' },
+    { path: '/data-trust', priority: 0.9, changeFrequency: 'weekly' },
+    { path: '/sample', priority: 0.85, changeFrequency: 'weekly' },
+    { path: '/emergent-replica', priority: 0.8, changeFrequency: 'weekly' },
+    { path: '/methodology', priority: 0.9, changeFrequency: 'monthly' },
+    { path: '/methodology/data-sources', priority: 0.85, changeFrequency: 'monthly' },
+    { path: '/methodology/formulas', priority: 0.85, changeFrequency: 'monthly' },
+    { path: '/methodology/resolution', priority: 0.85, changeFrequency: 'monthly' },
+    { path: '/methodology/guardrails', priority: 0.85, changeFrequency: 'monthly' },
+    { path: '/about', priority: 0.7, changeFrequency: 'monthly' },
+    { path: '/contact', priority: 0.6, changeFrequency: 'monthly' },
+    { path: '/privacy', priority: 0.4, changeFrequency: 'monthly' },
+    { path: '/terms', priority: 0.4, changeFrequency: 'monthly' },
   ];
+
+  for (const page of corePages) {
+    routes.push({
+      url: `${BASE_URL}${page.path}`,
+      lastModified: RELEASE_DATE,
+      changeFrequency: page.changeFrequency,
+      priority: page.priority,
+    });
+  }
+
+  // 2. Educational & Research Guides (/learn)
+  const learnSlugs = [
+    'pe-ratio',
+    'mutual-fund-comparison',
+    'alpha-beta-sharpe',
+    'large-cap-vs-flexi-cap',
+    'reading-stock-fundamentals',
+  ];
+
+  routes.push({
+    url: `${BASE_URL}/learn`,
+    lastModified: RELEASE_DATE,
+    changeFrequency: 'weekly',
+    priority: 0.9,
+  });
+
+  for (const slug of learnSlugs) {
+    routes.push({
+      url: `${BASE_URL}/learn/${slug}`,
+      lastModified: RELEASE_DATE,
+      changeFrequency: 'monthly',
+      priority: 0.85,
+    });
+  }
+
+  // 3. Mutual Fund Directory Hub & High-Value SEO Entities
+  // 3a. Hub Page
+  routes.push({
+    url: `${BASE_URL}/mutual-funds`,
+    lastModified: RELEASE_DATE,
+    changeFrequency: 'daily',
+    priority: 0.95,
+  });
+
+  // 3b. SEBI Category Pages
+  for (const cat of CATEGORY_LIST) {
+    routes.push({
+      url: `${BASE_URL}/mutual-funds/category/${categorySlug(cat)}`,
+      lastModified: RELEASE_DATE,
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    });
+  }
+
+  // 3c. AMC Hub Pages
+  for (const amc of AMC_REGISTRY) {
+    routes.push({
+      url: `${BASE_URL}/mutual-funds/${amc.slug}`,
+      lastModified: RELEASE_DATE,
+      changeFrequency: 'weekly',
+      priority: 0.85,
+    });
+  }
+
+  // 3d. Individual Scheme Factsheets
+  for (const fund of FUND_REGISTRY) {
+    routes.push({
+      url: `${BASE_URL}/mutual-funds/${fund.amcSlug}/${fund.fundSlug}`,
+      lastModified: RELEASE_DATE,
+      changeFrequency: 'weekly',
+      priority: 0.85,
+    });
+  }
+
+  // 3e. Head-to-Head Comparison Pages
+  for (const cp of COMPARE_PAIRS) {
+    routes.push({
+      url: `${BASE_URL}/compare/${cp.pair}`,
+      lastModified: RELEASE_DATE,
+      changeFrequency: 'weekly',
+      priority: 0.85,
+    });
+  }
+
+  // 4. Synthesis by FundersAI Intelligence Engine (synthesis.fundersai.co.in)
+  // 4a. Core Synthesis Hubs
+  const synthesisPages: { path: string; priority: number; changeFrequency: MetadataRoute.Sitemap[number]['changeFrequency'] }[] = [
+    { path: '/synthesis', priority: 1.0, changeFrequency: 'daily' },
+    { path: '/synthesis/supported-funds', priority: 0.95, changeFrequency: 'daily' },
+    { path: '/synthesis/tools/portfolio-overlap', priority: 0.9, changeFrequency: 'weekly' },
+    { path: '/synthesis/methodology', priority: 0.9, changeFrequency: 'monthly' },
+  ];
+
+  for (const page of synthesisPages) {
+    routes.push({
+      url: `${SYNTHESIS_BASE_URL}${page.path}`,
+      lastModified: RELEASE_DATE,
+      changeFrequency: page.changeFrequency,
+      priority: page.priority,
+    });
+  }
+
+  // 4b. Synthesis Category Intelligence Hubs
+  for (const cat of CATEGORY_LIST) {
+    routes.push({
+      url: `${SYNTHESIS_BASE_URL}/synthesis/category/${categorySlug(cat)}`,
+      lastModified: RELEASE_DATE,
+      changeFrequency: 'weekly',
+      priority: 0.85,
+    });
+  }
+
+  // 4c. Synthesis Programmatic Comparison Engine Pairs
+  const synthesisVsSlugs = [
+    'hdfc-flexi-cap-vs-parag-parikh-flexi-cap',
+    'nippon-india-small-cap-vs-sbi-small-cap',
+    'mirae-asset-emerging-bluechip-vs-hdfc-mid-cap-opportunities',
+    'icici-prudential-bluechip-vs-sbi-bluechip',
+  ];
+
+  for (const slug of synthesisVsSlugs) {
+    routes.push({
+      url: `${SYNTHESIS_BASE_URL}/synthesis/vs/${slug}`,
+      lastModified: RELEASE_DATE,
+      changeFrequency: 'weekly',
+      priority: 0.85,
+    });
+  }
+
+  return routes;
 }

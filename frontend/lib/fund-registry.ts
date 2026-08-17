@@ -378,3 +378,42 @@ export function categorySlug(category: string): string {
 export function getCategoryBySlug(slug: string): (typeof CATEGORY_LIST)[number] | undefined {
   return CATEGORY_LIST.find((cat) => categorySlug(cat) === slug);
 }
+
+export interface ComparePair {
+  pair: string;
+  fundSlugA: string;
+  amcSlugA: string;
+  fundSlugB: string;
+  amcSlugB: string;
+}
+
+export const COMPARE_PAIRS: ComparePair[] = [
+  {
+    pair: 'hdfc-flexi-cap-fund-vs-parag-parikh-flexi-cap-fund',
+    amcSlugA: 'hdfc',
+    fundSlugA: 'hdfc-flexi-cap-fund',
+    amcSlugB: 'ppfas',
+    fundSlugB: 'parag-parikh-flexi-cap-fund',
+  },
+  {
+    pair: 'nippon-india-small-cap-fund-vs-sbi-small-cap-fund',
+    amcSlugA: 'nippon',
+    fundSlugA: 'nippon-india-small-cap-fund',
+    amcSlugB: 'sbi',
+    fundSlugB: 'sbi-small-cap-fund',
+  },
+  {
+    pair: 'mirae-asset-emerging-bluechip-fund-vs-hdfc-mid-cap-opportunities-fund',
+    amcSlugA: 'mirae-asset',
+    fundSlugA: 'mirae-asset-emerging-bluechip-fund',
+    amcSlugB: 'hdfc',
+    fundSlugB: 'hdfc-mid-cap-opportunities-fund',
+  },
+  {
+    pair: 'icici-prudential-bluechip-fund-vs-sbi-bluechip-fund',
+    amcSlugA: 'icici-prudential',
+    fundSlugA: 'icici-prudential-bluechip-fund',
+    amcSlugB: 'sbi',
+    fundSlugB: 'sbi-bluechip-fund',
+  },
+];

@@ -52,7 +52,7 @@ FundersAI is research-only: it does not execute trades or provide personalized i
 **Database, Storage & Infra**
 - **Supabase (PostgreSQL)**: Primary datastore and authentication
 - **Cloudflare R2**: Object storage for raw AMC documents and cold archives
-- **GitHub Actions**: 17 workflows for sync, ingestion, retry, indexing, discovery, archive, migration, and compaction jobs
+- **GitHub Actions**: 22 workflows for sync, ingestion, retry, indexing, discovery, archive, migration, and compaction jobs
 
 ## 📁 Project Structure
 

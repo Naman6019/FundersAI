@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { MessageSquareText, Zap, ChevronUp, ChevronDown } from 'lucide-react';
+import { MessageSquareText, Zap, ChevronUp, ChevronDown, HelpCircle, Home } from 'lucide-react';
 import type { User } from '@supabase/supabase-js';
 import SignOutButton from './SignOutButton';
 import type { UserTier } from '@/lib/billing/tiers';
@@ -45,8 +45,17 @@ export default function UserProfileDropdown({ currentTier }: UserProfileDropdown
         setIsOpen(false);
       }
     }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   useEffect(() => {
@@ -71,7 +80,10 @@ export default function UserProfileDropdown({ currentTier }: UserProfileDropdown
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center justify-between rounded-xl px-2 py-2 transition-colors hover:bg-white/5"
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
+        aria-label="User profile menu"
+        className="flex w-full items-center justify-between rounded-xl px-2 py-2 transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
       >
         <div className="flex items-center gap-2.5">
           {avatarUrl ? (
@@ -90,9 +102,9 @@ export default function UserProfileDropdown({ currentTier }: UserProfileDropdown
           <span className="truncate text-sm font-medium text-slate-200">{displayName}</span>
         </div>
         {isOpen ? (
-          <ChevronDown className="h-4 w-4 text-slate-400" />
-        ) : (
           <ChevronUp className="h-4 w-4 text-slate-400" />
+        ) : (
+          <ChevronDown className="h-4 w-4 text-slate-400" />
         )}
       </button>
 
@@ -124,6 +136,41 @@ export default function UserProfileDropdown({ currentTier }: UserProfileDropdown
           >
             <MessageSquareText className="h-4 w-4 text-[#00FF9D]" />
             <span>Send Feedback</span>
+          </Link>
+
+          <Link
+            href="/contact"
+            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+            onClick={() => setIsOpen(false)}
+          >
+            <HelpCircle className="h-4 w-4 text-cyan-400" />
+            <span>Contact Support</span>
+          </Link>
+
+          <div className="my-1 border-t border-white/5"></div>
+
+          <Link
+            href="/"
+            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+            onClick={() => {
+              try { localStorage.setItem("fundersai_last_landing", "/"); } catch {}
+              setIsOpen(false);
+            }}
+          >
+            <Home className="h-4 w-4 text-emerald-400" />
+            <span>Research Landing Page</span>
+          </Link>
+
+          <Link
+            href="/synthesis"
+            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+            onClick={() => {
+              try { localStorage.setItem("fundersai_last_landing", "/synthesis"); } catch {}
+              setIsOpen(false);
+            }}
+          >
+            <Zap className="h-4 w-4 text-blue-400" />
+            <span>Synthesis Landing Page</span>
           </Link>
 
           <div className="my-1 border-t border-white/5"></div>

@@ -10,6 +10,7 @@ import { BorderBeam } from "@/components/ui/border-beam";
 import { AnimatedShinyText } from "@/components/ui/animated-shiny-text";
 import { Sparkles } from "@/components/ui/sparkles";
 import { NumberTicker } from "@/components/ui/number-ticker";
+import { ReportsSubNav } from "@/components/layout/ReportsSubNav";
 
 interface SchemeOption {
     code: number;
@@ -459,6 +460,9 @@ function ReportChatContent() {
                     )}
                 </div>
             </div>
+
+            {/* In-Page Navigation Options Menu */}
+            <ReportsSubNav />
             
             {/* Main Interactive Dual Input Controls */}
             <div className="relative z-30 bg-gray-950/90 border border-gray-800/80 rounded-2xl p-6 space-y-5 shadow-2xl backdrop-blur-xl overflow-hidden print:hidden">

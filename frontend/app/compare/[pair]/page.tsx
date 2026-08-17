@@ -1,45 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { getFundBySlug } from '@/lib/fund-registry';
-
-// Supported static pairs — slug format: "[fundSlugA]-vs-[fundSlugB]"
-const COMPARE_PAIRS: {
-  pair: string;
-  fundSlugA: string;
-  amcSlugA: string;
-  fundSlugB: string;
-  amcSlugB: string;
-}[] = [
-  {
-    pair: 'hdfc-flexi-cap-fund-vs-parag-parikh-flexi-cap-fund',
-    amcSlugA: 'hdfc',
-    fundSlugA: 'hdfc-flexi-cap-fund',
-    amcSlugB: 'ppfas',
-    fundSlugB: 'parag-parikh-flexi-cap-fund',
-  },
-  {
-    pair: 'nippon-india-small-cap-fund-vs-sbi-small-cap-fund',
-    amcSlugA: 'nippon',
-    fundSlugA: 'nippon-india-small-cap-fund',
-    amcSlugB: 'sbi',
-    fundSlugB: 'sbi-small-cap-fund',
-  },
-  {
-    pair: 'mirae-asset-emerging-bluechip-fund-vs-hdfc-mid-cap-opportunities-fund',
-    amcSlugA: 'mirae-asset',
-    fundSlugA: 'mirae-asset-emerging-bluechip-fund',
-    amcSlugB: 'hdfc',
-    fundSlugB: 'hdfc-mid-cap-opportunities-fund',
-  },
-  {
-    pair: 'icici-prudential-bluechip-fund-vs-sbi-bluechip-fund',
-    amcSlugA: 'icici-prudential',
-    fundSlugA: 'icici-prudential-bluechip-fund',
-    amcSlugB: 'sbi',
-    fundSlugB: 'sbi-bluechip-fund',
-  },
-];
+import { getFundBySlug, COMPARE_PAIRS } from '@/lib/fund-registry';
 
 type Props = { params: Promise<{ pair: string }> };
 

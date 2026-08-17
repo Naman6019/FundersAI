@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Metadata } from "next";
 import { MagicCard } from "@/components/ui/magic-card";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
+import { ReportsSubNav } from "@/components/layout/ReportsSubNav";
 
 export const metadata: Metadata = {
     title: "AI Research Methodology & Zero-Hallucination Guardrails | Synthesis by FundersAI",
@@ -44,6 +45,9 @@ export default function MethodologyPage() {
                     Synthesis by FundersAI operates on strict quantitative boundaries. Every metric, Sharpe ratio, and portfolio weighting in our reports is verified against official AMC disclosures.
                 </p>
             </div>
+
+            {/* In-Page Navigation Options Menu */}
+            <ReportsSubNav />
 
             {/* Methodology Architecture Pillars Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

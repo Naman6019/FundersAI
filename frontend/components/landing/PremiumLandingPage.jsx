@@ -9,6 +9,7 @@ import { ArrowRight } from "@phosphor-icons/react";
 import { HeroWave } from "@/components/ui/ai-input-hero";
 import { EcosystemHeader } from "@/components/ecosystem/EcosystemHeader";
 import { InteractiveHeroSandbox } from "@/components/workspace/InteractiveHeroSandbox";
+import PublicFooter from "@/components/layout/PublicFooter";
 
 function AmbientGlow({ className = "", color = "rgba(0, 255, 157, 0.12)" }) {
   return (
@@ -617,6 +618,10 @@ export default function FundersAILandingPage() {
   const [proofStats, setProofStats] = useState(defaultProofStats);
 
   useEffect(() => {
+    try {
+      localStorage.setItem("fundersai_last_landing", "/");
+    } catch {}
+
     // Fetch live numbers from public ticker to replace static defaults
     fetch("/api/funds/ticker")
       .then((r) => r.json())
@@ -933,38 +938,7 @@ export default function FundersAILandingPage() {
         </div>
       </section>
 
-      <footer className="relative border-t border-[var(--line)] bg-[var(--bg-base)] px-5 py-12 sm:px-8">
-        <div className="mx-auto grid w-full max-w-[1500px] gap-8 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
-          <div className="flex items-center gap-3">
-            <Image 
-              src="/FUNDERSAI-nobackground.png" 
-              alt="FundersAI Logo" 
-              width={160} 
-              height={40} 
-              unoptimized 
-              className="h-10 w-auto object-contain"
-              style={{ width: 'auto' }}
-            />
-          </div>
-          <div className="flex flex-wrap gap-6 text-sm font-semibold text-[var(--text-muted)]">
-            <Link href="/synthesis" className="transition font-bold text-blue-400 hover:text-blue-300">Synthesis</Link>
-            <Link href="/sample" className="transition hover:text-[var(--text-primary)]">Sample</Link>
-            <Link href="/how-it-works" className="transition hover:text-[var(--text-primary)]">Flow</Link>
-            <Link href="/intelligence" className="transition hover:text-[var(--text-primary)]">Intelligence</Link>
-            <Link href="/pricing" className="transition hover:text-[var(--text-primary)]">Pricing</Link>
-            <Link href="/data-trust" className="transition hover:text-[var(--text-primary)]">Data &amp; Trust</Link>
-            <Link href="/mutual-funds" className="transition hover:text-[var(--text-primary)]">Funds</Link>
-            <Link href="/methodology" className="transition hover:text-[var(--text-primary)]">Methodology</Link>
-            <Link href="/about" className="transition hover:text-[var(--text-primary)]">About</Link>
-            <Link href="/contact" className="transition hover:text-[var(--text-primary)]">Contact</Link>
-            <Link href="/privacy" className="transition hover:text-[var(--text-primary)]">Privacy</Link>
-            <Link href="/terms" className="transition hover:text-[var(--text-primary)]">Terms</Link>
-          </div>
-          <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)] lg:text-right">
-            Research only · not financial advice · verify independently
-          </p>
-        </div>
-      </footer>
+      <PublicFooter />
     </main>
   );
 }

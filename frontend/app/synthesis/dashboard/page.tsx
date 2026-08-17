@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { MagicCard } from "@/components/ui/magic-card";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
+import { ReportsSubNav } from "@/components/layout/ReportsSubNav";
 
 export default function ReportsDashboard() {
     const [savedReports, setSavedReports] = useState<any[]>([]);
@@ -65,6 +66,9 @@ export default function ReportsDashboard() {
                     </ShimmerButton>
                 </Link>
             </div>
+
+            {/* In-Page Navigation Options Menu */}
+            <ReportsSubNav />
             
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                 {/* Main Content Column: Saved Reports Grid */}
