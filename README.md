@@ -4,7 +4,6 @@
   <img src="frontend/public/FUNDERSAI-nobackground.png" alt="FundersAI Logo" width="260" />
 </a>
 
-# 📈 FundersAI
 **Research-first workspace for Indian stocks and mutual funds**
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.2.11-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
