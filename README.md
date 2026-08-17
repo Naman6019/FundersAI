@@ -1,5 +1,9 @@
 <div align="center">
 
+<a href="https://www.fundersai.co.in">
+  <img src="frontend/public/FUNDERSAI-nobackground.png" alt="FundersAI Logo" width="260" />
+</a>
+
 # 📈 FundersAI
 **Research-first workspace for Indian stocks and mutual funds**
 
@@ -8,7 +12,7 @@
 [![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS_4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 
-[Live App](https://www.fundersai.co.in) · [Code Repository](https://github.com/Naman6019/FundersAI)
+[Live App](https://www.fundersai.co.in) · [Synthesis Studio](https://synthesis.fundersai.co.in) · [Code Repository](https://github.com/Naman6019/FundersAI)
 
 </div>
 
