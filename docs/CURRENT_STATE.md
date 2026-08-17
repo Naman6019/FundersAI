@@ -1,6 +1,6 @@
 # Current State
 
-**Last Updated**: 2026-08-11
+**Last Updated**: 2026-08-18
 
 ## Project Summary
 FundersAI is a research-first Indian stocks + mutual funds app with deterministic comparison outputs, Supabase-first runtime reads, and workflow-driven data ingestion.
@@ -14,6 +14,11 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 - Automation: GitHub Actions workflows
 
 ## Implemented
+- Programmatic SEO Sitemap Generator, Centralized Compare Pairs & Synthesis UI Modernization (2026-08-18):
+  - **Dynamic Multi-Tier Sitemap Generator** (`frontend/app/sitemap.ts`): Refactored sitemap generation into 4 structured, programmatic tiers covering core static routes, `/learn/*` educational guides, `/mutual-funds` directory hubs (SEBI categories, AMC hubs, and factsheets), `/compare/[pair]` comparison engine pairs, and Synthesis Studio endpoints (`synthesis.fundersai.co.in/synthesis`, supported funds, overlap tools, and category hubs).
+  - **Centralized Comparison Registry** (`frontend/lib/fund-registry.ts`): Extracted and unified `COMPARE_PAIRS` and `ComparePair` types in `fund-registry.ts` to serve as the single source of truth across static path generation (`frontend/app/compare/[pair]/page.tsx`) and dynamic sitemap generation.
+  - **Reports Studio Navigation & Ecosystem Header Polish**: Upgraded `frontend/components/layout/ReportsSubNav.tsx` with modern floating pill-bar navigation, active indicator highlights, and integrated upgrade CTAs. Added unified cross-domain navigation via `EcosystemHeader.tsx` and unified `PublicFooter.tsx`.
+  - **Claude Design & UI Component Synchronization**: Synced custom shadcn and decorative primitives (`.design-sync/`) with hand-authored preview compositions.
 - Next-batch-by-AUM AMC registry scaffolding: Tata, Bandhan, Edelweiss, Invesco, HSBC (2026-08-11):
   - Ranked all registered Indian AMCs by AMFI Apr-Jun 2026 average AUM against the existing 12-AMC registry and identified the next 5 by AUM not yet onboarded: Tata (#10, Rs 2.29L Cr), Bandhan (#12, Rs 2.04L Cr), Edelweiss (#13, Rs 1.71L Cr), Invesco (#15, Rs 1.46L Cr), and HSBC (#16, Rs 1.43L Cr).
   - Added all 5 to `backend/app/mf_ingestion/sources/registry.py` `SOURCES` with real official factsheet/portfolio-disclosure page URLs found via research, and to `PRODUCTION_TARGET_AMC_KEYS` (12 to 17). A plain fetch during onboarding research returned HTTP 403 for Edelweiss and timed out for HSBC -- the same bot-protection signal that previously required `browser_recovery_allowed` for Axis/Kotak -- so both were set defensively. Bandhan's official documents were observed spread across three live subdomains (`bandhanmutual.com`, `partners.bandhanmutual.com`, `cmsnew.bandhanmutual.com`) plus a legacy `.aspx` download-centre URL scheme, a stronger signal that it likely needs a bespoke discovery adapter (like `icici_api`/`sbi_api`/etc.) rather than the generic strategy once a live discovery run confirms which host actually serves files; it was also set to `browser_recovery_allowed=True` pending that. Tata and Invesco showed no blocking signal and were left on the plain generic strategy.

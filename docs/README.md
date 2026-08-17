@@ -1,6 +1,6 @@
 # Documentation Index
 
-**Last updated:** 2026-08-11
+**Last updated:** 2026-08-18
 
 ## Authoritative Current Documents
 

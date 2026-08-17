@@ -23,12 +23,14 @@ FundersAI is research-only: it does not execute trades or provide personalized i
 ## ✨ Key Features
 
 - 🤖 **Research Chat & Intent Routing**: Routes questions to structured stock, mutual-fund, market-current-events, and comparison paths with visible status and limitation metadata.
-- 📊 **Interactive Comparison Canvas**: Side-by-side NAV, returns, alpha, beta, Sharpe, drawdown, cost, AUM, holdings, risk, and freshness data where available.
+- ⚡ **Synthesis Intelligence Engine & Reports Studio**: Deep-dive fund intelligence (`synthesis.fundersai.co.in`), agent research graphs, portfolio overlap analyzer, and downloadable institutional PDF reports.
+- 📊 **Interactive Comparison Canvas & Programmatic Comparisons**: Side-by-side NAV, returns, alpha, beta, Sharpe, drawdown, cost, AUM, holdings, risk, and head-to-head comparisons (`/compare/[pair]`).
+- 🌐 **Programmatic SEO Directory & Learn Hub**: Dynamic multi-tier sitemaps, SEBI category hubs, AMC directories, individual scheme factsheets, and educational guides (`/learn/*`).
 - 📚 **Official-Document Evidence**: Indexes official AMC documents and returns citable excerpts, readable supported claims, or explicit abstention when evidence is insufficient.
 - ⚙️ **Automated Data Pipelines**: GitHub Actions workflows handle stock data, mutual-fund metadata, NAV sync, AMC disclosure ingestion, retries, indexing, archiving, and storage maintenance.
 - 🔒 **Quota-Safe Architecture**: Designed for resilience. Query-critical data is served directly from normalized Supabase tables, protected by intelligent quota guards for third-party enrichments (IndianAPI).
 - 💼 **Auth & Subscriptions**: Secure workspace powered by Supabase Auth (Email & Google OAuth) with a Razorpay-backed subscription foundation for tiered access (Free, Pro, Ultra).
-- 🛠️ **Admin Controls**: Dashboard surfaces AI usage, data coverage, parser diagnostics, resolver debugging, NAV sync, and bounded review actions.
+- 🛠️ **Admin Controls**: Dashboard surfaces AI usage, data coverage, parser diagnostics, resolver debugging, NAV sync, MF promotion review, and bounded review actions.
 - 🧠 **Explainable ML Foundations**: Numeric mutual-fund similarity/clustering and human-in-the-loop parser-review prioritization, both grounded in stored data rather than investment recommendations.
 - 🔎 **Trust Metadata**: Freshness, missing fields, resolver confidence, partial coverage, research boundaries, and reasoning summaries remain visible around results.
 

@@ -1,6 +1,6 @@
 # Agents Guide
 
-**Last updated:** 2026-08-16
+**Last updated:** 2026-08-18
 
 Use this guide for repository conventions and quick orientation. For the authoritative implementation snapshot, read `docs/CURRENT_STATE.md`; use the focused documents under `docs/` for API, schema, deployment, and ML details.
 
@@ -84,6 +84,7 @@ See `docs/03_API_CONTRACTS.md` for the complete route inventory and security beh
 8. **Official-document research:** deterministic lexical rerank v2 remains the fallback with abstention. Direct OpenAI vector retrieval is configured separately from optional v3 cross-encoder/LLM grading and must use the same 1,536-dimension embedding model for documents and queries.
 9. **R2-first storage:** raw AMC documents stay in R2; Supabase stores query-critical structured rows and metadata.
 10. **Subdomain routing:** `frontend/middleware.ts` inspects the request `host` header to route `synthesis.fundersai.co.in` traffic to the `/reports` Synthesis Studio surface, separate from the main `www.fundersai.co.in` app shell.
+11. **Programmatic SEO & Compare Registry:** `frontend/lib/fund-registry.ts` is the single source of truth for `COMPARE_PAIRS`, SEBI categories, and AMC factsheets. `frontend/app/sitemap.ts` programmatically derives dynamic sitemap entries across core marketing routes, `/learn/*`, `/mutual-funds/*`, `/compare/*`, and Synthesis routes.
 
 ## Testing Conventions
 
