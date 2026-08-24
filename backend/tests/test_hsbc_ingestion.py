@@ -15,6 +15,7 @@ from app.mf_ingestion.parsers.combined_factsheet_portfolio import (
 )
 from app.mf_ingestion.parsers.factsheet_parser import FactsheetParser
 from app.mf_ingestion.sources.registry import get_source
+from app.mf_ingestion.services.parsing_service import _snapshot_matches_amc
 
 
 def test_hsbc_page_core_fields_use_manager_and_benchmark_labels() -> None:
@@ -157,3 +158,7 @@ def test_hsbc_portfolio_discovery_accepts_the_asset_filename() -> None:
         ".pdf",
         keywords,
     )
+
+
+def test_hsbc_snapshot_match_accepts_official_amc_name() -> None:
+    assert _snapshot_matches_amc("hsbc", "HSBC Mutual Fund") is True
