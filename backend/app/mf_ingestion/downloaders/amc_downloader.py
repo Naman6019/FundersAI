@@ -64,6 +64,13 @@ EDELWEISS_ENCRYPTION_KEY_URL = (
 EDELWEISS_STATUTORY_MENU_URL = f"{EDELWEISS_API_BASE_URL}/mf/statutory-menus/single"
 EDELWEISS_IPIFY_URL = "https://api.ipify.org/?format=json"
 EDELWEISS_STATIC_IP = "103.0.123.175"
+EDELWEISS_OFFICIAL_PORTFOLIO_FALLBACKS = (
+    (
+        "Monthly Portfolio - July 31, 2026",
+        "https://www.edelweissmf.com/Files/MF/Statutory/Portfolio_of_schemes/"
+        "Monthly_Portfolio_and_RiskoMeter/EDEL_Portfolio_Monthly_Notes_31Jul2026_17082026124432.xlsx",
+    ),
+)
 HDFC_PUBLIC_DOWNLOAD_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -901,12 +908,30 @@ def _discover_edelweiss_documents(
         return sorted(monthly_documents, key=lambda item: item.priority_score, reverse=True)
     if not _browser_fallback_allowed_for_source(source):
         return []
-    return _discover_edelweiss_monthly_portfolios_with_browser(
+    browser_documents = _discover_edelweiss_monthly_portfolios_with_browser(
         source,
         listing_url=listing_url,
         timeout_seconds=timeout_seconds,
         user_agent=user_agent,
     )
+    if browser_documents:
+        return browser_documents
+
+    # The official Edelweiss origins currently return 403 to GitHub-hosted
+    # discovery, but direct files remain publicly downloadable. Keep the
+    # user-verified July disclosure as a bounded last-resort candidate; it is
+    # still filtered by the requested reporting month before persistence.
+    fallback_documents = _edelweiss_monthly_portfolio_documents_from_candidates(
+        source,
+        listing_url=listing_url,
+        candidates=list(EDELWEISS_OFFICIAL_PORTFOLIO_FALLBACKS),
+    )
+    if fallback_documents:
+        logger.warning(
+            "edelweiss:using_official_direct_fallback count=%s",
+            len(fallback_documents),
+        )
+    return fallback_documents
 
 
 def _discover_edelweiss_monthly_portfolios_with_browser(
