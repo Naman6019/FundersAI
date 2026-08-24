@@ -6,6 +6,7 @@ from app.mf_ingestion.jobs.promote_mf_amc_disclosures import (
     _build_target_scopes,
     _compact_staging_rows,
     _dedupe_target_scopes,
+    _latest_active_factsheet_document_ids,
     _split_scope_groups,
     assess_batch_targets,
 )
@@ -309,6 +310,25 @@ def test_amc_batch_promotion_keeps_newest_document_for_same_type_and_url() -> No
         documents,
         ["holdings", "sectors"],
     ) == {"new": ["holdings", "sectors"]}
+
+
+def test_amc_batch_promotion_uses_latest_active_factsheet_for_core_scopes() -> None:
+    documents = [
+        {
+            "id": "old-review",
+            "document_type": "factsheet",
+            "parse_status": "needs_review",
+            "downloaded_at": "2026-08-10T00:00:00+00:00",
+        },
+        {
+            "id": "latest",
+            "document_type": "factsheet",
+            "parse_status": "parsed_partial",
+            "downloaded_at": "2026-08-24T00:00:00+00:00",
+        },
+    ]
+
+    assert _latest_active_factsheet_document_ids(documents) == {"latest"}
 
 
 def test_amc_batch_promotion_uses_document_role_for_shared_checksum() -> None:

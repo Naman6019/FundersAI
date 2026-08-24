@@ -5,7 +5,7 @@ import json
 import os
 import sys
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any
 
 BASE_DIR = os.path.dirname(
@@ -107,6 +107,49 @@ def _source_recency_key(document: dict[str, Any]) -> tuple[str, str]:
         str(document.get("parsed_at") or document.get("downloaded_at") or ""),
         str(document.get("id") or ""),
     )
+
+
+def _source_timestamp(document: dict[str, Any]) -> datetime:
+    """Return a comparable UTC timestamp for source selection."""
+    for field in ("downloaded_at", "created_at", "updated_at", "parsed_at"):
+        value = document.get(field)
+        if value in (None, ""):
+            continue
+        raw = str(value).strip()
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        try:
+            parsed = datetime.fromisoformat(raw)
+        except ValueError:
+            continue
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _latest_active_factsheet_document_ids(
+    documents: list[dict[str, Any]],
+) -> set[str]:
+    """Keep only the newest parsed factsheet for core promotion candidates."""
+    active = [
+        row
+        for row in documents
+        if str(row.get("document_type") or row.get("source_document_type") or "")
+        .strip()
+        .lower()
+        == "factsheet"
+        and str(row.get("parse_status") or "").strip().lower()
+        in {"parsed", "parsed_partial"}
+        and row.get("id")
+    ]
+    if not active:
+        return set()
+    latest = max(
+        active,
+        key=lambda row: (_source_timestamp(row), _source_recency_key(row)),
+    )
+    return {str(latest["id"])}
 
 
 def _preferred_document_type(scope: str) -> str:
@@ -457,7 +500,8 @@ def _get_selected_amc_staging_rows(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     raw_documents = _fetch_all_rows(
         "mf_raw_documents",
-        "id,amc_code",
+        "id,amc_code,document_type,source_document_type,parse_status,"
+        "downloaded_at,created_at,updated_at,parsed_at",
         filters={"report_month": report_month.isoformat()},
     )
     normalized_amc = _normalize_amc(amc)
@@ -470,10 +514,14 @@ def _get_selected_amc_staging_rows(
     if not source_document_ids:
         return [], [], []
 
+    latest_factsheet_ids = _latest_active_factsheet_document_ids(
+        [row for row in raw_documents if row.get("id") in amc_by_document_id]
+    )
+
     candidates = _fetch_rows_by_document_ids(
         "mf_factsheet_candidates",
         "id,source_document_id,amc_code,report_month",
-        source_document_ids=source_document_ids,
+        source_document_ids=sorted(latest_factsheet_ids),
         report_month=report_month,
     )
     holdings = _fetch_rows_by_document_ids(
