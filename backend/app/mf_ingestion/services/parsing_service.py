@@ -1627,6 +1627,32 @@ def _snapshot_matches_amc(
 
 
 KNOWN_PARSING_AMC_SCHEME_ALIASES: dict[str, dict[str, tuple[str, str]]] = {
+    "edelweiss": {
+        "edelweiss asean equity offshore fund": (
+            "140255",
+            "edelweiss-asean-equity-off-shore-fund",
+        ),
+        "edelweiss greater china equity offshore fund": (
+            "140242",
+            "edelweiss-greater-china-equity-off-shore-fund",
+        ),
+        "edelweiss crisil ibx aaa financial services bond - jan 2028 index fund": (
+            "153115",
+            "edelweiss-crisil-ibx-aaa-financial-services-jan-2028-index-fund",
+        ),
+        "edelweiss nifty next 50 etf": (
+            "154347",
+            "edelweiss-nifty-next-50-etf",
+        ),
+        "edelweiss us technology equity fof": (
+            "148063",
+            "edelweiss-us-technology-equity-fund-of-fund",
+        ),
+        "edelweiss nifty 100 quality 30 index fnd": (
+            "149254",
+            "edelweiss-nifty-100-quality-30-index-fund",
+        ),
+    },
     "uti": {
         "uti nifty midcap 150 etf": ("145293", "uti-nifty-midcap-150-etf"),
         "uti nifty next 50 etf": ("145295", "uti-nifty-next-50-etf"),

@@ -4,6 +4,7 @@ from app.mf_ingestion.normalizers.scheme_name_normalizer import (
     _normalize_family_scheme_name,
     _select_best_scheme_candidate,
 )
+from app.mf_ingestion.services.parsing_service import KNOWN_PARSING_AMC_SCHEME_ALIASES
 
 
 def test_select_best_scheme_candidate_prefers_direct_growth_variant():
@@ -46,3 +47,14 @@ def test_family_name_normalization_removes_plan_noise_and_spacing_variants():
     assert _normalize_family_scheme_name(
         "Kotak Flexi Cap Fund - Direct Plan - Growth Option"
     ) == _normalize_family_scheme_name("Kotak Flexicap Fund")
+
+
+def test_edelweiss_aliases_cover_offshore_and_portfolio_only_variants():
+    aliases = KNOWN_PARSING_AMC_SCHEME_ALIASES["edelweiss"]
+
+    assert aliases["edelweiss asean equity offshore fund"] == (
+        "140255",
+        "edelweiss-asean-equity-off-shore-fund",
+    )
+    assert aliases["edelweiss us technology equity fof"][0] == "148063"
+    assert aliases["edelweiss nifty 100 quality 30 index fnd"][0] == "149254"
