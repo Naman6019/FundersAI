@@ -354,6 +354,7 @@ SOURCES: dict[str, AMCDocumentSource] = {
         # Factsheets only expose Top 30 holdings. Use the monthly workbook for
         # complete holdings and sector allocation instead.
         factsheet_contains_holdings=False,
+        factsheet_report_month_in_content_only=True,
         browser_recovery_allowed=True,
         allowed_host_suffixes=("edelweissmf.com",),
     ),

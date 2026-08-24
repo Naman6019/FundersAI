@@ -4,9 +4,11 @@ from datetime import date
 
 from openpyxl import Workbook
 
+import app.mf_ingestion.downloaders.amc_downloader as amc_downloader
 from app.mf_ingestion.downloaders.amc_downloader import (
     _edelweiss_monthly_portfolio_documents_from_candidates,
 )
+from app.mf_ingestion.downloaders.base_downloader import DiscoveredDocument
 from app.mf_ingestion.parsers.adapters.edelweiss_adapter import EdelweissAdapter
 from app.mf_ingestion.parsers.base_parser import ParseContext
 from app.mf_ingestion.parsers.holdings_parser import HoldingsParser
@@ -37,6 +39,36 @@ def test_edelweiss_monthly_browser_candidates_keep_only_full_monthly_workbook() 
     assert documents[0].report_month == date(2026, 7, 1)
     assert documents[0].file_ext == ".xlsx"
     assert documents[0].url == JULY_WORKBOOK_URL
+
+
+def test_edelweiss_factsheet_month_is_confirmed_from_its_pdf_body(monkeypatch) -> None:
+    source = get_source("edelweiss")
+    published_in_august = DiscoveredDocument(
+        amc_name=source.amc_name,
+        amc_code=source.amc_code,
+        document_type="factsheet",
+        title="Edelweiss Factsheet August 2026",
+        url="https://www.edelweissmf.com/Files/MF/Downloads/FACTSHEETS/FACTSHEETS/Edelweiss_Factsheet_August__2026.pdf",
+        discovery_page_url=source.factsheet_page_url,
+        file_ext=".pdf",
+        report_month=date(2026, 8, 1),
+        priority_score=100,
+    )
+    monkeypatch.setattr(
+        amc_downloader,
+        "_discover_generic_anchor_documents",
+        lambda *_args, **_kwargs: [published_in_august],
+    )
+
+    documents = amc_downloader._discover_edelweiss_documents(
+        source,
+        document_type="factsheet",
+        timeout_seconds=10,
+        user_agent="FundersAI test",
+    )
+
+    assert source.factsheet_report_month_in_content_only is True
+    assert documents[0].report_month is None
 
 
 def test_edelweiss_workbook_title_and_fractional_allocations_are_normalized(tmp_path) -> None:

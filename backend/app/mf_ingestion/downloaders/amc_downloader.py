@@ -6,6 +6,7 @@ import os
 import re
 import time
 import uuid
+from dataclasses import replace
 from html import unescape
 from datetime import UTC, date, datetime
 from calendar import monthrange
@@ -857,12 +858,18 @@ def _discover_edelweiss_documents(
     """
     doc_type = (document_type or "").strip().lower()
     if doc_type != "portfolio_disclosure":
-        return _discover_generic_anchor_documents(
+        documents = _discover_generic_anchor_documents(
             source,
             document_type=doc_type,
             timeout_seconds=timeout_seconds,
             user_agent=user_agent,
         )
+        # Edelweiss publishes the factsheet in the following calendar month.
+        # The official PDF body, not its publication filename, confirms its
+        # reporting month before it can be persisted.
+        if doc_type == "factsheet":
+            return [replace(document, report_month=None) for document in documents]
+        return documents
 
     listing_url = source.portfolio_disclosure_page_url or source.factsheet_page_url
     if not listing_url:
@@ -913,6 +920,10 @@ def _discover_edelweiss_monthly_portfolios_with_browser(
                 context = browser.new_context(user_agent=user_agent)
                 page = context.new_page()
                 page.goto(listing_url, wait_until="domcontentloaded", timeout=timeout_ms)
+                # The statutory page first defaults to "Financials & Portfolios".
+                # Select the public portfolio section before its monthly sub-tab.
+                portfolio_tab = page.get_by_text("Portfolio of scheme(s)", exact=True)
+                portfolio_tab.first.click(timeout=timeout_ms)
                 monthly_tab = page.get_by_text("Monthly Portfolio and Risk-o-Meter", exact=True)
                 monthly_tab.first.click(timeout=timeout_ms)
                 monthly_links = page.locator(
