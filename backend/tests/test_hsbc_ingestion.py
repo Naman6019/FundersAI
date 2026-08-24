@@ -138,3 +138,22 @@ def test_hsbc_discovery_ranks_report_month_from_official_url(monkeypatch) -> Non
         date(2026, 6, 1),
     ]
     assert documents[0].url.endswith("the-asset-july-2026.pdf")
+
+
+def test_hsbc_portfolio_discovery_accepts_the_asset_filename() -> None:
+    keywords = get_source("hsbc").portfolio_required_keywords
+    candidate = (
+        "The Asset July 2026 "
+        "https://www.assetmanagement.hsbc.co.in/assets/documents/mutual-funds/"
+        "the-asset-july-2026.pdf"
+    ).lower()
+
+    assert "the asset" in keywords
+    assert any(keyword in candidate for keyword in keywords)
+    assert amc_downloader._generic_candidate_allowed(
+        get_source("hsbc"),
+        candidate,
+        "portfolio_disclosure",
+        ".pdf",
+        keywords,
+    )

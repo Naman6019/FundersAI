@@ -3065,7 +3065,10 @@ def _generic_candidate_allowed(
 
     # Portfolio ingestion should avoid non-portfolio disclosures.
     if document_type == "portfolio_disclosure" and "portfolio" not in low and "holding" not in low:
-        if not (adapter_key == "hdfc" and "monthly hdfc" in low):
+        if not (
+            (adapter_key == "hdfc" and "monthly hdfc" in low)
+            or (adapter_key == "hsbc" and "the asset" in low)
+        ):
             return False
 
     return True

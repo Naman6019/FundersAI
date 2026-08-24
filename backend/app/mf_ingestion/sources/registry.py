@@ -406,7 +406,12 @@ SOURCES: dict[str, AMCDocumentSource] = {
         # library's files against 75 for "the asset", which would burn the whole
         # discovery action budget on non-factsheets.
         factsheet_required_keywords=("factsheet", "fact sheet", "the asset"),
-        portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
+        portfolio_required_keywords=(
+            "portfolio",
+            "monthly portfolio",
+            "disclosure",
+            "the asset",
+        ),
         factsheet_contains_holdings=True,
         # The document library renders every document server-side into one ~12 MB HTML
         # page (its type/date filters are client-side only), so an earlier plain fetch
