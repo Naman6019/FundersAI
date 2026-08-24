@@ -208,6 +208,32 @@ class FactsheetParser:
             current = best_by_scheme.get(key)
             if current:
                 best_by_scheme[key] = _merge_page_factsheet_record(current, page_record)
+
+        # HSBC's ``The Asset`` factsheet puts every scheme on a page, but its headings
+        # and manager table are positioned text. The generic section parser can therefore
+        # read a chart label such as "Managing Since" as the manager. Page-local HSBC
+        # extraction is authoritative for those records and also repairs split titles.
+        hsbc_page_records = _extract_hsbc_page_core_records(page_texts or [], report_month)
+        for page_record in hsbc_page_records:
+            key = _scheme_key(page_record.scheme_name)
+            current = best_by_scheme.get(key)
+            best_by_scheme[key] = (
+                _merge_page_factsheet_record(current, page_record)
+                if current
+                else page_record
+            )
+        hsbc_page_keys = {
+            _scheme_key(record.scheme_name)
+            for record in hsbc_page_records
+        }
+        if hsbc_page_keys:
+            # Page-local HSBC records are authoritative; drop product-suitability
+            # and cross-page false positives that have no matching fund-details page.
+            best_by_scheme = {
+                key: record
+                for key, record in best_by_scheme.items()
+                if key in hsbc_page_keys
+            }
         return sorted(best_by_scheme.values(), key=lambda value: value.scheme_name)
 
 
@@ -638,6 +664,143 @@ def _extract_page_core_records(
             )
         )
     return records
+
+
+def _extract_hsbc_page_core_records(
+    page_texts: list[str],
+    report_month: date | None,
+) -> list[FactsheetRecord]:
+    records: list[FactsheetRecord] = []
+    for raw_page in page_texts:
+        page = _preprocess_factsheet_text(raw_page)
+        if "fund details" not in page.lower():
+            continue
+        lines = [_clean_line(line) for line in page.splitlines() if _clean_line(line)]
+        heading = _find_hsbc_page_heading(lines)
+        if not heading:
+            continue
+        scheme_name, _start, _line_count = heading
+        fields = {
+            "aum": _extract_aum(page),
+            "expense_ratio": _extract_expense_ratio(page),
+            "benchmark": _extract_hsbc_benchmark(lines),
+            "fund_manager": _extract_hsbc_fund_managers(lines),
+            "risk_level": _extract_risk_level(page),
+        }
+        if _score_fields(fields) < 3:
+            continue
+        records.append(
+            FactsheetRecord(
+                scheme_name=scheme_name,
+                report_month=report_month,
+                aum=fields["aum"],
+                expense_ratio=fields["expense_ratio"],
+                benchmark=fields["benchmark"],
+                fund_manager=fields["fund_manager"],
+                risk_level=fields["risk_level"],
+                scheme_isin=_extract_labeled_scheme_isin(page),
+                confidence_score=float(min(99.0, 60 + (_score_fields(fields) * 10))),
+            )
+        )
+    return records
+
+
+def _find_hsbc_page_heading(lines: list[str]) -> tuple[str, int, int] | None:
+    for index, line in enumerate(lines[:40]):
+        if not line.lower().startswith("hsbc "):
+            continue
+        parts = [line]
+        if not re.search(r"\b(?:fund|fof|etf)\b", line, flags=re.IGNORECASE):
+            for candidate in lines[index + 1 : index + 8]:
+                if candidate.lower().startswith(("an ", "the ", "investment objective", "fund details")):
+                    break
+                parts.append(candidate)
+                if re.search(r"\b(?:fund|fof|etf)\b", candidate, flags=re.IGNORECASE):
+                    break
+        name = re.sub(r"\s*[\*\^$#@~§]+$", "", " ".join(parts)).strip()
+        if re.search(r"\b(?:fund|fof|etf)\b", name, flags=re.IGNORECASE):
+            return name, index, len(parts)
+    return None
+
+
+def _extract_hsbc_benchmark(lines: list[str]) -> str | None:
+    stop_markers = (
+        "nav",
+        "aum",
+        "aaum",
+        "fund manager",
+        "minimum investment",
+        "load structure",
+        "expense ratio",
+        "portfolio turnover",
+    )
+    for index, line in enumerate(lines):
+        match = re.match(r"^benchmark\s*:?\s*(.*)$", line, flags=re.IGNORECASE)
+        if not match:
+            continue
+        value = match.group(1).strip()
+        cursor = index + 1
+        while not value and cursor < len(lines):
+            value = lines[cursor].strip()
+            cursor += 1
+        while cursor < len(lines) and len(value) < 120:
+            candidate = lines[cursor].strip()
+            if not candidate or candidate.lower().startswith(stop_markers):
+                break
+            if any(marker in candidate for marker in ("₹", "%")):
+                break
+            if len(candidate.split()) > 8:
+                break
+            value = f"{value} {candidate}".strip()
+            cursor += 1
+        value = _normalize_benchmark_candidate(value).strip(" :")
+        if value and _is_plausible_benchmark(value):
+            return value
+    return None
+
+
+def _extract_hsbc_fund_managers(lines: list[str]) -> str | None:
+    start = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if line.lower().startswith("fund manager")
+        ),
+        None,
+    )
+    if start is None:
+        return None
+    stop_markers = (
+        "minimum investment",
+        "load structure",
+        "expense ratio",
+        "portfolio turnover",
+    )
+    manager_pattern = re.compile(
+        r"^(?P<name>[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,5})\s*"
+        r"(?:\([^)]{1,120}\))?$"
+    )
+    names: list[str] = []
+    for offset, line in enumerate(lines[start + 1 :], start=start + 1):
+        if line.lower().startswith(stop_markers):
+            break
+        if line.lower() in {
+            "fund manager",
+            "fund manager & experience",
+            "total experience",
+            "managing since",
+        }:
+            continue
+        match = manager_pattern.fullmatch(line)
+        if not match:
+            continue
+        following = " ".join(lines[offset + 1 : offset + 4]).lower()
+        if not re.search(r"\btotal experience\b|\bmanaging since\b", following):
+            continue
+        name = " ".join(match.group("name").split())
+        if name not in names:
+            names.append(name)
+    return "; ".join(names) if names else None
 
 
 def _page_scheme_name(page: str, benchmark: str | None) -> str | None:

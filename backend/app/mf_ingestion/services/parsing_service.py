@@ -746,6 +746,21 @@ class ParsingService:
                 self.factsheet_parser.parse(file_path, parse_context),
                 amc_code,
             )
+            # HSBC's product-suitability page can be mistaken for a second
+            # factsheet record; keep only rows with core numeric identity fields.
+            if amc_code.strip().lower() == "hsbc":
+                records = [
+                    record
+                    for record in records
+                    if any(
+                        value not in (None, "")
+                        for value in (
+                            record.aum,
+                            record.expense_ratio,
+                            record.benchmark,
+                        )
+                    )
+                ]
         except Exception as exc:
             logger.exception("event=factsheet_parse_failed source_document_id=%s reason=%s", document_id, exc)
             self._mark_document(document_id, "failed", [f"factsheet_parse_exception:{type(exc).__name__}"])

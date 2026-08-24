@@ -3614,9 +3614,41 @@ def _discover_hsbc_documents(
     MF_SOURCE_MANIFEST_PATH), which is the sanctioned mechanism for that, and local PDFs
     belong in `scripts/smoke_parse_mf_raw_documents.py --download-only`.
     """
-    return _discover_generic_anchor_documents(
+    documents = _discover_generic_anchor_documents(
         source,
         document_type=document_type,
         timeout_seconds=timeout_seconds,
         user_agent=user_agent,
+    )
+    normalized: list[DiscoveredDocument] = []
+    for document in documents:
+        # HSBC's URL slug is the stable reporting-month signal. The listing title can
+        # contain a publication date or stale CMS text, so URL evidence wins here.
+        report_month = (
+            _detect_report_month_from_text(document.url)
+            or _detect_report_month_from_text(document.title)
+            or document.report_month
+        )
+        if report_month and report_month != document.report_month:
+            document = replace(
+                document,
+                report_month=report_month,
+                priority_score=(
+                    _generic_base_score(
+                        ext=document.file_ext,
+                        document_type=document_type,
+                    )
+                    + (report_month.year * 12 + report_month.month) * 10
+                    + 60
+                ),
+            )
+        normalized.append(document)
+    return sorted(
+        normalized,
+        key=lambda item: (
+            item.report_month is not None,
+            item.report_month or date.min,
+            item.priority_score,
+        ),
+        reverse=True,
     )

@@ -75,6 +75,8 @@ def parse_combined_factsheet_pdf(
     scheme_prefixes: tuple[str, ...],
     continue_after_grand_total: bool = False,
     extract_sector_allocations: bool = False,
+    extra_security_patterns: tuple[str, ...] = (),
+    excluded_security_names: tuple[str, ...] = (),
 ) -> list[ParsedDocument]:
     pages = PDFTextParser().extract_pages(file_path)
     records_by_scheme: dict[str, ParsedDocument] = {}
@@ -85,6 +87,8 @@ def parse_combined_factsheet_pdf(
             scheme_prefixes=scheme_prefixes,
             continue_after_grand_total=continue_after_grand_total,
             extract_sector_allocations=extract_sector_allocations,
+            extra_security_patterns=extra_security_patterns,
+            excluded_security_names=excluded_security_names,
         )
         if not parsed or not parsed.holdings:
             continue
@@ -102,6 +106,8 @@ def parse_combined_factsheet_page(
     scheme_prefixes: tuple[str, ...],
     continue_after_grand_total: bool = False,
     extract_sector_allocations: bool = False,
+    extra_security_patterns: tuple[str, ...] = (),
+    excluded_security_names: tuple[str, ...] = (),
 ) -> ParsedDocument | None:
     lines = [_clean(line) for line in str(page_text or "").splitlines()]
     lines = [line for line in lines if line]
@@ -128,6 +134,8 @@ def parse_combined_factsheet_page(
             lines,
             body_start,
             continue_after_grand_total=continue_after_grand_total,
+            extra_security_patterns=extra_security_patterns,
+            excluded_security_names=excluded_security_names,
         )
         for body_start in sorted(set(body_starts))
     ]
@@ -166,6 +174,8 @@ def _extract_portfolio_candidate(
     body_start: int,
     *,
     continue_after_grand_total: bool,
+    extra_security_patterns: tuple[str, ...] = (),
+    excluded_security_names: tuple[str, ...] = (),
 ) -> tuple[list[dict], float]:
     holdings: list[dict] = []
     current_sector: str | None = None
@@ -199,7 +209,11 @@ def _extract_portfolio_candidate(
             pending = pending[-6:]
             continue
 
-        candidate = _candidate_name(pending)
+        candidate = _candidate_name(
+            pending,
+            extra_security_patterns=extra_security_patterns,
+            excluded_security_names=excluded_security_names,
+        )
         pending.clear()
         if not candidate or not 0 < value <= 100:
             continue
@@ -210,7 +224,11 @@ def _extract_portfolio_candidate(
             if low_candidate.startswith("grand total"):
                 current_sector = None
             continue
-        if _looks_like_security(normalized) or _is_standalone_category_holding(low_candidate):
+        if _looks_like_security(
+            normalized,
+            extra_security_patterns=extra_security_patterns,
+            excluded_security_names=excluded_security_names,
+        ) or _is_standalone_category_holding(low_candidate):
             # Keep every row instead of deduping by normalized name: these tables
             # print no ISIN, so two genuinely different bonds from the same issuer
             # at the same rating (common -- multiple tranches/series) can share the
@@ -326,7 +344,12 @@ def _record_quality(record: ParsedDocument) -> tuple[int, float, int]:
     return _portfolio_quality(total_percent, len(record.holdings))
 
 
-def _candidate_name(pending: list[str]) -> str:
+def _candidate_name(
+    pending: list[str],
+    *,
+    extra_security_patterns: tuple[str, ...] = (),
+    excluded_security_names: tuple[str, ...] = (),
+) -> str:
     meaningful = [
         line
         for line in pending
@@ -343,16 +366,38 @@ def _candidate_name(pending: list[str]) -> str:
     # DEVELOPMENT CORPORATION LTD. came out as just "CORPORATION LTD. (^) ICRA
     # AAA", losing the distinguishing part of the name.
     full = " ".join(meaningful)
-    if _looks_like_security(full):
+    if _looks_like_security(
+        full,
+        extra_security_patterns=extra_security_patterns,
+        excluded_security_names=excluded_security_names,
+    ):
         return full
     return meaningful[-1]
 
 
-def _looks_like_security(value: str) -> bool:
-    return bool(SECURITY_PATTERN.search(value))
+def _looks_like_security(
+    value: str,
+    *,
+    extra_security_patterns: tuple[str, ...] = (),
+    excluded_security_names: tuple[str, ...] = (),
+) -> bool:
+    normalized = " ".join(str(value or "").lower().split())
+    excluded = {
+        " ".join(str(item or "").lower().split())
+        for item in excluded_security_names
+        if str(item or "").strip()
+    }
+    if normalized in excluded or any(
+        normalized.startswith(f"{item} ") for item in excluded
+    ):
+        return False
+    if SECURITY_PATTERN.search(value):
+        return True
+    return any(re.search(pattern, value, flags=re.IGNORECASE) for pattern in extra_security_patterns)
 
 
 def _is_standalone_category_holding(value: str) -> bool:
+    value = re.sub(r"[*^#@~§]+", "", str(value or "")).strip()
     # Excludes anything containing "total" so a "<category> - Total" redundant
     # line (an AMC layout that DOES break the category into its own row-level
     # detail, unlike this one) isn't double-counted alongside the real rows.
