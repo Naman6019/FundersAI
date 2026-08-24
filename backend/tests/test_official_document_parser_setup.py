@@ -601,6 +601,7 @@ def test_sync_workflow_has_parse_only_path_for_r2_first_acquisition():
     assert "parse_only" in workflow
     assert 'PARSE_ONLY="true"' in workflow
     assert "Skipping live AMC ingestion" in workflow
+    assert "Skipping live AMC link preflight for exact source-document IDs." in workflow
 
 
 def test_sync_workflow_prints_disclosure_diagnostics_before_coverage_gate():

@@ -304,7 +304,9 @@ jobs:
           fi
 
           echo "Processing AMC=$amc max_docs=$max_docs parse_limit=$parse_limit parse_rounds=$PARSE_ROUNDS parse_only=$PARSE_ONLY edge_acquired=$EDGE_ACQUIRED event=$EVENT_NAME"
-          if [ "$EDGE_ACQUIRED" = "true" ] && [ "$PARSE_ONLY" != "true" ]; then
+          if [ "$PARSE_ONLY" = "true" ] && [ -n "${DISPATCH_SOURCE_DOCUMENT_IDS:-}" ]; then
+            echo "Skipping live AMC link preflight for exact source-document IDs."
+          elif [ "$EDGE_ACQUIRED" = "true" ] && [ "$PARSE_ONLY" != "true" ]; then
             echo "Skipping GitHub runner link preflight for $amc; Supabase Edge acquisition validates and downloads official links."
           else
             python backend/scripts/preflight_mf_document_links.py \
