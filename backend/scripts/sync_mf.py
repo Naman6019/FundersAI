@@ -244,7 +244,14 @@ def main():
         try:
             existing_core = _load_existing_core_rows(supabase, batch)
             # 1. Update main table
-            supabase.table('mutual_funds').upsert(batch, on_conflict='scheme_code').execute()
+            mutual_fund_batch = [
+                {key: value for key, value in row.items() if key != "amc_name"}
+                for row in batch
+            ]
+            supabase.table('mutual_funds').upsert(
+                mutual_fund_batch,
+                on_conflict='scheme_code',
+            ).execute()
 
             # 2. Keep latest NAV and core snapshot aligned. Full history is cached on demand.
             core_snapshot_batch = [
