@@ -47,6 +47,14 @@ def _is_supported_scheme_name(scheme_name: str) -> bool:
     return is_direct_growth or bool(re.search(r"\betf\b", normalized))
 
 
+def _infer_amc_name(scheme_name: str) -> str | None:
+    """Restore the canonical AMC label for planless AMFI ETF rows."""
+    normalized = str(scheme_name or "").strip().lower()
+    if normalized.startswith("edelweiss "):
+        return "Edelweiss Mutual Fund"
+    return None
+
+
 def _auto_family_id(scheme_name: str) -> str:
     """Build the same stable family slug used by the existing auto-group script."""
     normalized = str(scheme_name or "").strip().lower()
@@ -100,6 +108,11 @@ def parse_amfi_nav_payload(payload: str) -> list[dict]:
                 "nav": nav,
                 "nav_date": nav_date,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
+                **(
+                    {"amc_name": amc_name}
+                    if (amc_name := _infer_amc_name(scheme_name))
+                    else {}
+                ),
             }
         )
     return updates
@@ -135,7 +148,7 @@ def _load_existing_core_rows(supabase, batch: list[dict]) -> dict[str, dict]:
     try:
         res = (
             supabase.table("mutual_fund_core_snapshot")
-            .select("scheme_code,data_source,provider_payload")
+            .select("scheme_code,amc_name,data_source,provider_payload")
             .in_("scheme_code", codes)
             .execute()
         )
@@ -197,7 +210,7 @@ def _merge_sources(*values: object) -> str:
 
 def _build_core_snapshot_row(update: dict, existing: dict | None = None) -> dict:
     existing = existing or {}
-    return {
+    row = {
         "scheme_code": str(update["scheme_code"]),
         "scheme_name": update["scheme_name"],
         "nav": update["nav"],
@@ -206,6 +219,10 @@ def _build_core_snapshot_row(update: dict, existing: dict | None = None) -> dict
         "provider_payload": existing.get("provider_payload"),
         "last_updated": datetime.now(timezone.utc).isoformat(),
     }
+    amc_name = existing.get("amc_name") or update.get("amc_name")
+    if amc_name:
+        row["amc_name"] = amc_name
+    return row
 
 
 def main():

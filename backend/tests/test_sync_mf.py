@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from backend.scripts.sync_mf import (
+    _build_core_snapshot_row,
     _build_missing_etf_family_mappings,
     parse_amfi_nav_payload,
 )
@@ -19,8 +20,25 @@ def test_parse_amfi_nav_payload_keeps_direct_growth_and_eight_column_etf_rows():
 
     assert [row["scheme_code"] for row in rows] == [1, 154535]
     assert rows[1]["isin"] == "INF754K01XI7"
+    assert rows[1]["amc_name"] == "Edelweiss Mutual Fund"
     assert rows[1]["nav"] == 36.835
     assert rows[1]["nav_date"] == "2026-08-21"
+
+
+def test_core_snapshot_backfills_missing_amc_name_without_overwriting_existing_value():
+    update = {
+        "scheme_code": 154535,
+        "scheme_name": "Edelweiss BSE LargeMid (60:40) Stable dividend 50 ETF",
+        "amc_name": "Edelweiss Mutual Fund",
+        "nav": 36.835,
+        "nav_date": "2026-08-21",
+    }
+
+    repaired = _build_core_snapshot_row(update, {"amc_name": None})
+    retained = _build_core_snapshot_row(update, {"amc_name": "Existing AMC Label"})
+
+    assert repaired["amc_name"] == "Edelweiss Mutual Fund"
+    assert retained["amc_name"] == "Existing AMC Label"
 
 
 def test_missing_etf_family_mapping_does_not_overwrite_existing_mapping():
