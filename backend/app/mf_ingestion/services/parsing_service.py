@@ -1644,6 +1644,18 @@ KNOWN_PARSING_AMC_SCHEME_ALIASES: dict[str, dict[str, tuple[str, str]]] = {
             "154347",
             "edelweiss-nifty-next-50-etf",
         ),
+        "edelweiss bse largemid (60:40) stable dividend 50 etf": (
+            "154535",
+            "edelweiss-bse-largemid-60-40-stable-dividend-50-etf",
+        ),
+        "edelweiss bse top 10 bank etf": (
+            "154524",
+            "edelweiss-bse-top-10-bank-etf",
+        ),
+        "edelweiss nifty metal etf": (
+            "154461",
+            "edelweiss-nifty-metal-etf",
+        ),
         "edelweiss us technology equity fof": (
             "148063",
             "edelweiss-us-technology-equity-fund-of-fund",

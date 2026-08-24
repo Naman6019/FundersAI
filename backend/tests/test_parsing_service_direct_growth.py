@@ -58,3 +58,14 @@ def test_edelweiss_aliases_cover_offshore_and_portfolio_only_variants():
     )
     assert aliases["edelweiss us technology equity fof"][0] == "148063"
     assert aliases["edelweiss nifty 100 quality 30 index fnd"][0] == "149254"
+
+
+def test_edelweiss_aliases_cover_new_official_etfs():
+    aliases = KNOWN_PARSING_AMC_SCHEME_ALIASES["edelweiss"]
+
+    assert aliases["edelweiss bse largemid (60:40) stable dividend 50 etf"] == (
+        "154535",
+        "edelweiss-bse-largemid-60-40-stable-dividend-50-etf",
+    )
+    assert aliases["edelweiss bse top 10 bank etf"][0] == "154524"
+    assert aliases["edelweiss nifty metal etf"][0] == "154461"

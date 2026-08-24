@@ -4,6 +4,7 @@ Downloads the full NAVAll.txt from AMFI and upserts to Supabase.
 """
 import os
 import logging
+import re
 import requests
 import time
 from datetime import datetime, timezone
@@ -18,6 +19,90 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 AMFI_URL = "https://www.amfiindia.com/spages/NAVAll.txt"
 BATCH_SIZE = 500
+
+_FAMILY_REMOVABLE_SUFFIXES = {
+    "direct",
+    "regular",
+    "retail",
+    "growth",
+    "cumulative",
+    "idcw",
+    "dividend",
+    "reinvestment",
+    "payout",
+    "payment",
+    "institutional",
+    "bonus",
+    "option",
+    "plan",
+}
+
+
+def _is_supported_scheme_name(scheme_name: str) -> bool:
+    """Keep direct-growth variants plus planless ETFs from AMFI NAVAll."""
+    normalized = str(scheme_name or "").strip().lower()
+    is_direct_growth = "direct" in normalized and (
+        "growth" in normalized or "cumulative" in normalized
+    )
+    return is_direct_growth or bool(re.search(r"\betf\b", normalized))
+
+
+def _auto_family_id(scheme_name: str) -> str:
+    """Build the same stable family slug used by the existing auto-group script."""
+    normalized = str(scheme_name or "").strip().lower()
+    normalized = normalized.replace("smallcap", "small cap")
+    normalized = normalized.replace("midcap", "mid cap")
+    normalized = normalized.replace("largecap", "large cap")
+    normalized = re.sub(r"[^a-z0-9\s]", " ", normalized)
+    tokens = normalized.split()
+    while len(tokens) > 1 and tokens[-1] in _FAMILY_REMOVABLE_SUFFIXES:
+        tokens.pop()
+    return "-".join(tokens)
+
+
+def parse_amfi_nav_payload(payload: str) -> list[dict]:
+    """Parse AMFI's six-column fund rows and eight-column ETF rows."""
+    updates = []
+    for line in str(payload or "").splitlines():
+        trimmed = line.strip().lstrip("\ufeff")
+        if not trimmed:
+            continue
+
+        delimiter = "|" if "|" in trimmed else ";"
+        cols = [value.strip() for value in trimmed.split(delimiter)]
+        if len(cols) < 6:
+            continue
+        try:
+            scheme_code = int(cols[0])
+            scheme_name = cols[3]
+            nav = float(cols[-2])
+            date_str = cols[-1]
+        except (ValueError, IndexError):
+            continue
+
+        if not _is_supported_scheme_name(scheme_name):
+            continue
+
+        isin = next(
+            (cols[index] for index in (1, 2) if index < len(cols) and cols[index] not in {"", "-"}),
+            None,
+        )
+        try:
+            nav_date = datetime.strptime(date_str, "%d-%b-%Y").strftime("%Y-%m-%d")
+        except ValueError:
+            nav_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+        updates.append(
+            {
+                "scheme_code": scheme_code,
+                "scheme_name": scheme_name,
+                "isin": isin,
+                "nav": nav,
+                "nav_date": nav_date,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+    return updates
 
 def fetch_amfi_nav():
     """
@@ -37,51 +122,7 @@ def fetch_amfi_nav():
         text = response.content.decode('utf-8', errors='replace')
         lines = text.split('\n')
         
-        updates = []
-        for line in lines:
-            trimmed = line.strip()
-            if not trimmed:
-                continue
-            
-            # User specified pipe-delimited format:
-            # Scheme Code|ISIN Div Payout/IDCW|ISIN Div Reinvestment|Scheme Name|Net Asset Value|Date
-            cols = trimmed.split('|')
-            if len(cols) != 6:
-                # Fallback to semicolon if pipe fails (AMFI often uses semicolon)
-                cols = trimmed.split(';')
-            
-            if len(cols) == 6:
-                try:
-                    scheme_code = int(cols[0])
-                    nav = float(cols[4])
-                    isin = cols[1] if cols[1] and cols[1] != '-' else cols[2]
-                    scheme_name = cols[3]
-                    date_str = cols[5].strip()
-                    
-                    # Filter: Only Direct Growth Funds (exclude IDCW, Dividend, and Regular plans)
-                    scheme_name_lower = scheme_name.lower()
-                    if 'direct' not in scheme_name_lower or 'growth' not in scheme_name_lower:
-                        continue
-                    if 'idcw' in scheme_name_lower or 'dividend' in scheme_name_lower or 'regular' in scheme_name_lower:
-                        continue
-                    
-                    try:
-                        nav_date = datetime.strptime(date_str, "%d-%b-%Y").strftime("%Y-%m-%d")
-                    except ValueError:
-                        nav_date = datetime.now().strftime("%Y-%m-%d")
-
-                    updates.append({
-                        "scheme_code": scheme_code,
-                        "scheme_name": scheme_name,
-                        "isin": isin,
-                        "nav": nav,
-                        "nav_date": nav_date,
-                        "updated_at": datetime.now(timezone.utc).isoformat()
-                    })
-                except (ValueError, IndexError):
-                    continue
-
-        return updates
+        return parse_amfi_nav_payload(response.content.decode("utf-8", errors="replace"))
     except Exception as e:
         logger.error(f"Failed to fetch AMFI NAV: {e}")
         return []
@@ -102,6 +143,46 @@ def _load_existing_core_rows(supabase, batch: list[dict]) -> dict[str, dict]:
         logger.warning("Existing MF core lookup failed before AMFI NAV upsert: %s", exc)
         return {}
     return {str(row.get("scheme_code")): row for row in (res.data or []) if row.get("scheme_code") is not None}
+
+
+def _load_existing_family_mappings(supabase, batch: list[dict]) -> dict[str, dict]:
+    codes = [str(row.get("scheme_code")) for row in batch if row.get("scheme_code") is not None]
+    if not codes:
+        return {}
+    try:
+        res = (
+            supabase.table("mutual_fund_family_mapping")
+            .select("scheme_code,family_id")
+            .in_("scheme_code", codes)
+            .execute()
+        )
+    except Exception as exc:
+        logger.warning("Existing MF family mapping lookup failed: %s", exc)
+        return {}
+    return {str(row.get("scheme_code")): row for row in (res.data or []) if row.get("scheme_code") is not None}
+
+
+def _build_missing_etf_family_mappings(
+    batch: list[dict], existing: dict[str, dict]
+) -> list[dict]:
+    mappings = []
+    for row in batch:
+        code = str(row.get("scheme_code") or "")
+        name = str(row.get("scheme_name") or "")
+        if code in existing or not re.search(r"\betf\b", name, flags=re.IGNORECASE):
+            continue
+        family_id = _auto_family_id(name)
+        if not family_id:
+            continue
+        mappings.append(
+            {
+                "scheme_code": code,
+                "family_id": family_id,
+                "confidence": 0.9,
+                "source": "amfi-navall-etf-v1",
+            }
+        )
+    return mappings
 
 
 def _merge_sources(*values: object) -> str:
@@ -154,6 +235,15 @@ def main():
                 for u in batch
             ]
             supabase.table('mutual_fund_core_snapshot').upsert(core_snapshot_batch, on_conflict='scheme_code').execute()
+
+            # ETF identities have no Direct Growth suffix; create only missing
+            # mappings so reviewed mappings for existing schemes are untouched.
+            existing_mappings = _load_existing_family_mappings(supabase, batch)
+            missing_mappings = _build_missing_etf_family_mappings(batch, existing_mappings)
+            if missing_mappings:
+                supabase.table("mutual_fund_family_mapping").upsert(
+                    missing_mappings, on_conflict="scheme_code"
+                ).execute()
             
             success += len(batch)
             logger.info(f"Upserted batch {i//BATCH_SIZE + 1}: {success}/{len(updates)} schemes done.")
