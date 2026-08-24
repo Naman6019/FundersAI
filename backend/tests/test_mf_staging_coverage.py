@@ -5,6 +5,7 @@ from pathlib import Path
 from scripts.report_mf_staging_coverage import (
     build_staging_coverage,
     failed_strict_amcs,
+    _latest_core_source_document_ids,
 )
 
 
@@ -107,6 +108,35 @@ def test_staging_coverage_uses_distinct_current_mapped_families():
     assert report["core_source_document_ids"] == ["mirae-core"]
     assert report["portfolio_source_document_ids"] == ["mirae-portfolio"]
     assert report["passes_all_fields"] is False
+
+
+def test_latest_core_source_document_excludes_stale_factsheet_rows(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.report_mf_staging_coverage._get_filtered",
+        lambda *_args, **_kwargs: [
+            {
+                "id": "old",
+                "amc_code": "EDELWEISS",
+                "document_type": "factsheet",
+                "report_month": "2026-07-01",
+                "parse_status": "needs_review",
+                "downloaded_at": "2026-08-10T21:14:00+00:00",
+            },
+            {
+                "id": "current",
+                "amc_code": "EDELWEISS",
+                "document_type": "factsheet",
+                "report_month": "2026-07-01",
+                "parse_status": "parsed_partial",
+                "downloaded_at": "2026-08-24T13:33:14+00:00",
+            },
+        ],
+    )
+
+    assert _latest_core_source_document_ids(
+        report_month="2026-07-01",
+        amcs=["edelweiss"],
+    ) == {"edelweiss": {"current"}}
 
 
 def test_staging_coverage_separates_non_applicable_sectors_from_missing_sectors():

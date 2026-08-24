@@ -5,6 +5,7 @@ import json
 import os
 import sys
 from collections import defaultdict
+from datetime import datetime, timezone
 from typing import Any
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -71,6 +72,62 @@ def _get_filtered(
         if len(page) < page_size:
             return rows
         start += page_size
+
+
+ACTIVE_SOURCE_STATUSES = {"parsed", "parsed_partial"}
+
+
+def _source_timestamp(row: dict[str, Any]) -> datetime:
+    for field in ("downloaded_at", "created_at", "updated_at", "parsed_at"):
+        raw = str(row.get(field) or "").strip()
+        if not raw:
+            continue
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+    return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _latest_core_source_document_ids(
+    *,
+    report_month: str,
+    amcs: list[str],
+) -> dict[str, set[str]]:
+    """Use one latest parsed factsheet per AMC/month for core coverage.
+
+    Reacquisition intentionally leaves old source rows for auditability. They must
+    not inflate the current-month mapping denominator after a newer official file
+    has been parsed.
+    """
+    normalized_amcs = {_normalize_amc_key(amc) for amc in amcs}
+    selected: dict[str, set[str]] = {amc: set() for amc in normalized_amcs}
+    documents = _get_filtered(
+        "mf_raw_documents",
+        "id,amc_code,document_type,source_document_type,report_month,parse_status,"
+        "downloaded_at,created_at,updated_at,parsed_at",
+        filters={"report_month": report_month},
+    )
+    latest: dict[str, dict[str, Any]] = {}
+    for document in documents:
+        amc = _normalize_amc_key(document.get("amc_code"))
+        document_type = str(
+            document.get("document_type") or document.get("source_document_type") or ""
+        ).strip().lower()
+        if (
+            amc not in normalized_amcs
+            or document_type != "factsheet"
+            or str(document.get("parse_status") or "").strip().lower()
+            not in ACTIVE_SOURCE_STATUSES
+        ):
+            continue
+        current = latest.get(amc)
+        if current is None or _source_timestamp(document) > _source_timestamp(current):
+            latest[amc] = document
+    for amc, document in latest.items():
+        if document.get("id"):
+            selected[amc] = {str(document["id"])}
+    return selected
 
 
 def _get_compact_coverage_rows(function_name: str, report_month: str) -> list[dict[str, Any]]:
@@ -300,6 +357,16 @@ def main() -> int:
         "aum,expense_ratio,benchmark,fund_manager,risk_level",
         filters={"report_month": args.report_month},
     )
+    latest_core_documents = _latest_core_source_document_ids(
+        report_month=args.report_month,
+        amcs=amcs,
+    )
+    candidates = [
+        row
+        for row in candidates
+        if str(row.get("source_document_id") or "")
+        in latest_core_documents.get(_normalize_amc_key(row.get("amc_code")), set())
+    ]
     holdings = _get_compact_coverage_rows(
         "mf_staging_holding_promotion_coverage_rows",
         args.report_month,

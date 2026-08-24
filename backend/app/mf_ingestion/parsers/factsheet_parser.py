@@ -181,11 +181,17 @@ class FactsheetParser:
             best_by_scheme[scheme_key] = _merge_factsheet_records(current, record) if current else record
 
         records = sorted(best_by_scheme.values(), key=lambda value: value.scheme_name)
+        page_aligned_expense_ratios = _extract_page_aligned_expense_ratios(
+            page_texts or [],
+            [record.scheme_name for record in records],
+        )
         for record in records:
             if record.aum is None and not has_anchored_sections:
                 record.aum = _extract_aum_from_scheme_occurrences(cleaned_text, record.scheme_name)
             if not record.risk_level:
                 record.risk_level = risk_by_scheme.get(_scheme_key(record.scheme_name))
+            if record.expense_ratio is None:
+                record.expense_ratio = page_aligned_expense_ratios.get(_scheme_key(record.scheme_name))
             mapped_ter = axis_ter_by_scheme.get(_scheme_key(record.scheme_name))
             if mapped_ter is not None:
                 record.expense_ratio = mapped_ter
@@ -757,6 +763,55 @@ def _extract_page_aligned_risk_levels(page_texts: list[str]) -> dict[str, str]:
         for scheme_name, risk_label in zip(scheme_names, risk_labels):
             risk_by_scheme[_scheme_key(scheme_name)] = risk_label
     return risk_by_scheme
+
+
+def _extract_page_aligned_expense_ratios(
+    page_texts: list[str],
+    allowed_scheme_names: list[str] | None = None,
+) -> dict[str, float]:
+    """Recover TER values when a factsheet puts the metric before its scheme title."""
+    expense_by_scheme: dict[str, float] = {}
+    for raw_page in page_texts:
+        page = _preprocess_factsheet_text(raw_page)
+        markers = list(
+            re.finditer(
+                r"(?i)(?:expense\s+ratios?|ber\s*/\s*ter|total\s+expense\s+ratio)",
+                page,
+            )
+        )
+        if not markers:
+            continue
+        value = _extract_expense_ratio(page)
+        if value is None:
+            continue
+        scheme_matches = list(SCHEME_NAME_PATTERN.finditer(page))
+        known_matches: list[tuple[int, str]] = [
+            (match.start(), _clean_scheme_name(match.group("name")))
+            for match in scheme_matches
+        ]
+        for scheme_name in allowed_scheme_names or []:
+            normalized_name = " ".join(str(scheme_name or "").split())
+            if not normalized_name:
+                continue
+            name_pattern = re.escape(normalized_name).replace(r"\ ", r"\s+")
+            match = re.search(name_pattern, page, flags=re.IGNORECASE)
+            if match:
+                known_matches.append((match.start(), normalized_name))
+        if known_matches:
+            known_matches = list(dict.fromkeys(known_matches))
+        if not scheme_matches:
+            if not known_matches:
+                continue
+        for marker in markers:
+            following = [match for match in known_matches if match[0] >= marker.end()]
+            selected = min(
+                following or known_matches,
+                key=lambda match: abs(match[0] - marker.end()),
+            )
+            scheme_key = _scheme_key(selected[1])
+            if scheme_key and scheme_key not in expense_by_scheme:
+                expense_by_scheme[scheme_key] = value
+    return expense_by_scheme
 
 
 def _extract_product_suitability_risk_levels(page_texts: list[str]) -> dict[str, str]:
@@ -1528,6 +1583,9 @@ def _extract_aum_from_scheme_occurrences(text: str, scheme_name: str) -> float |
 
 
 def _extract_expense_ratio(chunk: str) -> float | None:
+    ber_ter = _extract_ber_ter_expense_ratio(chunk)
+    if ber_ter is not None:
+        return ber_ter
     patterns = (
         r"Expense\s+Ratio\^?\s+Regular/Other\s+than\s+Direct\s+"
         r"[0-9]+(?:\.[0-9]+)?\s+Direct\s+([0-9]+(?:\.[0-9]+)?)\b",
@@ -1568,6 +1626,41 @@ def _extract_expense_ratio(chunk: str) -> float | None:
             value = float(pct.group(1))
         except ValueError:
             continue
+        if _valid_expense_ratio(value):
+            return value
+    return None
+
+
+def _extract_ber_ter_expense_ratio(text: str) -> float | None:
+    """Read direct TER when available, otherwise the regular/ETF TER."""
+    compact = " ".join(str(text or "").replace("\xa0", " ").split())
+    if not compact:
+        return None
+
+    plan_patterns = (
+        r"BER\s*/\s*TER\s*\(\s*Direct\s+Plan\s*\)\s*:?\s*"
+        r"([0-9]+(?:\.[0-9]+)?)\s*%\s*/\s*([0-9]+(?:\.[0-9]+)?)\s*%",
+        r"BER\s*/\s*TER\s*\(\s*Regular\s+Plan\s*\)\s*:?\s*"
+        r"([0-9]+(?:\.[0-9]+)?)\s*%\s*/\s*([0-9]+(?:\.[0-9]+)?)\s*%",
+    )
+    for index, pattern in enumerate(plan_patterns):
+        match = re.search(pattern, compact, flags=re.IGNORECASE)
+        if not match:
+            continue
+        value = float(match.group(2))
+        if _valid_expense_ratio(value):
+            return value
+        if index == 1:
+            continue
+
+    generic = re.search(
+        r"BER\s*/\s*TER(?:\s*\([^)]{1,40}\))?\s*:?\s*"
+        r"([0-9]+(?:\.[0-9]+)?)\s*%\s*/\s*([0-9]+(?:\.[0-9]+)?)\s*%",
+        compact,
+        flags=re.IGNORECASE,
+    )
+    if generic:
+        value = float(generic.group(2))
         if _valid_expense_ratio(value):
             return value
     return None

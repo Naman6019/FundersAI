@@ -12,6 +12,7 @@ from app.mf_ingestion.parsers.factsheet_parser import (
     _extract_absl_page_vector_riskometer_level,
     _extract_axis_page_vector_riskometer_levels,
     _extract_axis_ter_ratios,
+    _extract_page_aligned_expense_ratios,
     _extract_labeled_scheme_isin,
     _extract_page_aligned_risk_levels,
     _extract_uti_ter_map,
@@ -289,6 +290,43 @@ Mr. Akshay Udeshi
 
     assert records[0].aum == 10.2423
     assert records[0].expense_ratio == 0.17
+
+
+def test_page_aligned_expense_ratio_reads_ber_ter_before_scheme_title_and_etf_ter():
+    page = """
+    Expense Ratios1
+    BER / TER (Regular Plan)
+    :
+    0.70%/1.13%
+    BER / TER (Direct Plan)
+    :
+    0.42%/0.80%
+    Edelweiss Multi Asset Allocation Fund
+    An open-ended scheme investing in Equity and Debt.
+    """
+
+    ratios = _extract_page_aligned_expense_ratios(
+        [page],
+        ["Edelweiss Multi Asset Allocation Fund"],
+    )
+
+    assert ratios == {"edelweissmultiassetallocationfund": 0.8}
+
+
+def test_page_aligned_expense_ratio_uses_regular_ter_for_etf():
+    page = """
+    Expense Ratios1
+    Edelweiss BSE Sensex ETF
+    Edelweiss BSE Sensex ETF - BER/TER
+    : 0.11%/0.19%
+    """
+
+    ratios = _extract_page_aligned_expense_ratios(
+        [page],
+        ["Edelweiss BSE Sensex ETF"],
+    )
+
+    assert ratios == {"edelweissbsesensexetf": 0.19}
 
 
 def test_page_aligned_riskometer_maps_columnar_scheme_order():
