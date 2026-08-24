@@ -1,0 +1,24 @@
+# FundersAI
+
+> FundersAI is an institutional-grade, research-first financial intelligence workspace designed for analyzing and comparing Indian stocks and mutual funds with deterministic metrics, official-source evidence, freshness verification, and zero AI hallucinations.
+
+## Core Capabilities
+- **Deterministic Mutual Fund Analytics**: Daily AMFI NAV feeds, CAGR (1Y, 3Y, 5Y), Sharpe Ratio, Sortino Ratio, Maximum Drawdown, Expense Ratio (TER), and AUM.
+- **Side-by-Side Scheme Comparisons**: Real-time portfolio overlap calculations, risk-adjusted returns, and benchmark tracking error against Nifty / BSE indices.
+- **Stock Fundamental Research**: Financial statements, P/E, ROE, ROCE, OPM, and balance sheet metrics for Indian listed equities.
+- **Synthesis Report Studio**: Multi-page structured financial reports with Mermaid diagrams and citation audits.
+
+## Documentation & High-Value Resources
+- [Research Workspace](https://www.fundersai.co.in/research): Flagship quantitative AI research terminal with live metric computation and source evidence auditing.
+- [Portfolio Overlap Calculator](https://www.fundersai.co.in/tools/portfolio-overlap): Free tool to calculate shared stock holdings and sector overlap between any two Indian mutual funds.
+- [SIP & Step-Up Compounding Calculator](https://www.fundersai.co.in/tools/sip-calculator): Free tool to model monthly compounding, salary step-up increments, and inflation-adjusted corpus.
+- [Mutual Funds Directory](https://www.fundersai.co.in/mutual-funds): Complete index of Indian mutual funds across top AMCs (HDFC, SBI, ICICI Prudential, Nippon India, PPFAS, Kotak, Mirae Asset).
+- [SEBI Categories Hub](https://www.fundersai.co.in/mutual-funds): Category-level factsheets for Flexi Cap, Large Cap, Mid Cap, Small Cap, Large & Mid Cap, ELSS, and Index funds.
+- [Fund Comparison Matrix](https://www.fundersai.co.in/compare/hdfc-flexi-cap-fund-vs-parag-parikh-flexi-cap-fund): Head-to-head comparison engine with risk/return overlap metrics.
+- [Methodology & Guardrails](https://www.fundersai.co.in/methodology): Mathematical formulas, data sources (AMFI, NSE, BSE), and missing-field disclosure standards.
+- [Data Trust & Verification](https://www.fundersai.co.in/data-trust): Verification pipeline and data freshness timestamps.
+- [Learning Hub](https://www.fundersai.co.in/learn): Guides on P/E ratio, Alpha/Beta/Sharpe, and mutual fund selection frameworks.
+
+## Data Provenance & Compliance
+- Data is strictly derived from official Association of Mutual Funds in India (AMFI) and Asset Management Company (AMC) Scheme Information Documents (SID).
+- Research only. FundersAI does not provide personalized investment advice or buy/sell recommendations.

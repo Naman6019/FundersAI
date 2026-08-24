@@ -1,0 +1,46 @@
+# FundersAI — Full Technical & Research Knowledge Base
+
+> Institutional-grade financial research workspace for Indian equities and mutual funds.
+
+## 1. Supported AMCs (Asset Management Companies)
+FundersAI indexes and processes monthly portfolio disclosures, daily NAVs, and SIDs from the following top Indian fund houses:
+- **HDFC Mutual Fund** (`hdfc`): Schemes including HDFC Flexi Cap Fund, HDFC Mid-Cap Opportunities Fund, HDFC Top 100 Fund, HDFC Small Cap Fund.
+- **PPFAS Mutual Fund** (`ppfas`): Schemes including Parag Parikh Flexi Cap Fund, Parag Parikh Tax Saver Fund.
+- **SBI Mutual Fund** (`sbi`): Schemes including SBI Bluechip Fund, SBI Small Cap Fund, SBI Contra Fund.
+- **ICICI Prudential Mutual Fund** (`icici-prudential`): Schemes including ICICI Prudential Bluechip Fund, ICICI Prudential Value Discovery Fund.
+- **Nippon India Mutual Fund** (`nippon`): Schemes including Nippon India Small Cap Fund, Nippon India Growth Fund.
+- **Kotak Mahindra Mutual Fund** (`kotak`): Schemes including Kotak Emerging Equity Fund, Kotak Flexicap Fund.
+- **Mirae Asset Mutual Fund** (`mirae-asset`): Schemes including Mirae Asset Large & Midcap Fund, Mirae Asset Large Cap Fund.
+- **UTI Mutual Fund** (`uti`): Schemes including UTI Nifty 50 Index Fund.
+- **DSP Mutual Fund** (`dsp`): Schemes including DSP Midcap Fund.
+- **Bandhan Mutual Fund** (`bandhan`): Schemes including Bandhan Small Cap Fund.
+- **Tata Mutual Fund** (`tata`): Schemes including Tata Digital India Fund.
+- **Quant Mutual Fund** (`quant`): Schemes including Quant Active Fund, Quant Small Cap Fund.
+
+## 2. Quantitative Metric Formulas & Calculation Standards
+- **Compound Annual Growth Rate (CAGR)**:
+  `CAGR = (NAV_end / NAV_start)^(1 / years) - 1`
+  Calculated deterministically using exact calendar day-count conventions from official AMFI daily NAV history.
+- **Sharpe Ratio**:
+  `Sharpe = (Annualized Return - Risk Free Rate) / Annualized Standard Deviation`
+  Risk-free rate baseline is standard RBI 91-day Treasury Bill rate.
+- **Sortino Ratio**:
+  `Sortino = (Annualized Return - Risk Free Rate) / Downside Deviation`
+  Measures return per unit of bad volatility.
+- **Maximum Drawdown (Max DD)**:
+  `Max DD = (Trough Value - Peak Value) / Peak Value`
+  Computed across 1-year, 3-year, and 5-year rolling windows.
+- **Portfolio Overlap**:
+  `Overlap % = Sum(min(Weight_A_i, Weight_B_i)) for all common stocks i`
+  Calculated directly from monthly portfolio holdings filings.
+
+## 3. Web URLs & Sitemaps
+- Main Hub: https://www.fundersai.co.in
+- Research Workspace: https://www.fundersai.co.in/research
+- Portfolio Overlap Calculator: https://www.fundersai.co.in/tools/portfolio-overlap
+- Step-Up SIP Calculator: https://www.fundersai.co.in/tools/sip-calculator
+- Mutual Funds Hub: https://www.fundersai.co.in/mutual-funds
+- Learn Hub: https://www.fundersai.co.in/learn
+- Pricing: https://www.fundersai.co.in/pricing
+- Methodology: https://www.fundersai.co.in/methodology
+- Sitemap: https://www.fundersai.co.in/sitemap.xml

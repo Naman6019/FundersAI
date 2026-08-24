@@ -88,6 +88,8 @@ stitch_downloads/
 !docs/MF_12_AMC_PRODUCTION_READINESS_RUNBOOK.md
 !docs/README.md
 *.txt
+!frontend/public/llms.txt
+!frontend/public/llms-full.txt
 *.csv
 *.pdf
 *.png
