@@ -1,13 +1,24 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ArticleJsonLd } from '@/components/seo/JsonLd';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Reading Stock Fundamentals | FundersAI Learn',
   description: 'A beginner\'s guide to reading stock fundamentals, balance sheets, and earnings reports.',
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/learn/reading-stock-fundamentals',
+  },
 };
 
 export default function StockFundamentalsPage() {
   return (
-    <article className="prose prose-invert prose-slate max-w-none">
+    <>
+      <ArticleJsonLd
+        title="Reading Stock Fundamentals"
+        description="A beginner's guide to reading stock fundamentals, balance sheets, and earnings reports."
+        slug="reading-stock-fundamentals"
+      />
+      <article className="prose prose-invert prose-slate max-w-none">
       <div className="mb-8">
         <Link href="/learn" className="text-[#00FF9D] hover:underline text-sm font-medium">
           &larr; Back to Learning Hub
@@ -65,5 +76,6 @@ export default function StockFundamentalsPage() {
         </div>
       </div>
     </article>
+    </>
   );
 }

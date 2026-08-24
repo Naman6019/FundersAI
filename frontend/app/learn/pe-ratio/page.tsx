@@ -1,13 +1,24 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ArticleJsonLd } from '@/components/seo/JsonLd';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'P/E Ratio Explained | FundersAI Learn',
   description: 'Understand the Price-to-Earnings ratio and how to use it when analyzing Indian stocks.',
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/learn/pe-ratio',
+  },
 };
 
 export default function PERatioPage() {
   return (
-    <article className="prose prose-invert prose-slate max-w-none">
+    <>
+      <ArticleJsonLd
+        title="P/E Ratio Explained"
+        description="Understand the Price-to-Earnings ratio and how to use it when analyzing Indian stocks."
+        slug="pe-ratio"
+      />
+      <article className="prose prose-invert prose-slate max-w-none">
       <div className="mb-8">
         <Link href="/learn" className="text-[#00FF9D] hover:underline text-sm font-medium">
           &larr; Back to Learning Hub
@@ -60,5 +71,6 @@ export default function PERatioPage() {
         </div>
       </div>
     </article>
+    </>
   );
 }

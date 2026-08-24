@@ -20,11 +20,14 @@ test('public metadata uses the supported production domain', () => {
   }
 });
 
-test('root metadata publishes an explicit canonical URL', () => {
-  const source = readFileSync(new URL('../app/layout.tsx', import.meta.url), 'utf8');
+test('root metadata sets metadataBase and home page publishes canonical URL', () => {
+  const layoutSource = readFileSync(new URL('../app/layout.tsx', import.meta.url), 'utf8');
+  const pageSource = readFileSync(new URL('../app/page.tsx', import.meta.url), 'utf8');
 
-  assert.match(source, /metadataBase: new URL\('https:\/\/www\.fundersai\.co\.in'\)/);
-  assert.match(source, /alternates:\s*\{\s*canonical: '\/'/);
+  assert.match(layoutSource, /metadataBase: new URL\('https:\/\/www\.fundersai\.co\.in'\)/);
+  // Root layout must NOT set a blanket canonical: '/' to avoid the GSC root canonical trap
+  assert.doesNotMatch(layoutSource, /canonical:\s*['"]\/['"]/);
+  assert.match(pageSource, /canonical:\s*['"]https:\/\/www\.fundersai\.co\.in['"]/);
 });
 
 test('search identity publishes the FundersAI organization and square logo', () => {

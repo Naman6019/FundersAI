@@ -28,6 +28,10 @@ class AMCDocumentSource:
     factsheet_extensions: tuple[str, ...] = (".pdf", ".html", ".htm")
     portfolio_extensions: tuple[str, ...] = (".pdf", ".xls", ".xlsx", ".xlsm", ".csv", ".zip")
     factsheet_contains_holdings: bool = False
+    # Some official scheme-factsheet listings expose current document URLs without a
+    # report period. Acquisition may admit those only after the PDF body confirms the
+    # requested month.
+    factsheet_report_month_in_content_only: bool = False
     browser_recovery_allowed: bool = False
     allowed_host_suffixes: tuple[str, ...] = ()
 
@@ -278,31 +282,30 @@ SOURCES: dict[str, AMCDocumentSource] = {
         excluded_keywords=("fortnightly", "half-yearly", "performance disclosure", "scheme performance"),
         allowed_host_suffixes=("dspim.com",),
     ),
-    # The following five (tata, bandhan, edelweiss, invesco, hsbc) are the next batch by
-    # AUM after the original 12. They start in automation_scope.VALIDATION_ONLY_AMCS
-    # (not GREEN_AMCS): discovery/parsing may only run via explicit, non-scheduled
-    # dispatch until a live discovery run against these URLs is reviewed. runtime_enabled
-    # stays False so nothing reaches users regardless of lane. See docs/CURRENT_STATE.md.
+    # These five sources were live-checked against current official July/August 2026
+    # documents before joining the unattended staging lane. Discovery writes staging
+    # evidence only; the separately approval-gated promotion workflow remains manual.
     "tata": AMCDocumentSource(
         amc_name="Tata Mutual Fund",
         amc_code="TATA",
         adapter_key="tata",
         factsheet_page_url=_env_url(
             "MF_TATA_FACTSHEET_PAGE_URL",
-            "https://www.tatamutualfund.com/information-documents/factsheets",
+            "https://www.tatamutualfund.com/schemes-related/scheme-factsheet",
         ),
         portfolio_disclosure_page_url=_env_url(
             "MF_TATA_PORTFOLIO_PAGE_URL",
-            "https://www.tatamutualfund.com/information-documents/portfolio-disclosures",
+            "https://www.tatamutualfund.com/schemes-related/portfolio",
         ),
         requires_confirmation=False,
         confirmation_type=None,
         confirmation_notes=None,
         enabled=True,
-        runtime_enabled=False,
+        runtime_enabled=True,
         factsheet_required_keywords=("factsheet", "fact sheet", "scheme factsheet"),
         portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
         factsheet_contains_holdings=True,
+        factsheet_report_month_in_content_only=True,
         allowed_host_suffixes=("tatamutualfund.com",),
     ),
     "bandhan": AMCDocumentSource(
@@ -315,13 +318,13 @@ SOURCES: dict[str, AMCDocumentSource] = {
         ),
         portfolio_disclosure_page_url=_env_url(
             "MF_BANDHAN_PORTFOLIO_PAGE_URL",
-            "https://bandhanmutual.com/downloads/monthly-portfolio-disclosures",
+            "https://bandhanmutual.com/downloads/portfolio-summary/monthly",
         ),
         requires_confirmation=False,
         confirmation_type=None,
         confirmation_notes=None,
         enabled=True,
-        runtime_enabled=False,
+        runtime_enabled=True,
         factsheet_required_keywords=("factsheet", "fact sheet", "monthly factsheet"),
         portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
         factsheet_contains_holdings=True,
@@ -344,7 +347,7 @@ SOURCES: dict[str, AMCDocumentSource] = {
         confirmation_type=None,
         confirmation_notes=None,
         enabled=True,
-        runtime_enabled=False,
+        runtime_enabled=True,
         factsheet_required_keywords=("factsheet", "fact sheet"),
         portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
         factsheet_contains_holdings=True,
@@ -357,20 +360,21 @@ SOURCES: dict[str, AMCDocumentSource] = {
         adapter_key="invesco",
         factsheet_page_url=_env_url(
             "MF_INVESCO_FACTSHEET_PAGE_URL",
-            "https://www.invescomutualfund.com/literature-and-form",
+            "https://www.invescomutualfund.com/literature-forms/factsheets",
         ),
         portfolio_disclosure_page_url=_env_url(
             "MF_INVESCO_PORTFOLIO_PAGE_URL",
-            "https://www.invescomutualfund.com/literature-and-form",
+            "https://www.invescomutualfund.com/literature-forms/monthly-holdings",
         ),
         requires_confirmation=False,
         confirmation_type=None,
         confirmation_notes=None,
         enabled=True,
-        runtime_enabled=False,
+        runtime_enabled=True,
         factsheet_required_keywords=("factsheet", "fact sheet"),
-        portfolio_required_keywords=("portfolio", "monthly portfolio", "holdings", "disclosure"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "holding", "holdings", "disclosure"),
         factsheet_contains_holdings=True,
+        browser_recovery_allowed=True,
         allowed_host_suffixes=("invescomutualfund.com",),
     ),
     "hsbc": AMCDocumentSource(
@@ -389,7 +393,7 @@ SOURCES: dict[str, AMCDocumentSource] = {
         confirmation_type=None,
         confirmation_notes="HSBC Mutual Fund serves direct PDF downloads without inline HTML previews.",
         enabled=True,
-        runtime_enabled=False,
+        runtime_enabled=True,
         # HSBC names its monthly factsheet "The Asset as on - <Month> <Year>" (slug
         # `the-asset-<month>-<year>.pdf`), so neither the title nor the URL contains
         # "factsheet" -- without "the asset" here the real document is filtered out and

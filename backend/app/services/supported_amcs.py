@@ -16,6 +16,11 @@ ALL_MF_AMC_MARKERS: dict[str, tuple[str, ...]] = {
     "DSP": ("dsp",),
     "KOTAK": ("kotak",),
     "ABSL": ("aditya birla", "birla sun life", "absl"),
+    "TATA": ("tata",),
+    "BANDHAN": ("bandhan",),
+    "EDELWEISS": ("edelweiss",),
+    "INVESCO": ("invesco",),
+    "HSBC": ("hsbc",),
 }
 
 SUPPORTED_MF_AMC_MARKERS: dict[str, tuple[str, ...]] = {
@@ -39,6 +44,11 @@ SUPPORTED_AMC_DISPLAY_NAMES: dict[str, str] = {
     "DSP": "DSP",
     "KOTAK": "Kotak",
     "ABSL": "Aditya Birla Sun Life",
+    "TATA": "Tata",
+    "BANDHAN": "Bandhan",
+    "EDELWEISS": "Edelweiss",
+    "INVESCO": "Invesco",
+    "HSBC": "HSBC",
 }
 
 SUPPORTED_AMC_PIPELINE_COPY = ", ".join(
@@ -47,19 +57,14 @@ SUPPORTED_AMC_PIPELINE_COPY = ", ".join(
 
 UNSUPPORTED_MF_AMC_KEYWORDS = (
     "quant",
-    "tata",
     "canara",
     "groww",
     "zerodha",
-    "bandhan",
     "idfc",
     "franklin",
-    "edelweiss",
     "sundaram",
     "lic",
     "pgim",
-    "invesco",
-    "hsbc",
     "union",
     "baroda",
     "bnp",

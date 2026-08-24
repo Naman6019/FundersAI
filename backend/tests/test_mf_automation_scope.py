@@ -36,29 +36,27 @@ def test_no_amcs_remain_frozen_by_issue_2():
     assert FROZEN_ISSUE_2_AMCS == ()
 
 
-@pytest.mark.parametrize("amc", ["absl", "aditya_birla", "icici", "kotak", "hdfc", "axis", "motilal", "dsp", "nippon"])
-def test_formerly_restricted_amcs_graduated_to_green_lane(amc):
+@pytest.mark.parametrize("amc", ["absl", "aditya_birla", "icici", "kotak", "hdfc", "axis", "motilal", "dsp", "nippon", "uti", "tata", "bandhan", "edelweiss", "invesco", "hsbc"])
+def test_verified_amcs_are_in_the_green_lane(amc):
     """These AMCs' parser/mapping issues are resolved and their staging coverage passes
     cleanly, so they no longer need explicit source_document_ids for discovery/parsing.
-    Only uti still requires them, pending a human decision on stale source documents."""
+    UTI's current official Active/Passive factsheets and consolidated portfolio ZIP
+    were independently smoke-checked before it re-entered the scheduled lane."""
     resolved = resolve_automation_scope(operation="parser_retry", lane="green", raw_amcs=amc)
     assert resolved == (("aditya_birla",) if amc in ("absl", "aditya_birla") else (amc,))
 
 
-def test_uti_still_requires_exact_document_ids():
-    with pytest.raises(ValueError, match="source_document_ids_required"):
-        resolve_automation_scope(operation="parser_retry", lane="approved_restricted", raw_amcs="uti")
-
+def test_uti_no_longer_requires_manual_document_ids():
     assert resolve_automation_scope(
         operation="parser_retry",
-        lane="approved_restricted",
+        lane="green",
         raw_amcs="uti",
-        source_document_ids="doc-1",
     ) == ("uti",)
+    assert APPROVED_RESTRICTED_AMCS == ()
 
 
 def test_cross_lane_and_operation_requests_are_rejected():
     with pytest.raises(ValueError, match="amcs_not_in_green"):
-        resolve_automation_scope(operation="discovery", raw_amcs="uti")
+        resolve_automation_scope(operation="discovery", raw_amcs="quant")
     with pytest.raises(ValueError, match="lane_not_allowed_for_research_index"):
         resolve_automation_scope(operation="research_index", lane="validation_only", raw_amcs="axis")

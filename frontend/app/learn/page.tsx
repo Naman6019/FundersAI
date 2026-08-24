@@ -1,8 +1,12 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Learn | FundersAI Research',
   description: 'Educational resources and guides on Indian stock and mutual fund research. Learn how to compare mutual funds, read stock fundamentals, and understand risk metrics.',
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/learn',
+  },
 };
 
 const TOPICS = [

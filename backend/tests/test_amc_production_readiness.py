@@ -136,6 +136,19 @@ def test_expected_month_filter_prevents_stale_acquisition_fallback():
     assert selected == [current]
 
 
+def test_expected_month_filter_admits_only_explicit_content_verified_sources():
+    current = _document("https://example.test/current.pdf", None, 10)
+    stale = _document("https://example.test/may-2026.pdf", date(2026, 5, 1), 20)
+
+    selected = _filter_expected_month_documents(
+        [stale, current],
+        date(2026, 6, 1),
+        include_content_month_only=True,
+    )
+
+    assert selected == [current]
+
+
 def test_exact_month_duplicate_wins_before_cross_month_conflict(monkeypatch):
     downloaded = DownloadedDocument(
         amc_name="ICICI Prudential Mutual Fund",

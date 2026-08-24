@@ -835,6 +835,27 @@ Published in July 2026.
     assert _detect_dominant_factsheet_month(text) == date(2026, 6, 1)
 
 
+def test_dominant_factsheet_month_detects_data_and_total_net_asset_anchors():
+    text = """
+Bandhan Large Cap Fund
+Data as on July 31, 2026
+Bandhan Flexi Cap Fund
+Data as on July 31, 2026
+HSBC Value Fund
+Total Net Assets as on 31-July-2026
+Tata Aggressive Hybrid Fund
+Total Value as on Jul 31, 2026
+"""
+
+    assert _detect_dominant_factsheet_month(text) == date(2026, 7, 1)
+
+
+def test_dominant_factsheet_month_accepts_single_total_value_anchor():
+    assert _detect_dominant_factsheet_month(
+        "Tata Aggressive Hybrid Fund\nTotal Value as on Jul 31, 2026"
+    ) == date(2026, 7, 1)
+
+
 def test_dominant_factsheet_month_abstains_on_ambiguous_dates():
     text = """
 SBI Large Cap Fund

@@ -14,6 +14,9 @@ export const metadata: Metadata = {
     'Deterministic quantitative mutual fund engine',
     'AMC factsheet ingestion workflow',
   ],
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/how-it-works',
+  },
   openGraph: {
     title: 'How It Works & Architecture Flow | FundersAI',
     description:

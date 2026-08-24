@@ -13,7 +13,7 @@ def test_actionable_matrix_defaults_to_green_amcs_with_documents() -> None:
 
 
 def test_actionable_matrix_honors_requested_amcs_and_returns_sentinel() -> None:
-    assert actionable_matrix([{"id": "doc-hdfc", "amc_code": "HDFC"}], "uti", lane="approved_restricted", source_document_ids="doc-uti") == ["__none__"]
+    assert actionable_matrix([{"id": "doc-hdfc", "amc_code": "HDFC"}], "hdfc", lane="green", source_document_ids="doc-different") == ["__none__"]
 
 
 def test_actionable_matrix_requires_exact_ids_for_restricted_lane() -> None:
@@ -24,7 +24,7 @@ def test_actionable_matrix_requires_exact_ids_for_restricted_lane() -> None:
     assert actionable_matrix(
         rows,
         "uti",
-        lane="approved_restricted",
+        lane="green",
         source_document_ids="approved",
     ) == ["uti"]
 

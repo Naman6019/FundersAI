@@ -20,6 +20,11 @@ on:
           - dsp
           - kotak
           - aditya_birla
+          - tata
+          - bandhan
+          - edelweiss
+          - invesco
+          - hsbc
       scopes:
         description: Comma-separated scopes (risk,ter_aum,benchmark,manager,holdings,sectors)
         required: true

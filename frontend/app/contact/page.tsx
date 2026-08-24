@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   title: 'Contact | FundersAI',
   description:
     'Get in touch with FundersAI for support, feedback, data queries, responsible disclosure, or privacy requests.',
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/contact',
+  },
 };
 
 export default function ContactPage() {

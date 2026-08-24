@@ -1,13 +1,24 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ArticleJsonLd } from '@/components/seo/JsonLd';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Large Cap vs Flexi Cap Funds | FundersAI Learn',
   description: 'Comparison of market cap strategies in Indian mutual funds to help you build a diversified portfolio.',
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/learn/large-cap-vs-flexi-cap',
+  },
 };
 
 export default function MarketCapPage() {
   return (
-    <article className="prose prose-invert prose-slate max-w-none">
+    <>
+      <ArticleJsonLd
+        title="Large Cap vs Flexi Cap Funds"
+        description="Comparison of market cap strategies in Indian mutual funds to help you build a diversified portfolio."
+        slug="large-cap-vs-flexi-cap"
+      />
+      <article className="prose prose-invert prose-slate max-w-none">
       <div className="mb-8">
         <Link href="/learn" className="text-[#00FF9D] hover:underline text-sm font-medium">
           &larr; Back to Learning Hub
@@ -57,5 +68,6 @@ export default function MarketCapPage() {
         </div>
       </div>
     </article>
+    </>
   );
 }

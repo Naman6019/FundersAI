@@ -155,6 +155,8 @@ def build_staging_coverage(
             str(row["mapped_family_id"]) for row in mapped_holding_rows
         }
         holding_families = {str(row["mapped_family_id"]) for row in holding_rows}
+        core_family_ids = {str(row["mapped_family_id"]) for row in candidate_rows}
+        core_families_with_valid_holdings = core_family_ids & holding_families
         sector_families = {
             str(row["mapped_family_id"])
             for row in holding_rows
@@ -237,6 +239,17 @@ def build_staging_coverage(
             "sector_applicable_families": len(sector_applicable_families),
             "sector_not_applicable_families": len(sector_not_applicable_families),
             "mapping_percentages": mapping_percentages,
+            # Scope-specific promotion is intentional, but this makes a partial
+            # portfolio source visible instead of letting 24/24 holdings read as
+            # full AMC coverage when the factsheet batch has many more families.
+            "core_to_holdings_coverage": {
+                "core_families_with_valid_holdings": len(core_families_with_valid_holdings),
+                "core_families_missing_valid_holdings": len(core_family_ids - holding_families),
+                "core_with_valid_holdings_percentage": _ratio(
+                    len(core_families_with_valid_holdings),
+                    len(core_family_ids),
+                ),
+            },
             "counts": counts,
             "percentages": percentages,
             "passes_all_fields": bool(core_total and portfolio_total)

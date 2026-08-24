@@ -9,27 +9,20 @@ AutomationOperation = Literal["discovery", "parser_retry", "disclosure_parse", "
 
 GREEN_AMCS = (
     "ppfas", "sbi", "mirae", "hdfc", "axis", "nippon", "motilal", "dsp", "aditya_birla",
-    "icici", "kotak",
+    "icici", "kotak", "uti", "tata", "bandhan", "edelweiss", "invesco", "hsbc",
 )
-# uti is the only AMC still held back from unattended discovery/parsing: its June
-# promotion is on hold pending a human decision on stale source documents (not a code
-# bug), so it must keep requiring explicit source_document_ids rather than running
-# automatically. nippon, and then hdfc/axis/motilal/dsp/aditya_birla/icici/kotak (whose
-# parser/mapping issues, including the GitHub issue #2 family-merge bug, are fixed),
-# graduated to GREEN_AMCS once their staging coverage passed cleanly. Note this only
-# widens unattended discovery/parsing/research-indexing into staging tables -- runtime
-# promotion always stays a manual workflow_dispatch run with a typed approval phrase,
-# regardless of lane, so icici's excluded risk scope (10 families need a manual
-# riskometer-vs-PDF check) and kotak's excluded holdings/sectors scope (ISIN coverage
-# shortfall) still can't reach production data unreviewed.
-APPROVED_RESTRICTED_AMCS = ("uti",)
-# Next-by-AUM batch (2026-08-11): registered in SOURCES so reporting/promotion tooling
-# can target them, but never scheduled and never runnable without explicit
-# source_document_ids until a live discovery run against their real URLs is reviewed and
-# their generic-adapter holdings parsing is checked against real documents. Graduate to
-# GREEN_AMCS the same way hdfc/axis/motilal/dsp/aditya_birla/icici/kotak did: only after
-# staging coverage passes cleanly.
-VALIDATION_ONLY_AMCS = ("tata", "bandhan", "edelweiss", "invesco", "hsbc")
+# UTI's official API now exposes current English Active/Passive Fund Watch PDFs and
+# the matching consolidated portfolio ZIP. August 2026 factsheets and the July 2026
+# portfolio were smoke-checked against their July body month before this graduation.
+# As with every green AMC, unattended jobs only write staging tables. Runtime promotion
+# remains a manual workflow_dispatch with a typed approval phrase, so incomplete or
+# conflicting scopes cannot reach production data unreviewed.
+APPROVED_RESTRICTED_AMCS: tuple[str, ...] = ()
+# No AMCs remain in the validation-only lane. Tata, Bandhan, Edelweiss, Invesco, and
+# HSBC were promoted to unattended staging after live official-document discovery and
+# parser smoke checks on 2026-08-24. Staging still cannot update runtime tables without
+# the explicit promotion workflow and its typed approval phrase.
+VALIDATION_ONLY_AMCS: tuple[str, ...] = ()
 FROZEN_ISSUE_2_AMCS = ()
 
 LANE_AMCS: dict[str, tuple[str, ...]] = {

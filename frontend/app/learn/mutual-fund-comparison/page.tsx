@@ -1,13 +1,24 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ArticleJsonLd } from '@/components/seo/JsonLd';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Mutual Fund Comparison Guide | FundersAI Learn',
   description: 'How to compare mutual funds, evaluate expense ratios, and analyze historical performance.',
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/learn/mutual-fund-comparison',
+  },
 };
 
 export default function MutualFundComparisonPage() {
   return (
-    <article className="prose prose-invert prose-slate max-w-none">
+    <>
+      <ArticleJsonLd
+        title="Mutual Fund Comparison Guide"
+        description="How to compare mutual funds, evaluate expense ratios, and analyze historical performance."
+        slug="mutual-fund-comparison"
+      />
+      <article className="prose prose-invert prose-slate max-w-none">
       <div className="mb-8">
         <Link href="/learn" className="text-[#00FF9D] hover:underline text-sm font-medium">
           &larr; Back to Learning Hub
@@ -71,5 +82,6 @@ export default function MutualFundComparisonPage() {
         </div>
       </div>
     </article>
+    </>
   );
 }

@@ -22,9 +22,6 @@ export const metadata: Metadata = {
     'Financial Research AI'
   ],
   authors: [{ name: 'FundersAI Team' }],
-  alternates: {
-    canonical: '/',
-  },
   openGraph: {
     title: 'FundersAI | Indian Market Research Workspace',
     description: 'Compare Indian stocks and mutual funds with deterministic metrics, official-source evidence, freshness signals, and visible data limits.',

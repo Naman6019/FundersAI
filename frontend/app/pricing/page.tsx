@@ -14,6 +14,9 @@ export const metadata: Metadata = {
     'Synthesis studio subscription plans',
     'FundersAI Pro Ultra tier',
   ],
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/pricing',
+  },
   openGraph: {
     title: 'Pricing & Subscription Plans | FundersAI',
     description:

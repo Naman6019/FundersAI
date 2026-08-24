@@ -7,6 +7,7 @@ import {
   getCategoryBySlug,
   getFundsByCategory,
 } from '@/lib/fund-registry';
+import { CategoryJsonLd } from '@/components/seo/JsonLd';
 
 type Props = { params: Promise<{ categorySlug: string }> };
 
@@ -18,9 +19,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { categorySlug: slug } = await params;
   const category = getCategoryBySlug(slug);
   if (!category) return { title: 'Category Not Found | FundersAI' };
+  const canonicalUrl = `https://www.fundersai.co.in/mutual-funds/category/${slug}`;
   return {
     title: `${category} Mutual Funds | FundersAI`,
     description: `Research ${category} mutual funds available in India. Deterministic metrics from official sources — NAV history, CAGR, Sharpe ratio, expense ratio, and portfolio holdings.`,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: `${category} Mutual Funds | FundersAI`,
+      description: `Explore ${category} mutual funds with verified NAV and risk-adjusted metrics.`,
+      url: canonicalUrl,
+    },
   };
 }
 
@@ -33,7 +43,9 @@ export default async function CategoryPage({ params }: Props) {
   const otherCategories = CATEGORY_LIST.filter((cat) => cat !== category);
 
   return (
-    <main className="min-h-dvh bg-[#070b12] text-[#dce8fa]">
+    <>
+      <CategoryJsonLd category={category} categorySlug={slug} fundCount={funds.length} />
+      <main className="min-h-dvh bg-[#070b12] text-[#dce8fa]">
       {/* Header */}
       <div className="border-b border-white/10 bg-[#070b12]/90 backdrop-blur-md sticky top-0 z-30">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 sm:px-8">
@@ -132,5 +144,6 @@ export default async function CategoryPage({ params }: Props) {
         </div>
       </div>
     </main>
+    </>
   );
 }

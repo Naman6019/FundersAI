@@ -25,10 +25,10 @@ pdfplumber
 PyMuPDF
 rapidfuzz
 pytest
+pytest-cov
 razorpay
 playwright
 langfuse==4.14.0
 langgraph==1.2.9
 langchain-openai
 langchain-core
-

@@ -107,11 +107,32 @@ export const AMC_REGISTRY: AmcEntry[] = [
       'Backed by Axis Bank. Large-cap and flexi-cap strategies with growing AUM.',
   },
   {
+    slug: 'quant',
+    name: 'Quant Mutual Fund',
+    shortName: 'Quant',
+    description:
+      'Known for its quantitative VLRT dynamic investment framework and high momentum alpha strategies.',
+  },
+  {
+    slug: 'bandhan',
+    name: 'Bandhan Mutual Fund',
+    shortName: 'Bandhan',
+    description:
+      'Formerly IDFC Mutual Fund. Managed with strong research frameworks across small-cap and debt funds.',
+  },
+  {
     slug: 'motilal-oswal',
     name: 'Motilal Oswal Mutual Fund',
     shortName: 'Motilal Oswal',
     description:
       'Known for focused, buy-right-sit-tight equity strategy and growing index fund business.',
+  },
+  {
+    slug: 'tata',
+    name: 'Tata Mutual Fund',
+    shortName: 'Tata',
+    description:
+      'Part of the storied Tata Group. Known for disciplined thematic, sectoral, and diversified equity funds.',
   },
 ];
 
@@ -152,6 +173,17 @@ export const FUND_REGISTRY: FundEntry[] = [
     plan: 'Direct',
     option: 'Growth',
     benchmark: 'Nifty Smallcap 250 TRI',
+  },
+  {
+    schemeCode: 119533,
+    schemeName: 'HDFC Top 100 Fund',
+    amcSlug: 'hdfc',
+    amcName: 'HDFC Mutual Fund',
+    fundSlug: 'hdfc-top-100-fund',
+    category: 'Large Cap',
+    plan: 'Direct',
+    option: 'Growth',
+    benchmark: 'Nifty 100 TRI',
   },
   // PPFAS
   {
@@ -199,6 +231,17 @@ export const FUND_REGISTRY: FundEntry[] = [
     option: 'Growth',
     benchmark: 'Nifty 100 TRI',
   },
+  {
+    schemeCode: 147493,
+    schemeName: 'Mirae Asset Midcap Fund',
+    amcSlug: 'mirae-asset',
+    amcName: 'Mirae Asset Mutual Fund',
+    fundSlug: 'mirae-asset-midcap-fund',
+    category: 'Mid Cap',
+    plan: 'Direct',
+    option: 'Growth',
+    benchmark: 'Nifty Midcap 150 TRI',
+  },
   // SBI
   {
     schemeCode: 125497,
@@ -221,6 +264,17 @@ export const FUND_REGISTRY: FundEntry[] = [
     plan: 'Direct',
     option: 'Growth',
     benchmark: 'Nifty 100 TRI',
+  },
+  {
+    schemeCode: 119213,
+    schemeName: 'SBI Contra Fund',
+    amcSlug: 'sbi',
+    amcName: 'SBI Mutual Fund',
+    fundSlug: 'sbi-contra-fund',
+    category: 'Flexi Cap',
+    plan: 'Direct',
+    option: 'Growth',
+    benchmark: 'BSE 500 TRI',
   },
   // ICICI Prudential
   {
@@ -245,6 +299,17 @@ export const FUND_REGISTRY: FundEntry[] = [
     option: 'Growth',
     benchmark: 'Nifty IT TRI',
   },
+  {
+    schemeCode: 120588,
+    schemeName: 'ICICI Prudential Value Discovery Fund',
+    amcSlug: 'icici-prudential',
+    amcName: 'ICICI Prudential Mutual Fund',
+    fundSlug: 'icici-prudential-value-discovery-fund',
+    category: 'Flexi Cap',
+    plan: 'Direct',
+    option: 'Growth',
+    benchmark: 'Nifty 500 TRI',
+  },
   // Nippon
   {
     schemeCode: 118825,
@@ -256,6 +321,40 @@ export const FUND_REGISTRY: FundEntry[] = [
     plan: 'Direct',
     option: 'Growth',
     benchmark: 'Nifty Smallcap 250 TRI',
+  },
+  {
+    schemeCode: 118834,
+    schemeName: 'Nippon India Growth Fund',
+    amcSlug: 'nippon',
+    amcName: 'Nippon India Mutual Fund',
+    fundSlug: 'nippon-india-growth-fund',
+    category: 'Mid Cap',
+    plan: 'Direct',
+    option: 'Growth',
+    benchmark: 'Nifty Midcap 150 TRI',
+  },
+  // Quant
+  {
+    schemeCode: 120847,
+    schemeName: 'Quant Small Cap Fund',
+    amcSlug: 'quant',
+    amcName: 'Quant Mutual Fund',
+    fundSlug: 'quant-small-cap-fund',
+    category: 'Small Cap',
+    plan: 'Direct',
+    option: 'Growth',
+    benchmark: 'Nifty Smallcap 250 TRI',
+  },
+  {
+    schemeCode: 120828,
+    schemeName: 'Quant Active Fund',
+    amcSlug: 'quant',
+    amcName: 'Quant Mutual Fund',
+    fundSlug: 'quant-active-fund',
+    category: 'Flexi Cap',
+    plan: 'Direct',
+    option: 'Growth',
+    benchmark: 'Nifty 500 TRI',
   },
   // Kotak
   {
@@ -269,9 +368,20 @@ export const FUND_REGISTRY: FundEntry[] = [
     option: 'Growth',
     benchmark: 'BSE 500 TRI',
   },
+  {
+    schemeCode: 120152,
+    schemeName: 'Kotak Emerging Equity Fund',
+    amcSlug: 'kotak',
+    amcName: 'Kotak Mahindra Mutual Fund',
+    fundSlug: 'kotak-emerging-equity-fund',
+    category: 'Mid Cap',
+    plan: 'Direct',
+    option: 'Growth',
+    benchmark: 'Nifty Midcap 150 TRI',
+  },
   // Axis
   {
-    schemeCode: 120503,
+    schemeCode: 141870,
     schemeName: 'Axis Flexi Cap Fund',
     amcSlug: 'axis',
     amcName: 'Axis Mutual Fund',
@@ -280,6 +390,17 @@ export const FUND_REGISTRY: FundEntry[] = [
     plan: 'Direct',
     option: 'Growth',
     benchmark: 'BSE 500 TRI',
+  },
+  {
+    schemeCode: 120465,
+    schemeName: 'Axis Small Cap Fund',
+    amcSlug: 'axis',
+    amcName: 'Axis Mutual Fund',
+    fundSlug: 'axis-small-cap-fund',
+    category: 'Small Cap',
+    plan: 'Direct',
+    option: 'Growth',
+    benchmark: 'Nifty Smallcap 250 TRI',
   },
   // UTI
   {
@@ -304,6 +425,30 @@ export const FUND_REGISTRY: FundEntry[] = [
     plan: 'Direct',
     option: 'Growth',
     benchmark: 'Nifty Midcap 150 TRI',
+  },
+  // Bandhan
+  {
+    schemeCode: 147890,
+    schemeName: 'Bandhan Small Cap Fund',
+    amcSlug: 'bandhan',
+    amcName: 'Bandhan Mutual Fund',
+    fundSlug: 'bandhan-small-cap-fund',
+    category: 'Small Cap',
+    plan: 'Direct',
+    option: 'Growth',
+    benchmark: 'Nifty Smallcap 250 TRI',
+  },
+  // Tata
+  {
+    schemeCode: 135781,
+    schemeName: 'Tata Digital India Fund',
+    amcSlug: 'tata',
+    amcName: 'Tata Mutual Fund',
+    fundSlug: 'tata-digital-india-fund',
+    category: 'Sectoral/Thematic',
+    plan: 'Direct',
+    option: 'Growth',
+    benchmark: 'Nifty IT TRI',
   },
   // Aditya Birla
   {

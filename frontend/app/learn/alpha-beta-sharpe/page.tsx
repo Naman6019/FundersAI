@@ -1,13 +1,24 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ArticleJsonLd } from '@/components/seo/JsonLd';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Understanding Alpha, Beta, and Sharpe Ratio | FundersAI Learn',
   description: 'A guide to risk metrics for mutual funds and what they mean for your portfolio.',
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/learn/alpha-beta-sharpe',
+  },
 };
 
 export default function RiskMetricsPage() {
   return (
-    <article className="prose prose-invert prose-slate max-w-none">
+    <>
+      <ArticleJsonLd
+        title="Understanding Alpha, Beta, and Sharpe Ratio"
+        description="A guide to risk metrics for mutual funds and what they mean for your portfolio."
+        slug="alpha-beta-sharpe"
+      />
+      <article className="prose prose-invert prose-slate max-w-none">
       <div className="mb-8">
         <Link href="/learn" className="text-[#00FF9D] hover:underline text-sm font-medium">
           &larr; Back to Learning Hub
@@ -61,5 +72,6 @@ export default function RiskMetricsPage() {
         </div>
       </div>
     </article>
+    </>
   );
 }

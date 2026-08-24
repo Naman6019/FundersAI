@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   title: 'Privacy Policy | FundersAI',
   description:
     'How FundersAI collects, uses, and protects your data. Covers third-party service providers, data retention, prompt handling, account deletion, cookies, and privacy request contacts.',
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/privacy',
+  },
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

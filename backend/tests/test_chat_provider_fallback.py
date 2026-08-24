@@ -97,6 +97,39 @@ def test_openrouter_key_is_trimmed_before_authorization(monkeypatch):
     assert authorization_headers == ["Bearer openrouter-test-key"]
 
 
+def test_llm_returns_none_when_all_configured_providers_fail(monkeypatch):
+    from app.services import chat_service as service
+
+    calls: list[str] = []
+
+    class _FailingClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, url, **_kwargs):
+            calls.append(url)
+            raise RuntimeError("provider unavailable")
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "openrouter-test-key")
+    monkeypatch.setenv("GROQ_API_KEY", "groq-test-key")
+    monkeypatch.setattr(service.httpx, "AsyncClient", lambda **_kwargs: _FailingClient())
+
+    assert asyncio.run(
+        service.function_ollama_chat(
+            [{"role": "user", "content": "Explain expense ratios."}],
+            format="text",
+            max_retries=1,
+        )
+    ) is None
+    assert calls == [
+        service.OPENROUTER_BASE_URL,
+        "https://api.groq.com/openai/v1/chat/completions",
+    ]
+
+
 def test_general_expense_ratio_uses_useful_deterministic_fallback(monkeypatch):
     from app.services import chat_service as service
 

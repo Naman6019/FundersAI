@@ -494,21 +494,30 @@ def _preprocess_factsheet_text(text: str) -> str:
 def detect_dominant_factsheet_month(text: str) -> date | None:
     anchors = re.compile(
         r"(?i)\b(?:fund\s+details|details|closing\s+aum|month\s+end\s+aum|"
-        r"fund\s+aum(?:\s*/\s*folio)?|aum)"
+        r"fund\s+aum(?:\s*/\s*folio)?|aum|data|total\s+net\s+assets|total\s+value)"
         r"\s+as\s+on\s+([^\n:]{4,36})"
     )
     counts: dict[date, int] = {}
+    strong_counts: dict[date, int] = {}
     for match in anchors.finditer(text or ""):
         parsed = _month_from_date_text(match.group(1))
         if parsed:
             counts[parsed] = counts.get(parsed, 0) + 1
+            if re.match(r"(?i)\s*(?:total\s+value|total\s+net\s+assets)", match.group(0)):
+                strong_counts[parsed] = strong_counts.get(parsed, 0) + 1
     if not counts:
         return None
     dominant, count = max(counts.items(), key=lambda item: (item[1], item[0]))
     total = sum(counts.values())
-    if count < 3 or count / total < 0.7:
-        return None
-    return dominant
+    if count >= 3 and count / total >= 0.7:
+        return dominant
+    if strong_counts:
+        strong_dominant, strong_count = max(
+            strong_counts.items(), key=lambda item: (item[1], item[0])
+        )
+        if strong_count / sum(strong_counts.values()) >= 0.7:
+            return strong_dominant
+    return None
 
 
 _detect_dominant_factsheet_month = detect_dominant_factsheet_month

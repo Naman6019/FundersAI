@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getFundBySlug, COMPARE_PAIRS } from '@/lib/fund-registry';
+import { CompareJsonLd } from '@/components/seo/JsonLd';
 
 type Props = { params: Promise<{ pair: string }> };
 
@@ -16,9 +17,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const fundA = getFundBySlug(entry.amcSlugA, entry.fundSlugA);
   const fundB = getFundBySlug(entry.amcSlugB, entry.fundSlugB);
   if (!fundA || !fundB) return { title: 'Comparison Not Found | FundersAI' };
+  const canonicalUrl = `https://www.fundersai.co.in/compare/${pair}`;
   return {
     title: `${fundA.schemeName} vs ${fundB.schemeName} | FundersAI`,
     description: `Compare ${fundA.schemeName} and ${fundB.schemeName} — 1Y/3Y/5Y CAGR, Sharpe ratio, max drawdown, expense ratio, AUM, and portfolio overlap. Deterministic metrics from official AMC sources.`,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: `${fundA.schemeName} vs ${fundB.schemeName} | FundersAI`,
+      description: `Head-to-head comparison of ${fundA.schemeName} and ${fundB.schemeName} with deterministic metrics.`,
+      url: canonicalUrl,
+    },
   };
 }
 
@@ -59,7 +69,9 @@ export default async function ComparePage({ params }: Props) {
   const snapshot = STATIC_SNAPSHOTS[pair];
 
   return (
-    <main className="min-h-dvh bg-[#070b12] text-[#dce8fa]">
+    <>
+      <CompareJsonLd fundA={fundA} fundB={fundB} pair={pair} />
+      <main className="min-h-dvh bg-[#070b12] text-[#dce8fa]">
       {/* Header */}
       <div className="border-b border-white/10 bg-[#070b12]/90 backdrop-blur-md sticky top-0 z-30">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 sm:px-8">
@@ -223,5 +235,6 @@ export default async function ComparePage({ params }: Props) {
         </div>
       </div>
     </main>
+    </>
   );
 }

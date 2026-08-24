@@ -10,7 +10,7 @@ from html import unescape
 from datetime import UTC, date, datetime
 from calendar import monthrange
 from pathlib import Path
-from urllib.parse import quote, unquote, urljoin, urlsplit, urlunsplit
+from urllib.parse import parse_qs, quote, unquote, urljoin, urlsplit, urlunsplit
 
 import requests
 from bs4 import BeautifulSoup
@@ -75,6 +75,9 @@ ABSL_INDIVIDUAL_CUSTOMER_TYPE = (
 MONTH_PATTERN = re.compile(
     r"(?P<month>jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:[\s\-_]+(?P<day>\d{1,2}))?[\s\-_\,]+(?P<year>20\d{2})",
     re.IGNORECASE,
+)
+NUMERIC_DATE_PATTERN = re.compile(
+    r"\b(?P<day>\d{1,2})[/-](?P<month>\d{1,2})[/-](?P<year>20\d{2})\b"
 )
 DAY_FIRST_MONTH_PATTERN = re.compile(
     r"\b\d{1,2}(?:st|nd|rd|th)?[\s\-_]+(?P<month>jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\-_\,]+(?P<year>20\d{2})",
@@ -183,6 +186,36 @@ class AMCDownloader(BaseDownloader):
                 len(docs),
             )
             return docs
+        if adapter_key == "tata":
+            docs = _discover_tata_documents(
+                self.source,
+                document_type=document_type,
+                timeout_seconds=self.timeout_seconds,
+                user_agent=self.user_agent,
+            )
+            logger.info(
+                "event=amc_discovery_complete amc_code=%s adapter=%s document_type=%s count=%s",
+                self.source.amc_code,
+                adapter_key,
+                document_type,
+                len(docs),
+            )
+            return docs
+        if adapter_key == "bandhan":
+            docs = _discover_bandhan_documents(
+                self.source,
+                document_type=document_type,
+                timeout_seconds=self.timeout_seconds,
+                user_agent=self.user_agent,
+            )
+            logger.info(
+                "event=amc_discovery_complete amc_code=%s adapter=%s document_type=%s count=%s",
+                self.source.amc_code,
+                adapter_key,
+                document_type,
+                len(docs),
+            )
+            return docs
         if adapter_key == "dsp":
             if (document_type or "").strip().lower() == "factsheet":
                 docs = _discover_dsp_factsheet_documents(
@@ -228,8 +261,6 @@ class AMCDownloader(BaseDownloader):
             "sbi",
             "edelweiss",
             "invesco",
-            "tata",
-            "bandhan",
             "hsbc",
         }:
             if adapter_key == "invesco":
@@ -795,6 +826,241 @@ def _browser_fallback_allowed_for_source(source: AMCDocumentSource) -> bool:
         if item.strip()
     }
     return source.adapter_key.strip().lower() in approved
+
+
+def _discover_tata_documents(
+    source: AMCDocumentSource,
+    document_type: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    """Read Tata's server-rendered document cards instead of relying on anchors.
+
+    Tata exposes the monthly portfolio files in the public Next.js response as escaped
+    ``field_document_title``/``field_media_document`` pairs. They are not HTML anchor
+    tags, so generic anchor discovery never sees the official July workbook.
+    """
+    doc_type = (document_type or "").strip().lower()
+    if doc_type == "factsheet":
+        return _discover_tata_factsheet_documents(
+            source,
+            timeout_seconds=timeout_seconds,
+            user_agent=user_agent,
+        )
+    listing_url = (
+        source.factsheet_page_url
+        if doc_type == "factsheet"
+        else source.portfolio_disclosure_page_url
+    )
+    if not listing_url:
+        return []
+    try:
+        response = _request_with_retry(
+            "GET",
+            listing_url,
+            timeout_seconds=timeout_seconds,
+            headers={"User-Agent": user_agent, "Referer": _base_site_url(listing_url)},
+        )
+    except Exception as exc:
+        logger.warning("tata:listing_request_failed document_type=%s error=%s", doc_type, exc)
+        return []
+
+    required_keywords = _required_keywords_for_generic_source(source, doc_type)
+    allowed_extensions = (
+        source.factsheet_extensions
+        if doc_type == "factsheet"
+        else source.portfolio_extensions
+    )
+    documents: list[DiscoveredDocument] = []
+    seen_urls: set[str] = set()
+    # The JSON is embedded as an escaped Next.js flight payload, not anchor tags.
+    listing_text = (response.text or "").replace(chr(92) + '"', '"')
+    pattern = re.compile(
+        r'field_document_title":"(?P<title>.*?)".*?'
+        r'field_media_document":"(?P<url>https:[^"]+)',
+        re.DOTALL,
+    )
+    for match in pattern.finditer(listing_text):
+        title = _decode_tata_listing_value(match.group("title"))
+        url = _decode_tata_listing_value(match.group("url"))
+        if not title or not url or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        combined = f"{title} {url}"
+        ext = Path(urlsplit(url).path).suffix.lower() or _infer_file_ext_from_text(combined)
+        if ext not in allowed_extensions or not _generic_candidate_allowed(
+            source, combined, doc_type, ext, required_keywords
+        ):
+            continue
+        report_month = _detect_report_month_from_text(combined)
+        recency_score = (report_month.year * 12 + report_month.month) * 10 if report_month else 0
+        documents.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type=doc_type,
+                title=title,
+                url=url,
+                discovery_page_url=response.url or listing_url,
+                file_ext=ext,
+                report_month=report_month,
+                priority_score=_generic_base_score(ext=ext, document_type=doc_type) + recency_score,
+            )
+        )
+    documents.sort(key=lambda item: item.priority_score, reverse=True)
+    return documents
+
+
+def _decode_tata_listing_value(value: str) -> str:
+    return unescape(str(value or "").replace("\\/", "/").replace("\\u0026", "&")).strip()
+
+
+def _discover_tata_factsheet_documents(
+    source: AMCDocumentSource,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    """Discover the per-scheme PDFs on Tata's public scheme-factsheet page."""
+    listing_url = source.factsheet_page_url
+    if not listing_url:
+        return []
+    try:
+        response = _request_with_retry(
+            "GET",
+            listing_url,
+            timeout_seconds=timeout_seconds,
+            headers={"User-Agent": user_agent, "Referer": _base_site_url(listing_url)},
+        )
+    except Exception as exc:
+        logger.warning("tata:factsheet_listing_request_failed error=%s", exc)
+        return []
+
+    documents: list[DiscoveredDocument] = []
+    seen_urls: set[str] = set()
+    for anchor in BeautifulSoup(response.text or "", "html.parser").find_all("a"):
+        href = str(anchor.get("href") or "").strip()
+        url = urljoin(response.url or listing_url, href)
+        if not href or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        ext = Path(urlsplit(url).path).suffix.lower()
+        if ext != ".pdf":
+            continue
+        title = _clean_discovery_text(anchor.get("aria-label") or anchor.get_text(" ", strip=True))
+        if not title:
+            title = _human_title_from_url(url)
+        combined = f"Scheme Factsheet {title} {url}"
+        if "tata" not in combined.lower() or not _generic_candidate_allowed(
+            source,
+            combined,
+            "factsheet",
+            ext,
+            _required_keywords_for_generic_source(source, "factsheet"),
+        ):
+            continue
+        documents.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type="factsheet",
+                title=title,
+                url=url,
+                discovery_page_url=response.url or listing_url,
+                file_ext=ext,
+                report_month=None,
+                priority_score=_generic_base_score(ext=ext, document_type="factsheet"),
+            )
+        )
+    return documents
+
+
+def _discover_bandhan_documents(
+    source: AMCDocumentSource,
+    document_type: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    """Use Bandhan's ordinary public download control, never its encrypted CMS API."""
+    if not _browser_fallback_allowed_for_source(source):
+        return _discover_generic_anchor_documents(
+            source,
+            document_type=document_type,
+            timeout_seconds=timeout_seconds,
+            user_agent=user_agent,
+        )
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        logger.error("bandhan:playwright_not_installed")
+        return []
+
+    doc_type = (document_type or "").strip().lower()
+    listing_url = (
+        source.factsheet_page_url
+        if doc_type == "factsheet"
+        else source.portfolio_disclosure_page_url
+    )
+    if not listing_url:
+        return []
+    timeout_ms = max(5_000, min(int(timeout_seconds * 1_000), 90_000))
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            context = browser.new_context(user_agent=user_agent, accept_downloads=True)
+            page = context.new_page()
+            page.goto(listing_url, wait_until="networkidle", timeout=timeout_ms)
+            download_button = page.locator('button:has(svg[viewBox="0 0 16 20"])').last
+            if not download_button.count():
+                browser.close()
+                return []
+            with page.expect_download(timeout=timeout_ms) as event:
+                download_button.click(timeout=timeout_ms)
+            download = event.value
+            url = str(download.url or "").strip()
+            title = str(download.suggested_filename or "").strip() or _human_title_from_url(url)
+            browser.close()
+    except Exception as exc:
+        logger.warning("bandhan:browser_discovery_failed document_type=%s error=%s", doc_type, exc)
+        return []
+
+    combined = f"{unquote(url)} {title}"
+    ext = Path(urlsplit(url).path).suffix.lower() or _infer_file_ext_from_text(combined)
+    required_keywords = _required_keywords_for_generic_source(source, doc_type)
+    if not url or not _generic_candidate_allowed(source, combined, doc_type, ext, required_keywords):
+        return []
+    report_month = _bandhan_report_month_from_download(url) or _detect_report_month_from_text(combined)
+    recency_score = (report_month.year * 12 + report_month.month) * 10 if report_month else 0
+    return [
+        DiscoveredDocument(
+            amc_name=source.amc_name,
+            amc_code=source.amc_code,
+            document_type=doc_type,
+            title=title,
+            url=url,
+            discovery_page_url=listing_url,
+            file_ext=ext,
+            report_month=report_month,
+            priority_score=_generic_base_score(ext=ext, document_type=doc_type) + recency_score,
+        )
+    ]
+
+
+def _bandhan_report_month_from_download(download_url: str) -> date | None:
+    """Prefer Bandhan's official source filename over its publication-month folder.
+
+    The public download endpoint wraps the original filename in a ``filepath`` query
+    parameter. Its storage path can say ``2026/08`` while the actual factsheet is
+    ``...july-2026.pdf``. The filename is the disclosure period; the storage folder is
+    only the publication date.
+    """
+    query = parse_qs(urlsplit(str(download_url or "")).query)
+    source_paths = [*query.get("filepath", ()), str(download_url or "")]
+    for source_path in source_paths:
+        file_name = Path(urlsplit(unquote(source_path)).path).name
+        report_month = _detect_report_month_from_text(file_name)
+        if report_month:
+            return report_month
+    return None
 
 
 def _discover_kotak_browser_documents(
@@ -1729,9 +1995,19 @@ def _discover_uti_documents(
             continue
         seen_urls.add(raw_url)
         ext = Path(urlsplit(raw_url).path).suffix.lower()
+        low = f"{title} {row.get('category', '')} {raw_url}".lower()
         if doc_type == "factsheet" and ext != ".pdf":
             continue
         if doc_type == "portfolio_disclosure" and ext not in {".xls", ".xlsx", ".xlsm", ".csv", ".zip"}:
+            continue
+        # The UTI portfolio endpoint also lists riskometer and distribution ZIPs.
+        # Only its named portfolio disclosure is valid holdings input.
+        if doc_type == "portfolio_disclosure" and "portfolio" not in low:
+            continue
+        # UTI publishes translated Fund Watch files beside the English pair. The
+        # parser and operational-candidate gate intentionally use English Active
+        # and Passive factsheets only, so do not let Hindi PDFs enter the queue.
+        if doc_type == "factsheet" and "hindi" in low:
             continue
         report_month = _detect_report_month_from_text(
             f"{title} {row.get('month', '')} {row.get('year', '')} {raw_url}"
@@ -1740,8 +2016,6 @@ def _discover_uti_documents(
             # UTI's Fund Watch publication month trails the contained data month.
             report_month = _previous_month(report_month)
         recency_score = (report_month.year * 12 + report_month.month) * 10 if report_month else 0
-        low = f"{title} {raw_url}".lower()
-        language_penalty = -30 if "hindi" in low else 0
         active_boost = 10 if "active" in low else 0
         docs.append(
             DiscoveredDocument(
@@ -1757,7 +2031,6 @@ def _discover_uti_documents(
                     _generic_base_score(ext=ext, document_type=doc_type)
                     + recency_score
                     + active_boost
-                    + language_penalty
                 ),
             )
         )
@@ -2233,6 +2506,13 @@ def _generic_base_score(ext: str, document_type: str) -> int:
 def _detect_report_month_from_text(text: str) -> date | None:
     today = datetime.now(UTC).date()
     limit_date = date(today.year, today.month, 1)
+    for match in NUMERIC_DATE_PATTERN.finditer(text or ""):
+        try:
+            parsed_dt = date(int(match.group("year")), int(match.group("month")), 1)
+        except ValueError:
+            continue
+        if 2000 <= parsed_dt.year and parsed_dt <= limit_date:
+            return parsed_dt
     # Try day-first matches first
     for match in DAY_FIRST_MONTH_PATTERN.finditer(text or ""):
         month = datetime.strptime(match.group("month")[:3], "%b").month
@@ -2441,12 +2721,100 @@ def _discover_invesco_documents(
     precisely to stop that. Discovery stays live-only; a known-exact official URL for a
     specific month belongs in the reviewed source manifest instead.
     """
-    return _discover_generic_anchor_documents(
+    documents = _discover_generic_anchor_documents(
         source,
         document_type=document_type,
         timeout_seconds=timeout_seconds,
         user_agent=user_agent,
     )
+    if documents or not _browser_fallback_allowed_for_source(source):
+        return documents
+    return _discover_invesco_browser_documents(
+        source,
+        document_type=document_type,
+        timeout_seconds=timeout_seconds,
+        user_agent=user_agent,
+    )
+
+
+def _discover_invesco_browser_documents(
+    source: AMCDocumentSource,
+    document_type: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    """Read document links rendered by Invesco's public literature page."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        logger.error("invesco:playwright_not_installed")
+        return []
+
+    doc_type = (document_type or "").strip().lower()
+    listing_url = (
+        source.factsheet_page_url
+        if doc_type == "factsheet"
+        else source.portfolio_disclosure_page_url
+    )
+    if not listing_url:
+        return []
+    timeout_ms = max(5_000, min(int(timeout_seconds * 1_000), 90_000))
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            context = browser.new_context(user_agent=user_agent)
+            page = context.new_page()
+            page.goto(listing_url, wait_until="networkidle", timeout=timeout_ms)
+            candidates = page.locator("a[href]").evaluate_all(
+                """anchors => anchors.slice(0, 500).map(anchor => ({
+                    title: (anchor.textContent || "").trim(),
+                    href: anchor.href || "",
+                    context: (anchor.closest("li, article, section, div")?.textContent || "").trim().slice(0, 800)
+                }))"""
+            )
+            browser.close()
+    except Exception as exc:
+        logger.warning("invesco:browser_discovery_failed document_type=%s error=%s", doc_type, exc)
+        return []
+
+    required_keywords = _required_keywords_for_generic_source(source, doc_type)
+    allowed_extensions = (
+        source.factsheet_extensions
+        if doc_type == "factsheet"
+        else source.portfolio_extensions
+    )
+    documents: list[DiscoveredDocument] = []
+    seen_urls: set[str] = set()
+    for candidate in candidates:
+        url = str(candidate.get("href") or "").strip()
+        if not url or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        title = _clean_discovery_text(candidate.get("title") or "") or _human_title_from_url(url)
+        context_text = _clean_discovery_text(candidate.get("context") or "")
+        combined = f"{title} {context_text} {url}"
+        ext = Path(urlsplit(url).path).suffix.lower() or _infer_file_ext_from_text(combined)
+        if ext not in allowed_extensions or not _generic_candidate_allowed(
+            source, combined, doc_type, ext, required_keywords
+        ):
+            continue
+        report_month = _detect_report_month_from_text(combined)
+        recency_score = (report_month.year * 12 + report_month.month) * 10 if report_month else 0
+        documents.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type=doc_type,
+                title=title,
+                url=url,
+                discovery_page_url=listing_url,
+                file_ext=ext,
+                report_month=report_month,
+                priority_score=_generic_base_score(ext=ext, document_type=doc_type) + recency_score,
+            )
+        )
+    documents.sort(key=lambda item: item.priority_score, reverse=True)
+    return documents
 
 
 def _discover_hsbc_documents(

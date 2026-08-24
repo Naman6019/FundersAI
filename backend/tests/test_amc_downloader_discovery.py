@@ -39,6 +39,16 @@ def _source(adapter_key: str, factsheet_url: str, portfolio_url: str | None = No
     )
 
 
+def test_bandhan_download_uses_disclosure_filename_not_publication_folder() -> None:
+    download_url = (
+        "https://bandhanmutual.com/investor/v1/dashboard/download-doc?filepath="
+        "https%3A%2F%2Fstorage.googleapis.com%2Fnonprod-static-assets%2F2026%2F08%2F"
+        "6f1518f8-bandhan-factsheet-july-2026.pdf&fname=August%2B2026"
+    )
+
+    assert amc_downloader._bandhan_report_month_from_download(download_url) == date(2026, 7, 1)
+
+
 def test_hdfc_embedded_portfolio_xlsx_links_are_discovered(monkeypatch) -> None:
     html = """
     <script>
@@ -157,9 +167,16 @@ def test_hdfc_official_bucket_fallback_builds_prior_month_combined_factsheet() -
 
 
 def test_kotak_dropdown_month_remains_the_report_month_after_publication() -> None:
-    docs = _discover_kotak_combined_factsheets(
+    docs = _kotak_documents_from_candidates(
         get_source("kotak"),
-        now_utc=datetime(2026, 8, 10, tzinfo=UTC),
+        "factsheet",
+        "https://www.kotakmf.com/Information/forms-and-downloads",
+        [
+            {
+                "title": "Kotak MF Factsheet July 2026",
+                "url": "https://vatseelabs-s3.kotakmf.com/FormsDownloads/Factsheet/Factsheet-for-July-2026/KotakMFFactsheetJuly2026.pdf",
+            }
+        ],
     )
 
     assert docs[0].report_month == date(2026, 7, 1)

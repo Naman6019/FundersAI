@@ -1,0 +1,98 @@
+name: Revert MF Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: mf_promotion_runs.id to revert (use list mode first)
+        required: false
+        default: ""
+        type: string
+      list_only:
+        description: List revertable runs instead of reverting one
+        required: true
+        default: true
+        type: boolean
+      amc:
+        description: Optional AMC filter for list mode
+        required: false
+        default: ""
+        type: string
+      apply:
+        description: Apply only after reviewing the complete dry-run
+        required: true
+        default: false
+        type: boolean
+      approval_phrase:
+        description: For apply only, enter REVERT RUN <run-id>
+        required: false
+        default: ""
+        type: string
+
+concurrency:
+  group: revert-mf-promotion
+  cancel-in-progress: false
+
+jobs:
+  revert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production-data
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: List or revert one promotion run
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          RUN_ID: ${{ inputs.run_id }}
+          LIST_ONLY: ${{ inputs.list_only }}
+          AMC: ${{ inputs.amc }}
+          APPLY_REVERT: ${{ inputs.apply }}
+          APPROVAL_PHRASE: ${{ inputs.approval_phrase }}
+          REQUESTED_BY: ${{ github.actor }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "Missing existing Supabase production secrets."
+            exit 1
+          fi
+
+          if [ "$LIST_ONLY" = "true" ]; then
+            args=(--list --requested-by "$REQUESTED_BY")
+            if [ -n "$AMC" ]; then
+              args+=(--amc "$AMC")
+            fi
+            python backend/app/mf_ingestion/jobs/revert_mf_promotion.py "${args[@]}"
+            exit 0
+          fi
+
+          if [ -z "$RUN_ID" ]; then
+            echo "run_id is required unless list_only is true."
+            exit 1
+          fi
+          if [ "$APPLY_REVERT" = "true" ]; then
+            expected_approval="REVERT RUN ${RUN_ID}"
+            if [ "$APPROVAL_PHRASE" != "$expected_approval" ]; then
+              echo "Approval phrase mismatch. Expected: $expected_approval"
+              exit 1
+            fi
+          fi
+
+          args=(--run-id "$RUN_ID" --requested-by "$REQUESTED_BY")
+          if [ "$APPLY_REVERT" = "true" ]; then
+            args+=(--apply)
+          fi
+          python backend/app/mf_ingestion/jobs/revert_mf_promotion.py "${args[@]}"

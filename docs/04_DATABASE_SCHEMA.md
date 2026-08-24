@@ -63,9 +63,14 @@ FundersAI uses Supabase PostgreSQL for structured application data and authentic
   - Preserves raw and normalized AMC scheme names, reviewed scheme/family mappings, extracted fields, source/R2/checksum evidence, parser version, and per-scope promotion state.
 - `mf_promotion_runs` (`20260727_add_mf_extraction_staging_and_promotion.sql`, production presence verified 2026-07-27)
   - Service-role-only audit rows for dry-run validation and applied, scoped promotions.
+  - `reverted_at` / `reverted_by` / `revert_of_run_id` and the `reverted` status (`20260824_add_mf_promotion_revert.sql`, local implementation, not yet applied to production) record that an applied run was rolled back, and link the audit row written by the revert to the run it undid.
 - `promote_mf_factsheet_candidate(...)` and `promote_mf_holdings_document(...)`
   - Revalidate reviewed mappings and promote only requested scopes. Rejected or partial candidates do not clear last-known-good runtime rows.
   - The four-argument factsheet function is atomic and does not delegate to the legacy RPC. The pending sector-staging migration makes holdings and aggregate-sector promotion independently validated.
+  - `promote_mf_factsheet_candidate` has always written `before_snapshot`/`after_snapshot`. `promote_mf_holdings_document_v2` did not: it deleted live `mutual_fund_holdings`/`mutual_fund_sectors` rows while omitting `before_snapshot` from its run row, so a bad portfolio promotion was unrecoverable. `20260824_add_mf_promotion_revert.sql` replaces it so it records both the runtime rows it destroys and the full set of scheme codes it touches (a promotion can add schemes that had no prior rows, and a revert must clear those too).
+- `revert_mf_promotion_run(p_run_id uuid, p_requested_by text)` (`20260824_add_mf_promotion_revert.sql`, local implementation, not yet applied to production)
+  - Service-role-only. Restores one applied run from its captured before-state in a single transaction: core runs reset only the promoted scopes on `mutual_fund_core_snapshot` and release those scopes on the candidate; portfolio runs clear the touched scheme codes and re-insert the captured rows.
+  - Refuses runs that are not `applied`, are already reverted, or carry an empty/uncaptured `before_snapshot` — including every portfolio run applied before this migration. Those are not restorable and the function raises rather than restoring from nothing.
 
 Raw document bytes belong in Cloudflare R2. Supabase stores the object location and query-critical structured output.
 

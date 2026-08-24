@@ -17,9 +17,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { amcSlug } = await params;
   const amc = getAmcBySlug(amcSlug);
   if (!amc) return { title: 'AMC Not Found | FundersAI' };
+  const canonicalUrl = `https://www.fundersai.co.in/mutual-funds/${amcSlug}`;
   return {
     title: `${amc.name} Mutual Funds | FundersAI`,
     description: `Research ${amc.name} mutual funds. Deterministic metrics from official sources — NAV history, CAGR, Sharpe ratio, expense ratio, and portfolio holdings for ${amc.shortName} schemes.`,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: `${amc.name} Mutual Funds | FundersAI`,
+      description: `Research ${amc.name} mutual funds with deterministic metrics from AMFI and official AMC disclosures.`,
+      url: canonicalUrl,
+    },
   };
 }
 

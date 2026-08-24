@@ -8,7 +8,6 @@ import {
 } from '@/lib/fund-registry';
 
 const BASE_URL = 'https://www.fundersai.co.in';
-const SYNTHESIS_BASE_URL = 'https://synthesis.fundersai.co.in';
 
 // Stable baseline release timestamp to prevent lastmod churn on uncached crawler fetches
 const RELEASE_DATE = new Date('2026-08-15T00:00:00.000Z');
@@ -23,14 +22,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '/intelligence', priority: 0.9, changeFrequency: 'weekly' },
     { path: '/pricing', priority: 0.95, changeFrequency: 'weekly' },
     { path: '/data-trust', priority: 0.9, changeFrequency: 'weekly' },
-    { path: '/sample', priority: 0.85, changeFrequency: 'weekly' },
-    { path: '/emergent-replica', priority: 0.8, changeFrequency: 'weekly' },
+    { path: '/sample', priority: 0.8, changeFrequency: 'monthly' },
     { path: '/methodology', priority: 0.9, changeFrequency: 'monthly' },
     { path: '/methodology/data-sources', priority: 0.85, changeFrequency: 'monthly' },
     { path: '/methodology/formulas', priority: 0.85, changeFrequency: 'monthly' },
     { path: '/methodology/resolution', priority: 0.85, changeFrequency: 'monthly' },
     { path: '/methodology/guardrails', priority: 0.85, changeFrequency: 'monthly' },
     { path: '/about', priority: 0.7, changeFrequency: 'monthly' },
+    { path: '/tools', priority: 0.95, changeFrequency: 'daily' },
+    { path: '/tools/portfolio-overlap', priority: 0.95, changeFrequency: 'weekly' },
+    { path: '/tools/sip-calculator', priority: 0.95, changeFrequency: 'weekly' },
     { path: '/contact', priority: 0.6, changeFrequency: 'monthly' },
     { path: '/privacy', priority: 0.4, changeFrequency: 'monthly' },
     { path: '/terms', priority: 0.4, changeFrequency: 'monthly' },
@@ -113,51 +114,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
   for (const cp of COMPARE_PAIRS) {
     routes.push({
       url: `${BASE_URL}/compare/${cp.pair}`,
-      lastModified: RELEASE_DATE,
-      changeFrequency: 'weekly',
-      priority: 0.85,
-    });
-  }
-
-  // 4. Synthesis by FundersAI Intelligence Engine (synthesis.fundersai.co.in)
-  // 4a. Core Synthesis Hubs
-  const synthesisPages: { path: string; priority: number; changeFrequency: MetadataRoute.Sitemap[number]['changeFrequency'] }[] = [
-    { path: '/synthesis', priority: 1.0, changeFrequency: 'daily' },
-    { path: '/synthesis/supported-funds', priority: 0.95, changeFrequency: 'daily' },
-    { path: '/synthesis/tools/portfolio-overlap', priority: 0.9, changeFrequency: 'weekly' },
-    { path: '/synthesis/methodology', priority: 0.9, changeFrequency: 'monthly' },
-  ];
-
-  for (const page of synthesisPages) {
-    routes.push({
-      url: `${SYNTHESIS_BASE_URL}${page.path}`,
-      lastModified: RELEASE_DATE,
-      changeFrequency: page.changeFrequency,
-      priority: page.priority,
-    });
-  }
-
-  // 4b. Synthesis Category Intelligence Hubs
-  for (const cat of CATEGORY_LIST) {
-    routes.push({
-      url: `${SYNTHESIS_BASE_URL}/synthesis/category/${categorySlug(cat)}`,
-      lastModified: RELEASE_DATE,
-      changeFrequency: 'weekly',
-      priority: 0.85,
-    });
-  }
-
-  // 4c. Synthesis Programmatic Comparison Engine Pairs
-  const synthesisVsSlugs = [
-    'hdfc-flexi-cap-vs-parag-parikh-flexi-cap',
-    'nippon-india-small-cap-vs-sbi-small-cap',
-    'mirae-asset-emerging-bluechip-vs-hdfc-mid-cap-opportunities',
-    'icici-prudential-bluechip-vs-sbi-bluechip',
-  ];
-
-  for (const slug of synthesisVsSlugs) {
-    routes.push({
-      url: `${SYNTHESIS_BASE_URL}/synthesis/vs/${slug}`,
       lastModified: RELEASE_DATE,
       changeFrequency: 'weekly',
       priority: 0.85,

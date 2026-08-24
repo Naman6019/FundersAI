@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import logging
 import mimetypes
+from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
 
 from app.database import supabase
+from app.mf_ingestion.agents.validation import inspect_parser_smoke
 from app.mf_ingestion.config import get_config
 from app.mf_ingestion.downloaders.amc_downloader import AMCDownloader, _detect_report_month_from_text
 from app.mf_ingestion.downloaders.base_downloader import DiscoveredDocument, DownloadedDocument
@@ -114,7 +116,14 @@ class IngestionService:
                 return {"status": "error", "reason": str(exc)}
 
         if expected_month:
-            discovered_docs = _filter_expected_month_documents(discovered_docs, expected_month)
+            discovered_docs = _filter_expected_month_documents(
+                discovered_docs,
+                expected_month,
+                include_content_month_only=(
+                    document_type == "factsheet"
+                    and source.factsheet_report_month_in_content_only
+                ),
+            )
 
         if not discovered_docs:
             logger.error(
@@ -194,6 +203,28 @@ class IngestionService:
                     }
                 )
                 continue
+
+            if (
+                expected_month
+                and document_type == "factsheet"
+                and source.factsheet_report_month_in_content_only
+                and downloaded.report_month is None
+            ):
+                smoke_errors, detected_month = inspect_parser_smoke(
+                    downloaded,
+                    expected_report_month=expected_month,
+                )
+                if smoke_errors or detected_month is None:
+                    skipped.append(
+                        {
+                            "status": "error",
+                            "reason": ",".join(smoke_errors or ["factsheet_content_report_month_unknown"]),
+                            "source_url": downloaded.source_url,
+                            "document_type": downloaded.document_type,
+                        }
+                    )
+                    continue
+                downloaded = replace(downloaded, report_month=detected_month)
 
             checksum = sha256_bytes(downloaded.file_bytes)
             duplicate_id = self._find_duplicate_document(
@@ -805,5 +836,23 @@ def _rank_discovered_documents(
 def _filter_expected_month_documents(
     documents: list[Any],
     expected_month: date,
+    *,
+    include_content_month_only: bool = False,
 ) -> list[Any]:
-    return [document for document in documents if getattr(document, "report_month", None) == expected_month]
+    exact_month = [
+        document
+        for document in documents
+        if getattr(document, "report_month", None) == expected_month
+    ]
+    if not include_content_month_only:
+        return exact_month
+    # Unknown-month URLs are admitted only for the explicitly configured source and
+    # are still rejected after download unless the PDF body confirms expected_month.
+    return [
+        *exact_month,
+        *[
+            document
+            for document in documents
+            if getattr(document, "report_month", None) is None
+        ],
+    ]

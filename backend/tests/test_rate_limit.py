@@ -53,6 +53,31 @@ def test_rate_limit_groups_are_separate(monkeypatch):
     assert quant.remaining == 59
 
 
+def test_rate_limit_can_be_disabled_and_hashes_the_trusted_client_header(monkeypatch):
+    from app.services import rate_limit
+
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
+    bypassed = _run(rate_limit.check_rate_limit("chat", "client-d", now_seconds=1))
+    assert bypassed.allowed is True
+    assert bypassed.limit == 0
+
+    request = Request(
+        {
+            "type": "http",
+            "headers": [
+                (b"cf-connecting-ip", b"203.0.113.1"),
+                (b"x-real-ip", b"203.0.113.2"),
+                (b"x-forwarded-for", b"203.0.113.3, 203.0.113.4"),
+            ],
+            "client": ("203.0.113.5", 1234),
+            "scheme": "https",
+            "server": ("testserver", 443),
+        }
+    )
+    assert rate_limit.client_identifier_from_request(request) == rate_limit._hash("203.0.113.1")
+    assert rate_limit.client_identifier_from_request(request, override="user-1") == rate_limit._hash("user-1")
+
+
 def test_production_without_upstash_fails_closed(monkeypatch):
     from app.services import rate_limit
 

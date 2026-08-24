@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   title: 'Terms of Use | FundersAI',
   description:
     'Terms governing your use of the FundersAI research workspace — including research-only scope, subscription cancellation and refunds, data limitations, governing law, and acceptable use.',
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/terms',
+  },
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

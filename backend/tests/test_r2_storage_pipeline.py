@@ -169,6 +169,117 @@ def test_ingestion_writes_r2_storage_columns(monkeypatch):
     assert raw_insert["storage_metadata"]["checksum"] == "fixed-checksum"
 
 
+def test_tata_content_month_only_factsheet_is_verified_before_storage(monkeypatch):
+    from app.mf_ingestion.services import ingestion_service
+
+    class _TataDownloader(_FakeDownloader):
+        def list_documents(self, document_type: str):
+            return [
+                DiscoveredDocument(
+                    amc_name="Tata Mutual Fund",
+                    amc_code="TATA",
+                    document_type=document_type,
+                    title="Tata Aggressive Hybrid Fund",
+                    url="https://www.tatamutualfund.com/factsheets/aggressive-hybrid.pdf",
+                    discovery_page_url="https://www.tatamutualfund.com/schemes-related/scheme-factsheet",
+                    file_ext=".pdf",
+                    report_month=None,
+                    priority_score=100,
+                )
+            ]
+
+        def download(self, discovered: DiscoveredDocument):
+            return DownloadedDocument(
+                amc_name=discovered.amc_name,
+                amc_code=discovered.amc_code,
+                document_type=discovered.document_type,
+                source_url=discovered.url,
+                discovery_page_url=discovered.discovery_page_url,
+                file_name="aggressive-hybrid.pdf",
+                file_ext=".pdf",
+                report_month=None,
+                content_type="application/pdf",
+                file_size_bytes=9,
+                file_bytes=b"%PDF fake",
+            )
+
+    fake_supabase = _FakeSupabase()
+    monkeypatch.setattr(ingestion_service, "supabase", fake_supabase)
+    monkeypatch.setattr(ingestion_service, "AMCDownloader", _TataDownloader)
+    monkeypatch.setattr(ingestion_service, "R2Store", _FakeR2Enabled)
+    monkeypatch.setattr(ingestion_service, "sha256_bytes", lambda _bytes: "tata-checksum")
+    monkeypatch.setattr(
+        ingestion_service,
+        "inspect_parser_smoke",
+        lambda *_args, **_kwargs: ([], date(2026, 7, 1)),
+    )
+
+    result = IngestionService().ingest_documents(
+        amc="tata",
+        document_type="factsheet",
+        expected_report_month="2026-07",
+    )
+
+    assert result["status"] == "ok"
+    raw_insert = [payload for table, payload in fake_supabase.inserts if table == "mf_raw_documents"][0]
+    assert raw_insert["report_month"] == "2026-07-01"
+
+
+def test_tata_content_month_only_factsheet_is_not_stored_when_unverified(monkeypatch):
+    from app.mf_ingestion.services import ingestion_service
+
+    class _TataDownloader(_FakeDownloader):
+        def list_documents(self, document_type: str):
+            return [
+                DiscoveredDocument(
+                    amc_name="Tata Mutual Fund",
+                    amc_code="TATA",
+                    document_type=document_type,
+                    title="Tata Aggressive Hybrid Fund",
+                    url="https://www.tatamutualfund.com/factsheets/aggressive-hybrid.pdf",
+                    discovery_page_url="https://www.tatamutualfund.com/schemes-related/scheme-factsheet",
+                    file_ext=".pdf",
+                    report_month=None,
+                    priority_score=100,
+                )
+            ]
+
+        def download(self, discovered: DiscoveredDocument):
+            return DownloadedDocument(
+                amc_name=discovered.amc_name,
+                amc_code=discovered.amc_code,
+                document_type=discovered.document_type,
+                source_url=discovered.url,
+                discovery_page_url=discovered.discovery_page_url,
+                file_name="aggressive-hybrid.pdf",
+                file_ext=".pdf",
+                report_month=None,
+                content_type="application/pdf",
+                file_size_bytes=9,
+                file_bytes=b"%PDF fake",
+            )
+
+    fake_supabase = _FakeSupabase()
+    monkeypatch.setattr(ingestion_service, "supabase", fake_supabase)
+    monkeypatch.setattr(ingestion_service, "AMCDownloader", _TataDownloader)
+    monkeypatch.setattr(ingestion_service, "R2Store", _FakeR2Enabled)
+    monkeypatch.setattr(
+        ingestion_service,
+        "inspect_parser_smoke",
+        lambda *_args, **_kwargs: ([], None),
+    )
+
+    result = IngestionService().ingest_documents(
+        amc="tata",
+        document_type="factsheet",
+        expected_report_month="2026-07",
+    )
+
+    assert result["ingested_documents"] == []
+    assert result["skipped_documents"][0]["reason"] == "factsheet_content_report_month_unknown"
+    assert not any(table == "mf_raw_documents" for table, _ in fake_supabase.inserts)
+
+
 def test_disabled_source_requires_explicit_acquisition_opt_in(monkeypatch):
     from app.mf_ingestion.services import ingestion_service
     from app.mf_ingestion.sources import registry

@@ -51,7 +51,7 @@ on:
         type: boolean
         default: true
       browser_fallback:
-        description: 'Enable reviewed AMC-specific Playwright fallback'
+        description: 'Enable reviewed browser fallback for an explicit validation-only AMC; Bandhan and Invesco run their reviewed public-page adapters on schedule'
         required: false
         type: boolean
         default: false
@@ -98,8 +98,8 @@ jobs:
       R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
       MF_INGESTION_USER_AGENT: ${{ vars.MF_INGESTION_USER_AGENT || 'FundersAIResearchBot/1.0' }}
       MF_SOURCE_MANIFEST_PATH: backend/config/mf_document_sources.json
-      MF_DISCOVERY_BROWSER_ENABLED: ${{ inputs.browser_fallback || 'false' }}
-      MF_DISCOVERY_BROWSER_AMCS: ${{ inputs.browser_amcs || '' }}
+      MF_DISCOVERY_BROWSER_ENABLED: ${{ (github.event_name == 'schedule' && (matrix.amc == 'bandhan' || matrix.amc == 'invesco')) || inputs.browser_fallback || 'false' }}
+      MF_DISCOVERY_BROWSER_AMCS: ${{ github.event_name == 'schedule' && (matrix.amc == 'bandhan' || matrix.amc == 'invesco') && matrix.amc || inputs.browser_amcs || '' }}
 
     steps:
       - name: Checkout repository
@@ -116,7 +116,7 @@ jobs:
         run: pip install -r backend/requirements.txt
 
       - name: Install reviewed browser fallback runtime
-        if: inputs.browser_fallback == true
+        if: inputs.browser_fallback == true || (github.event_name == 'schedule' && (matrix.amc == 'bandhan' || matrix.amc == 'invesco'))
         run: python -m playwright install --with-deps chromium
 
       - name: Validate persistence secrets
@@ -175,8 +175,8 @@ jobs:
           max_candidates="${max_candidates:-3}"
           probe_downloads="${probe_downloads:-true}"
 
-          if [ "${MF_DISCOVERY_BROWSER_ENABLED}" = "true" ] && [ "$lane" != "validation_only" ]; then
-            echo "Browser fallback is allowed only for explicit validation-only discovery."
+          if [ "${MF_DISCOVERY_BROWSER_ENABLED}" = "true" ] && [ "$lane" != "validation_only" ] && [ "$amc" != "bandhan" ] && [ "$amc" != "invesco" ]; then
+            echo "Browser fallback is scheduled only for the reviewed Bandhan and Invesco public-page adapters."
             exit 2
           fi
 

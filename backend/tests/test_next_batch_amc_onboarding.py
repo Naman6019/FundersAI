@@ -8,7 +8,7 @@ import pytest
 
 from app.mf_ingestion.agents.discovery_agent import AGENT_CLASSES, build_discovery_agent
 from app.mf_ingestion.agents.validation import validate_candidate, validate_download
-from app.mf_ingestion.automation_scope import VALIDATION_ONLY_AMCS, resolve_automation_scope
+from app.mf_ingestion.automation_scope import GREEN_AMCS, VALIDATION_ONLY_AMCS, resolve_automation_scope
 from app.mf_ingestion.downloaders import amc_downloader
 from app.mf_ingestion.downloaders.base_downloader import (
     DiscoveredDocument,
@@ -23,7 +23,7 @@ NEXT_BATCH_AMCS = ("tata", "bandhan", "edelweiss", "invesco", "hsbc")
 LOCAL_FILE_URL = "file:///C:/Users/example/Downloads/factsheet.pdf"
 
 
-def test_next_batch_amcs_are_registered_but_not_runtime_enabled():
+def test_next_batch_amcs_are_registered_and_runtime_enabled():
     for amc in NEXT_BATCH_AMCS:
         source = get_source(amc)
         assert source.enabled is True
@@ -31,7 +31,7 @@ def test_next_batch_amcs_are_registered_but_not_runtime_enabled():
         assert source.acquisition_enabled is True
         assert source.factsheet_parser_enabled is True
         assert source.portfolio_parser_enabled is True
-        assert source.runtime_enabled is False
+        assert source.runtime_enabled is True
         assert source.allowed_host_suffixes
         assert source.factsheet_required_keywords
         assert source.portfolio_required_keywords
@@ -43,8 +43,9 @@ def test_next_batch_amcs_are_in_production_target_keys():
     assert set(NEXT_BATCH_AMCS).issubset(set(SOURCES))
 
 
-def test_next_batch_amcs_stay_in_validation_only_lane():
-    assert set(NEXT_BATCH_AMCS) == set(VALIDATION_ONLY_AMCS)
+def test_next_batch_amcs_are_in_the_unattended_staging_lane():
+    assert set(NEXT_BATCH_AMCS).issubset(set(GREEN_AMCS))
+    assert VALIDATION_ONLY_AMCS == ()
 
 
 @pytest.mark.parametrize("amc", NEXT_BATCH_AMCS)
@@ -64,37 +65,28 @@ def test_next_batch_parser_adapter_is_wired(amc: str) -> None:
 
 
 @pytest.mark.parametrize("amc", NEXT_BATCH_AMCS)
-def test_next_batch_discovery_requires_explicit_amcs_not_schedule(amc: str) -> None:
+def test_next_batch_discovery_resolves_in_green_lane(amc: str) -> None:
     resolved = resolve_automation_scope(
         operation="discovery",
-        lane="validation_only",
+        lane="green",
         raw_amcs=amc,
     )
     assert resolved == (amc,)
 
-    with pytest.raises(ValueError, match="explicit_amcs_required"):
-        resolve_automation_scope(operation="discovery", lane="validation_only", raw_amcs=None)
-
-
-@pytest.mark.parametrize("amc", NEXT_BATCH_AMCS)
-def test_next_batch_parser_retry_requires_explicit_source_document_ids(amc: str) -> None:
-    with pytest.raises(ValueError, match="source_document_ids_required"):
-        resolve_automation_scope(operation="parser_retry", lane="validation_only", raw_amcs=amc)
-
     assert resolve_automation_scope(
         operation="parser_retry",
-        lane="validation_only",
+        lane="green",
         raw_amcs=amc,
-        source_document_ids="doc-1",
     ) == (amc,)
 
 
-def test_next_batch_amcs_never_resolve_on_scheduled_runs():
+def test_next_batch_amcs_resolve_on_scheduled_runs():
+    scheduled = resolve_automation_scope(
+        operation="disclosure_parse",
+        event_name="schedule",
+    )
     for amc in NEXT_BATCH_AMCS:
-        assert amc not in resolve_automation_scope(
-            operation="disclosure_parse",
-            event_name="schedule",
-        )
+        assert amc in scheduled
 
 
 @pytest.mark.parametrize("amc", NEXT_BATCH_AMCS)

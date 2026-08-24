@@ -11,7 +11,8 @@ const nextConfig: NextConfig = {
       { source: '/reports/dashboard', destination: '/synthesis/dashboard', permanent: true },
       { source: '/reports/methodology', destination: '/synthesis/methodology', permanent: true },
       { source: '/reports/supported-funds', destination: '/synthesis/supported-funds', permanent: true },
-      { source: '/reports/tools/portfolio-overlap', destination: '/synthesis/tools/portfolio-overlap', permanent: true },
+      { source: '/reports/tools/portfolio-overlap', destination: '/tools/portfolio-overlap', permanent: true },
+      { source: '/synthesis/tools/portfolio-overlap', destination: '/tools/portfolio-overlap', permanent: true },
       { source: '/reports/vs/:slug', destination: '/synthesis/vs/:slug', permanent: true },
       { source: '/reports/category/:slug', destination: '/synthesis/category/:slug', permanent: true },
     ];

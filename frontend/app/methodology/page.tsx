@@ -14,6 +14,9 @@ export const metadata: Metadata = {
     'Deterministic quantitative finance AI',
     'AMC factsheet parser methodology',
   ],
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/methodology',
+  },
   openGraph: {
     title: 'Methodology Hub & Standards | FundersAI',
     description:

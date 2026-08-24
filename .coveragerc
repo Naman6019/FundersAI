@@ -1,0 +1,16 @@
+[run]
+branch = True
+source =
+    backend/app
+
+[report]
+show_missing = True
+
+[html]
+directory = backend/htmlcov
+
+[xml]
+output = backend/coverage.xml
+
+[json]
+output = backend/coverage.json

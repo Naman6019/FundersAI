@@ -14,6 +14,9 @@ export const metadata: Metadata = {
     'Financial AI hallucination prevention',
     'FundersAI data trust portal',
   ],
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/data-trust',
+  },
   openGraph: {
     title: 'Data & Trust Portal | FundersAI',
     description:

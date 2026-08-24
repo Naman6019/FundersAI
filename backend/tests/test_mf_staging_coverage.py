@@ -170,6 +170,54 @@ def test_staging_coverage_separates_non_applicable_sectors_from_missing_sectors(
     assert report["passes_all_fields"] is False
 
 
+def test_staging_coverage_reports_partial_holdings_against_full_core_batch():
+    candidates = [
+        {
+            "amc_code": "bandhan",
+            "report_month": "2026-07-01",
+            "normalized_scheme_name": f"bandhan fund {index}",
+            "mapped_family_id": f"bandhan-{index}",
+            "mapped_scheme_code": str(index),
+            "mapping_confidence": 100.0,
+            "mapping_status": "mapped",
+            "promotion_status": "staged",
+            "aum": 1,
+            "expense_ratio": 1,
+            "benchmark": "Index",
+            "fund_manager": "Manager",
+            "risk_level": "High",
+        }
+        for index in range(2)
+    ]
+    holdings = [
+        {
+            "amc_code": "bandhan",
+            "report_month": "2026-07-01",
+            "raw_scheme_name": "Bandhan Fund 0",
+            "mapped_family_id": "bandhan-0",
+            "mapped_scheme_code": "0",
+            "mapping_confidence": 100.0,
+            "mapping_status": "mapped",
+            "validation_status": "valid",
+            "sector": "Banks",
+        }
+    ]
+
+    report = build_staging_coverage(
+        report_month="2026-07-01",
+        amcs=["bandhan"],
+        candidates=candidates,
+        holdings=holdings,
+        threshold=80.0,
+    )["bandhan"]
+
+    assert report["core_to_holdings_coverage"] == {
+        "core_families_with_valid_holdings": 1,
+        "core_families_missing_valid_holdings": 1,
+        "core_with_valid_holdings_percentage": 50.0,
+    }
+
+
 def test_staging_coverage_maps_absl_database_code_to_aditya_birla_registry_key():
     row = {
         "amc_code": "ABSL",

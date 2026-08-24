@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   title: 'About | FundersAI',
   description:
     'FundersAI is an independent mutual fund research tool built for Indian investors who want deterministic metrics, official-source evidence, and visible data limits — not AI-generated opinions.',
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/about',
+  },
 };
 
 export default function AboutPage() {
