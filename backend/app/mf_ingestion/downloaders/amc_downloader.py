@@ -71,6 +71,13 @@ EDELWEISS_OFFICIAL_PORTFOLIO_FALLBACKS = (
         "Monthly_Portfolio_and_RiskoMeter/EDEL_Portfolio_Monthly_Notes_31Jul2026_17082026124432.xlsx",
     ),
 )
+EDELWEISS_OFFICIAL_FACTSHEET_FALLBACKS = (
+    (
+        "Factsheet - August 2026",
+        "https://www.edelweissmf.com/Files/MF/Downloads/FACTSHEETS/FACTSHEETS/"
+        "Edelweiss_Factsheet_August__2026_10082026160011.pdf",
+    ),
+)
 HDFC_PUBLIC_DOWNLOAD_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -457,16 +464,34 @@ class AMCDownloader(BaseDownloader):
             "hsbc",
         }:
             referer = discovered.discovery_page_url or _base_site_url(discovered.url)
-            response = _request_with_retry(
-                "GET",
-                discovered.url,
-                timeout_seconds=self.timeout_seconds,
-                headers={
-                    "User-Agent": _download_user_agent(self.source, self.user_agent),
-                    "Referer": referer,
-                    **(conditional_headers or {}),
-                },
-            )
+            try:
+                response = _request_with_retry(
+                    "GET",
+                    discovered.url,
+                    timeout_seconds=self.timeout_seconds,
+                    headers={
+                        "User-Agent": _download_user_agent(self.source, self.user_agent),
+                        "Referer": referer,
+                        **(conditional_headers or {}),
+                    },
+                )
+            except Exception:
+                if not (
+                    adapter_key == "edelweiss"
+                    and (discovered.document_type or "").strip().lower() == "factsheet"
+                    and _browser_fallback_allowed_for_source(self.source)
+                ):
+                    raise
+                logger.warning(
+                    "edelweiss:browser_download_fallback url=%s",
+                    discovered.url,
+                )
+                return _download_edelweiss_document_with_browser(
+                    self.source,
+                    discovered,
+                    timeout_seconds=self.timeout_seconds,
+                    user_agent=self.user_agent,
+                )
             if response.status_code == 304:
                 return DownloadedDocument(
                     amc_name=discovered.amc_name,
@@ -876,6 +901,16 @@ def _discover_edelweiss_documents(
     """
     doc_type = (document_type or "").strip().lower()
     if doc_type != "portfolio_disclosure":
+        if doc_type == "factsheet":
+            api_documents = _discover_edelweiss_factsheets_from_api(
+                source,
+                listing_url=source.factsheet_page_url or source.portfolio_disclosure_page_url or "",
+                timeout_seconds=timeout_seconds,
+                user_agent=user_agent,
+            )
+            if api_documents:
+                return api_documents
+
         documents = _discover_generic_anchor_documents(
             source,
             document_type=doc_type,
@@ -886,7 +921,29 @@ def _discover_edelweiss_documents(
         # The official PDF body, not its publication filename, confirms its
         # reporting month before it can be persisted.
         if doc_type == "factsheet":
-            return [replace(document, report_month=None) for document in documents]
+            documents = [replace(document, report_month=None) for document in documents]
+            if documents:
+                return documents
+            if _browser_fallback_allowed_for_source(source):
+                browser_documents = _discover_edelweiss_factsheets_with_browser(
+                    source,
+                    listing_url=source.factsheet_page_url or source.portfolio_disclosure_page_url or "",
+                    timeout_seconds=timeout_seconds,
+                    user_agent=user_agent,
+                )
+                if browser_documents:
+                    return browser_documents
+            fallback_documents = _edelweiss_factsheet_documents_from_candidates(
+                source,
+                listing_url=source.factsheet_page_url or source.portfolio_disclosure_page_url or "",
+                candidates=list(EDELWEISS_OFFICIAL_FACTSHEET_FALLBACKS),
+            )
+            if fallback_documents:
+                logger.warning(
+                    "edelweiss:using_official_factsheet_direct_fallback count=%s",
+                    len(fallback_documents),
+                )
+            return fallback_documents
         return documents
 
     listing_url = source.portfolio_disclosure_page_url or source.factsheet_page_url
@@ -1012,6 +1069,288 @@ def _discover_edelweiss_monthly_portfolios_with_browser(
         listing_url=listing_url,
         candidates=candidates,
     )
+
+
+def _discover_edelweiss_factsheets_with_browser(
+    source: AMCDocumentSource,
+    *,
+    listing_url: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        logger.error("edelweiss:playwright_not_installed")
+        return []
+
+    timeout_ms = max(60_000, int(timeout_seconds * 1_000))
+    candidates: list[tuple[str, str]] = []
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            try:
+                context = browser.new_context()
+                page = context.new_page()
+                page.goto(listing_url, wait_until="domcontentloaded", timeout=timeout_ms)
+                page.wait_for_function(
+                    "typeof window.webpackChunkapp !== 'undefined'",
+                    timeout=timeout_ms,
+                )
+                candidates = _edelweiss_factsheet_api_candidates_in_browser(page)
+                context.close()
+            finally:
+                browser.close()
+    except Exception as exc:
+        logger.warning("edelweiss:factsheet_browser_discovery_failed error=%s", exc)
+        return []
+
+    return _edelweiss_factsheet_documents_from_candidates(
+        source,
+        listing_url=listing_url,
+        candidates=candidates,
+    )
+
+
+def _edelweiss_factsheet_api_candidates_in_browser(page) -> list[tuple[str, str]]:
+    try:
+        return list(
+            page.evaluate(
+                """
+                async () => {
+                  const findCrypto = () => {
+                    let req;
+                    if (window.__fundersaiWebpackRequire) req = window.__fundersaiWebpackRequire;
+                    else if (window.webpackChunkapp) {
+                      window.webpackChunkapp.push([[Date.now()], {}, candidate => { req = candidate; }]);
+                      window.__fundersaiWebpackRequire = req;
+                    }
+                    if (!req || !req.m) return null;
+                    for (const id of Object.keys(req.m)) {
+                      try {
+                        const candidate = req(id);
+                        if (candidate?.AES?.decrypt && candidate?.HmacSHA256 && candidate?.enc?.Utf8) return candidate;
+                      } catch (_) {}
+                    }
+                    return null;
+                  };
+                  const cryptoJs = findCrypto();
+                  if (!cryptoJs) return [];
+                  const staticIp = "103.0.123.175";
+                  let ip = staticIp;
+                  try { ip = String((await (await fetch("https://api.ipify.org/?format=json")).json()).ip || staticIp); } catch (_) {}
+                  const keyTimestamp = String(Date.now());
+                  const keyResponse = await fetch("https://api.edelweissmf.com/virat_eks_api/api/v1/auth/encryption-key", {
+                    headers: {"accept":"application/json, text/plain, */*", "init":"true", "x-timestamp":keyTimestamp, "x-ip-address":staticIp}
+                  });
+                  if (!keyResponse.ok) return [];
+                  const keyData = JSON.parse((await keyResponse.json()).body);
+                  const secret = String(keyData.PRE_LOGIN.SECRET);
+                  const hashKey = String(keyData.PRE_LOGIN.HASHKEY);
+                  const timestamp = String(Date.now());
+                  const requestKey = cryptoJs.HmacSHA256(secret + ip + timestamp, hashKey).toString(cryptoJs.enc.Hex);
+                  const response = await fetch("https://api.edelweissmf.com/edelweissmf/api/v1/mf/statutory-menus/single?type=Downloads&fundType=MF&menuName=FACTSHEETS", {
+                    headers: {"accept":"application/json, text/plain, */*", "x-timestamp":timestamp, "x-ip-address":ip}
+                  });
+                  if (!response.ok) return [];
+                  const encrypted = (await response.json()).body;
+                  const payload = JSON.parse(cryptoJs.AES.decrypt(encrypted, requestKey).toString(cryptoJs.enc.Utf8));
+                  return (payload.files || [])
+                    .filter(item => String(item.subMenuName || "").trim().toLowerCase() === "factsheets")
+                    .map(item => [
+                      String(item.fileTitle || item.systemFileName || ""),
+                      String(item.filePath || item.downloadFile || "")
+                    ])
+                    .filter(item => item[1]);
+                }
+                """
+            )
+            or []
+        )
+    except Exception as exc:
+        logger.warning("edelweiss:factsheet_browser_api_discovery_failed error=%s", exc)
+        return []
+
+
+def _discover_edelweiss_factsheets_from_api(
+    source: AMCDocumentSource,
+    *,
+    listing_url: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    timeout = max(10.0, min(float(timeout_seconds), 30.0))
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://www.edelweissmf.com/",
+        "User-Agent": user_agent or HDFC_PUBLIC_DOWNLOAD_USER_AGENT,
+    }
+    try:
+        with requests.Session() as session:
+            session.headers.update(headers)
+            try:
+                ip_response = session.get(EDELWEISS_IPIFY_URL, timeout=timeout)
+                ip_response.raise_for_status()
+                ip_address = str(ip_response.json().get("ip") or EDELWEISS_STATIC_IP)
+            except Exception:
+                ip_address = EDELWEISS_STATIC_IP
+
+            key_timestamp = str(int(time.time() * 1_000))
+            key_response = session.get(
+                EDELWEISS_ENCRYPTION_KEY_URL,
+                headers={
+                    "init": "true",
+                    "x-timestamp": key_timestamp,
+                    "x-ip-address": EDELWEISS_STATIC_IP,
+                },
+                timeout=timeout,
+            )
+            key_response.raise_for_status()
+            key_data = json.loads(key_response.json()["body"])
+            secret = str(key_data["PRE_LOGIN"]["SECRET"])
+            hash_key = str(key_data["PRE_LOGIN"]["HASHKEY"])
+            timestamp = str(int(time.time() * 1_000))
+            request_key = hmac.new(
+                hash_key.encode("utf-8"),
+                f"{secret}{ip_address}{timestamp}".encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+            response = session.get(
+                EDELWEISS_STATUTORY_MENU_URL,
+                params={"type": "Downloads", "fundType": "MF", "menuName": "FACTSHEETS"},
+                headers={"x-timestamp": timestamp, "x-ip-address": ip_address},
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            payload = _decrypt_edelweiss_api_body(str(response.json()["body"]), request_key)
+            candidates = [
+                (
+                    str(item.get("fileTitle") or item.get("systemFileName") or ""),
+                    urljoin(listing_url, str(item.get("filePath") or item.get("downloadFile") or "")),
+                )
+                for item in (payload.get("files") or [])
+                if isinstance(item, dict)
+                and str(item.get("subMenuName") or "").strip().lower() == "factsheets"
+            ]
+            documents = _edelweiss_factsheet_documents_from_candidates(
+                source,
+                listing_url=listing_url,
+                candidates=candidates,
+            )
+            logger.info(
+                "edelweiss:official_api_discovery document_type=factsheet count=%s",
+                len(documents),
+            )
+            return documents
+    except Exception as exc:
+        logger.warning("edelweiss:official_factsheet_api_discovery_failed error=%s", exc)
+        return []
+
+
+def _edelweiss_factsheet_documents_from_candidates(
+    source: AMCDocumentSource,
+    *,
+    listing_url: str,
+    candidates: list[tuple[str, str]],
+) -> list[DiscoveredDocument]:
+    documents: list[DiscoveredDocument] = []
+    seen_urls: set[str] = set()
+    required_keywords = _required_keywords_for_generic_source(source, "factsheet")
+    for raw_title, raw_url in candidates:
+        url = urljoin(listing_url, str(raw_url or "").strip())
+        title = _clean_discovery_text(raw_title) or _human_title_from_url(url)
+        if not url or url in seen_urls:
+            continue
+        combined = f"{title} {url}".lower()
+        ext = Path(urlsplit(url).path).suffix.lower()
+        if ext not in {".pdf", ".xls", ".xlsx", ".xlsm"}:
+            continue
+        if not _generic_candidate_allowed(
+            source,
+            combined,
+            "factsheet",
+            ext,
+            required_keywords,
+        ):
+            continue
+        seen_urls.add(url)
+        publication_month = _detect_report_month_from_text(combined)
+        recency_score = (
+            (publication_month.year * 12 + publication_month.month) * 10
+            if publication_month
+            else 0
+        )
+        documents.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type="factsheet",
+                title=title,
+                url=url,
+                discovery_page_url=listing_url,
+                file_ext=ext,
+                # Edelweiss publishes the reporting month in the following
+                # calendar month. The PDF body confirms the actual month.
+                report_month=None,
+                priority_score=_generic_base_score(ext, "factsheet") + recency_score + 50,
+            )
+        )
+    return sorted(documents, key=lambda item: item.priority_score, reverse=True)
+
+
+def _download_edelweiss_document_with_browser(
+    source: AMCDocumentSource,
+    discovered: DiscoveredDocument,
+    *,
+    timeout_seconds: float,
+    user_agent: str,
+) -> DownloadedDocument:
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:
+        raise RuntimeError("edelweiss_browser_download_requires_playwright") from exc
+
+    timeout_ms = max(60_000, int(float(timeout_seconds) * 1_000))
+    referer = discovered.discovery_page_url or _base_site_url(discovered.url)
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            context = browser.new_context(
+                user_agent=user_agent or HDFC_PUBLIC_DOWNLOAD_USER_AGENT,
+            )
+            page = context.new_page()
+            page.goto(referer, wait_until="domcontentloaded", timeout=timeout_ms)
+            response = context.request.get(
+                discovered.url,
+                headers={
+                    "Accept": "application/pdf,*/*;q=0.8",
+                    "Referer": referer,
+                },
+                timeout=timeout_ms,
+            )
+            if not response.ok:
+                raise RuntimeError(
+                    f"edelweiss_browser_download_http_{response.status}"
+                )
+            body = response.body()
+            source_url = str(response.url or discovered.url)
+            return DownloadedDocument(
+                amc_name=discovered.amc_name,
+                amc_code=discovered.amc_code,
+                document_type=discovered.document_type,
+                source_url=source_url,
+                discovery_page_url=discovered.discovery_page_url,
+                file_name=_derive_file_name(source_url, discovered.title),
+                file_ext=_normalize_download_file_ext(discovered.file_ext, body),
+                report_month=discovered.report_month,
+                content_type=response.headers.get("content-type"),
+                file_size_bytes=len(body),
+                file_bytes=body,
+                etag=response.headers.get("etag"),
+                last_modified=response.headers.get("last-modified"),
+            )
+        finally:
+            browser.close()
 
 
 def _edelweiss_api_candidates_in_browser(page) -> list[tuple[str, str]]:

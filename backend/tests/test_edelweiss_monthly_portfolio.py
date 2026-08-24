@@ -11,6 +11,7 @@ from openpyxl import Workbook
 import app.mf_ingestion.downloaders.amc_downloader as amc_downloader
 from app.mf_ingestion.downloaders.amc_downloader import (
     _decrypt_edelweiss_api_body,
+    _edelweiss_factsheet_documents_from_candidates,
     _edelweiss_monthly_portfolio_documents_from_candidates,
 )
 from app.mf_ingestion.downloaders.base_downloader import DiscoveredDocument
@@ -22,6 +23,7 @@ from app.mf_ingestion.sources.registry import get_source
 
 
 EDELWEISS_PORTFOLIO_URL = "https://www.edelweissmf.com/statutory/portfolio-of-schemes"
+EDELWEISS_FACTSHEET_URL = "https://www.edelweissmf.com/downloads/factsheets"
 JULY_WORKBOOK_URL = (
     "https://www.edelweissmf.com/Files/MF/Statutory/Portfolio_of_schemes/"
     "Monthly_Portfolio_and_RiskoMeter/EDEL_Portfolio_Monthly_Notes_31Jul2026.xlsx"
@@ -74,6 +76,31 @@ def test_edelweiss_factsheet_month_is_confirmed_from_its_pdf_body(monkeypatch) -
 
     assert source.factsheet_report_month_in_content_only is True
     assert documents[0].report_month is None
+
+
+def test_edelweiss_official_factsheet_candidates_keep_publication_order_and_defer_month() -> None:
+    documents = _edelweiss_factsheet_documents_from_candidates(
+        get_source("edelweiss"),
+        listing_url=EDELWEISS_FACTSHEET_URL,
+        candidates=[
+            (
+                "Factsheet - July 2026",
+                "/Files/MF/Downloads/FACTSHEETS/FACTSHEETS/Edelweiss_Factsheet_July2026.pdf",
+            ),
+            (
+                "Factsheet - August 2026",
+                "/Files/MF/Downloads/FACTSHEETS/FACTSHEETS/Edelweiss_Factsheet_August__2026.pdf",
+            ),
+            ("Quarterly portfolio notice", "/Files/MF/Downloads/notice.pdf"),
+        ],
+    )
+
+    assert [document.title for document in documents] == [
+        "Factsheet - August 2026",
+        "Factsheet - July 2026",
+    ]
+    assert all(document.report_month is None for document in documents)
+    assert all(document.discovery_page_url == EDELWEISS_FACTSHEET_URL for document in documents)
 
 
 def test_edelweiss_workbook_title_and_fractional_allocations_are_normalized(tmp_path) -> None:
