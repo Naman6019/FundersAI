@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import base64
+import hashlib
+import hmac
 import logging
 import os
 import re
@@ -15,6 +18,7 @@ from urllib.parse import parse_qs, quote, unquote, urljoin, urlsplit, urlunsplit
 
 import requests
 from bs4 import BeautifulSoup
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from app.mf_ingestion.downloaders.base_downloader import (
     BaseDownloader,
     DiscoveredDocument,
@@ -53,6 +57,13 @@ MOTILAL_CATEGORY_BY_DOCUMENT_TYPE = {
     "portfolio_disclosure": "month end portfolio",
 }
 MOTILAL_DISCOVERY_LOOKBACK_MONTHS = 6
+EDELWEISS_API_BASE_URL = "https://api.edelweissmf.com/edelweissmf/api/v1"
+EDELWEISS_ENCRYPTION_KEY_URL = (
+    "https://api.edelweissmf.com/virat_eks_api/api/v1/auth/encryption-key"
+)
+EDELWEISS_STATUTORY_MENU_URL = f"{EDELWEISS_API_BASE_URL}/mf/statutory-menus/single"
+EDELWEISS_IPIFY_URL = "https://api.ipify.org/?format=json"
+EDELWEISS_STATIC_IP = "103.0.123.175"
 HDFC_PUBLIC_DOWNLOAD_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -562,7 +573,7 @@ class AMCDownloader(BaseDownloader):
 
 
 def _download_user_agent(source: AMCDocumentSource, configured_user_agent: str) -> str:
-    if (source.adapter_key or "").strip().lower() == "hdfc":
+    if (source.adapter_key or "").strip().lower() in {"hdfc", "edelweiss"}:
         return HDFC_PUBLIC_DOWNLOAD_USER_AGENT
     return configured_user_agent
 
@@ -905,6 +916,15 @@ def _discover_edelweiss_monthly_portfolios_with_browser(
     timeout_seconds: float,
     user_agent: str,
 ) -> list[DiscoveredDocument]:
+    api_documents = _discover_edelweiss_monthly_portfolios_from_api(
+        source,
+        listing_url=listing_url,
+        timeout_seconds=timeout_seconds,
+        user_agent=user_agent,
+    )
+    if api_documents:
+        return api_documents
+
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -920,12 +940,23 @@ def _discover_edelweiss_monthly_portfolios_with_browser(
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             try:
-                # The public statutory page suppresses its disclosure tabs for
-                # the crawler-style ingestion agent. Use the same bounded
-                # browser identity as the other official public-page adapters.
-                context = browser.new_context(user_agent=HDFC_PUBLIC_DOWNLOAD_USER_AGENT)
+                # Use Playwright's native browser identity. The public page's
+                # API is protected by browser-level delivery rules.
+                context = browser.new_context()
                 page = context.new_page()
                 page.goto(listing_url, wait_until="domcontentloaded", timeout=timeout_ms)
+                page.wait_for_function(
+                    "typeof window.webpackChunkapp !== 'undefined'",
+                    timeout=timeout_ms,
+                )
+                api_candidates = _edelweiss_api_candidates_in_browser(page)
+                if api_candidates:
+                    context.close()
+                    return _edelweiss_monthly_portfolio_documents_from_candidates(
+                        source,
+                        listing_url=listing_url,
+                        candidates=api_candidates,
+                    )
                 # The statutory page first defaults to "Financials & Portfolios".
                 # Select the public portfolio section before its monthly sub-tab.
                 portfolio_tab = page.get_by_text("Portfolio of scheme(s)", exact=True)
@@ -956,6 +987,205 @@ def _discover_edelweiss_monthly_portfolios_with_browser(
         listing_url=listing_url,
         candidates=candidates,
     )
+
+
+def _edelweiss_api_candidates_in_browser(page) -> list[tuple[str, str]]:
+    try:
+        return list(
+            page.evaluate(
+                """
+                async () => {
+                  const keyUrl = "https://api.edelweissmf.com/virat_eks_api/api/v1/auth/encryption-key";
+                  const menuUrl = "https://api.edelweissmf.com/edelweissmf/api/v1/mf/statutory-menus/single";
+                  const staticIp = "103.0.123.175";
+                  const findCrypto = () => {
+                    let req;
+                    if (window.__fundersaiWebpackRequire) {
+                      req = window.__fundersaiWebpackRequire;
+                    } else if (window.webpackChunkapp) {
+                      window.webpackChunkapp.push([[Date.now()], {}, candidate => { req = candidate; }]);
+                      window.__fundersaiWebpackRequire = req;
+                    }
+                    if (!req || !req.m) return null;
+                    for (const id of Object.keys(req.m)) {
+                      try {
+                        const candidate = req(id);
+                        if (candidate?.AES?.decrypt && candidate?.HmacSHA256 && candidate?.enc?.Utf8) {
+                          return candidate;
+                        }
+                      } catch (_) {}
+                    }
+                    return null;
+                  };
+                  const cryptoJs = findCrypto();
+                  if (!cryptoJs) return [];
+                  let ip = staticIp;
+                  try {
+                    ip = String((await (await fetch("https://api.ipify.org/?format=json")).json()).ip || staticIp);
+                  } catch (_) {}
+                  const keyTimestamp = String(Date.now());
+                  const keyResponse = await fetch(keyUrl, {
+                    headers: {
+                      "accept": "application/json, text/plain, */*",
+                      "init": "true",
+                      "x-timestamp": keyTimestamp,
+                      "x-ip-address": staticIp,
+                    },
+                  });
+                  if (!keyResponse.ok) return [];
+                  const keyEnvelope = await keyResponse.json();
+                  const keyData = JSON.parse(keyEnvelope.body);
+                  const secret = String(keyData.PRE_LOGIN.SECRET);
+                  const hashKey = String(keyData.PRE_LOGIN.HASHKEY);
+                  const timestamp = String(Date.now());
+                  const requestKey = cryptoJs.HmacSHA256(secret + ip + timestamp, hashKey).toString(cryptoJs.enc.Hex);
+                  const menuResponse = await fetch(menuUrl + "?type=Statutory&fundType=MF&menuName=Portfolio%20of%20scheme(s)", {
+                    headers: {
+                      "accept": "application/json, text/plain, */*",
+                      "x-timestamp": timestamp,
+                      "x-ip-address": ip,
+                    },
+                  });
+                  if (!menuResponse.ok) return [];
+                  const encrypted = (await menuResponse.json()).body;
+                  const payload = JSON.parse(cryptoJs.AES.decrypt(encrypted, requestKey).toString(cryptoJs.enc.Utf8));
+                  return (payload.files || [])
+                    .filter(item => String(item.subMenuName || "").trim().toLowerCase() === "monthly portfolio and risk-o-meter")
+                    .map(item => ({
+                      title: String(item.fileTitle || item.systemFileName || ""),
+                      url: String(item.filePath || item.downloadFile || ""),
+                    }))
+                    .filter(item => item.url);
+                }
+                """
+            )
+            or []
+        )
+    except Exception as exc:
+        logger.warning("edelweiss:browser_api_discovery_failed error=%s", exc)
+        return []
+
+
+def _discover_edelweiss_monthly_portfolios_from_api(
+    source: AMCDocumentSource,
+    *,
+    listing_url: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    """Read the same official statutory-menu API used by Edelweiss's page.
+
+    The public page can hide its Angular tabs from hosted crawlers, while this
+    API remains the page's source of truth for its official file inventory.
+    """
+    timeout = max(10.0, min(float(timeout_seconds), 30.0))
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://www.edelweissmf.com/",
+        "User-Agent": user_agent or HDFC_PUBLIC_DOWNLOAD_USER_AGENT,
+    }
+    try:
+        with requests.Session() as session:
+            session.headers.update(headers)
+            try:
+                ip_response = session.get(EDELWEISS_IPIFY_URL, timeout=timeout)
+                ip_response.raise_for_status()
+                ip_address = str(ip_response.json().get("ip") or EDELWEISS_STATIC_IP)
+            except Exception:
+                ip_address = EDELWEISS_STATIC_IP
+
+            timestamp = str(int(time.time() * 1_000))
+            key_response = session.get(
+                EDELWEISS_ENCRYPTION_KEY_URL,
+                headers={
+                    "init": "true",
+                    "x-timestamp": timestamp,
+                    # Edelweiss's Angular client uses its static bootstrap IP
+                    # for this first public-key request.
+                    "x-ip-address": EDELWEISS_STATIC_IP,
+                },
+                timeout=timeout,
+            )
+            key_response.raise_for_status()
+            key_envelope = key_response.json()
+            key_data = json.loads(key_envelope["body"])
+            secret = str(key_data["PRE_LOGIN"]["SECRET"])
+            hash_key = str(key_data["PRE_LOGIN"]["HASHKEY"])
+
+            timestamp = str(int(time.time() * 1_000))
+            request_key = hmac.new(
+                hash_key.encode("utf-8"),
+                f"{secret}{ip_address}{timestamp}".encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+            response = session.get(
+                EDELWEISS_STATUTORY_MENU_URL,
+                params={
+                    "type": "Statutory",
+                    "fundType": "MF",
+                    "menuName": "Portfolio of scheme(s)",
+                },
+                headers={
+                    "x-timestamp": timestamp,
+                    "x-ip-address": ip_address,
+                },
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            encrypted_body = str(response.json()["body"])
+            payload = _decrypt_edelweiss_api_body(encrypted_body, request_key)
+            files = payload.get("files") if isinstance(payload, dict) else None
+            if not isinstance(files, list):
+                raise ValueError("statutory API response has no files list")
+
+            candidates: list[tuple[str, str]] = []
+            for item in files:
+                if not isinstance(item, dict):
+                    continue
+                if (
+                    str(item.get("subMenuName") or "").strip().lower()
+                    != "monthly portfolio and risk-o-meter"
+                ):
+                    continue
+                file_path = str(item.get("filePath") or item.get("downloadFile") or "").strip()
+                title = str(item.get("fileTitle") or item.get("systemFileName") or "").strip()
+                if file_path:
+                    candidates.append((title, urljoin(listing_url, file_path)))
+            documents = _edelweiss_monthly_portfolio_documents_from_candidates(
+                source,
+                listing_url=listing_url,
+                candidates=candidates,
+            )
+            logger.info(
+                "edelweiss:official_api_discovery document_type=portfolio_disclosure count=%s",
+                len(documents),
+            )
+            return documents
+    except Exception as exc:
+        logger.warning("edelweiss:official_api_discovery_failed error=%s", exc)
+        return []
+
+
+def _decrypt_edelweiss_api_body(encrypted_body: str, passphrase: str) -> dict:
+    raw = base64.b64decode(encrypted_body)
+    if raw[:8] != b"Salted__":
+        raise ValueError("unexpected Edelweiss encrypted response format")
+    salt = raw[8:16]
+    derived = b""
+    previous = b""
+    passphrase_bytes = passphrase.encode("utf-8")
+    while len(derived) < 48:
+        previous = hashlib.md5(previous + passphrase_bytes + salt).digest()
+        derived += previous
+    decryptor = Cipher(
+        algorithms.AES(derived[:32]),
+        modes.CBC(derived[32:48]),
+    ).decryptor()
+    padded = decryptor.update(raw[16:]) + decryptor.finalize()
+    padding_length = padded[-1]
+    if not 1 <= padding_length <= 16 or padded[-padding_length:] != bytes([padding_length]) * padding_length:
+        raise ValueError("invalid Edelweiss response padding")
+    return json.loads(padded[:-padding_length].decode("utf-8"))
 
 
 def _edelweiss_monthly_portfolio_documents_from_candidates(

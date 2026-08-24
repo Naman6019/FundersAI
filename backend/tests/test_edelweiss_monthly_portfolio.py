@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import json
 from datetime import date
 
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from openpyxl import Workbook
 
 import app.mf_ingestion.downloaders.amc_downloader as amc_downloader
 from app.mf_ingestion.downloaders.amc_downloader import (
+    _decrypt_edelweiss_api_body,
     _edelweiss_monthly_portfolio_documents_from_candidates,
 )
 from app.mf_ingestion.downloaders.base_downloader import DiscoveredDocument
@@ -132,3 +137,23 @@ def test_edelweiss_mapping_alias_accepts_its_official_snapshot_name() -> None:
     assert source.factsheet_contains_holdings is False
     assert source.portfolio_disclosure_page_url == EDELWEISS_PORTFOLIO_URL
     assert _snapshot_matches_amc("edelweiss", "Edelweiss Mutual Fund") is True
+
+
+def test_edelweiss_api_body_decrypts_openssl_aes_payload() -> None:
+    plaintext = json.dumps({"files": [{"fileTitle": "Monthly Portfolio - July 31, 2026"}]}).encode()
+    passphrase = b"test-request-key"
+    salt = b"12345678"
+    derived = b""
+    previous = b""
+    while len(derived) < 48:
+        previous = hashlib.md5(previous + passphrase + salt).digest()
+        derived += previous
+    padding_length = 16 - (len(plaintext) % 16)
+    padded = plaintext + bytes([padding_length]) * padding_length
+    encryptor = Cipher(
+        algorithms.AES(derived[:32]),
+        modes.CBC(derived[32:48]),
+    ).encryptor()
+    encrypted = base64.b64encode(b"Salted__" + salt + encryptor.update(padded) + encryptor.finalize()).decode()
+
+    assert _decrypt_edelweiss_api_body(encrypted, "test-request-key") == json.loads(plaintext)
