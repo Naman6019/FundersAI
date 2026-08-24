@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.mf_ingestion.services.parsing_service import (
+from app.mf_ingestion.normalizers.scheme_name_normalizer import (
     _normalize_family_scheme_name,
     _select_best_scheme_candidate,
 )

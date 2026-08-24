@@ -917,7 +917,10 @@ def _discover_edelweiss_monthly_portfolios_with_browser(
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             try:
-                context = browser.new_context(user_agent=user_agent)
+                # The public statutory page suppresses its disclosure tabs for
+                # the crawler-style ingestion agent. Use the same bounded
+                # browser identity as the other official public-page adapters.
+                context = browser.new_context(user_agent=HDFC_PUBLIC_DOWNLOAD_USER_AGENT)
                 page = context.new_page()
                 page.goto(listing_url, wait_until="domcontentloaded", timeout=timeout_ms)
                 # The statutory page first defaults to "Financials & Portfolios".

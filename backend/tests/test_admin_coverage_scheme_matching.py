@@ -1,4 +1,4 @@
-from app.mf_ingestion.services.parsing_service import (
+from app.mf_ingestion.normalizers.scheme_name_normalizer import (
     _build_relaxed_ilike_pattern,
     _normalize_family_scheme_name,
     _normalize_lookup_text,

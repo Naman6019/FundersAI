@@ -18,6 +18,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   // 1. Core Institutional & Marketing Pages (www.fundersai.co.in)
   const corePages: { path: string; priority: number; changeFrequency: MetadataRoute.Sitemap[number]['changeFrequency'] }[] = [
     { path: '', priority: 1.0, changeFrequency: 'daily' },
+    { path: '/research', priority: 0.95, changeFrequency: 'daily' },
     { path: '/how-it-works', priority: 0.9, changeFrequency: 'weekly' },
     { path: '/intelligence', priority: 0.9, changeFrequency: 'weekly' },
     { path: '/pricing', priority: 0.95, changeFrequency: 'weekly' },

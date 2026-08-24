@@ -116,3 +116,24 @@ test('Mathematical SIP compounding formulas execute with deterministic precision
   assert.equal(totalInvested, 1200000); // 12 Lakhs
   assert.ok(expectedFV > 2300000 && expectedFV < 2350000); // ~23.23 Lakhs
 });
+
+test('Dedicated /research page and Master Ecosystem landing page exist and are configured', () => {
+  const researchPage = path.join(FRONTEND_ROOT, 'app', 'research', 'page.tsx');
+  const masterLandingComponent = path.join(FRONTEND_ROOT, 'components', 'landing', 'MasterEcosystemLandingPage.tsx');
+  const ecosystemHeader = path.join(FRONTEND_ROOT, 'components', 'ecosystem', 'EcosystemHeader.tsx');
+  const rootPage = path.join(FRONTEND_ROOT, 'app', 'page.tsx');
+
+  assert.ok(existsSync(researchPage), 'app/research/page.tsx must exist');
+  assert.ok(existsSync(masterLandingComponent), 'MasterEcosystemLandingPage.tsx must exist');
+
+  const researchSource = readFileSync(researchPage, 'utf-8');
+  assert.match(researchSource, /canonical.*\/research/);
+  assert.match(researchSource, /PremiumLandingPage/);
+
+  const rootSource = readFileSync(rootPage, 'utf-8');
+  assert.match(rootSource, /MasterEcosystemLandingPage/);
+
+  const headerSource = readFileSync(ecosystemHeader, 'utf-8');
+  assert.match(headerSource, /href="\/research"/);
+});
+

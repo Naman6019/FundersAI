@@ -106,9 +106,11 @@ export function EcosystemHeader({
     if (!q) {
       return {
         tools: [
-          { name: "Mutual Fund Screener & Metric Explorer", href: "/mutual-funds", type: "Directory" },
-          { name: "Mutual Fund Portfolio Overlap Calculator", href: "/tools/portfolio-overlap", type: "Calculator" },
-          { name: "Mutual Fund SIP & Step-Up Calculator", href: "/tools/sip-calculator", type: "Calculator" },
+          { name: "Research Workspace", href: "/research", type: "Workspace" },
+          { name: "Synthesis Studio", href: "/synthesis", type: "Studio" },
+          { name: "Mutual Fund Screener & Explorer", href: "/mutual-funds", type: "Directory" },
+          { name: "Portfolio Overlap Calculator", href: "/tools/portfolio-overlap", type: "Calculator" },
+          { name: "SIP & Step-Up Calculator", href: "/tools/sip-calculator", type: "Calculator" },
         ],
         funds: FUND_REGISTRY.slice(0, 4),
         comparisons: [
@@ -128,6 +130,8 @@ export function EcosystemHeader({
     ).slice(0, 6);
 
     const publicTools = [
+      { name: "Research Workspace", href: "/research", type: "Workspace", desc: "Quantitative AI evidence & market analysis" },
+      { name: "Synthesis Studio", href: "/synthesis", type: "Studio", desc: "Autonomous multi-agent fund factsheet reports" },
       { name: "Portfolio Overlap Calculator", href: "/tools/portfolio-overlap", type: "Tool", desc: "Compare fund holdings overlap" },
       { name: "SIP & Compounding Calculator", href: "/tools/sip-calculator", type: "Tool", desc: "Calculate future corpus & step-up SIP" },
       { name: "Mutual Fund Directory & Screener", href: "/mutual-funds", type: "Directory", desc: "Screen 30+ funds by AMC and category" },
@@ -186,7 +190,7 @@ export function EcosystemHeader({
             </Link>
 
             <Link
-              href="/dashboard"
+              href="/research"
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all ${
                 activeTab === "research"
                   ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm"

@@ -16,7 +16,8 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 from app.database import supabase
-from app.mf_ingestion.services.parsing_service import ParsingService, _normalize_family_scheme_name
+from app.mf_ingestion.normalizers.scheme_name_normalizer import _normalize_family_scheme_name
+from app.mf_ingestion.services.parsing_service import ParsingService
 from app.mf_ingestion.services.promotion_review_service import upsert_decision
 
 FMP_PATTERN = re.compile(
