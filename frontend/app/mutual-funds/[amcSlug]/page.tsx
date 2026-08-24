@@ -6,6 +6,8 @@ import {
   getAmcBySlug,
   getFundsByAmc,
 } from '@/lib/fund-registry';
+import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
+import PublicFooter from '@/components/layout/PublicFooter';
 
 type Props = { params: Promise<{ amcSlug: string }> };
 
@@ -61,100 +63,99 @@ export default async function AmcPage({ params }: Props) {
   const allAmcs = AMC_REGISTRY.filter((a) => a.slug !== amcSlug);
 
   return (
-    <main className="min-h-dvh bg-[#070b12] text-[#dce8fa]">
-      {/* Header */}
-      <div className="border-b border-white/10 bg-[#070b12]/90 backdrop-blur-md sticky top-0 z-30">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 sm:px-8">
-          <Link href="/mutual-funds" className="text-sm font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">
-            ← Mutual Funds
-          </Link>
-          <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#7183a0]">{amc.shortName}</span>
-        </div>
-      </div>
+    <div className="min-h-dvh bg-[#070b12] text-[#dce8fa] flex flex-col justify-between">
+      <EcosystemHeader currentApp="mutual-funds" />
 
-      <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
-        {/* Hero */}
-        <div className="mb-12">
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#00FF9D]/70 mb-3">AMC</p>
-          <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl mb-4">{amc.name}</h1>
-          <p className="text-base leading-7 text-[#aebed6] max-w-2xl">{amc.description}</p>
-        </div>
+      <main className="flex-1">
+        <div className="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-2 text-xs font-mono text-[#7183a0] mb-8">
+            <Link href="/" className="hover:text-white transition-colors">Home</Link>
+            <span>/</span>
+            <Link href="/mutual-funds" className="hover:text-white transition-colors">Mutual Funds</Link>
+            <span>/</span>
+            <span className="text-[#00FF9D]">{amc.shortName}</span>
+          </div>
 
-        {/* Fund cards */}
-        {funds.length > 0 ? (
-          <section className="mb-16">
-            <div className="flex items-baseline justify-between mb-6">
-              <h2 className="text-xl font-bold text-white">Indexed funds</h2>
-              <span className="text-xs text-[#7183a0]">{funds.length} fund{funds.length !== 1 ? 's' : ''}</span>
+          {/* Hero */}
+          <div className="mb-12">
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#00FF9D]/70 mb-3">AMC</p>
+            <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl mb-4">{amc.name}</h1>
+            <p className="text-base leading-7 text-[#aebed6] max-w-2xl">{amc.description}</p>
+          </div>
+
+          {/* Fund cards */}
+          {funds.length > 0 ? (
+            <section className="mb-16">
+              <div className="flex items-baseline justify-between mb-6">
+                <h2 className="text-xl font-bold text-white">Indexed funds</h2>
+                <span className="text-xs text-[#7183a0]">{funds.length} fund{funds.length !== 1 ? 's' : ''}</span>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {funds.map((fund) => (
+                  <Link
+                    key={fund.fundSlug}
+                    href={`/mutual-funds/${fund.amcSlug}/${fund.fundSlug}`}
+                    className="group flex flex-col rounded-2xl border border-white/10 bg-white/[0.025] p-6 transition hover:border-white/20 hover:bg-white/[0.04]"
+                  >
+                    <div className="flex items-start justify-between gap-4 mb-4">
+                      <h3 className="text-base font-bold text-white group-hover:text-[#00FF9D] transition-colors leading-snug">
+                        {fund.schemeName}
+                      </h3>
+                      <CategoryBadge category={fund.category} />
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#7183a0] mb-4">
+                      <span>{fund.plan} · {fund.option}</span>
+                      <span>Benchmark: {fund.benchmark}</span>
+                      <span>AMFI: {fund.schemeCode}</span>
+                    </div>
+                    <span className="mt-auto text-xs font-semibold text-[#82aff6] group-hover:text-[#b8d3ff] transition-colors">
+                      View metrics →
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          ) : (
+            <div className="mb-16 rounded-xl border border-white/10 bg-white/[0.02] px-6 py-8 text-center">
+              <p className="text-[#7183a0] text-sm">
+                No funds indexed for {amc.name} yet. Use the{' '}
+                <Link href="/dashboard" className="text-[#82aff6] hover:text-[#b8d3ff]">workspace</Link>{' '}
+                to search all schemes.
+              </p>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {funds.map((fund) => (
+          )}
+
+          {/* Other AMCs */}
+          <section className="mb-16">
+            <h2 className="text-lg font-bold text-white mb-4">Other fund houses</h2>
+            <div className="flex flex-wrap gap-2">
+              {allAmcs.map((a) => (
                 <Link
-                  key={fund.fundSlug}
-                  href={`/mutual-funds/${fund.amcSlug}/${fund.fundSlug}`}
-                  className="group flex flex-col rounded-2xl border border-white/10 bg-white/[0.025] p-6 transition hover:border-white/20 hover:bg-white/[0.04]"
+                  key={a.slug}
+                  href={`/mutual-funds/${a.slug}`}
+                  className="rounded-full border border-white/10 bg-white/[0.02] px-3.5 py-1.5 text-xs font-semibold text-[#aebed6] transition hover:border-white/20 hover:text-white"
                 >
-                  <div className="flex items-start justify-between gap-4 mb-4">
-                    <h3 className="text-base font-bold text-white group-hover:text-[#00FF9D] transition-colors leading-snug">
-                      {fund.schemeName}
-                    </h3>
-                    <CategoryBadge category={fund.category} />
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#7183a0] mb-4">
-                    <span>{fund.plan} · {fund.option}</span>
-                    <span>Benchmark: {fund.benchmark}</span>
-                    <span>AMFI: {fund.schemeCode}</span>
-                  </div>
-                  <span className="mt-auto text-xs font-semibold text-[#82aff6] group-hover:text-[#b8d3ff] transition-colors">
-                    View metrics →
-                  </span>
+                  {a.shortName}
                 </Link>
               ))}
             </div>
           </section>
-        ) : (
-          <div className="mb-16 rounded-xl border border-white/10 bg-white/[0.02] px-6 py-8 text-center">
-            <p className="text-[#7183a0] text-sm">
-              No funds indexed for {amc.name} yet. Use the{' '}
-              <Link href="/dashboard" className="text-[#82aff6] hover:text-[#b8d3ff]">workspace</Link>{' '}
-              to search all schemes.
+
+          {/* Disclosure */}
+          <div className="rounded-xl border border-white/8 bg-white/[0.015] px-5 py-4 text-xs text-[#7183a0]">
+            <p>
+              <span className="font-semibold text-white/60">Coverage note: </span>
+              This page shows funds from {amc.name} that are currently indexed in FundersAI. Coverage is partial —
+              not every scheme offered by this AMC is listed here. For full scheme search, use the workspace.
+              Data sourced from AMFI and official AMC disclosures. Last updated July 2026.
+              FundersAI does not provide investment advice.
             </p>
           </div>
-        )}
-
-        {/* Other AMCs */}
-        <section className="mb-12">
-          <h2 className="text-lg font-bold text-white mb-4">Other AMCs</h2>
-          <div className="flex flex-wrap gap-2">
-            {allAmcs.map((a) => (
-              <Link
-                key={a.slug}
-                href={`/mutual-funds/${a.slug}`}
-                className="rounded-full border border-white/10 bg-white/[0.02] px-3.5 py-1.5 text-xs font-semibold text-[#7183a0] transition hover:border-white/20 hover:text-white"
-              >
-                {a.shortName}
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        {/* Disclosure */}
-        <div className="rounded-xl border border-white/8 bg-white/[0.015] px-5 py-4 text-xs text-[#7183a0]">
-          <p>
-            <span className="font-semibold text-white/60">Coverage note: </span>
-            This page shows funds from {amc.name} that are currently indexed in FundersAI. Coverage is partial —
-            not every scheme offered by this AMC is listed here. For full scheme search, use the workspace.
-            Data sourced from AMFI and official AMC disclosures. Last updated July 2026.
-            FundersAI does not provide investment advice.
-          </p>
         </div>
+      </main>
 
-        <div className="mt-8 flex flex-wrap gap-4 border-t border-white/10 pt-6 text-sm">
-          <Link href="/mutual-funds" className="font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">All AMCs</Link>
-          <Link href="/methodology" className="font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">Methodology</Link>
-          <Link href="/dashboard" className="font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">Open workspace</Link>
-        </div>
-      </div>
-    </main>
+      <PublicFooter />
+    </div>
   );
 }

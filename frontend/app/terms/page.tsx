@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
+import PublicFooter from '@/components/layout/PublicFooter';
 
 export const metadata: Metadata = {
   title: 'Terms of Use | FundersAI',
@@ -21,11 +23,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function TermsPage() {
   return (
-    <main className="min-h-dvh bg-[#070b12] px-4 py-12 text-[#dce8fa] sm:px-6">
-      <article className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-[#101724] p-6 shadow-2xl sm:p-10">
-        <Link href="/" className="text-sm font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">
-          ← FundersAI
-        </Link>
+    <div className="min-h-dvh bg-[#070b12] text-[#dce8fa] flex flex-col justify-between">
+      <EcosystemHeader />
+
+      <main className="px-4 py-12 sm:px-6 flex-1">
+        <article className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-[#101724] p-6 shadow-2xl sm:p-10">
+          <Link href="/" className="text-sm font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">
+            ← Home
+          </Link>
         <h1 className="mt-6 text-3xl font-semibold tracking-tight text-white">Terms of Use</h1>
         <p className="mt-2 text-sm text-[#7183a0]">Last updated: July 31, 2026</p>
 
@@ -140,14 +145,10 @@ export default function TermsPage() {
           </Section>
 
         </div>
-
-        <div className="mt-10 flex flex-wrap gap-4 border-t border-white/10 pt-6 text-sm">
-          <Link href="/" className="font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">Home</Link>
-          <Link href="/privacy" className="font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">Privacy Policy</Link>
-          <Link href="/contact" className="font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">Contact</Link>
-          <Link href="/feedback" className="font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">Feedback form</Link>
-        </div>
       </article>
-    </main>
+      </main>
+
+      <PublicFooter />
+    </div>
   );
 }

@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getFundBySlug, COMPARE_PAIRS } from '@/lib/fund-registry';
 import { CompareJsonLd } from '@/components/seo/JsonLd';
+import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
+import PublicFooter from '@/components/layout/PublicFooter';
 
 type Props = { params: Promise<{ pair: string }> };
 
@@ -69,20 +71,20 @@ export default async function ComparePage({ params }: Props) {
   const snapshot = STATIC_SNAPSHOTS[pair];
 
   return (
-    <>
+    <div className="min-h-dvh bg-[#070b12] text-[#dce8fa] flex flex-col justify-between">
       <CompareJsonLd fundA={fundA} fundB={fundB} pair={pair} />
-      <main className="min-h-dvh bg-[#070b12] text-[#dce8fa]">
-      {/* Header */}
-      <div className="border-b border-white/10 bg-[#070b12]/90 backdrop-blur-md sticky top-0 z-30">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 sm:px-8">
-          <Link href="/mutual-funds" className="text-sm font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">
-            ← Mutual Funds
-          </Link>
-          <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#7183a0] hidden sm:block">Compare</span>
-        </div>
-      </div>
+      <EcosystemHeader currentApp="tools" />
 
-      <div className="mx-auto max-w-5xl px-5 py-16 sm:px-8">
+      <main className="flex-1">
+        <div className="mx-auto max-w-5xl px-5 py-12 sm:px-8">
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-2 text-xs font-mono text-[#7183a0] mb-8">
+            <Link href="/" className="hover:text-white transition-colors">Home</Link>
+            <span>/</span>
+            <Link href="/mutual-funds" className="hover:text-white transition-colors">Mutual Funds</Link>
+            <span>/</span>
+            <span className="text-[#00FF9D]">Compare</span>
+          </div>
         {/* Hero */}
         <div className="mb-12 text-center">
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#00FF9D]/70 mb-4">Fund Comparison</p>
@@ -228,13 +230,10 @@ export default async function ComparePage({ params }: Props) {
           </p>
         </div>
 
-        <div className="mt-8 flex flex-wrap gap-4 border-t border-white/10 pt-6 text-sm">
-          <Link href="/mutual-funds" className="font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">All funds</Link>
-          <Link href={`/mutual-funds/${fundA.amcSlug}/${fundA.fundSlug}`} className="font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">{fundA.schemeName}</Link>
-          <Link href={`/mutual-funds/${fundB.amcSlug}/${fundB.fundSlug}`} className="font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">{fundB.schemeName}</Link>
         </div>
-      </div>
-    </main>
-    </>
+      </main>
+
+      <PublicFooter />
+    </div>
   );
 }

@@ -8,6 +8,8 @@ import {
   getFundsByCategory,
 } from '@/lib/fund-registry';
 import { CategoryJsonLd } from '@/components/seo/JsonLd';
+import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
+import PublicFooter from '@/components/layout/PublicFooter';
 
 type Props = { params: Promise<{ categorySlug: string }> };
 
@@ -43,20 +45,20 @@ export default async function CategoryPage({ params }: Props) {
   const otherCategories = CATEGORY_LIST.filter((cat) => cat !== category);
 
   return (
-    <>
+    <div className="min-h-dvh bg-[#070b12] text-[#dce8fa] flex flex-col justify-between">
       <CategoryJsonLd category={category} categorySlug={slug} fundCount={funds.length} />
-      <main className="min-h-dvh bg-[#070b12] text-[#dce8fa]">
-      {/* Header */}
-      <div className="border-b border-white/10 bg-[#070b12]/90 backdrop-blur-md sticky top-0 z-30">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 sm:px-8">
-          <Link href="/mutual-funds" className="text-sm font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">
-            ← Mutual Funds
-          </Link>
-          <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#7183a0]">{category}</span>
-        </div>
-      </div>
+      <EcosystemHeader currentApp="mutual-funds" />
 
-      <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
+      <main className="flex-1">
+        <div className="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-2 text-xs font-mono text-[#7183a0] mb-8">
+            <Link href="/" className="hover:text-white transition-colors">Home</Link>
+            <span>/</span>
+            <Link href="/mutual-funds" className="hover:text-white transition-colors">Mutual Funds</Link>
+            <span>/</span>
+            <span className="text-[#00FF9D]">{category}</span>
+          </div>
         {/* Hero */}
         <div className="mb-12">
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#00FF9D]/70 mb-3">SEBI Category</p>
@@ -137,13 +139,10 @@ export default async function CategoryPage({ params }: Props) {
           </p>
         </div>
 
-        <div className="mt-8 flex flex-wrap gap-4 border-t border-white/10 pt-6 text-sm">
-          <Link href="/mutual-funds" className="font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">All funds</Link>
-          <Link href="/methodology" className="font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">Methodology</Link>
-          <Link href="/dashboard" className="font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">Open workspace</Link>
         </div>
-      </div>
-    </main>
-    </>
+      </main>
+
+      <PublicFooter />
+    </div>
   );
 }

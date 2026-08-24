@@ -9,6 +9,8 @@ import {
 } from '@/lib/fund-registry';
 import { DirectoryJsonLd } from '@/components/seo/JsonLd';
 import MutualFundExplorer from '@/components/funds/MutualFundExplorer';
+import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
+import PublicFooter from '@/components/layout/PublicFooter';
 
 export const metadata: Metadata = {
   title: 'Indian Mutual Funds Screener & Directory | FundersAI',
@@ -33,29 +35,11 @@ export default function MutualFundsPage() {
   }));
 
   return (
-    <>
+    <div className="min-h-dvh bg-[#070b12] text-[#dce8fa] flex flex-col justify-between">
       <DirectoryJsonLd funds={FUND_REGISTRY} />
-      <main className="min-h-dvh bg-[#070b12] text-[#dce8fa]">
-        {/* Header */}
-        <div className="border-b border-white/10 bg-[#070b12]/90 backdrop-blur-md sticky top-0 z-30">
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 sm:px-8">
-            <Link href="/" className="text-sm font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">
-              ← FundersAI
-            </Link>
-            <div className="flex items-center gap-4">
-              <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#00FF9D]">
-                Mutual Funds Screener
-              </span>
-              <Link
-                href="/dashboard"
-                className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-[#00FF9D]/30 bg-[#00FF9D]/10 px-3.5 py-1 text-xs font-semibold text-[#00FF9D] hover:bg-[#00FF9D]/20 transition"
-              >
-                Open Workspace ⚡
-              </Link>
-            </div>
-          </div>
-        </div>
+      <EcosystemHeader currentApp="mutual-funds" />
 
+      <main className="flex-1">
         <div className="mx-auto max-w-6xl px-5 py-12 sm:px-8 space-y-16">
           {/* Hero */}
           <div>
@@ -153,18 +137,10 @@ export default function MutualFundsPage() {
               FundersAI provides deterministic metric computation from official Association of Mutual Funds in India (AMFI) daily NAV disclosures and monthly AMC portfolio filings. Nothing on this page constitutes financial advice or personalized investment recommendation. Always verify with official AMC Scheme Information Documents (SID).
             </p>
           </div>
-
-          <div className="flex flex-wrap gap-4 border-t border-white/10 pt-6 text-sm">
-            <Link href="/" className="font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">Home</Link>
-            <span className="text-white/20">|</span>
-            <Link href="/methodology" className="font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">Methodology</Link>
-            <span className="text-white/20">|</span>
-            <Link href="/data-trust" className="font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">Data Trust</Link>
-            <span className="text-white/20">|</span>
-            <Link href="/dashboard" className="font-semibold text-[#00FF9D] hover:text-[#66ffba] transition-colors">Open workspace →</Link>
-          </div>
         </div>
       </main>
-    </>
+
+      <PublicFooter />
+    </div>
   );
 }

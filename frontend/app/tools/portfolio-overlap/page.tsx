@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import PortfolioOverlapCalculator from '@/components/tools/PortfolioOverlapCalculator';
 import { ToolJsonLd } from '@/components/seo/JsonLd';
-import { Layers, HelpCircle, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
+import PublicFooter from '@/components/layout/PublicFooter';
+import { Layers, HelpCircle } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Mutual Fund Portfolio Overlap Calculator | Check Common Stocks | FundersAI',
@@ -40,7 +42,8 @@ const OVERLAP_FAQS = [
 
 export default function PortfolioOverlapPage() {
   return (
-    <main className="min-h-screen bg-[#05070f] text-slate-100 px-4 sm:px-6 lg:px-8 py-10">
+    <div className="min-h-screen bg-[#05070f] text-slate-100 flex flex-col justify-between">
+      <EcosystemHeader currentApp="tools" />
       <ToolJsonLd
         name="Mutual Fund Portfolio Overlap Calculator"
         description="Calculate stock holding overlap and duplication between any two Indian mutual funds based on official SEBI portfolio disclosures."
@@ -48,7 +51,7 @@ export default function PortfolioOverlapPage() {
         faqs={OVERLAP_FAQS}
       />
 
-      <div className="max-w-6xl mx-auto space-y-12">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-12 flex-1 w-full">
         {/* Breadcrumb & Header */}
         <header className="space-y-4">
           <div className="flex items-center gap-2 text-xs font-mono text-[#7183a0]">
@@ -97,7 +100,9 @@ export default function PortfolioOverlapPage() {
             ))}
           </div>
         </section>
-      </div>
-    </main>
+      </main>
+
+      <PublicFooter />
+    </div>
   );
 }

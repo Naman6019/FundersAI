@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import SipCalculatorPublic from '@/components/tools/SipCalculatorPublic';
 import { ToolJsonLd } from '@/components/seo/JsonLd';
-import { Calculator, HelpCircle, Sparkles } from 'lucide-react';
+import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
+import PublicFooter from '@/components/layout/PublicFooter';
+import { Calculator, HelpCircle } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'SIP Calculator – Systematic Investment Plan & Step-Up Calculator | FundersAI',
@@ -40,7 +42,8 @@ const SIP_FAQS = [
 
 export default function SipCalculatorPage() {
   return (
-    <main className="min-h-screen bg-[#05070f] text-slate-100 px-4 sm:px-6 lg:px-8 py-10">
+    <div className="min-h-screen bg-[#05070f] text-slate-100 flex flex-col justify-between">
+      <EcosystemHeader currentApp="tools" />
       <ToolJsonLd
         name="Mutual Fund SIP & Step-Up Calculator"
         description="Estimate compound growth, maturity corpus, and inflation-adjusted future wealth for Systematic Investment Plans and Lumpsum mutual fund investments."
@@ -48,7 +51,7 @@ export default function SipCalculatorPage() {
         faqs={SIP_FAQS}
       />
 
-      <div className="max-w-6xl mx-auto space-y-12">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-12 flex-1 w-full">
         {/* Breadcrumb & Header */}
         <header className="space-y-4">
           <div className="flex items-center gap-2 text-xs font-mono text-[#7183a0]">
@@ -97,7 +100,9 @@ export default function SipCalculatorPage() {
             ))}
           </div>
         </section>
-      </div>
-    </main>
+      </main>
+
+      <PublicFooter />
+    </div>
   );
 }

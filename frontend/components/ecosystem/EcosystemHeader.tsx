@@ -68,8 +68,8 @@ export function EcosystemHeader({
   }, []);
 
   // The logo returns to the Synthesis landing page (/synthesis) if in Synthesis,
-  // or to the user's remembered landing page (/ or /synthesis).
-  const logoHref = isSynthesis ? "/synthesis" : rememberedLanding;
+  // or to the root homepage (/) on all other pages.
+  const logoHref = isSynthesis ? "/synthesis" : "/";
 
   // Keyboard shortcut listener for Cmd+K
   useEffect(() => {

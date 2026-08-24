@@ -9,6 +9,8 @@ import {
   getFundsByCategory,
 } from '@/lib/fund-registry';
 import { FundJsonLd } from '@/components/seo/JsonLd';
+import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
+import PublicFooter from '@/components/layout/PublicFooter';
 
 type Props = { params: Promise<{ amcSlug: string; fundSlug: string }> };
 
@@ -223,22 +225,23 @@ export default async function FundDetailPage({ params }: Props) {
   const amc = getAmcBySlug(amcSlug);
 
   return (
-    <>
+    <div className="min-h-dvh bg-[#070b12] text-[#dce8fa] flex flex-col justify-between">
       <FundJsonLd fund={fund} amc={amc} />
-      <main className="min-h-dvh bg-[#070b12] text-[#dce8fa]">
-        {/* Header */}
-        <div className="border-b border-white/10 bg-[#070b12]/90 backdrop-blur-md sticky top-0 z-30">
-          <div className="mx-auto flex max-w-6xl items-center gap-4 px-5 py-4 sm:px-8">
-            <Link href={`/mutual-funds/${amcSlug}`} className="text-sm font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors shrink-0">
-              ← {amc?.shortName ?? amcSlug}
-            </Link>
-            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#7183a0] truncate hidden sm:block">
-              {fund.schemeName}
-            </span>
-          </div>
-        </div>
+      <EcosystemHeader currentApp="mutual-funds" />
 
-        <div className="mx-auto max-w-5xl px-5 py-16 sm:px-8">
+      <main className="flex-1">
+        <div className="mx-auto max-w-5xl px-5 py-12 sm:px-8">
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-2 text-xs font-mono text-[#7183a0] mb-8">
+            <Link href="/" className="hover:text-white transition-colors">Home</Link>
+            <span>/</span>
+            <Link href="/mutual-funds" className="hover:text-white transition-colors">Mutual Funds</Link>
+            <span>/</span>
+            <Link href={`/mutual-funds/${amcSlug}`} className="hover:text-white transition-colors">{amc?.shortName ?? amcSlug}</Link>
+            <span>/</span>
+            <span className="text-[#00FF9D] truncate max-w-xs">{fund.schemeName}</span>
+          </div>
+
           {/* Hero */}
           <div className="mb-12">
             <div className="flex flex-wrap gap-2 mb-4">
@@ -268,26 +271,10 @@ export default async function FundDetailPage({ params }: Props) {
               <Link href="/methodology" className="text-[#82aff6] hover:text-[#b8d3ff]">Full methodology →</Link>
             </p>
           </div>
-
-          <div className="mt-8 flex flex-wrap gap-4 border-t border-white/10 pt-6 text-sm">
-            <Link href="/mutual-funds" className="text-[#82aff6] hover:text-[#b8d3ff] transition-colors">
-              ← All mutual funds
-            </Link>
-            <span className="text-white/20">|</span>
-            <Link href={`/mutual-funds/${amcSlug}`} className="text-[#82aff6] hover:text-[#b8d3ff] transition-colors">
-              More {amc?.shortName ?? amcSlug} funds
-            </Link>
-            <span className="text-white/20">|</span>
-            <Link href="/methodology" className="text-[#7183a0] hover:text-white transition-colors">
-              Methodology
-            </Link>
-            <span className="text-white/20">|</span>
-            <Link href="/privacy" className="text-[#7183a0] hover:text-white transition-colors">
-              Privacy
-            </Link>
-          </div>
         </div>
       </main>
-    </>
+
+      <PublicFooter />
+    </div>
   );
 }

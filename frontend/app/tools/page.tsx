@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Layers, Calculator, Search, Scale, Sparkles, ArrowRight, ShieldCheck } from 'lucide-react';
 import { ToolJsonLd } from '@/components/seo/JsonLd';
+import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
+import PublicFooter from '@/components/layout/PublicFooter';
 
 export const metadata: Metadata = {
   title: 'Free Mutual Fund & Investor Tools | FundersAI',
@@ -63,14 +65,15 @@ const TOOLS = [
 
 export default function ToolsIndexPage() {
   return (
-    <main className="min-h-screen bg-[#05070f] text-slate-100 px-4 sm:px-6 lg:px-8 py-12">
+    <div className="min-h-screen bg-[#05070f] text-slate-100 flex flex-col justify-between">
+      <EcosystemHeader currentApp="tools" />
       <ToolJsonLd
         name="FundersAI Investor Tools Suite"
         description="Suite of free quantitative mutual fund tools for Indian retail investors including portfolio overlap calculators, SIP compounding estimators, and scheme comparators."
         url="https://www.fundersai.co.in/tools"
       />
 
-      <div className="max-w-6xl mx-auto space-y-12">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-12 flex-1 w-full">
         {/* Header */}
         <header className="space-y-4 text-center max-w-3xl mx-auto">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#00FF9D]/10 border border-[#00FF9D]/20 text-[#00FF9D] text-xs font-mono font-semibold">
@@ -135,7 +138,9 @@ export default function ToolsIndexPage() {
             );
           })}
         </section>
-      </div>
-    </main>
+      </main>
+
+      <PublicFooter />
+    </div>
   );
 }
