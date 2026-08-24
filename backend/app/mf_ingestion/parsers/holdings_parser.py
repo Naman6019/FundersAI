@@ -167,6 +167,25 @@ class HoldingsParser:
                 empty_sources=1,
             )
 
+        prepare_excel_frames = getattr(self.adapter, "prepare_excel_frames", None)
+        if callable(prepare_excel_frames):
+            try:
+                prepare_excel_frames(frames)
+            except Exception as exc:
+                logger.exception("event=excel_workbook_prepare_failed source_document_id=%s", context.source_document_id)
+                return ParseBatchResult(
+                    diagnostics=[
+                        ParseDiagnostic(
+                            "error",
+                            "excel_workbook",
+                            "workbook_prepare_failed",
+                            member_name=member_name,
+                            error_type=type(exc).__name__,
+                        )
+                    ],
+                    failed_sources=1,
+                )
+
         by_scheme: dict[str, ParsedDocument] = {}
         result = ParseBatchResult()
         for sheet_index, frame in enumerate(frames):

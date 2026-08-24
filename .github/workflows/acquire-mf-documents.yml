@@ -72,6 +72,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
 
+      - name: Install Edelweiss browser runtime
+        if: inputs.amc == 'edelweiss'
+        run: python -m playwright install --with-deps chromium
+
       - name: Acquire approved official documents
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -88,6 +92,8 @@ jobs:
           APPROVAL_PHRASE: ${{ inputs.approval_phrase }}
           MF_SOURCE_MANIFEST_PATH: backend/config/mf_document_sources.json
           MF_REQUIRE_R2_FOR_RAW_STORAGE: "true"
+          MF_DISCOVERY_BROWSER_ENABLED: ${{ inputs.amc == 'edelweiss' && 'true' || 'false' }}
+          MF_DISCOVERY_BROWSER_AMCS: ${{ inputs.amc == 'edelweiss' && 'edelweiss' || '' }}
         shell: bash
         run: |
           set -euo pipefail

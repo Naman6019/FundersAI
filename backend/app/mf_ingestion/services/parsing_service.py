@@ -1634,6 +1634,7 @@ def _snapshot_matches_amc(
         "kotak": ("kotak",),
         "aditya_birla": ("aditya birla", "birla sun life"),
         "absl": ("aditya birla", "birla sun life"),
+        "edelweiss": ("edelweiss",),
     }.get(str(amc_code or "").strip().lower(), ())
     return bool(normalized and aliases and any(alias in normalized for alias in aliases))
 

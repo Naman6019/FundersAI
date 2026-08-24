@@ -341,16 +341,19 @@ SOURCES: dict[str, AMCDocumentSource] = {
         ),
         portfolio_disclosure_page_url=_env_url(
             "MF_EDELWEISS_PORTFOLIO_PAGE_URL",
-            "https://www.edelweissmf.com/statutory-disclosures/monthly-portfolio",
+            "https://www.edelweissmf.com/statutory/portfolio-of-schemes",
         ),
         requires_confirmation=False,
         confirmation_type=None,
         confirmation_notes=None,
         enabled=True,
         runtime_enabled=True,
+        discovery_strategy="edelweiss_monthly_portfolio_browser",
         factsheet_required_keywords=("factsheet", "fact sheet"),
         portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
-        factsheet_contains_holdings=True,
+        # Factsheets only expose Top 30 holdings. Use the monthly workbook for
+        # complete holdings and sector allocation instead.
+        factsheet_contains_holdings=False,
         browser_recovery_allowed=True,
         allowed_host_suffixes=("edelweissmf.com",),
     ),

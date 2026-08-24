@@ -148,8 +148,8 @@ jobs:
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
 
-      - name: Install Playwright browser (Axis only)
-        if: matrix.amc == 'axis'
+      - name: Install Playwright browser (Axis and Edelweiss)
+        if: matrix.amc == 'axis' || matrix.amc == 'edelweiss'
         run: playwright install chromium --with-deps
 
       - name: Ingest + parse disclosures
@@ -196,6 +196,8 @@ jobs:
           MF_LLM_MIN_WRITE_CONFIDENCE: ${{ github.event.inputs.llm_min_write_confidence || vars.MF_LLM_MIN_WRITE_CONFIDENCE || '90' }}
           MF_LLM_ALLOW_FINAL_WRITES: ${{ github.event.inputs.llm_allow_final_writes || vars.MF_LLM_ALLOW_FINAL_WRITES || 'false' }}
           MF_SOURCE_MANIFEST_PATH: ${{ vars.MF_SOURCE_MANIFEST_PATH || 'backend/config/mf_document_sources.json' }}
+          MF_DISCOVERY_BROWSER_ENABLED: ${{ matrix.amc == 'edelweiss' && 'true' || 'false' }}
+          MF_DISCOVERY_BROWSER_AMCS: ${{ matrix.amc == 'edelweiss' && 'edelweiss' || '' }}
           ENABLE_MF_OFFICIAL_SOURCE_PARSER_BYPASS: "false"
           DISPATCH_MAX_DOCS: ${{ github.event.inputs.max_documents }}
           DISPATCH_PARSE_LIMIT: ${{ github.event.inputs.parse_limit }}

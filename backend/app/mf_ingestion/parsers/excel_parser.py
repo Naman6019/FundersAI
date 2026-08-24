@@ -21,12 +21,15 @@ class ExcelParser:
 
     def _clean_frames(self, workbook: dict[str, pd.DataFrame]) -> list[pd.DataFrame]:
         frames: list[pd.DataFrame] = []
-        for _, frame in workbook.items():
+        for sheet_name, frame in workbook.items():
             if frame is None or frame.empty:
                 continue
-            clean = frame.dropna(how="all")
+            clean = frame.dropna(how="all").copy()
             if clean.empty:
                 continue
+            # AMC workbooks frequently use short sheet IDs; retain them for
+            # adapters that map them through an official index sheet.
+            clean.attrs["sheet_name"] = str(sheet_name)
             frames.append(clean)
         return frames
 

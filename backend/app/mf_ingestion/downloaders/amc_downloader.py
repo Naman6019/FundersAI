@@ -216,6 +216,21 @@ class AMCDownloader(BaseDownloader):
                 len(docs),
             )
             return docs
+        if adapter_key == "edelweiss":
+            docs = _discover_edelweiss_documents(
+                self.source,
+                document_type=document_type,
+                timeout_seconds=self.timeout_seconds,
+                user_agent=self.user_agent,
+            )
+            logger.info(
+                "event=amc_discovery_complete amc_code=%s adapter=%s document_type=%s count=%s",
+                self.source.amc_code,
+                adapter_key,
+                document_type,
+                len(docs),
+            )
+            return docs
         if adapter_key == "dsp":
             if (document_type or "").strip().lower() == "factsheet":
                 docs = _discover_dsp_factsheet_documents(
@@ -826,6 +841,158 @@ def _browser_fallback_allowed_for_source(source: AMCDocumentSource) -> bool:
         if item.strip()
     }
     return source.adapter_key.strip().lower() in approved
+
+
+def _discover_edelweiss_documents(
+    source: AMCDocumentSource,
+    document_type: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    """Discover Edelweiss's official monthly holdings workbook.
+
+    The statutory page renders weekly, fortnightly, and monthly document tabs in
+    the browser. The monthly tab exposes one complete XLSX portfolio workbook;
+    generic anchor extraction only sees the page shell.
+    """
+    doc_type = (document_type or "").strip().lower()
+    if doc_type != "portfolio_disclosure":
+        return _discover_generic_anchor_documents(
+            source,
+            document_type=doc_type,
+            timeout_seconds=timeout_seconds,
+            user_agent=user_agent,
+        )
+
+    listing_url = source.portfolio_disclosure_page_url or source.factsheet_page_url
+    if not listing_url:
+        return []
+
+    generic_documents = _discover_generic_anchor_documents(
+        source,
+        document_type=doc_type,
+        timeout_seconds=timeout_seconds,
+        user_agent=user_agent,
+    )
+    monthly_documents = [
+        document
+        for document in generic_documents
+        if _is_edelweiss_monthly_portfolio_document(document.title, document.url)
+    ]
+    if monthly_documents:
+        return sorted(monthly_documents, key=lambda item: item.priority_score, reverse=True)
+    if not _browser_fallback_allowed_for_source(source):
+        return []
+    return _discover_edelweiss_monthly_portfolios_with_browser(
+        source,
+        listing_url=listing_url,
+        timeout_seconds=timeout_seconds,
+        user_agent=user_agent,
+    )
+
+
+def _discover_edelweiss_monthly_portfolios_with_browser(
+    source: AMCDocumentSource,
+    *,
+    listing_url: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        logger.error("edelweiss:playwright_not_installed")
+        return []
+
+    candidates: list[tuple[str, str]] = []
+    timeout_ms = max(5_000, min(int(timeout_seconds * 1_000), 30_000))
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            try:
+                context = browser.new_context(user_agent=user_agent)
+                page = context.new_page()
+                page.goto(listing_url, wait_until="domcontentloaded", timeout=timeout_ms)
+                monthly_tab = page.get_by_text("Monthly Portfolio and Risk-o-Meter", exact=True)
+                monthly_tab.first.click(timeout=timeout_ms)
+                monthly_links = page.locator(
+                    "a[href*='/Monthly_Portfolio_and_RiskoMeter/']"
+                )
+                monthly_links.first.wait_for(timeout=timeout_ms)
+                for index in range(monthly_links.count()):
+                    link = monthly_links.nth(index)
+                    url = str(link.get_attribute("href") or "").strip()
+                    title = " ".join(link.inner_text().split())
+                    if url:
+                        candidates.append((title, url))
+                context.close()
+            finally:
+                browser.close()
+    except Exception as exc:
+        logger.warning("edelweiss:browser_discovery_failed error=%s", exc)
+        return []
+
+    return _edelweiss_monthly_portfolio_documents_from_candidates(
+        source,
+        listing_url=listing_url,
+        candidates=candidates,
+    )
+
+
+def _edelweiss_monthly_portfolio_documents_from_candidates(
+    source: AMCDocumentSource,
+    *,
+    listing_url: str,
+    candidates: list[tuple[str, str]],
+) -> list[DiscoveredDocument]:
+    documents: list[DiscoveredDocument] = []
+    seen_urls: set[str] = set()
+    required_keywords = _required_keywords_for_generic_source(
+        source,
+        "portfolio_disclosure",
+    )
+    for raw_title, raw_url in candidates:
+        url = urljoin(listing_url, str(raw_url or "").strip())
+        title = _clean_discovery_text(raw_title) or _human_title_from_url(url)
+        if not url or url in seen_urls or not _is_edelweiss_monthly_portfolio_document(title, url):
+            continue
+        seen_urls.add(url)
+        combined = f"{title} {url}".lower()
+        ext = Path(urlsplit(url).path).suffix.lower()
+        if not _generic_candidate_allowed(
+            source,
+            combined,
+            "portfolio_disclosure",
+            ext,
+            required_keywords,
+        ):
+            continue
+        report_month = _detect_report_month_from_text(combined)
+        recency_score = (report_month.year * 12 + report_month.month) * 10 if report_month else 0
+        documents.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type="portfolio_disclosure",
+                title=title,
+                url=url,
+                discovery_page_url=listing_url,
+                file_ext=ext,
+                report_month=report_month,
+                priority_score=_generic_base_score(ext, "portfolio_disclosure") + recency_score + 50,
+            )
+        )
+    return sorted(documents, key=lambda item: item.priority_score, reverse=True)
+
+
+def _is_edelweiss_monthly_portfolio_document(title: str, url: str) -> bool:
+    combined = f"{title} {url}".lower()
+    return (
+        "monthly portfolio" in combined
+        and "monthly_portfolio_and_riskometer" in combined
+        and "weekly" not in combined
+        and "fortnightly" not in combined
+    )
 
 
 def _discover_tata_documents(
