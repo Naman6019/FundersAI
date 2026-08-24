@@ -912,7 +912,10 @@ def _discover_edelweiss_monthly_portfolios_with_browser(
         return []
 
     candidates: list[tuple[str, str]] = []
-    timeout_ms = max(5_000, min(int(timeout_seconds * 1_000), 30_000))
+    # The Angular disclosure tabs can arrive well after the initial document
+    # response. Keep this bounded, but allow the public page its observed
+    # hydration time on a clean GitHub Actions browser.
+    timeout_ms = max(60_000, int(timeout_seconds * 1_000))
     try:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
@@ -926,8 +929,10 @@ def _discover_edelweiss_monthly_portfolios_with_browser(
                 # The statutory page first defaults to "Financials & Portfolios".
                 # Select the public portfolio section before its monthly sub-tab.
                 portfolio_tab = page.get_by_text("Portfolio of scheme(s)", exact=True)
+                portfolio_tab.first.wait_for(state="visible", timeout=timeout_ms)
                 portfolio_tab.first.click(timeout=timeout_ms)
                 monthly_tab = page.get_by_text("Monthly Portfolio and Risk-o-Meter", exact=True)
+                monthly_tab.first.wait_for(state="visible", timeout=timeout_ms)
                 monthly_tab.first.click(timeout=timeout_ms)
                 monthly_links = page.locator(
                     "a[href*='/Monthly_Portfolio_and_RiskoMeter/']"
