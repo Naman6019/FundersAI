@@ -30,13 +30,12 @@ export default function PublicFooter() {
         <div className="space-y-3">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-400">Product &amp; Tools</p>
           <ul className="space-y-2 text-xs font-medium">
-            <li><Link href="/sample" className="hover:text-white transition-colors">Sample Research Report</Link></li>
-            <li><Link href="/how-it-works" className="hover:text-white transition-colors">Architecture Flow</Link></li>
-            <li><Link href="/intelligence" className="hover:text-white transition-colors">Source Intelligence</Link></li>
-            <li><Link href="https://synthesis.fundersai.co.in" className="hover:text-white transition-colors text-blue-400 font-semibold">Synthesis Studio</Link></li>
+            <li><Link href="/mutual-funds" className="hover:text-white transition-colors text-[#00FF9D]">Mutual Fund Screener</Link></li>
+            <li><Link href="/tools" className="hover:text-white transition-colors">Free Investor Tools Hub</Link></li>
+            <li><Link href="/tools/portfolio-overlap" className="hover:text-white transition-colors">Portfolio Overlap Calculator</Link></li>
+            <li><Link href="/tools/sip-calculator" className="hover:text-white transition-colors">SIP &amp; Step-Up Calculator</Link></li>
+            <li><Link href="/synthesis" className="hover:text-white transition-colors">Synthesis Studio</Link></li>
             <li><Link href="/pricing" className="hover:text-white transition-colors">Pricing &amp; Subscriptions</Link></li>
-            <li><Link href="/synthesis" className="hover:text-white transition-colors">Synthesis Report Studio</Link></li>
-            <li><Link href="/synthesis/tools/portfolio-overlap" className="hover:text-white transition-colors">Portfolio Overlap Tool</Link></li>
           </ul>
         </div>
 

@@ -425,15 +425,86 @@ export default function SipCalculatorPublic() {
               </div>
             </div>
 
-            {/* Direct Link to Mutual Funds Screener */}
-            <div className="pt-2">
+            {/* Compounding Visual Spline Graph */}
+            <div className="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-2">
+              <div className="flex justify-between items-center text-[11px] font-mono text-[#7183a0]">
+                <span>Compounding Trajectory ({years} Years)</span>
+                <span className="text-[#00FF9D] font-bold">Exponential Corpus Growth</span>
+              </div>
+              <div className="relative w-full h-32 pt-2">
+                <svg viewBox="0 0 400 130" className="w-full h-full overflow-visible">
+                  <defs>
+                    <linearGradient id="wealthGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#00FF9D" stopOpacity="0.25" />
+                      <stop offset="100%" stopColor="#00FF9D" stopOpacity="0.0" />
+                    </linearGradient>
+                  </defs>
+
+                  {/* Grid Lines */}
+                  <line x1="30" y1="110" x2="380" y2="110" stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                  <line x1="30" y1="65" x2="380" y2="65" stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                  <line x1="30" y1="20" x2="380" y2="20" stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+
+                  {/* Invested Principal Line */}
+                  <line
+                    x1="30"
+                    y1="110"
+                    x2="380"
+                    y2={110 - Math.min(90, (calculation.totalInvested / (calculation.futureValue || 1)) * 90)}
+                    stroke="rgba(255,255,255,0.3)"
+                    strokeWidth="2"
+                    strokeDasharray="4 4"
+                  />
+
+                  {/* Exponential Wealth Spline Area & Stroke */}
+                  {calculation.yearlyBreakdown.length > 0 && (() => {
+                    const points = calculation.yearlyBreakdown.map((item, idx) => {
+                      const x = 30 + (idx / (calculation.yearlyBreakdown.length - 1 || 1)) * 350;
+                      const y = 110 - (item.wealth / (calculation.futureValue || 1)) * 90;
+                      return `${x.toFixed(1)},${y.toFixed(1)}`;
+                    });
+                    const dArea = `M 30,110 L ${points.join(' L ')} L 380,110 Z`;
+                    const dLine = `M ${points.join(' L ')}`;
+                    return (
+                      <>
+                        <path d={dArea} fill="url(#wealthGrad)" />
+                        <path d={dLine} fill="none" stroke="#00FF9D" strokeWidth="2.5" />
+                        <circle cx="380" cy={110 - 90} r="4" fill="#00FF9D" className="animate-pulse" />
+                      </>
+                    );
+                  })()}
+
+                  {/* Labels */}
+                  <text x="30" y="125" fill="#7183a0" fontSize="9" fontFamily="monospace">Yr 1</text>
+                  <text x="205" y="125" textAnchor="middle" fill="#7183a0" fontSize="9" fontFamily="monospace">Yr {Math.round(years / 2)}</text>
+                  <text x="380" y="125" textAnchor="end" fill="#00FF9D" fontSize="9" fontFamily="monospace" fontWeight="bold">Yr {years}</text>
+                </svg>
+              </div>
+            </div>
+
+            {/* Direct Link to Mutual Funds Screener & 1-Click Share Button */}
+            <div className="pt-2 flex gap-3">
               <Link
                 href="/mutual-funds"
-                className="w-full py-3.5 rounded-xl bg-[#00FF9D] text-black font-bold text-xs hover:bg-[#00FF9D]/90 transition-colors shadow-lg shadow-[#00FF9D]/20 flex items-center justify-center gap-2"
+                className="flex-1 py-3.5 rounded-xl bg-[#00FF9D] text-black font-bold text-xs hover:bg-[#00FF9D]/90 transition-colors shadow-lg shadow-[#00FF9D]/20 flex items-center justify-center gap-2"
               >
-                <span>Find Mutual Funds Delivering {annualReturn}%+ Returns</span>
+                <span>Find {annualReturn}%+ Funds</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
+
+              <button
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    const shareUrl = `${window.location.origin}/tools/sip-calculator?amount=${monthlyAmount}&cagr=${annualReturn}&years=${years}`;
+                    navigator.clipboard.writeText(shareUrl);
+                    alert('Projection link copied to clipboard!');
+                  }
+                }}
+                className="px-4 py-3.5 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-white text-xs font-semibold transition-colors flex items-center gap-1.5"
+                title="Share this SIP projection"
+              >
+                <span>Share</span>
+              </button>
             </div>
           </div>
 

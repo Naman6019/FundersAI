@@ -8,7 +8,7 @@ import {
   calculateDetailedOverlap,
   DetailedOverlapResult,
 } from '@/lib/fund-holdings';
-import { Search, ArrowRight, Layers, PieChart, ShieldCheck, AlertTriangle, Sparkles, CheckCircle2, ChevronRight } from 'lucide-react';
+import { Search, ArrowRight, Layers, PieChart, ShieldCheck, AlertTriangle, Sparkles, CheckCircle2, ChevronRight, Share2, Check } from 'lucide-react';
 
 interface PopularPair {
   label: string;
@@ -58,6 +58,16 @@ export default function PortfolioOverlapCalculator() {
   const [openSelectorA, setOpenSelectorA] = useState<boolean>(false);
   const [openSelectorB, setOpenSelectorB] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'overlapping' | 'uniqueA' | 'uniqueB' | 'sectors'>('overlapping');
+  const [copied, setCopied] = useState<boolean>(false);
+
+  const handleShare = () => {
+    if (typeof window !== 'undefined') {
+      const shareUrl = `${window.location.origin}/tools/portfolio-overlap?fundA=${codeA}&fundB=${codeB}`;
+      navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }
+  };
 
   const fundA = useMemo(
     () => FUND_REGISTRY.find((f) => f.schemeCode === codeA) || FUND_REGISTRY[0],
@@ -317,19 +327,96 @@ export default function PortfolioOverlapCalculator() {
               {overlapResult.verdict.description}
             </p>
 
-            <div className="pt-2 flex flex-wrap gap-4 border-t border-white/5 text-xs text-[#7183a0]">
-              <span>
-                <strong className="text-white">{overlapResult.uniqueA.length}</strong> unique to {fundA.schemeName.split(' ')[0]}
-              </span>
-              <span>•</span>
-              <span>
-                <strong className="text-white">{overlapResult.overlappingCount}</strong> common overlap
-              </span>
-              <span>•</span>
-              <span>
-                <strong className="text-white">{overlapResult.uniqueB.length}</strong> unique to {fundB.schemeName.split(' ')[0]}
-              </span>
+            <div className="pt-2 flex flex-wrap items-center justify-between gap-4 border-t border-white/5 text-xs text-[#7183a0]">
+              <div className="flex flex-wrap items-center gap-4">
+                <span>
+                  <strong className="text-white">{overlapResult.uniqueA.length}</strong> unique to {fundA.schemeName.split(' ')[0]}
+                </span>
+                <span>•</span>
+                <span>
+                  <strong className="text-white">{overlapResult.overlappingCount}</strong> common overlap
+                </span>
+                <span>•</span>
+                <span>
+                  <strong className="text-white">{overlapResult.uniqueB.length}</strong> unique to {fundB.schemeName.split(' ')[0]}
+                </span>
+              </div>
+
+              {/* 1-Click Share & Copy Link */}
+              <button
+                onClick={handleShare}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-white font-medium transition-colors text-xs"
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-[#00FF9D]" />
+                    <span className="text-[#00FF9D] font-bold">Link Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="w-3.5 h-3.5 text-[#7183a0]" />
+                    <span>Share Duel</span>
+                  </>
+                )}
+              </button>
             </div>
+          </div>
+        </div>
+
+        {/* ─── Visual Venn Diagram Diagram Section ─── */}
+        <div className="mt-8 pt-6 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="space-y-1 text-center md:text-left">
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#7183a0]">Portfolio Overlap Venn Diagram</span>
+            <p className="text-xs text-[#aebed6]">Visual representation of distinct vs duplicated equity allocation</p>
+          </div>
+
+          <div className="relative w-full max-w-sm flex items-center justify-center">
+            <svg viewBox="0 0 320 150" className="w-full h-auto max-h-36 drop-shadow-lg">
+              {/* Left Circle - Fund A */}
+              <circle
+                cx="120"
+                cy="75"
+                r="55"
+                fill="rgba(0, 255, 157, 0.12)"
+                stroke="#00FF9D"
+                strokeWidth="1.5"
+                strokeDasharray="4 2"
+              />
+              {/* Right Circle - Fund B */}
+              <circle
+                cx="200"
+                cy="75"
+                r="55"
+                fill="rgba(102, 163, 255, 0.12)"
+                stroke="#66a3ff"
+                strokeWidth="1.5"
+                strokeDasharray="4 2"
+              />
+
+              {/* Fund A Label */}
+              <text x="85" y="70" textAnchor="middle" fill="#00FF9D" fontSize="12" fontWeight="bold">
+                {fundA.schemeName.split(' ')[0]}
+              </text>
+              <text x="85" y="85" textAnchor="middle" fill="#7183a0" fontSize="9" fontFamily="monospace">
+                {(100 - overlapResult.percentage).toFixed(0)}% Unique
+              </text>
+
+              {/* Overlap Intersection Label */}
+              <text x="160" y="68" textAnchor="middle" fill={overlapResult.verdict.color} fontSize="14" fontWeight="900">
+                {overlapResult.percentage}%
+              </text>
+              <text x="160" y="83" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="bold" letterSpacing="0.05em">
+                SHARED
+              </text>
+
+              {/* Fund B Label */}
+              <text x="235" y="70" textAnchor="middle" fill="#66a3ff" fontSize="12" fontWeight="bold">
+                {fundB.schemeName.split(' ')[0]}
+              </text>
+              <text x="235" y="85" textAnchor="middle" fill="#7183a0" fontSize="9" fontFamily="monospace">
+                {(100 - overlapResult.percentage).toFixed(0)}% Unique
+              </text>
+            </svg>
           </div>
         </div>
       </section>
