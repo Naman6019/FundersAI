@@ -1024,6 +1024,36 @@ Direct Plan: 0.25%
     assert by_name["DSP Multi Asset Allocation Fund"].expense_ratio == 0.15
 
 
+def test_page_local_fields_override_repeated_edelweiss_etf_labels():
+    page = """
+Edelweiss BSE Top 10 Bank ETF
+This fund aims to track the BSE Top 10 Bank Total Return Index.
+Data as on July 31, 2026
+Benchmark
+BSE Top 10 Bank TRI
+Month End AUM (Rs.) : 21 Cr.
+Monthly Average AUM (Rs.) : 1 Cr.
+Expense Ratios1
+Edelweiss Nifty Metal ETF - BER/TER : 0.10%/0.12%
+Fund Manager
+Mr. Bhavesh Jain
+Ms. Manasi
+Jalgaonkar
+"""
+
+    records = FactsheetParser().parse_text(
+        text=page,
+        report_month=date(2026, 7, 1),
+        page_texts=[page],
+    )
+    record = next(record for record in records if "BSE Top 10 Bank ETF" in record.scheme_name)
+
+    assert record.aum == 21.0
+    assert record.expense_ratio == 0.12
+    assert record.benchmark == "BSE Top 10 Bank TRI"
+    assert record.fund_manager == "Mr. Bhavesh Jain; Ms. Manasi Jalgaonkar"
+
+
 def test_factsheet_parser_ignores_ppfas_contents_list_when_anchored_sections_exist():
     text = """
 Parag Parikh Flexi Cap Fund

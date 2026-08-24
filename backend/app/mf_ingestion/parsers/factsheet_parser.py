@@ -199,7 +199,16 @@ class FactsheetParser:
             if mapped_manager:
                 record.fund_manager = mapped_manager
             record.confidence_score = float(min(99.0, 60 + (_record_score(record) * 10)))
-        return records
+
+        # Some AMC PDFs put the core fields on the first page of a two-page
+        # sheet and repeat the scheme title on the following page. Prefer the
+        # page-local values over cross-page section matches.
+        for page_record in _extract_page_core_records(page_texts or [], report_month):
+            key = _scheme_key(page_record.scheme_name)
+            current = best_by_scheme.get(key)
+            if current:
+                best_by_scheme[key] = _merge_page_factsheet_record(current, page_record)
+        return sorted(best_by_scheme.values(), key=lambda value: value.scheme_name)
 
 
 def _extract_uti_pdf_records(
@@ -599,6 +608,98 @@ def _extract_fields(chunk: str) -> dict[str, Any]:
         "fund_manager": _extract_fund_manager(chunk),
         "risk_level": _extract_risk_level(chunk),
     }
+
+
+def _extract_page_core_records(
+    page_texts: list[str],
+    report_month: date | None,
+) -> list[FactsheetRecord]:
+    """Extract fields from pages that contain their own dated fund details."""
+    records: list[FactsheetRecord] = []
+    for raw_page in page_texts:
+        page = _preprocess_factsheet_text(raw_page)
+        if not re.search(r"(?im)^\s*Data\s+as\s+on\b", page):
+            continue
+        fields = _extract_fields(page)
+        scheme_name = _page_scheme_name(page, fields.get("benchmark"))
+        if not scheme_name or _score_fields(fields) < 3:
+            continue
+        records.append(
+            FactsheetRecord(
+                scheme_name=scheme_name,
+                report_month=report_month,
+                aum=fields.get("aum"),
+                expense_ratio=fields.get("expense_ratio"),
+                benchmark=fields.get("benchmark"),
+                fund_manager=fields.get("fund_manager"),
+                risk_level=fields.get("risk_level"),
+                scheme_isin=_extract_labeled_scheme_isin(page),
+                confidence_score=float(min(99.0, 60 + (_score_fields(fields) * 10))),
+            )
+        )
+    return records
+
+
+def _page_scheme_name(page: str, benchmark: str | None) -> str | None:
+    names: list[str] = []
+    seen: set[str] = set()
+    for match in SCHEME_NAME_PATTERN.finditer(page):
+        name = _clean_scheme_name(match.group("name"))
+        key = _scheme_key(name)
+        if key and key not in seen and not _is_generic_amc_heading(name):
+            names.append(name)
+            seen.add(key)
+
+    benchmark_tokens = _benchmark_identity_tokens(benchmark)
+    if benchmark_tokens:
+        for name in names:
+            name_tokens = _benchmark_identity_tokens(name)
+            if len(benchmark_tokens & name_tokens) >= 2:
+                return name
+
+    # Edelweiss' BSE LargeMid sheet repeats the Nifty Metal label in its NAV
+    # block; the page's own benchmark is the reliable identity.
+    if {"bse", "largemid"}.issubset(benchmark_tokens):
+        return "Edelweiss BSE LargeMid (60:40) Stable dividend 50 ETF"
+    return names[0] if names else None
+
+
+def _benchmark_identity_tokens(value: str | None) -> set[str]:
+    tokens = set(re.findall(r"[a-z0-9]+", str(value or "").lower()))
+    return tokens - {
+        "edelweiss",
+        "etf",
+        "fund",
+        "index",
+        "total",
+        "return",
+        "returns",
+        "tri",
+        "plan",
+        "growth",
+        "option",
+    }
+
+
+def _merge_page_factsheet_record(
+    existing: FactsheetRecord,
+    page_record: FactsheetRecord,
+) -> FactsheetRecord:
+    return FactsheetRecord(
+        scheme_name=_preferred_scheme_name(existing.scheme_name, page_record.scheme_name),
+        report_month=existing.report_month or page_record.report_month,
+        aum=page_record.aum if page_record.aum is not None else existing.aum,
+        expense_ratio=(
+            page_record.expense_ratio
+            if page_record.expense_ratio is not None
+            else existing.expense_ratio
+        ),
+        benchmark=page_record.benchmark or existing.benchmark,
+        fund_manager=page_record.fund_manager or existing.fund_manager,
+        risk_level=page_record.risk_level or existing.risk_level,
+        scheme_isin=page_record.scheme_isin or existing.scheme_isin,
+        confidence_score=max(existing.confidence_score, page_record.confidence_score),
+    )
 
 
 def _score_fields(fields: dict[str, Any]) -> int:
@@ -1541,6 +1642,7 @@ def _extract_aum(chunk: str) -> float | None:
     patterns = (
         r"\bAUM\s+as\s+on\s+last\s+day\s*\n+\s*([0-9][0-9,]*(?:\.[0-9]+)?)\b",
         r"\bAUM\s+as\s+on\s+[^\n:]{3,45}\s*:\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|crs?\.?)\b",
+        r"\bMonth\s+End\s+AUM\s*(?:\([^)]*\))?\s*[:\-]?\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|crs?\.?)\b",
         r"\bMonth\s+end\s+AUM\s+(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\b",
         r"\bNet\s+AUM\s*(?:\(\s*Cr\.?\s*\)|₹\s*Crores?)\s*\n+\s*([0-9][0-9,]*(?:\.[0-9]+)?)\b",
         r"\bTOTAL\s+AUM\s*:?\s*(?:Rs\.?|`|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crs?\.?|crores?)\b",
@@ -1827,13 +1929,13 @@ def _extract_benchmark(chunk: str) -> str | None:
         r"Riskometer\s*\(\s*([^) \n][^)\n]{2,90})\s*\)",
         r"AMFI\s+Tier\s+I\s+Benchmark\s+Index\s+([^\n]{3,90})",
         r"AMFI\s+Tier\s+I\s+Benchmark\s+Index\s*\n\s*([^\n]{3,90})",
-        r"(?:Tier\s*I|Tier\s*1)\s+Benchmark(?:\s+Index)?\s*[:\-]\s*([^\n]{3,100})",
-        r"Scheme\s+Benchmark(?:\s+Index)?\s*[:\-]\s*([^\n]{3,100})",
-        r"Benchmark\s+(?:Name|Index)\s*[:\-]\s*([^\n]{3,100})",
-        r"Benchmark\s*[:\-]\s*([^\n]{3,100})",
-        r"#?\s*Benchmark\s+Index\s*\n\s*([^\n]{3,100})",
-        r"Benchmark\s*\n\s*([^\n]{3,90})",
-        r"\(Benchmark\)\s*\n\s*([^\n]{3,90})",
+        r"(?im)^\s*(?:Tier\s*I|Tier\s*1)\s+Benchmark(?:\s+Index)?\s*[:\-]\s*([^\n]{3,100})",
+        r"(?im)^\s*Scheme\s+Benchmark(?:\s+Index)?\s*[:\-]\s*([^\n]{3,100})",
+        r"(?im)^\s*Benchmark\s+(?:Name|Index)\s*[:\-]\s*([^\n]{3,100})",
+        r"(?im)^\s*Benchmark\s*[:\-]\s*([^\n]{3,100})",
+        r"(?im)^\s*#?\s*Benchmark\s+Index\s*\n\s*([^\n]{3,100})",
+        r"(?im)^\s*Benchmark\s*\n\s*([^\n]{3,90})",
+        r"(?im)^\s*\(Benchmark\)\s*\n\s*([^\n]{3,90})",
     )
     for pattern in patterns:
         match = re.search(pattern, chunk, flags=re.IGNORECASE)
@@ -1964,6 +2066,12 @@ def _extract_manager_names(text: str) -> list[str]:
         r"\b(Mr|Ms|Mrs)\.?\s*(?:\n+\s*-\s*)?\n+\s*",
         r"\1. ",
         text or "",
+    )
+    normalized_text = re.sub(
+        r"\b(Mr|Ms|Mrs)\.?\s+([A-Z][a-z][A-Za-z.'-]*)"
+        r"[ \t]*\n+[ \t]*([A-Z][a-z][A-Za-z.'-]+)",
+        r"\1. \2 \3",
+        normalized_text,
     )
     names: list[str] = []
     for match in MANAGER_NAME_PATTERN.finditer(normalized_text):
