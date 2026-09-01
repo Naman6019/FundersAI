@@ -15,6 +15,9 @@ export const metadata: Metadata = {
     'Parag Parikh vs HDFC Flexi Cap report',
     'institutional mutual fund comparison PDF',
   ],
+  alternates: {
+    canonical: 'https://synthesis.fundersai.co.in',
+  },
   openGraph: {
     title: 'Synthesis by FundersAI | Autonomous AI Mutual Fund Research Studio',
     description:

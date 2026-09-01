@@ -11,6 +11,26 @@ export function middleware(request: NextRequest) {
     if (pathname === '/') {
       return NextResponse.rewrite(new URL('/synthesis', request.url));
     }
+
+    // Case A2: the subdomain hosts the studio and nothing else. Without this, every www
+    // page also renders at 200 here — the same content on two hostnames, which Google
+    // either splits authority across or drops as a duplicate. Case B is the mirror of
+    // this rule; the two together keep each product on exactly one host.
+    // Auth and account routes are excluded: they are noindex and share a session with www.
+    const isStudioPath = pathname === '/synthesis' || pathname.startsWith('/synthesis/');
+    const isSharedAppPath =
+      pathname.startsWith('/auth/') ||
+      pathname === '/auth' ||
+      pathname.startsWith('/api/') ||
+      pathname.startsWith('/_next/');
+
+    if (!isStudioPath && !isSharedAppPath) {
+      return NextResponse.redirect(
+        new URL(`https://www.fundersai.co.in${pathname}${search}`, request.url),
+        308,
+      );
+    }
+
     return NextResponse.next();
   }
 

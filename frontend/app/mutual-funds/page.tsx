@@ -20,6 +20,7 @@ export const metadata: Metadata = {
     canonical: 'https://www.fundersai.co.in/mutual-funds',
   },
   openGraph: {
+    images: ['/opengraph-image'],
     title: 'Indian Mutual Funds Screener & Directory | FundersAI',
     description:
       'Search and filter Indian mutual funds by AMC fund house and SEBI category with deterministic risk-adjusted return metrics.',

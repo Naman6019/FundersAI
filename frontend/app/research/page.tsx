@@ -19,6 +19,7 @@ export const metadata: Metadata = {
     canonical: 'https://www.fundersai.co.in/research',
   },
   openGraph: {
+    images: ['/opengraph-image'],
     title: 'FundersAI Research | Quantitative Mutual Fund Intelligence Workspace',
     description:
       'Explore evidence-based mutual fund research with deterministic metrics, official AMC factsheet sources, and zero hallucinations.',
