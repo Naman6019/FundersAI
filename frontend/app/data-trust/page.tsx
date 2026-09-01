@@ -18,6 +18,7 @@ export const metadata: Metadata = {
     canonical: 'https://www.fundersai.co.in/data-trust',
   },
   openGraph: {
+    images: ['/opengraph-image'],
     title: 'Data & Trust Portal | FundersAI',
     description:
       'Inspect real-time data freshness, official feed sources, and zero-hallucination guardrails.',

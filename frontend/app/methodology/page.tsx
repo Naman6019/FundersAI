@@ -18,6 +18,7 @@ export const metadata: Metadata = {
     canonical: 'https://www.fundersai.co.in/methodology',
   },
   openGraph: {
+    images: ['/opengraph-image'],
     title: 'Methodology Hub & Standards | FundersAI',
     description:
       'Complete transparency on quantitative financial data sourcing, metric formulas, and zero-hallucination guardrails.',

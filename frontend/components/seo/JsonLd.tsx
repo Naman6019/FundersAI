@@ -131,12 +131,18 @@ export function CompareJsonLd({ fundA, fundB, pair }: CompareJsonLdProps) {
           {
             '@type': 'ListItem',
             'position': 2,
-            'name': 'Compare',
+            'name': 'Mutual Funds',
             'item': 'https://www.fundersai.co.in/mutual-funds',
           },
           {
             '@type': 'ListItem',
             'position': 3,
+            'name': 'Compare',
+            'item': 'https://www.fundersai.co.in/compare',
+          },
+          {
+            '@type': 'ListItem',
+            'position': 4,
             'name': `${fundA.schemeName} vs ${fundB.schemeName}`,
             'item': compareUrl,
           },
@@ -318,6 +324,64 @@ export function DirectoryJsonLd({ funds }: DirectoryJsonLdProps) {
             'position': 2,
             'name': 'Mutual Funds',
             'item': directoryUrl,
+          },
+        ],
+      },
+    ],
+  };
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+    />
+  );
+}
+
+// ─── Comparison Index Schema Generator ──────────────────────────────────────
+
+interface CompareIndexJsonLdProps {
+  comparisons: { pair: string; nameA: string; nameB: string }[];
+}
+
+export function CompareIndexJsonLd({ comparisons }: CompareIndexJsonLdProps) {
+  const indexUrl = 'https://www.fundersai.co.in/compare';
+
+  const schema = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'CollectionPage',
+        '@id': `${indexUrl}/#collection`,
+        'url': indexUrl,
+        'name': 'Mutual Fund Head-to-Head Comparisons | FundersAI',
+        'description': 'Side-by-side comparisons of Indian mutual funds — CAGR, Sharpe ratio, max drawdown, expense ratio, AUM, and portfolio overlap from official AMC sources.',
+        'mainEntity': {
+          '@type': 'ItemList',
+          'numberOfItems': comparisons.length,
+          'itemListElement': comparisons.map((c, i) => ({
+            '@type': 'ListItem',
+            'position': i + 1,
+            'url': `${indexUrl}/${c.pair}`,
+            'name': `${c.nameA} vs ${c.nameB}`,
+          })),
+        },
+      },
+      {
+        '@type': 'BreadcrumbList',
+        '@id': `${indexUrl}/#breadcrumb`,
+        'itemListElement': [
+          {
+            '@type': 'ListItem',
+            'position': 1,
+            'name': 'Home',
+            'item': 'https://www.fundersai.co.in',
+          },
+          {
+            '@type': 'ListItem',
+            'position': 2,
+            'name': 'Compare',
+            'item': indexUrl,
           },
         ],
       },

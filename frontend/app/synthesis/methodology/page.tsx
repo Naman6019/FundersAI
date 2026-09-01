@@ -5,7 +5,8 @@ import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { ReportsSubNav } from "@/components/layout/ReportsSubNav";
 
 export const metadata: Metadata = {
-    title: "AI Research Methodology & Zero-Hallucination Guardrails | Synthesis by FundersAI",
+    // The parent synthesis layout appends "| Synthesis by FundersAI" via title.template.
+    title: "AI Research Methodology & Zero-Hallucination Guardrails",
     description: "Learn how Synthesis by FundersAI ingests official AMC disclosures, parses factsheet tables, calculates risk ratios, and enforces zero-hallucination policies.",
     keywords: [
         "FundersAI research methodology",
@@ -13,6 +14,9 @@ export const metadata: Metadata = {
         "zero hallucination AI financial reports",
         "Synthesis by FundersAI"
     ],
+    alternates: {
+        canonical: "https://synthesis.fundersai.co.in/synthesis/methodology",
+    },
     openGraph: {
         title: "AI Research Methodology | Synthesis by FundersAI",
         description: "Institutional-grade financial AI methodology, deterministic risk metrics, and zero-hallucination guardrails.",

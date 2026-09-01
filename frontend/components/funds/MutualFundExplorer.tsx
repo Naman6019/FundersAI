@@ -386,6 +386,7 @@ export default function MutualFundExplorer({
               </Link>
 
               <Link
+                rel="nofollow"
                 href={`/dashboard?query=Run a complete quantitative analysis on ${activeFund.schemeName} vs ${activeFund.benchmark}`}
                 className="flex items-center justify-between w-full px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-xs font-semibold text-white hover:bg-white/[0.08] transition"
               >
@@ -420,6 +421,7 @@ export default function MutualFundExplorer({
               Reset Filters
             </button>
             <Link
+              rel="nofollow"
               href={`/dashboard?query=${searchQuery || 'Search Indian mutual funds'}`}
               className="px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-white text-xs font-semibold hover:bg-white/15 transition"
             >

@@ -29,6 +29,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       canonical: canonicalUrl,
     },
     openGraph: {
+      images: ['/opengraph-image'],
       title: `${category} Mutual Funds | FundersAI`,
       description: `Explore ${category} mutual funds with verified NAV and risk-adjusted metrics.`,
       url: canonicalUrl,

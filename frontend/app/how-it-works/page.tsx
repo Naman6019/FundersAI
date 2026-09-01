@@ -18,6 +18,7 @@ export const metadata: Metadata = {
     canonical: 'https://www.fundersai.co.in/how-it-works',
   },
   openGraph: {
+    images: ['/opengraph-image'],
     title: 'How It Works & Architecture Flow | FundersAI',
     description:
       'Learn how FundersAI combines official AMC factsheet ingestion with deterministic metric calculations and zero-hallucination multi-agent verification.',

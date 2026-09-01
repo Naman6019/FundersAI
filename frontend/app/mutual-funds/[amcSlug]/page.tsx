@@ -27,6 +27,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       canonical: canonicalUrl,
     },
     openGraph: {
+      images: ['/opengraph-image'],
       title: `${amc.name} Mutual Funds | FundersAI`,
       description: `Research ${amc.name} mutual funds with deterministic metrics from AMFI and official AMC disclosures.`,
       url: canonicalUrl,

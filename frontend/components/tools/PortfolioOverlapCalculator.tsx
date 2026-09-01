@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { FUND_REGISTRY, FundEntry } from '@/lib/fund-registry';
+import { FUND_REGISTRY, FundEntry, getComparePair } from '@/lib/fund-registry';
 import {
   getHoldingsForScheme,
   calculateDetailedOverlap,
@@ -77,6 +77,8 @@ export default function PortfolioOverlapCalculator() {
     () => FUND_REGISTRY.find((f) => f.schemeCode === codeB) || FUND_REGISTRY[1],
     [codeB]
   );
+
+  const comparePair = getComparePair(fundA.fundSlug, fundB.fundSlug);
 
   const filteredFundsA = useMemo(() => {
     if (!searchA.trim()) return FUND_REGISTRY;
@@ -467,13 +469,15 @@ export default function PortfolioOverlapCalculator() {
             </button>
           </div>
 
-          <Link
-            href={`/compare/${fundA.fundSlug}-vs-${fundB.fundSlug}`}
-            className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-[#00FF9D] hover:underline"
-          >
-            <span>Full Head-to-Head Comparison</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
+          {comparePair && (
+            <Link
+              href={`/compare/${comparePair.pair}`}
+              className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-[#00FF9D] hover:underline"
+            >
+              <span>Full Head-to-Head Comparison</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          )}
         </div>
 
         {/* Tab 1: Overlapping Stocks */}
@@ -605,7 +609,12 @@ export default function PortfolioOverlapCalculator() {
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <Link
-            href={`/compare/${fundA.fundSlug}-vs-${fundB.fundSlug}`}
+            rel={comparePair ? undefined : 'nofollow'}
+            href={
+              comparePair
+                ? `/compare/${comparePair.pair}`
+                : `/dashboard?query=${encodeURIComponent(`Compare ${fundA.schemeName} and ${fundB.schemeName} with full metrics`)}`
+            }
             className="px-5 py-2.5 rounded-xl bg-[#00FF9D] text-black font-bold text-xs hover:bg-[#00FF9D]/90 transition-colors shadow-lg shadow-[#00FF9D]/20 flex items-center gap-2"
           >
             <span>Compare Returns & Risk</span>

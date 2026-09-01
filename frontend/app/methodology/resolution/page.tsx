@@ -13,7 +13,11 @@ export const metadata: Metadata = {
     'Growth vs IDCW option handling',
     'FundersAI benchmark mapping',
   ],
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/methodology/resolution',
+  },
   openGraph: {
+    images: ['/opengraph-image'],
     title: 'Scheme Resolution & Benchmarks | FundersAI Methodology',
     description: 'Learn how FundersAI resolves scheme names and maps primary benchmark indexes.',
     url: 'https://www.fundersai.co.in/methodology/resolution',

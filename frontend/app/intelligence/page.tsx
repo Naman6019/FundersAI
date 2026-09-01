@@ -14,7 +14,11 @@ export const metadata: Metadata = {
     'SEBI factsheet extraction AI',
     'FundersAI source intelligence',
   ],
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/intelligence',
+  },
   openGraph: {
+    images: ['/opengraph-image'],
     title: 'Source Intelligence & Factsheet Engine | FundersAI',
     description:
       'Learn how FundersAI ingests, parses, and indexes official AMC disclosures with zero-hallucination vector search.',

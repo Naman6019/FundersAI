@@ -1,11 +1,27 @@
 import Link from "next/link";
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { CATEGORY_LIST, categorySlug } from "@/lib/fund-registry";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { MagicCard } from "@/components/ui/magic-card";
 
 interface PageProps {
     params: Promise<{ slug: string }>;
 }
+
+// Bounded to the SEBI categories the registry actually knows. Without this, any slug
+// rendered a 200 "<SLUG> Mutual Funds Analysis & Rankings" page.
+const CATEGORY_SLUGS = CATEGORY_LIST.map((c) => categorySlug(c));
+
+function isKnownCategory(slug: string): boolean {
+    return CATEGORY_SLUGS.includes(slug);
+}
+
+export async function generateStaticParams() {
+    return CATEGORY_SLUGS.map((slug) => ({ slug }));
+}
+
+export const dynamicParams = false;
 
 function parseCategorySlug(slug: string) {
     const formatted = slug.replace(/-/g, " ").toUpperCase();
@@ -14,8 +30,9 @@ function parseCategorySlug(slug: string) {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
     const resolvedParams = await params;
+    if (!isKnownCategory(resolvedParams.slug)) return { title: "Category Not Found" };
     const { name } = parseCategorySlug(resolvedParams.slug);
-    const title = `${name} Mutual Funds Analysis & Rankings | Synthesis by FundersAI`;
+    const title = `${name} Mutual Funds Analysis & Rankings`;
     const description = `AI-powered analysis and benchmark comparison for top ${name} mutual funds in India. Synthesize factsheet disclosures, risk metrics, and CAGR returns.`;
 
     return {
@@ -27,6 +44,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
             `${name} FundersAI comparison`,
             "Synthesis by FundersAI"
         ],
+        alternates: {
+            canonical: `https://synthesis.fundersai.co.in/synthesis/category/${resolvedParams.slug}`,
+        },
         openGraph: {
             title,
             description,
@@ -38,6 +58,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function CategoryPage({ params }: PageProps) {
     const resolvedParams = await params;
+    if (!isKnownCategory(resolvedParams.slug)) notFound();
     const { name } = parseCategorySlug(resolvedParams.slug);
 
     return (

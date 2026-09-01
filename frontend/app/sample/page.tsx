@@ -15,7 +15,11 @@ export const metadata: Metadata = {
     'Institutional mutual fund report demo',
     'Mutual fund risk matrix sample',
   ],
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/sample',
+  },
   openGraph: {
+    images: ['/opengraph-image'],
     title: 'Sample Comparison Report | Synthesis by FundersAI',
     description:
       'Explore an institutional mutual fund research sample with verified AMC data, risk ratios, and direct PDF downloads.',

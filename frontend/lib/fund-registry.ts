@@ -532,6 +532,30 @@ export interface ComparePair {
   amcSlugB: string;
 }
 
+/**
+ * The comparison slugs the Synthesis landing page links as "Trending Synthesis Comparisons".
+ * `/synthesis/vs/[slug]` builds its heading by de-slugging whatever it is given, so without
+ * an allow-list any string returns a 200 page with a fabricated fund name in the title —
+ * an unbounded space of machine-written pages. Keep this in sync with the landing page's
+ * `trendingComparisons`.
+ */
+export const SYNTHESIS_VS_SLUGS = [
+  'parag-parikh-flexi-cap-vs-hdfc-flexi-cap',
+  'quant-small-cap-vs-nippon-india-small-cap',
+  'nifty-50-vs-parag-parikh-flexi-cap',
+  'axis-elss-vs-mirae-asset-tax-saver',
+] as const;
+
+// /compare/[pair] renders only the curated pairs below, so callers must resolve a pair
+// here before linking — an unlisted combination 404s.
+export function getComparePair(fundSlugA: string, fundSlugB: string): ComparePair | undefined {
+  return COMPARE_PAIRS.find(
+    (p) =>
+      (p.fundSlugA === fundSlugA && p.fundSlugB === fundSlugB) ||
+      (p.fundSlugA === fundSlugB && p.fundSlugB === fundSlugA),
+  );
+}
+
 export const COMPARE_PAIRS: ComparePair[] = [
   {
     pair: 'hdfc-flexi-cap-fund-vs-parag-parikh-flexi-cap-fund',
@@ -560,5 +584,80 @@ export const COMPARE_PAIRS: ComparePair[] = [
     fundSlugA: 'icici-prudential-bluechip-fund',
     amcSlugB: 'sbi',
     fundSlugB: 'sbi-bluechip-fund',
+  },
+
+  // ─── Demand-led additions ─────────────────────────────────────────────────
+  // The first four are pairs Search Console recorded Googlebot crawling and receiving a
+  // 404 for: proven demand for the exact URL. The rest are the highest-volume same-category
+  // matchups the registry can currently support on both sides.
+  {
+    pair: 'hdfc-top-100-fund-vs-mirae-asset-large-cap-fund',
+    amcSlugA: 'hdfc',
+    fundSlugA: 'hdfc-top-100-fund',
+    amcSlugB: 'mirae-asset',
+    fundSlugB: 'mirae-asset-large-cap-fund',
+  },
+  {
+    pair: 'hdfc-top-100-fund-vs-aditya-birla-sun-life-frontline-equity-fund',
+    amcSlugA: 'hdfc',
+    fundSlugA: 'hdfc-top-100-fund',
+    amcSlugB: 'aditya-birla-sun-life',
+    fundSlugB: 'aditya-birla-sun-life-frontline-equity-fund',
+  },
+  {
+    pair: 'motilal-oswal-midcap-fund-vs-hdfc-mid-cap-opportunities-fund',
+    amcSlugA: 'motilal-oswal',
+    fundSlugA: 'motilal-oswal-midcap-fund',
+    amcSlugB: 'hdfc',
+    fundSlugB: 'hdfc-mid-cap-opportunities-fund',
+  },
+  {
+    pair: 'kotak-flexi-cap-fund-vs-sbi-contra-fund',
+    amcSlugA: 'kotak',
+    fundSlugA: 'kotak-flexi-cap-fund',
+    amcSlugB: 'sbi',
+    fundSlugB: 'sbi-contra-fund',
+  },
+  {
+    pair: 'quant-small-cap-fund-vs-nippon-india-small-cap-fund',
+    amcSlugA: 'quant',
+    fundSlugA: 'quant-small-cap-fund',
+    amcSlugB: 'nippon',
+    fundSlugB: 'nippon-india-small-cap-fund',
+  },
+  {
+    pair: 'hdfc-small-cap-fund-vs-sbi-small-cap-fund',
+    amcSlugA: 'hdfc',
+    fundSlugA: 'hdfc-small-cap-fund',
+    amcSlugB: 'sbi',
+    fundSlugB: 'sbi-small-cap-fund',
+  },
+  {
+    pair: 'parag-parikh-flexi-cap-fund-vs-kotak-flexi-cap-fund',
+    amcSlugA: 'ppfas',
+    fundSlugA: 'parag-parikh-flexi-cap-fund',
+    amcSlugB: 'kotak',
+    fundSlugB: 'kotak-flexi-cap-fund',
+  },
+  {
+    pair: 'kotak-emerging-equity-fund-vs-motilal-oswal-midcap-fund',
+    amcSlugA: 'kotak',
+    fundSlugA: 'kotak-emerging-equity-fund',
+    amcSlugB: 'motilal-oswal',
+    fundSlugB: 'motilal-oswal-midcap-fund',
+  },
+  {
+    pair: 'icici-prudential-technology-fund-vs-tata-digital-india-fund',
+    amcSlugA: 'icici-prudential',
+    fundSlugA: 'icici-prudential-technology-fund',
+    amcSlugB: 'tata',
+    fundSlugB: 'tata-digital-india-fund',
+  },
+  {
+    pair: 'uti-nifty-50-index-fund-vs-hdfc-top-100-fund',
+    amcSlugA: 'uti',
+    fundSlugA: 'uti-nifty-50-index-fund',
+    amcSlugB: 'hdfc',
+    fundSlugB: 'hdfc-top-100-fund',
   },
 ];

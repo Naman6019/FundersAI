@@ -13,7 +13,11 @@ export const metadata: Metadata = {
     'SEBI non-advisory compliance AI',
     'Zero hallucination mutual fund research',
   ],
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/methodology/guardrails',
+  },
   openGraph: {
+    images: ['/opengraph-image'],
     title: 'Guardrails & Abstention Policy | FundersAI Methodology',
     description: 'Learn when and why FundersAI refuses to generate un-backed financial claims.',
     url: 'https://www.fundersai.co.in/methodology/guardrails',

@@ -3,14 +3,24 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import test from 'node:test';
 
-test('sitemap.ts is configured exclusively for supported production domain', () => {
+test('sitemap.ts is configured for the two supported production hosts', () => {
   const source = readFileSync(resolve('app/sitemap.ts'), 'utf8');
 
   // Verify BASE_URL
   assert.match(source, /BASE_URL\s*=\s*'https:\/\/www\.fundersai\.co\.in'/);
 
-  // Quarantine check: must NOT include synthesis subdomain in primary sitemap
-  assert.doesNotMatch(source, /synthesis\.fundersai\.co\.in/);
+  // The synthesis subdomain used to be quarantined out of this sitemap because the studio
+  // was reachable on www as well, so listing it would have submitted duplicate URLs. Now
+  // that middleware pins each product to one host and the studio pages carry subdomain
+  // canonicals, the studio is listed here instead of being link-discoverable only.
+  // Cross-host entries require synthesis.fundersai.co.in to be a verified Search Console
+  // property (or covered by a fundersai.co.in domain property).
+  assert.match(source, /SYNTHESIS_URL\s*=\s*'https:\/\/synthesis\.fundersai\.co\.in'/);
+
+  // Noindex studio surfaces must never be submitted. Matches a quoted path literal rather
+  // than the bare word, so prose in a comment does not trip the assertion.
+  assert.doesNotMatch(source, /['"`]\/synthesis\/generate/);
+  assert.doesNotMatch(source, /['"`]\/synthesis\/dashboard/);
 
   // Prototype route check
   assert.doesNotMatch(source, /emergent-replica/);

@@ -14,6 +14,7 @@ export const metadata: Metadata = {
     canonical: 'https://www.fundersai.co.in/tools/portfolio-overlap',
   },
   openGraph: {
+    images: ['/opengraph-image'],
     title: 'Mutual Fund Portfolio Overlap Calculator | FundersAI',
     description:
       'Check stock overlap % between Indian mutual funds before investing. Identify shared ISIN holdings and eliminate duplicate expense ratios.',

@@ -13,7 +13,11 @@ export const metadata: Metadata = {
     'NSE mutual fund data feed',
     'AMC factsheet ingestion source',
   ],
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/methodology/data-sources',
+  },
   openGraph: {
+    images: ['/opengraph-image'],
     title: 'Data Sources & Feeds | FundersAI Methodology',
     description: 'Learn how FundersAI acquires, parses, and validates official AMC disclosures.',
     url: 'https://www.fundersai.co.in/methodology/data-sources',

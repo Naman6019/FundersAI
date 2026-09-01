@@ -13,7 +13,11 @@ export const metadata: Metadata = {
     'Beta calculation Nifty 50 benchmark',
     'FundersAI mathematical formulas',
   ],
+  alternates: {
+    canonical: 'https://www.fundersai.co.in/methodology/formulas',
+  },
   openGraph: {
+    images: ['/opengraph-image'],
     title: 'Metric Formulas & Math | FundersAI Methodology',
     description: 'Explore the exact quantitative math behind FundersAI metric calculations.',
     url: 'https://www.fundersai.co.in/methodology/formulas',

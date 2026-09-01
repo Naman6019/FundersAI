@@ -27,6 +27,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       canonical: canonicalUrl,
     },
     openGraph: {
+      images: ['/opengraph-image'],
       title: `${fundA.schemeName} vs ${fundB.schemeName} | FundersAI`,
       description: `Head-to-head comparison of ${fundA.schemeName} and ${fundB.schemeName} with deterministic metrics.`,
       url: canonicalUrl,
@@ -93,8 +94,19 @@ export default async function ComparePage({ params }: Props) {
             <span className="mx-3 text-[#7183a0] font-normal">vs</span>
             {fundB.schemeName}
           </h1>
+          {/*
+            Reads fund A's fields for both funds only where they genuinely agree. With
+            cross-category pairs in the registry (an index fund against an active large cap,
+            say), asserting one fund's category or benchmark for the other would be wrong.
+          */}
           <p className="text-sm text-[#7183a0]">
-            {fundA.category} · Both {fundA.option} plans · Benchmark: {fundA.benchmark}
+            {fundA.category === fundB.category ? fundA.category : `${fundA.category} vs ${fundB.category}`}
+            {' · '}
+            {fundA.option === fundB.option ? `Both ${fundA.option} plans` : `${fundA.option} vs ${fundB.option}`}
+            {' · '}
+            {fundA.benchmark === fundB.benchmark
+              ? `Benchmark: ${fundA.benchmark}`
+              : `Benchmarks: ${fundA.benchmark} / ${fundB.benchmark}`}
           </p>
           {snapshot && (
             <p className="mt-2 text-xs text-[#7183a0]">
@@ -172,25 +184,85 @@ export default async function ComparePage({ params }: Props) {
             </div>
           </>
         ) : (
-          /* Generic pair — no static snapshot, workspace CTA */
-          <div className="rounded-xl border border-[#66a3ff]/20 bg-[#66a3ff]/[0.04] px-6 py-8 mb-8 text-center">
-            <p className="font-semibold text-white mb-2">Live comparison</p>
+          /*
+           * Pairs without a hand-written performance snapshot still get the scheme identity
+           * both funds are actually registered under — AMFI code, SEBI category, benchmark,
+           * plan and option. That is verifiable registry data rather than a bare CTA, which
+           * is what made these pages thin enough for Google to crawl and skip.
+           */
+          <>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.015] overflow-x-auto mb-6">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-left px-5 py-4 font-semibold text-[#7183a0] text-xs uppercase tracking-widest">
+                      Scheme identity
+                    </th>
+                    <th className="text-center px-4 py-4 font-semibold text-white">
+                      {fundA.schemeName.split(' ').slice(0, 3).join(' ')}
+                    </th>
+                    <th className="text-center px-4 py-4 font-semibold text-white">
+                      {fundB.schemeName.split(' ').slice(0, 3).join(' ')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <MetricRow label="Fund house" a={fundA.amcName} b={fundB.amcName} />
+                  <MetricRow label="AMFI scheme code" a={String(fundA.schemeCode)} b={String(fundB.schemeCode)} />
+                  <MetricRow label="SEBI category" a={fundA.category} b={fundB.category} />
+                  <MetricRow label="Benchmark" a={fundA.benchmark} b={fundB.benchmark} />
+                  <MetricRow label="Plan" a={`${fundA.plan} · ${fundA.option}`} b={`${fundB.plan} · ${fundB.option}`} />
+                </tbody>
+              </table>
+            </div>
+
+            <div className="rounded-xl border border-white/8 bg-white/[0.015] px-5 py-4 mb-6 text-xs leading-6 text-[#7183a0]">
+              <p>
+                {fundA.category === fundB.category ? (
+                  <>
+                    Both schemes sit in the same SEBI category ({fundA.category}), so they draw from a
+                    comparable universe and the comparison turns on manager selection, concentration and
+                    cost rather than on mandate.
+                  </>
+                ) : (
+                  <>
+                    These schemes sit in different SEBI categories — {fundA.schemeName} is {fundA.category}{' '}
+                    and {fundB.schemeName} is {fundB.category} — so they are held to different mandates.
+                    Read return differences against each fund&apos;s own benchmark, not against each other.
+                  </>
+                )}{' '}
+                {fundA.benchmark === fundB.benchmark ? (
+                  <>Both are benchmarked to {fundA.benchmark}, so relative alpha is directly comparable.</>
+                ) : (
+                  <>
+                    They benchmark against different indices ({fundA.benchmark} and {fundB.benchmark}),
+                    so alpha figures are not directly comparable between the two.
+                  </>
+                )}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-[#66a3ff]/20 bg-[#66a3ff]/[0.04] px-6 py-6 mb-8 text-center">
+            <p className="font-semibold text-white mb-2">Live performance metrics</p>
             <p className="text-sm text-[#7183a0] max-w-lg mx-auto mb-5">
-              Live NAV, CAGR, Sharpe, drawdown, and portfolio overlap data for this pair is available in the
-              FundersAI workspace.
+              NAV, CAGR, Sharpe ratio, drawdown and portfolio overlap for this pair are computed on
+              demand from AMFI history in the FundersAI workspace.
             </p>
             <Link
+              rel="nofollow"
               href={`/dashboard?query=Compare ${fundA.schemeName} and ${fundB.schemeName}`}
               className="inline-flex items-center gap-2 rounded-full border border-[#66a3ff]/30 bg-[#66a3ff]/10 px-5 py-2.5 text-sm font-semibold text-[#66a3ff] hover:bg-[#66a3ff]/20 transition-colors"
             >
               Run this comparison →
             </Link>
-          </div>
+            </div>
+          </>
         )}
 
         {/* Live analysis CTA */}
         <div className="text-center mb-12">
           <Link
+            rel="nofollow"
             href={`/dashboard?query=Compare ${fundA.schemeName} and ${fundB.schemeName} with full metrics`}
             className="inline-flex items-center gap-2 rounded-full border border-[#00FF9D]/30 bg-[#00FF9D]/[0.08] px-6 py-3 text-sm font-bold text-[#00FF9D] hover:bg-[#00FF9D]/[0.15] transition-colors"
           >

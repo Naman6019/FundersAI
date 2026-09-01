@@ -7,6 +7,7 @@ import {
   getAmcBySlug,
   getFundsByAmc,
   getFundsByCategory,
+  getComparePair,
 } from '@/lib/fund-registry';
 import { FundJsonLd } from '@/components/seo/JsonLd';
 import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
@@ -33,6 +34,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       canonical: canonicalUrl,
     },
     openGraph: {
+      images: ['/opengraph-image'],
       title: `${fund.schemeName} – NAV, Returns & Risk Metrics | FundersAI`,
       description: `Analyze ${fund.schemeName} (${fund.category}, ${fund.plan} plan) with verified NAV and benchmark comparisons against ${fund.benchmark}.`,
       url: canonicalUrl,
@@ -67,6 +69,10 @@ function SectionHead({ label, title }: { label: string; title: string }) {
 function StaticFundDisplay({ fund }: { fund: ReturnType<typeof getFundBySlug> & {} }) {
   const otherFunds = getFundsByAmc(fund.amcSlug).filter((f) => f.fundSlug !== fund.fundSlug);
   const categoryFunds = getFundsByCategory(fund.category).filter((f) => f.fundSlug !== fund.fundSlug);
+  const comparablePeers = categoryFunds
+    .map((cf) => ({ peer: cf, pair: getComparePair(fund.fundSlug, cf.fundSlug) }))
+    .filter((entry): entry is { peer: typeof entry.peer; pair: NonNullable<typeof entry.pair> } => Boolean(entry.pair))
+    .slice(0, 4);
 
   return (
     <div className="space-y-14">
@@ -117,6 +123,7 @@ function StaticFundDisplay({ fund }: { fund: ReturnType<typeof getFundBySlug> & 
               Calculated 1Y/3Y/5Y CAGR, Sharpe ratio, Sortino, Maximum Drawdown, monthly portfolio sector weights, and stock holdings are fetched directly from official AMFI and AMC disclosures.
             </p>
             <Link
+              rel="nofollow"
               href={`/dashboard?query=Give me a full quantitative analysis of ${fund.schemeName} vs ${fund.benchmark}`}
               className="inline-flex mt-3 items-center gap-1.5 rounded-full bg-[#66a3ff]/10 border border-[#66a3ff]/20 px-4 py-2 text-xs font-semibold text-[#66a3ff] hover:bg-[#66a3ff]/20 transition-colors"
             >
@@ -176,16 +183,17 @@ function StaticFundDisplay({ fund }: { fund: ReturnType<typeof getFundBySlug> & 
           Compare risk-adjusted returns, Sharpe ratios, and portfolio overlap with other {fund.category} funds:
         </p>
         <div className="flex flex-wrap gap-2">
-          {categoryFunds.slice(0, 4).map((cf) => (
+          {comparablePeers.map(({ peer, pair }) => (
             <Link
-              key={cf.fundSlug}
-              href={`/compare/${fund.fundSlug}-vs-${cf.fundSlug}`}
+              key={peer.fundSlug}
+              href={`/compare/${pair.pair}`}
               className="text-xs font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors rounded-full border border-[#82aff6]/20 px-3 py-1.5"
             >
-              vs {cf.schemeName.split(' ')[0]} {cf.category} →
+              vs {peer.schemeName.split(' ')[0]} {peer.category} →
             </Link>
           ))}
           <Link
+            rel="nofollow"
             href={`/dashboard?query=Compare ${fund.schemeName} with its benchmark ${fund.benchmark}`}
             className="text-xs font-semibold text-[#00FF9D] hover:text-[#66ffba] transition-colors rounded-full border border-[#00FF9D]/20 bg-[#00FF9D]/[0.06] px-3 py-1.5"
           >

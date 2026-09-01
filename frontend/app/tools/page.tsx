@@ -13,6 +13,7 @@ export const metadata: Metadata = {
     canonical: 'https://www.fundersai.co.in/tools',
   },
   openGraph: {
+    images: ['/opengraph-image'],
     title: 'Free Mutual Fund & Investor Tools | FundersAI',
     description:
       'Analyze portfolio overlap, calculate SIP & Step-Up compounding wealth, and compare Indian mutual funds with official SEBI factsheet data.',

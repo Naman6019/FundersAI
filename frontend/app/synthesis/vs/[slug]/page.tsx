@@ -1,11 +1,25 @@
 import Link from "next/link";
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { SYNTHESIS_VS_SLUGS } from "@/lib/fund-registry";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { MagicCard } from "@/components/ui/magic-card";
 
 interface PageProps {
     params: Promise<{ slug: string }>;
 }
+
+// Only the curated trending comparisons resolve. Anything else 404s rather than rendering
+// a page named after whatever string was in the URL.
+function isKnownSlug(slug: string): boolean {
+    return (SYNTHESIS_VS_SLUGS as readonly string[]).includes(slug);
+}
+
+export async function generateStaticParams() {
+    return SYNTHESIS_VS_SLUGS.map((slug) => ({ slug }));
+}
+
+export const dynamicParams = false;
 
 function parseSlug(slug: string) {
     const parts = slug.split("-vs-");
@@ -16,8 +30,9 @@ function parseSlug(slug: string) {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
     const resolvedParams = await params;
+    if (!isKnownSlug(resolvedParams.slug)) return { title: "Comparison Not Found" };
     const { nameA, nameB } = parseSlug(resolvedParams.slug);
-    const title = `${nameA} vs ${nameB} Comparison | Synthesis by FundersAI`;
+    const title = `${nameA} vs ${nameB} Comparison`;
     const description = `Detailed side-by-side analysis of ${nameA} vs ${nameB}. Compare NAV, Sharpe ratio, alpha, expense ratio, and portfolio overlap with Synthesis by FundersAI.`;
 
     return {
@@ -30,6 +45,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
             "mutual fund comparison tool",
             "Synthesis by FundersAI"
         ],
+        alternates: {
+            canonical: `https://synthesis.fundersai.co.in/synthesis/vs/${resolvedParams.slug}`,
+        },
         openGraph: {
             title,
             description,
@@ -41,6 +59,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function FundVsFundPage({ params }: PageProps) {
     const resolvedParams = await params;
+    if (!isKnownSlug(resolvedParams.slug)) notFound();
     const { nameA, nameB } = parseSlug(resolvedParams.slug);
 
     return (

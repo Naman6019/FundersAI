@@ -20,6 +20,7 @@ export const metadata: Metadata = {
     canonical: 'https://www.fundersai.co.in',
   },
   openGraph: {
+    images: ['/opengraph-image'],
     title: 'FundersAI | Quantitative Mutual Fund Intelligence & Research Platform',
     description:
       'The modern intelligence platform for Indian mutual funds and equities with deterministic math, factsheet synthesis, and public utilities.',

@@ -14,6 +14,7 @@ export const metadata: Metadata = {
     canonical: 'https://www.fundersai.co.in/tools/sip-calculator',
   },
   openGraph: {
+    images: ['/opengraph-image'],
     title: 'SIP Calculator & Wealth Compounding Tool | FundersAI',
     description:
       'Calculate maturity corpus for Monthly SIP, Lumpsum, and Step-Up investments with SEBI category return benchmarks.',

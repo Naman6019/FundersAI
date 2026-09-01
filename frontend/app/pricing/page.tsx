@@ -18,6 +18,7 @@ export const metadata: Metadata = {
     canonical: 'https://www.fundersai.co.in/pricing',
   },
   openGraph: {
+    images: ['/opengraph-image'],
     title: 'Pricing & Subscription Plans | FundersAI',
     description:
       'Simple, transparent pricing for institutional-grade Indian mutual fund & stock research.',
