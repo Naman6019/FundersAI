@@ -4,6 +4,7 @@ import { Layers, Calculator, Search, Scale, Sparkles, ArrowRight, ShieldCheck } 
 import { ToolJsonLd } from '@/components/seo/JsonLd';
 import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
 import PublicFooter from '@/components/layout/PublicFooter';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
 export const metadata: Metadata = {
   title: 'Free Mutual Fund & Investor Tools | FundersAI',
@@ -75,6 +76,8 @@ export default function ToolsIndexPage() {
       />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-12 flex-1 w-full">
+        <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Tools' }]} />
+
         {/* Header */}
         <header className="space-y-4 text-center max-w-3xl mx-auto">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#00FF9D]/10 border border-[#00FF9D]/20 text-[#00FF9D] text-xs font-mono font-semibold">

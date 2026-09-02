@@ -5,6 +5,7 @@ import { getFundBySlug, COMPARE_PAIRS } from '@/lib/fund-registry';
 import { CompareJsonLd } from '@/components/seo/JsonLd';
 import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
 import PublicFooter from '@/components/layout/PublicFooter';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
 type Props = { params: Promise<{ pair: string }> };
 
@@ -79,13 +80,15 @@ export default async function ComparePage({ params }: Props) {
       <main className="flex-1">
         <div className="mx-auto max-w-5xl px-5 py-12 sm:px-8">
           {/* Breadcrumb */}
-          <div className="flex items-center gap-2 text-xs font-mono text-[#7183a0] mb-8">
-            <Link href="/" className="hover:text-white transition-colors">Home</Link>
-            <span>/</span>
-            <Link href="/mutual-funds" className="hover:text-white transition-colors">Mutual Funds</Link>
-            <span>/</span>
-            <span className="text-[#00FF9D]">Compare</span>
-          </div>
+          <Breadcrumbs
+            className="mb-8"
+            items={[
+              { label: 'Home', href: '/' },
+              { label: 'Mutual Funds', href: '/mutual-funds' },
+              { label: 'Compare', href: '/compare' },
+              { label: `${fundA.schemeName} vs ${fundB.schemeName}`, truncate: true },
+            ]}
+          />
         {/* Hero */}
         <div className="mb-12 text-center">
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#00FF9D]/70 mb-4">Fund Comparison</p>

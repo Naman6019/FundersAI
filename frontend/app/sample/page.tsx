@@ -4,6 +4,7 @@ import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
 import PublicFooter from '@/components/layout/PublicFooter';
 import { MagicCard } from '@/components/ui/magic-card';
 import { ShimmerButton } from '@/components/ui/shimmer-button';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
 export const metadata: Metadata = {
   title: 'Sample Comparison Report | Synthesis by FundersAI',
@@ -68,13 +69,15 @@ export default function SamplePage() {
 
       <main className="flex-1 max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-20 w-full space-y-12">
         {/* Breadcrumbs */}
-        <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
-          <Link href="/" className="hover:text-emerald-400">Home</Link>
-          <span>/</span>
-          <span className="text-gray-200">Sample Research</span>
-          <span>/</span>
-          <span className="text-blue-400">Flexi Cap Battle</span>
-        </div>
+        <Breadcrumbs
+          tone="docs"
+          currentClassName="text-blue-400"
+          items={[
+            { label: 'Home', href: '/' },
+            { label: 'Sample Research' },
+            { label: 'Flexi Cap Battle' },
+          ]}
+        />
 
         {/* Hero Section */}
         <div className="space-y-4 max-w-3xl">

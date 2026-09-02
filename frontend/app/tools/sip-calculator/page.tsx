@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import SipCalculatorPublic from '@/components/tools/SipCalculatorPublic';
 import { ToolJsonLd } from '@/components/seo/JsonLd';
 import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
 import PublicFooter from '@/components/layout/PublicFooter';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import { Calculator, HelpCircle } from 'lucide-react';
 
 export const metadata: Metadata = {
@@ -55,13 +55,13 @@ export default function SipCalculatorPage() {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-12 flex-1 w-full">
         {/* Breadcrumb & Header */}
         <header className="space-y-4">
-          <div className="flex items-center gap-2 text-xs font-mono text-[#7183a0]">
-            <Link href="/" className="hover:text-white transition-colors">Home</Link>
-            <span>/</span>
-            <Link href="/tools" className="hover:text-white transition-colors">Tools</Link>
-            <span>/</span>
-            <span className="text-[#00FF9D]">SIP Calculator</span>
-          </div>
+          <Breadcrumbs
+            items={[
+              { label: 'Home', href: '/' },
+              { label: 'Tools', href: '/tools' },
+              { label: 'SIP Calculator' },
+            ]}
+          />
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-6">
             <div>

@@ -17,9 +17,10 @@ import {
 import {
   LayoutDashboard,
   Brain,
+  Wallet,
 } from "lucide-react";
 import { useChatStore } from "@/store/useChatStore";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import UserProfileDropdown from "@/components/auth/UserProfileDropdown";
 import { InfoCard, InfoCardContent, InfoCardDescription, InfoCardTitle, InfoCardMedia } from "@/components/ui/info-card";
 import { UserTier } from "@/lib/billing/tiers";
@@ -39,15 +40,6 @@ export function AppSidebar({
   const loadSessionMessages = useChatStore((state) => state.loadSessionMessages);
   const currentSessionId = useChatStore((state) => state.currentSessionId);
   const resetMessages = useChatStore((state) => state.resetMessages);
-  const [rememberedLanding, setRememberedLanding] = useState<string>("/");
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("fundersai_last_landing");
-      if (saved) setRememberedLanding(saved);
-    } catch {}
-  }, []);
-
   useEffect(() => {
     fetchSessions();
   }, [fetchSessions]);
@@ -76,7 +68,7 @@ export function AppSidebar({
     <Sidebar className="border-r border-white/10 bg-[#0a0a0a]">
       <SidebarHeader className="p-5 border-b border-white/10">
         <div className="flex flex-col gap-1 items-start">
-          <Link href={rememberedLanding} className="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg p-0.5 transition-opacity hover:opacity-80">
+          <Link href="/" className="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg p-0.5 transition-opacity hover:opacity-80">
             <Image
               src="/FUNDERSAI-vertical.png"
               alt="FundersAI Logo"
@@ -110,6 +102,12 @@ export function AppSidebar({
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              <SidebarMenuItem>
+                <Link href="/dashboard/portfolio" className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium text-text-2 hover:bg-surface-1 hover:text-white">
+                    <Wallet className="h-[18px] w-[18px] shrink-0" />
+                    <span>Portfolio</span>
+                </Link>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

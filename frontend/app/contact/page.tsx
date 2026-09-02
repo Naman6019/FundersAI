@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
 import PublicFooter from '@/components/layout/PublicFooter';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
 export const metadata: Metadata = {
   title: 'Contact | FundersAI',
@@ -19,9 +20,7 @@ export default function ContactPage() {
 
       <main className="px-4 py-12 sm:px-6 flex-1">
         <article className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-[#101724] p-6 shadow-2xl sm:p-10">
-          <Link href="/" className="text-sm font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">
-            ← Home
-          </Link>
+          <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Contact' }]} />
 
         <h1 className="mt-6 text-3xl font-semibold tracking-tight text-white">Contact</h1>
         <p className="mt-2 text-sm text-[#7183a0]">We aim to respond within 2 business days.</p>

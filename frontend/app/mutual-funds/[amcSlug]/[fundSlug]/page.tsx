@@ -12,6 +12,7 @@ import {
 import { FundJsonLd } from '@/components/seo/JsonLd';
 import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
 import PublicFooter from '@/components/layout/PublicFooter';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
 type Props = { params: Promise<{ amcSlug: string; fundSlug: string }> };
 
@@ -240,15 +241,15 @@ export default async function FundDetailPage({ params }: Props) {
       <main className="flex-1">
         <div className="mx-auto max-w-5xl px-5 py-12 sm:px-8">
           {/* Breadcrumb */}
-          <div className="flex items-center gap-2 text-xs font-mono text-[#7183a0] mb-8">
-            <Link href="/" className="hover:text-white transition-colors">Home</Link>
-            <span>/</span>
-            <Link href="/mutual-funds" className="hover:text-white transition-colors">Mutual Funds</Link>
-            <span>/</span>
-            <Link href={`/mutual-funds/${amcSlug}`} className="hover:text-white transition-colors">{amc?.shortName ?? amcSlug}</Link>
-            <span>/</span>
-            <span className="text-[#00FF9D] truncate max-w-xs">{fund.schemeName}</span>
-          </div>
+          <Breadcrumbs
+            className="mb-8"
+            items={[
+              { label: 'Home', href: '/' },
+              { label: 'Mutual Funds', href: '/mutual-funds' },
+              { label: amc?.shortName ?? amcSlug, href: `/mutual-funds/${amcSlug}` },
+              { label: fund.schemeName, truncate: true },
+            ]}
+          />
 
           {/* Hero */}
           <div className="mb-12">

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
 import PublicFooter from '@/components/layout/PublicFooter';
 import { MagicCard } from '@/components/ui/magic-card';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
 export const metadata: Metadata = {
   title: 'Methodology Hub & Standards | FundersAI',
@@ -73,13 +74,14 @@ export default function MethodologyHubPage() {
 
       <main className="flex-1 max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-20 w-full space-y-12">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
-          <Link href="/" className="hover:text-emerald-400">Home</Link>
-          <span>/</span>
-          <span className="text-gray-200">Documentation</span>
-          <span>/</span>
-          <span className="text-emerald-400">Methodology Hub</span>
-        </div>
+        <Breadcrumbs
+          tone="docs"
+          items={[
+            { label: 'Home', href: '/' },
+            { label: 'Documentation' },
+            { label: 'Methodology Hub' },
+          ]}
+        />
 
         {/* Hero Header */}
         <div className="space-y-4 max-w-3xl">

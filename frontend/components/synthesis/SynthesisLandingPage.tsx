@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { MagicCard } from "@/components/ui/magic-card";
@@ -101,12 +101,6 @@ export default function SynthesisLandingPage() {
     const [openFaq, setOpenFaq] = useState<number | null>(0);
     const [heroSelectedPreset, setHeroSelectedPreset] = useState(0);
     const [heroSimulatedProgress, setHeroSimulatedProgress] = useState(4);
-
-    useEffect(() => {
-        try {
-            localStorage.setItem("fundersai_last_landing", "/synthesis");
-        } catch {}
-    }, []);
 
     const runHeroPreset = (idx: number) => {
         setHeroSelectedPreset(idx);

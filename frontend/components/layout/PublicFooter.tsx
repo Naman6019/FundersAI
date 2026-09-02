@@ -79,7 +79,7 @@ export default function PublicFooter() {
             href="/dashboard"
             className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold hover:bg-emerald-500/20 transition-all text-[11px]"
           >
-            <span>← Back to Research</span>
+            <span>← Back to Workspace</span>
           </Link>
         </div>
         <p className="uppercase tracking-widest text-[10px] text-gray-400 font-mono">

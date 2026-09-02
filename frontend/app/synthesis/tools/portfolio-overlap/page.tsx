@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { MagicCard } from "@/components/ui/magic-card";
 import { ReportsSubNav } from "@/components/layout/ReportsSubNav";
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
 export default function PortfolioOverlapToolPage() {
     const [fundA, setFundA] = useState("Parag Parikh Flexi Cap Fund");
@@ -23,13 +24,16 @@ export default function PortfolioOverlapToolPage() {
             {/* Breadcrumb & Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800/80 pb-6">
                 <div>
-                    <div className="flex items-center gap-2 text-xs font-mono text-gray-400 mb-1">
-                        <Link href="/synthesis" className="hover:text-blue-400">Synthesis</Link>
-                        <span>/</span>
-                        <span className="text-gray-200">Tools</span>
-                        <span>/</span>
-                        <span className="text-blue-400">Portfolio Overlap Calculator</span>
-                    </div>
+                    <Breadcrumbs
+                        tone="synthesis"
+                        className="mb-1"
+                        currentClassName="text-violet-400"
+                        items={[
+                            { label: 'Synthesis', href: '/synthesis' },
+                            { label: 'Tools' },
+                            { label: 'Portfolio Overlap Calculator' },
+                        ]}
+                    />
                     <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
                         <span>Mutual Fund Portfolio Overlap Calculator</span>
                         <span className="text-xs font-mono font-normal px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">

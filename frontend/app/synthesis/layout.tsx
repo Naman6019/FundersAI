@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { ReactNode } from "react";
 import type { Metadata } from "next";
 import { AnimatedGridPattern } from "@/components/ui/animated-grid-pattern";
 import { FlickeringGrid } from "@/components/ui/flickering-grid";
 import { EcosystemHeader } from "@/components/ecosystem/EcosystemHeader";
 import { ReportsSubNav } from "@/components/layout/ReportsSubNav";
+import SynthesisFooter from "@/components/synthesis/SynthesisFooter";
 
 export const metadata: Metadata = {
     title: {
@@ -60,13 +60,13 @@ export const metadata: Metadata = {
 
 export default function SynthesisLayout({ children }: { children: ReactNode }) {
     return (
-        <div className="relative min-h-screen bg-gray-950 text-gray-100 flex flex-col overflow-hidden selection:bg-blue-500/30 selection:text-blue-200">
+        <div className="relative min-h-screen bg-background text-text-1 flex flex-col overflow-hidden selection:bg-violet-500/30 selection:text-violet-200">
             {/* Ambient Subtly Dimmed Flickering Grid Background Pattern */}
             <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden [mask-image:linear-gradient(to_bottom,transparent_0%,white_8%,white_92%,transparent_100%)]">
                 <FlickeringGrid
                     squareSize={6}
                     gridGap={10}
-                    color="rgb(37, 99, 235)"
+                    color="rgb(139, 92, 246)"
                     maxOpacity={0.18}
                     flickerChance={0.15}
                     className="w-full h-full"
@@ -80,6 +80,9 @@ export default function SynthesisLayout({ children }: { children: ReactNode }) {
             <main className="flex-1 flex flex-col relative">
                 {children}
             </main>
+
+            {/* Second exit from the silo, below the fold */}
+            <SynthesisFooter />
         </div>
     );
 }

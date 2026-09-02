@@ -3,6 +3,7 @@ import { Metadata } from "next";
 import { MagicCard } from "@/components/ui/magic-card";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { ReportsSubNav } from "@/components/layout/ReportsSubNav";
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
 export const metadata: Metadata = {
     // The parent synthesis layout appends "| Synthesis by FundersAI" via title.template.
@@ -29,13 +30,14 @@ export default function MethodologyPage() {
     return (
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full space-y-10">
             {/* Breadcrumb */}
-            <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
-                <Link href="/" className="hover:text-blue-400">FundersAI</Link>
-                <span>/</span>
-                <Link href="/synthesis" className="hover:text-blue-400">Synthesis</Link>
-                <span>/</span>
-                <span className="text-blue-400 font-bold">[ METHODOLOGY ]</span>
-            </div>
+            <Breadcrumbs
+                tone="synthesis"
+                items={[
+                    { label: 'FundersAI', href: '/' },
+                    { label: 'Synthesis', href: '/synthesis' },
+                    { label: '[ METHODOLOGY ]' },
+                ]}
+            />
 
             {/* Header */}
             <div className="space-y-4 max-w-3xl">

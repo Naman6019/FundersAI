@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import PublicFooter from '@/components/layout/PublicFooter';
 
 export const metadata: Metadata = {
@@ -70,11 +70,14 @@ export default function MethodologyFormulasPage() {
       <EcosystemHeader />
 
       <main className="flex-1 max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-20 w-full space-y-10">
-        <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
-          <Link href="/methodology" className="hover:text-emerald-400">Methodology</Link>
-          <span>/</span>
-          <span className="text-cyan-400">02. Formulas &amp; Math</span>
-        </div>
+        <Breadcrumbs
+          tone="docs"
+          currentClassName="text-cyan-400"
+          items={[
+            { label: 'Methodology', href: '/methodology' },
+            { label: '02. Formulas & Math' },
+          ]}
+        />
 
         <div className="space-y-4 max-w-3xl">
           <span className="text-xs font-mono font-bold uppercase tracking-wider text-cyan-400">Quantitative Standard</span>

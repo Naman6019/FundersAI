@@ -610,7 +610,14 @@ export default function DashboardLayout() {
                   </div>
                   <ArrowRight className="h-4 w-4 text-[#00FF9D] transition-colors" />
                 </Link>
-                <div onClick={() => handleOverviewQuery('Is this a good time to invest in mid cap funds?')} className="w-full text-left p-3 rounded-lg border border-white/10 bg-white/[0.02] hover:bg-white/[0.04] transition-all cursor-pointer flex items-center justify-between group">
+                <Link href="/dashboard/portfolio" className="w-full text-left p-3 rounded-lg border border-line bg-surface-1 hover:bg-surface-1 transition-all cursor-pointer flex items-center justify-between group">
+                  <div>
+                    <div className="text-[13px] font-medium text-white">Manual Portfolio</div>
+                    <div className="text-[11px] text-text-2 mt-0.5">Track positions and inspect stored overlap</div>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-text-3 group-hover:text-text-2 transition-colors" />
+                </Link>
+                <div onClick={() => handleOverviewQuery('Is this a good time to invest in mid cap funds?')} className="w-full text-left p-3 rounded-lg border border-line bg-surface-1 hover:bg-surface-1 transition-all cursor-pointer flex items-center justify-between group">
                   <div>
                     <div className="text-[13px] font-medium text-white">Market Outlook</div>
                     <div className="text-[11px] text-slate-400 mt-0.5">Macro trends and equity valuations</div>

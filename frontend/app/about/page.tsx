@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import PublicFooter from '@/components/layout/PublicFooter';
 
 export const metadata: Metadata = {
@@ -19,9 +19,7 @@ export default function AboutPage() {
 
       <main className="px-4 py-12 sm:px-6 flex-1">
         <article className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-[#101724] p-6 shadow-2xl sm:p-10">
-          <Link href="/" className="text-sm font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors">
-            ← Home
-          </Link>
+          <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'About' }]} />
 
         <h1 className="mt-6 text-3xl font-semibold tracking-tight text-white">About FundersAI</h1>
         <p className="mt-2 text-sm text-[#7183a0]">Updated July 2026</p>

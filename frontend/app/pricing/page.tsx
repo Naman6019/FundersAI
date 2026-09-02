@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
 import PublicFooter from '@/components/layout/PublicFooter';
 import { MagicCard } from '@/components/ui/magic-card';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
 export const metadata: Metadata = {
   title: 'Pricing & Subscription Plans | FundersAI',
@@ -56,13 +57,14 @@ export default function PricingPage() {
 
       <main className="flex-1 max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-20 w-full space-y-16 relative z-10">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
-          <Link href="/" className="hover:text-blue-400">FundersAI</Link>
-          <span>/</span>
-          <Link href="/synthesis" className="hover:text-blue-400">Synthesis</Link>
-          <span>/</span>
-          <span className="text-blue-400 font-bold">[ PRICING_PLANS ]</span>
-        </div>
+        <Breadcrumbs
+          tone="synthesis"
+          items={[
+            { label: 'FundersAI', href: '/' },
+            { label: 'Synthesis', href: '/synthesis' },
+            { label: '[ PRICING_PLANS ]' },
+          ]}
+        />
 
         {/* Hero Header */}
         <div className="text-center space-y-4 max-w-3xl mx-auto">

@@ -18,6 +18,9 @@ export type UserContext = {
     email: string | null;
   };
   profile: ProfileRow;
+  /** Bearer-scoped client. RLS applies to user-owned rows. */
+  supabaseUser: SupabaseClient;
+  /** Service-role client for server-only profile and public-data reads. */
   supabaseAdmin: SupabaseClient;
 };
 
@@ -86,6 +89,11 @@ export async function getUserContext(request: Request): Promise<UserContext | nu
   const profile = await fetchOrCreateUserProfile(supabaseAdmin, data.user.id);
   if (!profile) return null;
 
+  const supabaseUser = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+
   return {
     token,
     user: {
@@ -93,6 +101,7 @@ export async function getUserContext(request: Request): Promise<UserContext | nu
       email: data.user.email ?? null,
     },
     profile,
+    supabaseUser,
     supabaseAdmin,
   };
 }

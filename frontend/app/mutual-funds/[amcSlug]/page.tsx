@@ -8,6 +8,7 @@ import {
 } from '@/lib/fund-registry';
 import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
 import PublicFooter from '@/components/layout/PublicFooter';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
 type Props = { params: Promise<{ amcSlug: string }> };
 
@@ -70,13 +71,14 @@ export default async function AmcPage({ params }: Props) {
       <main className="flex-1">
         <div className="mx-auto max-w-6xl px-5 py-12 sm:px-8">
           {/* Breadcrumb */}
-          <div className="flex items-center gap-2 text-xs font-mono text-[#7183a0] mb-8">
-            <Link href="/" className="hover:text-white transition-colors">Home</Link>
-            <span>/</span>
-            <Link href="/mutual-funds" className="hover:text-white transition-colors">Mutual Funds</Link>
-            <span>/</span>
-            <span className="text-[#00FF9D]">{amc.shortName}</span>
-          </div>
+          <Breadcrumbs
+            className="mb-8"
+            items={[
+              { label: 'Home', href: '/' },
+              { label: 'Mutual Funds', href: '/mutual-funds' },
+              { label: amc.shortName },
+            ]}
+          />
 
           {/* Hero */}
           <div className="mb-12">

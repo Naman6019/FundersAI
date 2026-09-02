@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { SYNTHESIS_VS_SLUGS } from "@/lib/fund-registry";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { MagicCard } from "@/components/ui/magic-card";
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
 interface PageProps {
     params: Promise<{ slug: string }>;
@@ -65,13 +66,15 @@ export default async function FundVsFundPage({ params }: PageProps) {
     return (
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full space-y-10">
             {/* Breadcrumb */}
-            <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
-                <Link href="/synthesis" className="hover:text-blue-400">Synthesis</Link>
-                <span>/</span>
-                <span className="text-gray-200">Comparison Engine</span>
-                <span>/</span>
-                <span className="text-blue-400 uppercase">{resolvedParams.slug}</span>
-            </div>
+            <Breadcrumbs
+                tone="synthesis"
+                currentClassName="text-violet-400 uppercase"
+                items={[
+                    { label: 'Synthesis', href: '/synthesis' },
+                    { label: 'Comparison Engine' },
+                    { label: resolvedParams.slug },
+                ]}
+            />
 
             {/* Hero Header */}
             <div className="space-y-4 max-w-3xl">

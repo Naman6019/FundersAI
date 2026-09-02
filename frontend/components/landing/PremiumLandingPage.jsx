@@ -618,10 +618,6 @@ export default function FundersAILandingPage() {
   const [proofStats, setProofStats] = useState(defaultProofStats);
 
   useEffect(() => {
-    try {
-      localStorage.setItem("fundersai_last_landing", "/");
-    } catch {}
-
     // Fetch live numbers from public ticker to replace static defaults
     fetch("/api/funds/ticker")
       .then((r) => r.json())

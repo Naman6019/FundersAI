@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
 import PublicFooter from '@/components/layout/PublicFooter';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import { MagicCard } from '@/components/ui/magic-card';
 
 export const metadata: Metadata = {
@@ -79,13 +79,15 @@ export default function HowItWorksPage() {
 
       <main className="flex-1 max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-20 w-full space-y-12">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
-          <Link href="/" className="hover:text-emerald-400">Home</Link>
-          <span>/</span>
-          <span className="text-gray-200">Architecture</span>
-          <span>/</span>
-          <span className="text-blue-400">System Flow</span>
-        </div>
+        <Breadcrumbs
+          tone="docs"
+          currentClassName="text-blue-400"
+          items={[
+            { label: 'Home', href: '/' },
+            { label: 'Architecture' },
+            { label: 'System Flow' },
+          ]}
+        />
 
         {/* Hero */}
         <div className="space-y-4 max-w-3xl">

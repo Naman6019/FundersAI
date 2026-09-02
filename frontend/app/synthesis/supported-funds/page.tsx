@@ -5,6 +5,7 @@ import Link from "next/link";
 import { MagicCard } from "@/components/ui/magic-card";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { ReportsSubNav } from "@/components/layout/ReportsSubNav";
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
 interface FundRow {
     scheme_code: string | number;
@@ -95,12 +96,15 @@ export default function SupportedFundsDirectoryPage() {
     return (
         <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-8">
             {/* Header & Title */}
-            <div className="border-b border-gray-800/80 pb-6 space-y-4">
-                <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
-                    <Link href="/synthesis" className="hover:text-blue-400">Synthesis</Link>
-                    <span>/</span>
-                    <span className="text-blue-400">Supported Funds Directory</span>
-                </div>
+            <div className="border-b border-line pb-6 space-y-4">
+                <Breadcrumbs
+                    tone="synthesis"
+                    currentClassName="text-violet-400"
+                    items={[
+                        { label: 'Synthesis', href: '/synthesis' },
+                        { label: 'Supported Funds Directory' },
+                    ]}
+                />
 
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>

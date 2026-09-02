@@ -134,6 +134,8 @@ test('Dedicated /research page and Master Ecosystem landing page exist and are c
   assert.match(rootSource, /MasterEcosystemLandingPage/);
 
   const headerSource = readFileSync(ecosystemHeader, 'utf-8');
-  assert.match(headerSource, /href="\/research"/);
+  // The header may link to /research directly or resolve it through ecosystemHref,
+  // which sends the link off the Synthesis subdomain. Either form satisfies the contract.
+  assert.match(headerSource, /href(="|: ")\/research"|ecosystemHref\("\/research"\)/);
 });
 

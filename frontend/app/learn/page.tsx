@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
 export const metadata: Metadata = {
   title: 'Learn | FundersAI Research',
@@ -40,6 +41,8 @@ const TOPICS = [
 export default function LearnIndexPage() {
   return (
     <div className="space-y-8">
+      <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Learn' }]} />
+
       <div>
         <h1 className="font-serif text-4xl md:text-5xl font-semibold tracking-tight text-white mb-4">
           Investing Concepts & Guides
