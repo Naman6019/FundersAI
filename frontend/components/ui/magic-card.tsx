@@ -75,7 +75,9 @@ export function MagicCard(props: MagicCardProps) {
   const { theme, systemTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
 
-  useEffect(() => setMounted(true), [])
+  useEffect(() => {
+    requestAnimationFrame(() => setMounted(true));
+  }, []);
 
   const isDarkTheme = useMemo(() => {
     if (!mounted) return true

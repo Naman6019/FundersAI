@@ -72,62 +72,11 @@ function formatDate(value?: string | null) {
   return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-const PricingSwitch = ({ onSwitch }: { onSwitch: (value: string) => void }) => {
-  const [selected, setSelected] = useState("0");
-
-  const handleSwitch = (value: string) => {
-    setSelected(value);
-    onSwitch(value);
-  };
-
-  return (
-    <div className="flex justify-center">
-      <div className="relative z-10 mx-auto flex w-fit rounded-full bg-neutral-900 border border-gray-700 p-1">
-        <button
-          onClick={() => handleSwitch("0")}
-          className={cn(
-            "relative z-10 w-fit h-10  rounded-full sm:px-6 px-3 sm:py-2 py-1 font-medium transition-colors",
-            selected === "0" ? "text-white" : "text-gray-200",
-          )}
-        >
-          {selected === "0" && (
-            <motion.span
-              layoutId={"switch"}
-              className="absolute top-0 left-0 h-10 w-full rounded-full border-4 shadow-sm shadow-blue-600 border-blue-600 bg-gradient-to-t from-blue-500 to-blue-600"
-              transition={{ type: "spring", stiffness: 500, damping: 30 }}
-            />
-          )}
-          <span className="relative">Monthly</span>
-        </button>
-
-        <button
-          onClick={() => handleSwitch("1")}
-          className={cn(
-            "relative z-10 w-fit h-10 flex-shrink-0 rounded-full sm:px-6 px-3 sm:py-2 py-1 font-medium transition-colors",
-            selected === "1" ? "text-white" : "text-gray-200",
-          )}
-        >
-          {selected === "1" && (
-            <motion.span
-              layoutId={"switch"}
-              className="absolute top-0 left-0 h-10 w-full  rounded-full border-4 shadow-sm shadow-blue-600 border-blue-600 bg-gradient-to-t from-blue-500 to-blue-600"
-              transition={{ type: "spring", stiffness: 500, damping: 30 }}
-            />
-          )}
-          <span className="relative flex items-center gap-2">Yearly</span>
-        </button>
-      </div>
-    </div>
-  );
-};
-
 export default function BillingPage() {
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyTier, setBusyTier] = useState<PaidTier | null>(null);
   const [message, setMessage] = useState('');
-  
-  const [isYearly, setIsYearly] = useState(false);
   const pricingRef = useRef<HTMLDivElement>(null);
 
   const revealVariants = {
@@ -146,9 +95,6 @@ export default function BillingPage() {
       opacity: 0,
     },
   };
-
-  const togglePricingPeriod = (value: string) =>
-    setIsYearly(parseInt(value) === 1);
 
   const refreshBilling = async () => {
     const res = await billingFetch('/api/billing/subscriptions');
@@ -326,9 +272,12 @@ export default function BillingPage() {
           animationNum={1}
           timelineRef={pricingRef}
           customVariants={revealVariants}
-          className="pt-4"
+          className="pt-4 flex justify-center"
         >
-          <PricingSwitch onSwitch={togglePricingPeriod} />
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface-1 border border-line text-xs font-mono text-text-2 shadow-sm">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Transparent monthly billing · Instant activation via Razorpay · Cancel anytime</span>
+          </div>
         </TimelineContent>
       </article>
 
@@ -336,20 +285,20 @@ export default function BillingPage() {
         className="absolute top-0 left-[10%] right-[10%] w-[80%] h-full z-0 pointer-events-none"
         style={{
           backgroundImage: `radial-gradient(circle at center, #206ce8 0%, transparent 70%)`,
-          opacity: 0.6,
+          opacity: 0.3,
           mixBlendMode: "multiply",
         }}
       />
 
       <div className="relative z-20 max-w-5xl mx-auto px-4">
         {loading ? (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-slate-300 max-w-sm mx-auto text-center mb-8">
+          <div className="rounded-2xl border border-line bg-surface-1 p-4 text-sm text-text-2 max-w-sm mx-auto text-center mb-8">
             Loading billing status...
           </div>
         ) : null}
 
         {message ? (
-          <div className="mb-8 rounded-2xl border border-[#66a3ff]/30 bg-[#66a3ff]/10 p-4 text-sm text-[#cce0ff] max-w-md mx-auto text-center backdrop-blur-sm">
+          <div className="mb-8 rounded-2xl border border-primary/30 bg-primary/10 p-4 text-sm text-text-1 max-w-md mx-auto text-center backdrop-blur-sm">
             {message}
           </div>
         ) : null}
@@ -371,38 +320,38 @@ export default function BillingPage() {
               className="h-full"
             >
               <Card
-                className={`relative h-full text-white border-neutral-800 transition-all duration-300 hover:scale-[1.02] ${
+                className={`relative h-full text-foreground border transition-all duration-300 hover:scale-[1.01] ${
                   isPopular
-                    ? "bg-gradient-to-r from-neutral-900 via-neutral-800 to-neutral-900 shadow-[0px_-13px_300px_0px_#0900ff] z-20 border-[#3131f5]/50"
-                    : "bg-gradient-to-r from-neutral-900 via-neutral-800 to-neutral-900 z-10"
+                    ? "bg-surface-1 border-primary/40 shadow-lg shadow-primary/5 z-20"
+                    : "bg-surface-base border-line z-10"
                 }`}
               >
                 <CardHeader className="text-left pb-4">
                   <div className="flex justify-between items-center mb-2">
                     <h3 className="text-2xl font-medium">{tier.name}</h3>
                     {isCurrent && (
-                      <span className="rounded-full border border-emerald-300/40 bg-emerald-400/10 px-2.5 py-1 text-xs text-emerald-200">
+                      <span className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-300 font-mono">
                         Current Plan
                       </span>
                     )}
                   </div>
                   <div className="flex items-baseline">
-                    <span className="text-4xl font-semibold ">
+                    <span className="text-4xl font-semibold font-mono text-white">
                       <NumberFlow
                         format={{
                           style: "currency",
                           currency: "INR",
                           maximumFractionDigits: 0
                         }}
-                        value={isYearly ? (tier.amountPaise / 100) * 10 : tier.amountPaise / 100}
+                        value={tier.amountPaise / 100}
                         className="text-4xl font-semibold"
                       />
                     </span>
-                    <span className="text-gray-300 ml-1">
-                      /{isYearly ? "year" : "month"}
+                    <span className="text-text-3 ml-1.5 font-mono text-sm">
+                      /month
                     </span>
                   </div>
-                  <p className="text-sm text-gray-300 mt-3 min-h-[40px]">{tier.description}</p>
+                  <p className="text-sm text-text-3 mt-3 min-h-[40px]">{tier.description}</p>
                 </CardHeader>
 
                 <CardContent className="pt-0 flex flex-col h-[calc(100%-160px)]">

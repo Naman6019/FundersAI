@@ -719,9 +719,11 @@ export default function DashboardLayout() {
             currentApp="research"
             dataTrustHref="/dashboard/data-trust"
             containerClassName="w-full px-4 sm:px-6"
-            leading={<SidebarTrigger className="text-slate-200 hover:text-white transition shrink-0" />}
+            desktopNavigationVisibilityClassName="hidden"
+            compactMenuVisibilityClassName=""
+            leading={<SidebarTrigger className="hidden sm:inline-flex text-slate-200 hover:text-white transition shrink-0" />}
             centerSlot={
-              <div className="hidden relative max-w-xs w-full sm:block">
+              <div className="hidden relative max-w-xs w-full xl:block">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 h-3.5 w-3.5" />
                 <input
                   type="text"
@@ -742,24 +744,26 @@ export default function DashboardLayout() {
               </div>
             }
             trailing={
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="hidden sm:flex items-center gap-3 shrink-0">
                 {currentTier === 'free' && (
                   <Link
                     href="/billing"
-                    className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 text-xs font-semibold text-white transition hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-950/40"
+                    aria-label="Upgrade plan"
+                    className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-3 2xl:px-4 text-xs font-semibold text-white transition hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-950/40"
                   >
                     <Sparkles className="h-3.5 w-3.5 text-emerald-100" />
-                    <span className="hidden sm:inline tracking-wide">Upgrade</span>
+                    <span className="hidden 2xl:inline tracking-wide">Upgrade</span>
                   </Link>
                 )}
                 <Link
                   href="/dashboard/data-trust"
-                  className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200 transition hover:border-amber-400/45 hover:text-white"
+                  aria-label={`Data & Trust: ${healthSummary.label}. Last checked ${lastSuccessfulCheck || 'pending'}.`}
+                  className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200 transition hover:border-amber-400/45 hover:text-white"
                   title={`Data & Trust: ${healthSummary.label}. Last checked ${lastSuccessfulCheck || 'pending'}.`}
                 >
                   <span className={`h-2 w-2 rounded-full ${statusDotClass(healthSummary.status)}`} aria-hidden="true" />
-                  <span className="hidden md:inline">Data &amp; Trust</span>
-                  <span className="hidden max-w-40 truncate font-normal text-slate-400 lg:inline">{healthSummary.label}</span>
+                  <span className="hidden 2xl:inline">Data &amp; Trust</span>
+                  <span className="hidden max-w-40 truncate font-normal text-slate-400 2xl:inline">{healthSummary.label}</span>
                 </Link>
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/15 bg-white/[0.04] hover:bg-white/10 transition-colors">
                   <LandingThemeToggle />

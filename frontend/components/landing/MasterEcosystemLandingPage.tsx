@@ -1,30 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { motion } from "framer-motion";
 import { EcosystemHeader } from "@/components/ecosystem/EcosystemHeader";
 import PublicFooter from "@/components/layout/PublicFooter";
-import { FUND_REGISTRY } from "@/lib/fund-registry";
+import ProductHuntBadge from "@/components/growth/ProductHuntBadge";
 import {
   BarChart3,
   Zap,
   Layers,
-  Calculator,
-  ShieldCheck,
   ArrowRight,
   Sparkles,
-  TrendingUp,
-  Search,
   CheckCircle2,
-  Lock,
-  FileText,
-  Activity,
-  Cpu,
-  ChevronRight,
-  ExternalLink,
-  PieChart,
+  Calculator,
 } from "lucide-react";
 
 const ease = [0.22, 1, 0.36, 1] as const;
@@ -129,8 +118,6 @@ const AMC_LIST = [
 ];
 
 export default function MasterEcosystemLandingPage() {
-  const [activeTab, setActiveTab] = useState<"overlap" | "sip" | "screener">("overlap");
-
   return (
     <div className="min-h-screen bg-[#05070f] text-slate-100 selection:bg-[#00FF9D]/30 selection:text-white flex flex-col justify-between">
       {/* Ecosystem Header */}
@@ -188,6 +175,15 @@ export default function MasterEcosystemLandingPage() {
             transition={{ duration: 0.6, delay: 0.3, ease }}
             className="mt-10 flex flex-wrap items-center justify-center gap-4"
           >
+            <Link
+              href="/compare/parag-parikh-flexi-cap-fund-vs-hdfc-flexi-cap-fund"
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full bg-gradient-to-r from-emerald-500/20 via-teal-500/20 to-cyan-500/20 border border-[#00FF9D]/50 text-[#00FF9D] font-bold text-sm hover:bg-[#00FF9D]/20 transition-all shadow-[0_0_20px_rgba(0,255,157,0.2)] hover:scale-[1.02]"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>⚡ Try Instant 1-Click Demo</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+
             <Link
               href="/research"
               className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full bg-[#00FF9D] text-slate-950 font-bold text-sm hover:bg-[#66ffba] transition-all shadow-[0_0_25px_rgba(0,255,157,0.3)] hover:scale-[1.02]"
@@ -685,6 +681,11 @@ export default function MasterEcosystemLandingPage() {
               >
                 Open Free Public Tools 🛠️
               </Link>
+            </div>
+
+            <div className="pt-6 flex flex-col items-center justify-center gap-2">
+              <span className="text-xs font-mono text-slate-400">Featured on Product Hunt</span>
+              <ProductHuntBadge theme="neutral" />
             </div>
           </div>
         </section>

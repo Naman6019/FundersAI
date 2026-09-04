@@ -43,7 +43,7 @@ const OVERLAP_FAQS = [
 
 export default function PortfolioOverlapPage() {
   return (
-    <div className="min-h-screen bg-[#05070f] text-slate-100 flex flex-col justify-between">
+    <div className="min-h-screen bg-background text-foreground flex flex-col justify-between">
       <EcosystemHeader currentApp="tools" />
       <ToolJsonLd
         name="Mutual Fund Portfolio Overlap Calculator"
@@ -63,16 +63,16 @@ export default function PortfolioOverlapPage() {
             ]}
           />
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line pb-6">
             <div>
-              <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight flex items-center gap-3">
+              <h1 className="text-2xl sm:text-4xl font-extrabold font-serif-display text-white tracking-tight flex items-center gap-3">
                 <span>Mutual Fund Portfolio Overlap Calculator</span>
               </h1>
-              <p className="text-xs sm:text-sm text-[#aebed6] mt-2 max-w-3xl leading-relaxed">
+              <p className="text-xs sm:text-sm text-text-3 mt-2 max-w-3xl leading-relaxed">
                 Compare stock holding duplication between any two Indian mutual funds. Discover shared ISINs, unique holdings, and sector concentration before investing.
               </p>
             </div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#00FF9D]/10 border border-[#00FF9D]/20 text-[#00FF9D] text-xs font-mono font-semibold shrink-0">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-mono font-semibold shrink-0">
               <Layers className="w-4 h-4" />
               <span>SEBI Disclosure Powered</span>
             </div>

@@ -20,23 +20,25 @@ export default function MutualFundExplorer({
   const searchParams = useSearchParams();
 
   // URL state synchronization
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedAmc, setSelectedAmc] = useState<string>('all');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedFundSlug, setSelectedFundSlug] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '');
+  const [selectedAmc, setSelectedAmc] = useState<string>(() => searchParams.get('amc') || 'all');
+  const [selectedCategory, setSelectedCategory] = useState<string>(() => searchParams.get('category') || 'all');
+  const [selectedFundSlug, setSelectedFundSlug] = useState<string>(() => searchParams.get('fund') || '');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
-  // Sync from URL params on mount
+  // Sync from URL params on searchParams update
   useEffect(() => {
     const qParam = searchParams.get('q') || '';
     const amcParam = searchParams.get('amc') || 'all';
     const catParam = searchParams.get('category') || 'all';
     const fundParam = searchParams.get('fund') || '';
 
-    if (qParam) setSearchQuery(qParam);
-    if (amcParam) setSelectedAmc(amcParam);
-    if (catParam) setSelectedCategory(catParam);
-    if (fundParam) setSelectedFundSlug(fundParam);
+    requestAnimationFrame(() => {
+      setSearchQuery((prev) => (prev !== qParam ? qParam : prev));
+      setSelectedAmc((prev) => (prev !== amcParam ? amcParam : prev));
+      setSelectedCategory((prev) => (prev !== catParam ? catParam : prev));
+      setSelectedFundSlug((prev) => (prev !== fundParam ? fundParam : prev));
+    });
   }, [searchParams]);
 
   // Filtered funds list
@@ -291,21 +293,21 @@ export default function MutualFundExplorer({
             <div className="flex items-center gap-2 pt-2 text-xs">
               <span className="text-[#7183a0]">Active Filters:</span>
               {selectedAmc !== 'all' && (
-                <span className="inline-flex items-center gap-1 bg-[#00FF9D]/10 text-[#00FF9D] border border-[#00FF9D]/30 px-2.5 py-0.5 rounded-md font-semibold">
+                <span className="inline-flex items-center gap-1 bg-primary/10 text-primary border border-primary/30 px-2.5 py-0.5 rounded-md font-semibold">
                   AMC: {amcs.find((a) => a.slug === selectedAmc)?.shortName || selectedAmc}
-                  <button onClick={() => setSelectedAmc('all')}>×</button>
+                  <button type="button" aria-label="Remove AMC filter" onClick={() => setSelectedAmc('all')}>×</button>
                 </span>
               )}
               {selectedCategory !== 'all' && (
-                <span className="inline-flex items-center gap-1 bg-[#66a3ff]/10 text-[#66a3ff] border border-[#66a3ff]/30 px-2.5 py-0.5 rounded-md font-semibold">
+                <span className="inline-flex items-center gap-1 bg-blue-500/10 text-blue-400 border border-blue-500/30 px-2.5 py-0.5 rounded-md font-semibold">
                   Category: {selectedCategory}
-                  <button onClick={() => setSelectedCategory('all')}>×</button>
+                  <button type="button" aria-label="Remove category filter" onClick={() => setSelectedCategory('all')}>×</button>
                 </span>
               )}
               {searchQuery && (
                 <span className="inline-flex items-center gap-1 bg-white/10 text-white border border-white/20 px-2.5 py-0.5 rounded-md">
                   &ldquo;{searchQuery}&rdquo;
-                  <button onClick={() => setSearchQuery('')}>×</button>
+                  <button type="button" aria-label="Clear search query" onClick={() => setSearchQuery('')}>×</button>
                 </span>
               )}
               <button
@@ -436,11 +438,19 @@ export default function MutualFundExplorer({
             return (
               <div
                 key={`${fund.amcSlug}-${fund.fundSlug}`}
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedFundSlug(fund.fundSlug)}
-                className={`cursor-pointer group flex flex-col justify-between rounded-2xl border p-5 transition-all duration-200 ${
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedFundSlug(fund.fundSlug);
+                  }
+                }}
+                className={`cursor-pointer group flex flex-col justify-between rounded-2xl border p-5 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/40 ${
                   isSelected
-                    ? 'border-[#00FF9D] bg-white/[0.05] shadow-lg shadow-[#00FF9D]/10'
-                    : 'border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.035]'
+                    ? 'border-primary bg-primary/10 shadow-lg shadow-primary/10'
+                    : 'border-line bg-surface-1 hover:border-border-active hover:bg-surface-hover'
                 }`}
               >
                 <div>

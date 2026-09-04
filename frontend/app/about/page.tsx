@@ -14,17 +14,17 @@ export const metadata: Metadata = {
 
 export default function AboutPage() {
   return (
-    <div className="min-h-dvh bg-[#070b12] text-[#dce8fa] flex flex-col justify-between">
+    <div className="min-h-dvh bg-background text-foreground flex flex-col justify-between">
       <EcosystemHeader />
 
       <main className="px-4 py-12 sm:px-6 flex-1">
-        <article className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-[#101724] p-6 shadow-2xl sm:p-10">
+        <article className="mx-auto max-w-3xl rounded-2xl border border-line bg-surface-1 p-6 shadow-2xl sm:p-10">
           <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'About' }]} />
 
-        <h1 className="mt-6 text-3xl font-semibold tracking-tight text-white">About FundersAI</h1>
-        <p className="mt-2 text-sm text-[#7183a0]">Updated July 2026</p>
+        <h1 className="mt-6 text-3xl font-semibold font-serif-display tracking-tight text-white">About FundersAI</h1>
+        <p className="mt-2 text-sm text-text-3">Updated July 2026</p>
 
-        <div className="mt-8 space-y-8 text-sm leading-7 text-[#aebed6]">
+        <div className="mt-8 space-y-8 text-sm leading-7 text-text-2">
 
           <section>
             <h2 className="text-lg font-semibold text-white">Why this exists</h2>

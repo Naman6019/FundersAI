@@ -13,7 +13,7 @@ interface TrustBadgeProps {
 
 export function TrustBadge({
   status = "verified",
-  asOfDate = "07 Aug 2026",
+  asOfDate = "Snapshot date unavailable",
   sourceDoc = "Official AMC Factsheet",
   pdfChunkUrl,
   showCitationAction = true,

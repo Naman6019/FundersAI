@@ -115,6 +115,7 @@ function ReportChatContent() {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
     const [reportText, setReportText] = useState("");
+    const [streamError, setStreamError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
@@ -224,17 +225,6 @@ function ReportChatContent() {
                 const combinedMap = new Map<number, SchemeOption>();
                 localMatches.forEach(s => combinedMap.set(s.code, s));
                 remoteMatches.forEach(s => combinedMap.set(s.code, s));
-
-                // 3. Fallback: If user typed custom query like "HDFC Defence" and nothing returned from DB, create a dynamic match entry
-                if (combinedMap.size === 0 && query.length >= 2) {
-                    const fallbackCode = 150000 + Math.abs(schemeSearchQuery.split('').reduce((a,b)=>{a=((a<<5)-a)+b.charCodeAt(0);return a&a},0) % 40000);
-                    combinedMap.set(fallbackCode, {
-                        code: fallbackCode,
-                        name: schemeSearchQuery.trim(),
-                        amc: "Live SEBI Ingestion Target"
-                    });
-                }
-
                 setDbSearchResults(Array.from(combinedMap.values()));
             }
         }
@@ -347,6 +337,7 @@ function ReportChatContent() {
             payloadUserMessage = `Write a comprehensive institutional comparison report for: ${selectedSchemes.map(s => s.name).join(" and ")}`;
         }
 
+        setStreamError(null);
         try {
             const response = await fetch("/api/reports/stream", {
                 method: "POST",
@@ -358,10 +349,22 @@ function ReportChatContent() {
                 }),
             });
 
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                const msg = errData?.error || errData?.message || `Report synthesis failed (HTTP ${response.status}). Please try again.`;
+                setStreamError(msg);
+                setIsLoading(false);
+                return;
+            }
+
             const reader = response.body?.getReader();
             const decoder = new TextDecoder();
 
-            if (!reader) return;
+            if (!reader) {
+                setStreamError("Unable to initialize response stream from synthesis engine.");
+                setIsLoading(false);
+                return;
+            }
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
@@ -384,6 +387,7 @@ function ReportChatContent() {
             }
         } catch (e: unknown) {
             console.error("Stream error:", e);
+            setStreamError("A network error occurred while generating the report. Please check your connection and try again.");
         }
         setIsLoading(false);
     };
@@ -651,6 +655,22 @@ function ReportChatContent() {
                                 })}
                             </div>
                         </div>
+                    </div>
+                )}
+
+                {streamError && (
+                    <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                            <span className="text-base">⚠️</span>
+                            <span className="font-mono">{streamError}</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setStreamError(null)}
+                            className="text-red-400 hover:text-white font-mono text-xs px-2 py-1 rounded bg-red-500/20"
+                        >
+                            Dismiss
+                        </button>
                     </div>
                 )}
 

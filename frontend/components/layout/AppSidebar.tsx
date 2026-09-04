@@ -22,7 +22,7 @@ import {
 import { useChatStore } from "@/store/useChatStore";
 import { useEffect } from "react";
 import UserProfileDropdown from "@/components/auth/UserProfileDropdown";
-import { InfoCard, InfoCardContent, InfoCardDescription, InfoCardTitle, InfoCardMedia } from "@/components/ui/info-card";
+import { InfoCard, InfoCardContent, InfoCardDescription, InfoCardTitle } from "@/components/ui/info-card";
 import { UserTier } from "@/lib/billing/tiers";
 
 export function AppSidebar({
@@ -65,10 +65,10 @@ export function AppSidebar({
   ];
 
   return (
-    <Sidebar className="border-r border-white/10 bg-[#0a0a0a]">
-      <SidebarHeader className="p-5 border-b border-white/10">
+    <Sidebar className="border-r border-line bg-surface-base">
+      <SidebarHeader className="p-5 border-b border-line">
         <div className="flex flex-col gap-1 items-start">
-          <Link href="/" className="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg p-0.5 transition-opacity hover:opacity-80">
+          <Link href="/" className="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg p-0.5 transition-opacity hover:opacity-80">
             <Image
               src="/FUNDERSAI-vertical.png"
               alt="FundersAI Logo"
@@ -78,7 +78,7 @@ export function AppSidebar({
               className="h-8 w-auto object-contain origin-left"
             />
           </Link>
-          <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400 pl-1">Research terminal</p>
+          <p className="text-[11px] uppercase tracking-[0.14em] text-text-3 pl-1 font-mono">Research terminal</p>
         </div>
       </SidebarHeader>
 
@@ -93,8 +93,8 @@ export function AppSidebar({
                     onClick={item.onClick}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${
                       item.isActive
-                        ? "text-blue-300 font-bold bg-blue-500/15 border border-blue-500/30 shadow-sm"
-                        : "text-slate-400 hover:bg-white/5 hover:text-white"
+                        ? "text-emerald-300 font-bold bg-emerald-500/15 border border-emerald-500/30 shadow-sm"
+                        : "text-text-3 hover:bg-surface-1 hover:text-white"
                     }`}
                   >
                     <item.icon className="h-[18px] w-[18px] shrink-0" />
@@ -114,12 +114,12 @@ export function AppSidebar({
 
         <SidebarGroup className="mt-4">
           <div className="flex items-center justify-between px-3">
-            <SidebarGroupLabel className="text-[11px] uppercase tracking-[0.16em] text-slate-400 font-semibold px-0">
+            <SidebarGroupLabel className="text-[11px] uppercase tracking-[0.16em] text-text-3 font-semibold px-0 font-mono">
               Recent Chats
             </SidebarGroupLabel>
             <button
               onClick={() => { setActiveTab('overview'); resetMessages(); }}
-              className="text-[10px] text-slate-400 hover:text-[#00FF9D] flex items-center gap-1 transition-colors"
+              className="text-[10px] text-text-3 hover:text-primary flex items-center gap-1 transition-colors font-mono"
             >
               <Brain className="h-3 w-3" />
               New
@@ -135,26 +135,25 @@ export function AppSidebar({
                 }}
                 className={`w-full text-left truncate rounded-lg px-2.5 py-1.5 text-[12px] transition-all ${
                   currentSessionId === session.id
-                    ? "bg-[#00FF9D]/10 text-[#00FF9D] font-medium"
-                    : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-text-3 hover:bg-surface-1 hover:text-text-1"
                 }`}
               >
                 {session.title}
               </button>
             ))}
             {sessions.length === 0 && (
-              <p className="text-[11px] text-slate-500 px-2 py-1">No recent chats</p>
+              <p className="text-[11px] text-text-3 px-2 py-1 font-mono">No recent chats</p>
             )}
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t border-white/10 space-y-4">
+      <SidebarFooter className="p-4 border-t border-line space-y-4">
         <InfoCard dismissType="forever" storageKey="beta-notice">
           <InfoCardContent>
-            <InfoCardTitle>Welcome to Beta!</InfoCardTitle>
-            <InfoCardDescription>FundersAI is currently in Beta. Data may be delayed or incomplete.</InfoCardDescription>
-            <InfoCardMedia media={[{ type: 'image', src: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop' }]} />
+            <InfoCardTitle>Research Terminal Beta</InfoCardTitle>
+            <InfoCardDescription>Deterministic models verified against official AMFI and AMC disclosures.</InfoCardDescription>
           </InfoCardContent>
         </InfoCard>
         <UserProfileDropdown currentTier={currentTier} />

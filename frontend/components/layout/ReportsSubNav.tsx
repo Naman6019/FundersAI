@@ -26,16 +26,16 @@ export function ReportsSubNav() {
 
   return (
     <div className="my-4 print:hidden">
-      <nav className="inline-flex flex-wrap items-center gap-1.5 p-1.5 rounded-2xl bg-[#090d16]/90 border border-white/10 shadow-xl backdrop-blur-xl text-xs font-medium">
+      <nav className="inline-flex flex-wrap items-center gap-1.5 p-1.5 rounded-2xl bg-surface-1/90 border border-line shadow-xl backdrop-blur-xl text-xs font-medium">
         <Link
           href="/synthesis/generate"
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all ${
             isGenerate
-              ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm font-bold"
-              : "text-slate-400 hover:text-white hover:bg-white/5 border border-transparent"
+              ? "bg-violet-500/20 text-violet-300 border border-violet-500/40 shadow-sm font-bold"
+              : "text-text-3 hover:text-text-1 hover:bg-surface-2/60 border border-transparent"
           }`}
         >
-          <PlusCircle className="w-3.5 h-3.5 text-cyan-400" />
+          <PlusCircle className="w-3.5 h-3.5 text-violet-400" />
           <span>New Report</span>
         </Link>
 
@@ -43,23 +43,23 @@ export function ReportsSubNav() {
           href="/synthesis/dashboard"
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all ${
             isDashboard
-              ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm font-bold"
-              : "text-slate-400 hover:text-white hover:bg-white/5 border border-transparent"
+              ? "bg-violet-500/20 text-violet-300 border border-violet-500/40 shadow-sm font-bold"
+              : "text-text-3 hover:text-text-1 hover:bg-surface-2/60 border border-transparent"
           }`}
         >
-          <LayoutDashboard className="w-3.5 h-3.5 text-blue-400" />
+          <LayoutDashboard className="w-3.5 h-3.5 text-violet-400" />
           <span>Dashboard</span>
         </Link>
 
         <Link
-          href="/synthesis/tools/portfolio-overlap"
+          href="/tools/portfolio-overlap"
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all ${
             isOverlap
-              ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm font-bold"
-              : "text-slate-400 hover:text-white hover:bg-white/5 border border-transparent"
+              ? "bg-violet-500/20 text-violet-300 border border-violet-500/40 shadow-sm font-bold"
+              : "text-text-3 hover:text-text-1 hover:bg-surface-2/60 border border-transparent"
           }`}
         >
-          <Layers className="w-3.5 h-3.5 text-emerald-400" />
+          <Layers className="w-3.5 h-3.5 text-violet-400" />
           <span>Overlap Tool</span>
         </Link>
 
@@ -67,11 +67,11 @@ export function ReportsSubNav() {
           href="/synthesis/supported-funds"
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all ${
             isFunds
-              ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm font-bold"
-              : "text-slate-400 hover:text-white hover:bg-white/5 border border-transparent"
+              ? "bg-violet-500/20 text-violet-300 border border-violet-500/40 shadow-sm font-bold"
+              : "text-text-3 hover:text-text-1 hover:bg-surface-2/60 border border-transparent"
           }`}
         >
-          <Building2 className="w-3.5 h-3.5 text-amber-400" />
+          <Building2 className="w-3.5 h-3.5 text-violet-400" />
           <span>Supported Funds</span>
         </Link>
 
@@ -79,15 +79,15 @@ export function ReportsSubNav() {
           href="/synthesis/methodology"
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all ${
             isMethodology
-              ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm font-bold"
-              : "text-slate-400 hover:text-white hover:bg-white/5 border border-transparent"
+              ? "bg-violet-500/20 text-violet-300 border border-violet-500/40 shadow-sm font-bold"
+              : "text-text-3 hover:text-text-1 hover:bg-surface-2/60 border border-transparent"
           }`}
         >
-          <BookOpen className="w-3.5 h-3.5 text-purple-400" />
+          <BookOpen className="w-3.5 h-3.5 text-violet-400" />
           <span>Methodology</span>
         </Link>
 
-        <div className="h-4 w-px bg-white/10 mx-1 hidden sm:block" />
+        <div className="h-4 w-px bg-line mx-1 hidden sm:block" />
 
         <Link
           href="/billing"

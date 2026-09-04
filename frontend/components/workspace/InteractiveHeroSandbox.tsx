@@ -73,7 +73,7 @@ export function InteractiveHeroSandbox() {
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-950/80 text-emerald-300 border border-emerald-800/50">
               Interactive Preview
             </span>
-            <TrustBadge status="verified" asOfDate="07 Aug 2026" sourceDoc="AMFI & AMC Factsheet" />
+            <TrustBadge status="verified" asOfDate="July 2026" sourceDoc="Sample · AMFI & AMC Factsheet" />
           </div>
           <h3 className="text-xl font-bold text-white tracking-tight font-sans">
             Instant Quantitative Mutual Fund Comparison

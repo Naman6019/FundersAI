@@ -334,9 +334,13 @@ export default function SipCalculatorPublic() {
           <div className="flex items-center justify-between pt-2 border-t border-white/5">
             <div>
               <span className="text-xs font-semibold text-white">Adjust for Inflation</span>
-              <p className="text-[11px] text-[#7183a0]">View purchasing power in today's money (assumes 6% CPI)</p>
+              <p className="text-[11px] text-[#7183a0]">View purchasing power in today&apos;s money (assumes 6% CPI)</p>
             </div>
             <button
+              type="button"
+              role="switch"
+              aria-checked={adjustInflation}
+              aria-label="Adjust for inflation"
               onClick={() => setAdjustInflation(!adjustInflation)}
               className={`w-11 h-6 rounded-full transition-colors relative ${
                 adjustInflation ? 'bg-[#00FF9D]' : 'bg-white/15'

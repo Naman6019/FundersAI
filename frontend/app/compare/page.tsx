@@ -35,7 +35,7 @@ export default function CompareIndexPage() {
   }).filter((c): c is NonNullable<typeof c> => c !== null);
 
   return (
-    <div className="min-h-dvh bg-[#070b12] text-[#dce8fa] flex flex-col justify-between">
+    <div className="min-h-dvh bg-background text-foreground flex flex-col justify-between">
       <CompareIndexJsonLd
         comparisons={comparisons.map((c) => ({
           pair: c.pair,
@@ -50,13 +50,13 @@ export default function CompareIndexPage() {
 
           {/* Hero */}
           <div className="mb-12 max-w-2xl">
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#00FF9D]/70 mb-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-primary mb-4 font-mono">
               Head-to-Head
             </p>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white mb-4">
+            <h1 className="text-2xl sm:text-3xl font-bold font-serif-display tracking-tight text-white mb-4">
               Mutual Fund Comparisons
             </h1>
-            <p className="text-sm leading-7 text-[#7183a0]">
+            <p className="text-sm leading-7 text-text-3">
               Each comparison puts two schemes side by side on the metrics that actually separate them —
               1Y/3Y/5Y CAGR, Sharpe ratio, maximum drawdown, expense ratio, AUM, and portfolio overlap.
               Every figure is computed deterministically from AMFI NAV histories and official AMC

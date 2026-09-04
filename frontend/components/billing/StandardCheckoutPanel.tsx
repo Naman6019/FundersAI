@@ -30,6 +30,8 @@ async function loadRazorpayScript(): Promise<boolean> {
 
 export default function StandardCheckoutPanel() {
   const [amountRupees, setAmountRupees] = useState('1');
+  const [promoCode, setPromoCode] = useState('');
+  const [promoApplied, setPromoApplied] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -50,6 +52,7 @@ export default function StandardCheckoutPanel() {
         amount,
         currency: 'INR',
         receipt: `fundersai_${Date.now()}`,
+        promo_code: promoCode.trim().toUpperCase(),
       }),
     });
     const order = await orderRes.json().catch(() => ({}));
@@ -111,21 +114,46 @@ export default function StandardCheckoutPanel() {
             Create a Razorpay order, open Checkout, and verify the payment signature on the server.
           </p>
         </div>
-        <label className="text-sm text-slate-300">
-          Amount
-          <div className="mt-1 flex items-center overflow-hidden rounded-xl border border-white/10 bg-[#080d1a]">
-            <span className="px-3 text-slate-400">₹</span>
-            <input
-              type="number"
-              min="1"
-              step="1"
-              value={amountRupees}
-              onChange={(event) => setAmountRupees(event.target.value)}
-              className="h-11 w-28 bg-transparent px-2 text-white outline-none"
-            />
-          </div>
-        </label>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-sm text-slate-300">
+            Amount
+            <div className="mt-1 flex items-center overflow-hidden rounded-xl border border-white/10 bg-[#080d1a]">
+              <span className="px-3 text-slate-400">₹</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={amountRupees}
+                onChange={(event) => setAmountRupees(event.target.value)}
+                className="h-11 w-24 bg-transparent px-2 text-white outline-none"
+              />
+            </div>
+          </label>
+
+          <label className="text-sm text-slate-300">
+            Promo Code
+            <div className="mt-1 flex items-center overflow-hidden rounded-xl border border-white/10 bg-[#080d1a]">
+              <input
+                type="text"
+                placeholder="e.g. PRODUCTHUNT"
+                value={promoCode}
+                onChange={(event) => {
+                  const code = event.target.value;
+                  setPromoCode(code);
+                  setPromoApplied(code.trim().toUpperCase() === 'PRODUCTHUNT');
+                }}
+                className="h-11 w-36 bg-transparent px-3 text-white uppercase placeholder:text-slate-500 text-xs font-mono outline-none"
+              />
+            </div>
+          </label>
+        </div>
       </div>
+
+      {promoApplied && (
+        <p className="mt-2 text-xs font-mono text-[#00FF9D]">
+          🎉 Product Hunt launch perk: 50% discount will be applied at order creation!
+        </p>
+      )}
 
       <button
         type="button"

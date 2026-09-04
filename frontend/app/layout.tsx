@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import './globals.css';
-import { Geist } from "next/font/google";
+import { Geist, Playfair_Display, IBM_Plex_Mono } from "next/font/google";
 import { cn } from "@/lib/utils";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
+const playfair = Playfair_Display({ subsets: ['latin'], variable: '--font-playfair' });
+const plexMono = IBM_Plex_Mono({ weight: ['400', '500', '600', '700'], subsets: ['latin'], variable: '--font-plex-mono' });
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.fundersai.co.in'),
@@ -43,8 +45,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("w-full min-w-full", "font-sans", geist.variable)}>
-      <body className="w-full min-w-full bg-[#050505] antialiased">
+    <html lang="en" className={cn("w-full min-w-full font-sans dark", geist.variable, playfair.variable, plexMono.variable)}>
+      <body className="w-full min-w-full bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary-foreground">
         {children}
         <SpeedInsights />
       </body>

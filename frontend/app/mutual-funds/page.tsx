@@ -36,7 +36,7 @@ export default function MutualFundsPage() {
   }));
 
   return (
-    <div className="min-h-dvh bg-[#070b12] text-[#dce8fa] flex flex-col justify-between">
+    <div className="min-h-dvh bg-background text-foreground flex flex-col justify-between">
       <DirectoryJsonLd funds={FUND_REGISTRY} />
       <EcosystemHeader currentApp="mutual-funds" />
 
@@ -44,15 +44,15 @@ export default function MutualFundsPage() {
         <div className="mx-auto max-w-6xl px-5 py-12 sm:px-8 space-y-16">
           {/* Hero */}
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#00FF9D]/20 bg-[#00FF9D]/[0.06] px-3 py-1 text-xs font-semibold text-[#00FF9D] mb-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary mb-4 font-mono">
               <span>Verified AMFI &amp; AMC Dataset</span>
               <span>•</span>
-              <span className="text-white/80">{FUND_REGISTRY.length} Direct Growth Schemes</span>
+              <span className="text-text-2">{FUND_REGISTRY.length} Direct Growth Schemes</span>
             </div>
-            <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl mb-4">
+            <h1 className="text-4xl font-bold font-serif-display tracking-tight text-white sm:text-5xl mb-4">
               Indian Mutual Funds Screener
             </h1>
-            <p className="text-base leading-7 text-[#aebed6] max-w-3xl">
+            <p className="text-base leading-7 text-text-3 max-w-3xl">
               Filter mutual funds by <strong className="text-white">Fund House (AMC Family)</strong> and <strong className="text-white">SEBI Category</strong>, or search by scheme name and AMFI code. Inspect individual fund metrics, calculate benchmark performance, or launch a full quantitative analysis in the workspace.
             </p>
           </div>

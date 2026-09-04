@@ -67,7 +67,7 @@ const TOOLS = [
 
 export default function ToolsIndexPage() {
   return (
-    <div className="min-h-screen bg-[#05070f] text-slate-100 flex flex-col justify-between">
+    <div className="min-h-screen bg-background text-foreground flex flex-col justify-between">
       <EcosystemHeader currentApp="tools" />
       <ToolJsonLd
         name="FundersAI Investor Tools Suite"
@@ -80,14 +80,14 @@ export default function ToolsIndexPage() {
 
         {/* Header */}
         <header className="space-y-4 text-center max-w-3xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#00FF9D]/10 border border-[#00FF9D]/20 text-[#00FF9D] text-xs font-mono font-semibold">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-mono font-semibold">
             <Sparkles className="w-3.5 h-3.5" />
             <span>100% Free • Deterministic Data • No Login Required</span>
           </div>
-          <h1 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight">
+          <h1 className="text-3xl sm:text-5xl font-extrabold font-serif-display text-white tracking-tight">
             Free Investor Research Tools
           </h1>
-          <p className="text-sm sm:text-base text-[#aebed6] leading-relaxed">
+          <p className="text-sm sm:text-base text-text-3 leading-relaxed">
             Institutional-grade calculations built for Indian mutual fund investors. Powered by official SEBI disclosures, AMFI data, and deterministic mathematical models.
           </p>
         </header>

@@ -43,7 +43,7 @@ const SIP_FAQS = [
 
 export default function SipCalculatorPage() {
   return (
-    <div className="min-h-screen bg-[#05070f] text-slate-100 flex flex-col justify-between">
+    <div className="min-h-screen bg-background text-foreground flex flex-col justify-between">
       <EcosystemHeader currentApp="tools" />
       <ToolJsonLd
         name="Mutual Fund SIP & Step-Up Calculator"
@@ -63,16 +63,16 @@ export default function SipCalculatorPage() {
             ]}
           />
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line pb-6">
             <div>
-              <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight flex items-center gap-3">
+              <h1 className="text-2xl sm:text-4xl font-extrabold font-serif-display text-white tracking-tight flex items-center gap-3">
                 <span>Mutual Fund SIP & Step-Up Calculator</span>
               </h1>
-              <p className="text-xs sm:text-sm text-[#aebed6] mt-2 max-w-3xl leading-relaxed">
+              <p className="text-xs sm:text-sm text-text-3 mt-2 max-w-3xl leading-relaxed">
                 Calculate your future investment corpus from monthly SIPs or one-time lumpsum investments. Model annual step-up salary increments and inflation adjustments in real-time.
               </p>
             </div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#66a3ff]/10 border border-[#66a3ff]/20 text-[#66a3ff] text-xs font-mono font-semibold shrink-0">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-mono font-semibold shrink-0">
               <Calculator className="w-4 h-4" />
               <span>Monthly Compounding Engine</span>
             </div>

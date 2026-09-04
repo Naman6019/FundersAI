@@ -36,23 +36,23 @@ export default function FeedbackPageForm({ source }: { source: string }) {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#050505] px-4 py-10 text-white">
-      <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-white/[0.04] p-7 shadow-2xl backdrop-blur-xl sm:p-9">
+    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10 text-foreground">
+      <section className="w-full max-w-xl rounded-3xl border border-line bg-surface-1 p-7 shadow-2xl backdrop-blur-xl sm:p-9">
         {status === 'sent' ? (
           <div className="text-center">
-            <CheckCircle2 className="mx-auto h-10 w-10 text-[#00FF9D]" />
-            <h1 className="mt-4 text-2xl font-semibold">Thank you for the feedback.</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-400">Your input will help improve FundersAI’s answers and overall experience.</p>
+            <CheckCircle2 className="mx-auto h-10 w-10 text-primary" />
+            <h1 className="mt-4 text-2xl font-semibold font-serif-display text-white">Thank you for the feedback.</h1>
+            <p className="mt-2 text-sm leading-6 text-text-3">Your input will help improve FundersAI’s answers and overall experience.</p>
             <div className="mt-6 flex justify-center gap-3">
-              <Link href="/auth" className="rounded-xl bg-[#00FF9D] px-4 py-2.5 text-sm font-semibold text-slate-950">Sign in again</Link>
-              <Link href="/" className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5">Go home</Link>
+              <Link href="/auth" className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground">Sign in again</Link>
+              <Link href="/" className="rounded-xl border border-line px-4 py-2.5 text-sm text-text-3 hover:bg-surface-hover">Go home</Link>
             </div>
           </div>
         ) : (
           <>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00FF9D]">FundersAI feedback</p>
-            <h1 className="mt-3 text-2xl font-semibold">{isLogout ? 'Before you go, how was your experience?' : 'Tell us what you think'}</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-400">Rate the app and optionally tell us what was useful, confusing, or missing.</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary font-mono">FundersAI feedback</p>
+            <h1 className="mt-3 text-2xl font-semibold font-serif-display text-white">{isLogout ? 'Before you go, how was your experience?' : 'Tell us what you think'}</h1>
+            <p className="mt-2 text-sm leading-6 text-text-3">Rate the app and optionally tell us what was useful, confusing, or missing.</p>
             <div className="mt-6 flex gap-2" aria-label="Overall app rating">
               {[1, 2, 3, 4, 5].map((value) => (
                 <button key={value} type="button" onClick={() => setRating(value)} className="rounded-xl p-2 hover:bg-white/5" aria-label={`${value} star${value === 1 ? '' : 's'}`} aria-pressed={rating === value}>

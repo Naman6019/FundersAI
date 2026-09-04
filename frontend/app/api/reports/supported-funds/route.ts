@@ -92,7 +92,8 @@ export async function GET() {
     }
 
     // Group DB data by AMC
-    const groupsMap: Record<string, any[]> = {};
+    type SchemeRow = (typeof dbData)[number];
+    const groupsMap: Record<string, SchemeRow[]> = {};
     dbData.forEach(row => {
       const amc = row.amc_name?.trim() || "Other Mutual Funds";
       if (!groupsMap[amc]) groupsMap[amc] = [];
@@ -104,7 +105,7 @@ export async function GET() {
       .sort((a, b) => b.schemes.length - a.schemes.length);
 
     return NextResponse.json({ amcGroups, source: 'supabase' });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("API error in supported-funds route:", err);
     return NextResponse.json({ amcGroups: FALLBACK_FUNDS_BY_AMC, source: 'fallback' });
   }

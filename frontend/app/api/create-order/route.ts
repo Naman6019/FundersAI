@@ -20,6 +20,7 @@ export async function POST(request: Request) {
   const currency = String(body?.currency || 'INR').trim().toUpperCase();
   const receiptInput = typeof body?.receipt === 'string' ? body.receipt.trim() : '';
   const receipt = (receiptInput || `rcpt_${Date.now()}`).slice(0, 40);
+  const promoCode = typeof body?.promo_code === 'string' ? body.promo_code.trim().toUpperCase() : '';
 
   if (!Number.isFinite(amount) || amount < 100) {
     return NextResponse.json({ error: 'amount_must_be_at_least_100_paise' }, { status: 400 });
@@ -29,12 +30,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'invalid_currency' }, { status: 400 });
   }
 
+  let finalAmount = amount;
+  let discountApplied = false;
+  if (promoCode === 'PRODUCTHUNT') {
+    finalAmount = Math.max(100, Math.round(amount * 0.5));
+    discountApplied = true;
+  }
+
   try {
-    const order = await createRazorpayOrder({ amount, currency, receipt });
+    const order = await createRazorpayOrder({ amount: finalAmount, currency, receipt });
     return NextResponse.json({
       order_id: order.id,
       amount: Number(order.amount),
       currency: order.currency,
+      discount_applied: discountApplied,
+      original_amount: amount,
+      promo_code: discountApplied ? 'PRODUCTHUNT' : null,
     });
   } catch (error) {
     console.error('Razorpay order create failed:', error);

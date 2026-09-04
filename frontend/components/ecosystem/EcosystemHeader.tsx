@@ -17,6 +17,7 @@ import {
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { FUND_REGISTRY } from "@/lib/fund-registry";
 import { useEcosystemHref } from "@/lib/ecosystem-origin";
+import ProductHuntWelcomeBanner from "@/components/growth/ProductHuntWelcomeBanner";
 
 // The Synthesis product has no separate "home" for signed-in users — logged-out
 // visitors see the marketing landing page, logged-in users should land straight
@@ -38,6 +39,10 @@ interface EcosystemHeaderProps {
   /** Override the header's inner container width/padding. Defaults to a centered max-w-7xl for
    *  marketing/content pages; authenticated app shells pass a full-bleed value to match the shell below. */
   containerClassName?: string;
+  /** Lets dense authenticated shells use the navigation drawer at every viewport width. */
+  compactMenuVisibilityClassName?: string;
+  /** Controls when the desktop ecosystem pill is shown. */
+  desktopNavigationVisibilityClassName?: string;
 }
 
 export function EcosystemHeader({
@@ -47,6 +52,8 @@ export function EcosystemHeader({
   centerSlot,
   trailing,
   containerClassName = "max-w-[1560px] mx-auto px-4 sm:px-6 lg:px-8",
+  compactMenuVisibilityClassName = "xl:hidden",
+  desktopNavigationVisibilityClassName = "hidden xl:flex",
 }: EcosystemHeaderProps) {
   const [commandOpen, setCommandOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -284,6 +291,8 @@ export function EcosystemHeader({
         Skip to content
       </a>
 
+      <ProductHuntWelcomeBanner />
+
       <header className="sticky top-0 z-50 w-full border-b border-line bg-background/80 backdrop-blur-xl transition-all">
         <div className={`${containerClassName} h-16 flex items-center justify-between gap-4`}>
 
@@ -303,7 +312,7 @@ export function EcosystemHeader({
             </Link>
 
             {/* Ecosystem Navigation Switcher Pill (desktop) */}
-            <nav className="hidden xl:flex shrink-0 items-center p-1 bg-surface-1 border border-line rounded-full text-xs font-medium">
+            <nav className={`${desktopNavigationVisibilityClassName} shrink-0 items-center p-1 bg-surface-1 border border-line rounded-full text-xs font-medium`}>
               {navItems.map((item) => (
                 <Link
                   key={item.key}
@@ -343,7 +352,7 @@ export function EcosystemHeader({
               aria-label="Open navigation menu"
               aria-expanded={mobileNavOpen}
               aria-controls="ecosystem-mobile-nav"
-              className="xl:hidden flex items-center justify-center w-9 h-9 rounded-lg bg-surface-1 border border-line text-text-2 hover:text-white hover:border-line-strong transition-all"
+              className={`${compactMenuVisibilityClassName} flex items-center justify-center w-9 h-9 rounded-lg bg-surface-1 border border-line text-text-2 hover:text-white hover:border-line-strong transition-all`}
             >
               <Menu className="w-4 h-4" />
             </button>
@@ -392,7 +401,7 @@ export function EcosystemHeader({
             this the only controls on the header are the logo and Launch App. */}
         <AnimatePresence>
           {mobileNavOpen && (
-            <div className="xl:hidden fixed inset-0 z-[60]">
+            <div className={`${compactMenuVisibilityClassName} fixed inset-0 z-[60]`}>
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
