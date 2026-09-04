@@ -10,6 +10,11 @@ AutomationOperation = Literal["discovery", "parser_retry", "disclosure_parse", "
 GREEN_AMCS = (
     "ppfas", "sbi", "mirae", "hdfc", "axis", "nippon", "motilal", "dsp", "aditya_birla",
     "icici", "kotak", "uti", "tata", "bandhan", "edelweiss", "invesco", "hsbc",
+    "quant", "canara_robeco", "groww", "zerodha",
+    # Verified live discovery on official portals (September 2026):
+    "baroda_bnp", "lic", "pgim", "quantum", "bajaj_finserv",
+    "capitalmind", "abakkus", "unifi", "shriram", "helios",
+    "old_bridge", "taurus", "angel_one", "jio_blackrock",
 )
 # UTI's official API now exposes current English Active/Passive Fund Watch PDFs and
 # the matching consolidated portfolio ZIP. August 2026 factsheets and the July 2026
@@ -18,11 +23,17 @@ GREEN_AMCS = (
 # remains a manual workflow_dispatch with a typed approval phrase, so incomplete or
 # conflicting scopes cannot reach production data unreviewed.
 APPROVED_RESTRICTED_AMCS: tuple[str, ...] = ()
-# No AMCs remain in the validation-only lane. Tata, Bandhan, Edelweiss, Invesco, and
-# HSBC were promoted to unattended staging after live official-document discovery and
-# parser smoke checks on 2026-08-24. Staging still cannot update runtime tables without
-# the explicit promotion workflow and its typed approval phrase.
-VALIDATION_ONLY_AMCS: tuple[str, ...] = ()
+# AMCs registered in sources & parsers but pending live discovery verification or
+# document publication before graduation to unattended green staging:
+VALIDATION_ONLY_AMCS = (
+    "sundaram",
+    "nj",
+    "360_one",
+    "navi",
+    "boi",
+    "choice",
+    "wealth_company",
+)
 FROZEN_ISSUE_2_AMCS = ()
 
 LANE_AMCS: dict[str, tuple[str, ...]] = {
@@ -40,6 +51,18 @@ AMC_ALIASES = {
     "absl": "aditya_birla",
     "adityabirla": "aditya_birla",
     "aditya-birla": "aditya_birla",
+    "canara": "canara_robeco",
+    "canararobeco": "canara_robeco",
+    "canara-robeco": "canara_robeco",
+    "baroda": "baroda_bnp",
+    "licmf": "lic",
+    "bajaj": "bajaj_finserv",
+    "iifl": "360_one",
+    "360one": "360_one",
+    "bankofindia": "boi",
+    "bank_of_india": "boi",
+    "wealthcompany": "wealth_company",
+    "jioblackrock": "jio_blackrock",
 }
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from app.mf_ingestion.sources.registry import SOURCES
 
 
@@ -21,6 +23,31 @@ ALL_MF_AMC_MARKERS: dict[str, tuple[str, ...]] = {
     "EDELWEISS": ("edelweiss",),
     "INVESCO": ("invesco",),
     "HSBC": ("hsbc",),
+    "QUANT": ("quant",),
+    "CANARA_ROBECO": ("canara robeco", "canara"),
+    "GROWW": ("groww",),
+    "ZERODHA": ("zerodha",),
+    "BARODA_BNP": ("baroda bnp paribas", "baroda bnp", "baroda pioneer", "baroda"),
+    "LIC": ("lic mutual fund", "lic mf", "lic"),
+    "SUNDARAM": ("sundaram",),
+    "PGIM": ("pgim india", "pgim"),
+    "QUANTUM": ("quantum",),
+    "BAJAJ_FINSERV": ("bajaj finserv", "bajaj"),
+    "CAPITALMIND": ("capitalmind",),
+    "ABAKKUS": ("abakkus",),
+    "UNIFI": ("unifi",),
+    "SHRIRAM": ("shriram",),
+    "HELIOS": ("helios",),
+    "NJ": ("nj mutual fund", "nj mf", "nj"),
+    "OLD_BRIDGE": ("old bridge", "oldbridge"),
+    "THREE_SIXTY_ONE": ("360 one", "iifl"),
+    "NAVI": ("navi",),
+    "TAURUS": ("taurus",),
+    "ANGEL_ONE": ("angel one", "angel"),
+    "BOI": ("bank of india", "boi"),
+    "CHOICE": ("choice",),
+    "WEALTH_COMPANY": ("the wealth company", "wealth company"),
+    "JIO_BLACKROCK": ("jio blackrock", "jio"),
 }
 
 SUPPORTED_MF_AMC_MARKERS: dict[str, tuple[str, ...]] = {
@@ -49,6 +76,31 @@ SUPPORTED_AMC_DISPLAY_NAMES: dict[str, str] = {
     "EDELWEISS": "Edelweiss",
     "INVESCO": "Invesco",
     "HSBC": "HSBC",
+    "QUANT": "Quant",
+    "CANARA_ROBECO": "Canara Robeco",
+    "GROWW": "Groww",
+    "ZERODHA": "Zerodha",
+    "BARODA_BNP": "Baroda BNP Paribas",
+    "LIC": "LIC",
+    "SUNDARAM": "Sundaram",
+    "PGIM": "PGIM India",
+    "QUANTUM": "Quantum",
+    "BAJAJ_FINSERV": "Bajaj Finserv",
+    "CAPITALMIND": "Capitalmind",
+    "ABAKKUS": "Abakkus",
+    "UNIFI": "Unifi",
+    "SHRIRAM": "Shriram",
+    "HELIOS": "Helios",
+    "NJ": "NJ",
+    "OLD_BRIDGE": "Old Bridge",
+    "THREE_SIXTY_ONE": "360 ONE",
+    "NAVI": "Navi",
+    "TAURUS": "Taurus",
+    "ANGEL_ONE": "Angel One",
+    "BOI": "Bank of India",
+    "CHOICE": "Choice",
+    "WEALTH_COMPANY": "The Wealth Company",
+    "JIO_BLACKROCK": "Jio BlackRock",
 }
 
 SUPPORTED_AMC_PIPELINE_COPY = ", ".join(
@@ -56,28 +108,12 @@ SUPPORTED_AMC_PIPELINE_COPY = ", ".join(
 )
 
 UNSUPPORTED_MF_AMC_KEYWORDS = (
-    "quant",
-    "canara",
-    "groww",
-    "zerodha",
     "idfc",
     "franklin",
-    "sundaram",
-    "lic",
-    "pgim",
     "union",
-    "baroda",
-    "bnp",
     "mahindra",
-    "shriram",
     "whiteoak",
     "samco",
-    "helios",
-    "navi",
-    "quantum",
-    "taurus",
-    "360 one",
-    "iifl",
     "jm financial",
     *(
         marker
@@ -92,7 +128,13 @@ def supported_amc_label_from_text(value: object) -> str | None:
     text = str(value or "").strip().lower()
     if not text:
         return None
+    matches: list[tuple[int, str]] = []
     for label, markers in SUPPORTED_MF_AMC_MARKERS.items():
-        if any(marker in text for marker in markers):
-            return label
+        for marker in markers:
+            # Check for word boundary to avoid substring collisions like "quant" in "quantum"
+            if re.search(rf"\b{re.escape(marker)}\b", text):
+                matches.append((len(marker), label))
+    if matches:
+        matches.sort(key=lambda item: item[0], reverse=True)
+        return matches[0][1]
     return None

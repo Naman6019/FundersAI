@@ -57,6 +57,6 @@ def test_uti_no_longer_requires_manual_document_ids():
 
 def test_cross_lane_and_operation_requests_are_rejected():
     with pytest.raises(ValueError, match="amcs_not_in_green"):
-        resolve_automation_scope(operation="discovery", raw_amcs="quant")
+        resolve_automation_scope(operation="discovery", raw_amcs="franklin")
     with pytest.raises(ValueError, match="lane_not_allowed_for_research_index"):
         resolve_automation_scope(operation="research_index", lane="validation_only", raw_amcs="axis")

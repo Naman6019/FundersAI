@@ -16,7 +16,11 @@ from app.mf_ingestion.parsers.pdf_text_parser import PDFTextParser
 AMC_SCHEME_PREFIX_PATTERN = (
     r"(?:ICICI Prudential|Parag Parikh|HDFC|SBI|Mirae Asset|Axis|Motilal Oswal|"
     r"Nippon India|UTI(?:\s*-\s*)?|DSP|Kotak|Aditya Birla Sun Life|"
-    r"Invesco|Edelweiss|HSBC|Tata|Bandhan)"
+    r"Invesco|Edelweiss|HSBC|Tata|Bandhan|"
+    r"quant|Canara Robeco|Groww|Zerodha|"
+    r"Baroda BNP Paribas|LIC|Sundaram|PGIM India|PGIM|Quantum|Bajaj Finserv|"
+    r"Capitalmind|Abakkus|Unifi|Shriram|Helios|NJ|Old Bridge|360 ONE|IIFL|"
+    r"Navi|Taurus|Angel One|Bank of India|BOI|Choice|The Wealth Company|Wealth Company|Jio BlackRock)"
 )
 SCHEME_NAME_PATTERN = re.compile(
     rf"(?im)^(?:\((?:Formerly|Erstwhile)[^\n]*\)\s*)?(?P<name>{AMC_SCHEME_PREFIX_PATTERN}[^\n]{{3,140}}?(?:Fund|FOF|ETF))(?:\s*\([^\n]{{1,60}}\))?(?:\s*[\*\^$#@~§]+)?\s*$"
@@ -53,13 +57,49 @@ FACTSHEET_AMC_NAME_PREFIXES: dict[str, tuple[str, ...]] = {
     "hsbc": ("hsbc",),
     "tata": ("tata",),
     "bandhan": ("bandhan",),
+    "quant": ("quant",),
+    "canara_robeco": ("canara robeco", "canara"),
+    "groww": ("groww",),
+    "zerodha": ("zerodha",),
+    "baroda_bnp": ("baroda bnp paribas", "baroda bnp", "baroda"),
+    "lic": ("lic mf", "lic"),
+    "sundaram": ("sundaram",),
+    "pgim": ("pgim india", "pgim"),
+    "quantum": ("quantum",),
+    "bajaj_finserv": ("bajaj finserv", "bajaj"),
+    "capitalmind": ("capitalmind",),
+    "abakkus": ("abakkus",),
+    "unifi": ("unifi",),
+    "shriram": ("shriram",),
+    "helios": ("helios",),
+    "nj": ("nj",),
+    "old_bridge": ("old bridge", "oldbridge"),
+    "360_one": ("360 one", "iifl"),
+    "navi": ("navi",),
+    "taurus": ("taurus",),
+    "angel_one": ("angel one", "angel"),
+    "boi": ("bank of india", "boi"),
+    "choice": ("choice",),
+    "wealth_company": ("the wealth company", "wealth company"),
+    "jio_blackrock": ("jio blackrock", "jio"),
 }
 FACTSHEET_AMC_ALIASES = {
     "aditya_birla": "absl",
     "icici_prudential": "icici",
     "nippon_india": "nippon",
+    "canara": "canara_robeco",
+    "canararobeco": "canara_robeco",
     "motilal_oswal": "motilal",
     "mirae_asset": "mirae",
+    "baroda": "baroda_bnp",
+    "licmf": "lic",
+    "bajaj": "bajaj_finserv",
+    "iifl": "360_one",
+    "360one": "360_one",
+    "bank_of_india": "boi",
+    "bankofindia": "boi",
+    "wealthcompany": "wealth_company",
+    "jioblackrock": "jio_blackrock",
 }
 
 

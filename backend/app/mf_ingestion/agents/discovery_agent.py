@@ -575,6 +575,106 @@ class HSBCLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
     expected_adapter_key = "hsbc"
 
 
+class QuantLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "quant"
+
+
+class CanaraRobecoLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "canara_robeco"
+
+
+class GrowwLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "groww"
+
+
+class ZerodhaLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "zerodha"
+
+
+class BarodaBNPLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "baroda_bnp"
+
+
+class LICLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "lic"
+
+
+class SundaramLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "sundaram"
+
+
+class PGIMLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "pgim"
+
+
+class QuantumLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "quantum"
+
+
+class BajajFinservLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "bajaj_finserv"
+
+
+class CapitalmindLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "capitalmind"
+
+
+class AbakkusLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "abakkus"
+
+
+class UnifiLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "unifi"
+
+
+class ShriramLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "shriram"
+
+
+class HeliosLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "helios"
+
+
+class NJLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "nj"
+
+
+class OldBridgeLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "old_bridge"
+
+
+class ThreeSixtyOneLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "360_one"
+
+
+class NaviLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "navi"
+
+
+class TaurusLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "taurus"
+
+
+class AngelOneLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "angel_one"
+
+
+class BOILinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "boi"
+
+
+class ChoiceLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "choice"
+
+
+class WealthCompanyLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "wealth_company"
+
+
+class JioBlackRockLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "jio_blackrock"
+
+
 PRODUCTION_TARGET_AMC_AGENT_KEYS = (
     "sbi",
     "mirae",
@@ -593,6 +693,31 @@ PRODUCTION_TARGET_AMC_AGENT_KEYS = (
     "edelweiss",
     "invesco",
     "hsbc",
+    "quant",
+    "canara_robeco",
+    "groww",
+    "zerodha",
+    "baroda_bnp",
+    "lic",
+    "sundaram",
+    "pgim",
+    "quantum",
+    "bajaj_finserv",
+    "capitalmind",
+    "abakkus",
+    "unifi",
+    "shriram",
+    "helios",
+    "nj",
+    "old_bridge",
+    "360_one",
+    "navi",
+    "taurus",
+    "angel_one",
+    "boi",
+    "choice",
+    "wealth_company",
+    "jio_blackrock",
 )
 
 # Compatibility roster retained for callers and reports that still mean ten AMCs.
@@ -627,12 +752,49 @@ AGENT_CLASSES: dict[str, type[AMCLinkDiscoveryAgent]] = {
     "edelweiss": EdelweissLinkDiscoveryAgent,
     "invesco": InvescoLinkDiscoveryAgent,
     "hsbc": HSBCLinkDiscoveryAgent,
+    "quant": QuantLinkDiscoveryAgent,
+    "canara_robeco": CanaraRobecoLinkDiscoveryAgent,
+    "groww": GrowwLinkDiscoveryAgent,
+    "zerodha": ZerodhaLinkDiscoveryAgent,
+    "baroda_bnp": BarodaBNPLinkDiscoveryAgent,
+    "lic": LICLinkDiscoveryAgent,
+    "sundaram": SundaramLinkDiscoveryAgent,
+    "pgim": PGIMLinkDiscoveryAgent,
+    "quantum": QuantumLinkDiscoveryAgent,
+    "bajaj_finserv": BajajFinservLinkDiscoveryAgent,
+    "capitalmind": CapitalmindLinkDiscoveryAgent,
+    "abakkus": AbakkusLinkDiscoveryAgent,
+    "unifi": UnifiLinkDiscoveryAgent,
+    "shriram": ShriramLinkDiscoveryAgent,
+    "helios": HeliosLinkDiscoveryAgent,
+    "nj": NJLinkDiscoveryAgent,
+    "old_bridge": OldBridgeLinkDiscoveryAgent,
+    "360_one": ThreeSixtyOneLinkDiscoveryAgent,
+    "navi": NaviLinkDiscoveryAgent,
+    "taurus": TaurusLinkDiscoveryAgent,
+    "angel_one": AngelOneLinkDiscoveryAgent,
+    "boi": BOILinkDiscoveryAgent,
+    "choice": ChoiceLinkDiscoveryAgent,
+    "wealth_company": WealthCompanyLinkDiscoveryAgent,
+    "jio_blackrock": JioBlackRockLinkDiscoveryAgent,
 }
 
 AGENT_KEY_ALIASES = {
     "absl": "aditya_birla",
     "aditya-birla": "aditya_birla",
     "aditya_birla_sun_life": "aditya_birla",
+    "canara": "canara_robeco",
+    "canararobeco": "canara_robeco",
+    "canara-robeco": "canara_robeco",
+    "baroda": "baroda_bnp",
+    "licmf": "lic",
+    "bajaj": "bajaj_finserv",
+    "iifl": "360_one",
+    "360one": "360_one",
+    "bankofindia": "boi",
+    "bank_of_india": "boi",
+    "jioblackrock": "jio_blackrock",
+    "wealthcompany": "wealth_company",
 }
 
 

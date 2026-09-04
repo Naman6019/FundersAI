@@ -303,6 +303,31 @@ class AMCDownloader(BaseDownloader):
             "edelweiss",
             "invesco",
             "hsbc",
+            "quant",
+            "canara_robeco",
+            "groww",
+            "zerodha",
+            "baroda_bnp",
+            "lic",
+            "sundaram",
+            "pgim",
+            "quantum",
+            "bajaj_finserv",
+            "capitalmind",
+            "abakkus",
+            "unifi",
+            "shriram",
+            "helios",
+            "nj",
+            "old_bridge",
+            "360_one",
+            "navi",
+            "taurus",
+            "angel_one",
+            "boi",
+            "choice",
+            "wealth_company",
+            "jio_blackrock",
         }:
             if adapter_key == "invesco":
                 docs = _discover_invesco_documents(
@@ -446,71 +471,10 @@ class AMCDownloader(BaseDownloader):
                 not_modified=response.status_code == 304,
             )
 
-        if adapter_key in {
-            "aditya_birla",
-            "axis",
-            "dsp",
-            "hdfc",
-            "kotak",
-            "mirae",
-            "motilal",
-            "nippon",
-            "sbi",
-            "uti",
-            "edelweiss",
-            "invesco",
-            "tata",
-            "bandhan",
-            "hsbc",
-        }:
-            referer = discovered.discovery_page_url or _base_site_url(discovered.url)
-            try:
-                response = _request_with_retry(
-                    "GET",
-                    discovered.url,
-                    timeout_seconds=self.timeout_seconds,
-                    headers={
-                        "User-Agent": _download_user_agent(self.source, self.user_agent),
-                        "Referer": referer,
-                        **(conditional_headers or {}),
-                    },
-                )
-            except Exception:
-                if not (
-                    adapter_key == "edelweiss"
-                    and (discovered.document_type or "").strip().lower() == "factsheet"
-                    and _browser_fallback_allowed_for_source(self.source)
-                ):
-                    raise
-                logger.warning(
-                    "edelweiss:browser_download_fallback url=%s",
-                    discovered.url,
-                )
-                return _download_edelweiss_document_with_browser(
-                    self.source,
-                    discovered,
-                    timeout_seconds=self.timeout_seconds,
-                    user_agent=self.user_agent,
-                )
-            if response.status_code == 304:
-                return DownloadedDocument(
-                    amc_name=discovered.amc_name,
-                    amc_code=discovered.amc_code,
-                    document_type=discovered.document_type,
-                    source_url=response.url or discovered.url,
-                    discovery_page_url=discovered.discovery_page_url,
-                    file_name=_derive_file_name(discovered.url, discovered.title),
-                    file_ext=discovered.file_ext,
-                    report_month=discovered.report_month,
-                    content_type=response.headers.get("Content-Type"),
-                    file_size_bytes=0,
-                    file_bytes=b"",
-                    etag=response.headers.get("ETag") or response.headers.get("etag"),
-                    last_modified=response.headers.get("Last-Modified") or response.headers.get("last-modified"),
-                    not_modified=True,
-                )
-            _validate_generic_download_response(self.source, discovered, response)
-            source_url = response.url or discovered.url
+        if adapter_key == "ppfas":
+            adapter = PPFASAdapter(user_agent=self.user_agent, timeout_seconds=int(self.timeout_seconds))
+            response = adapter.download_document(discovered.url)
+            source_url = getattr(response, "url", None) or discovered.url
             file_name = _derive_file_name(source_url, discovered.title)
             file_ext = _normalize_download_file_ext(discovered.file_ext, response.content)
             return DownloadedDocument(
@@ -529,12 +493,54 @@ class AMCDownloader(BaseDownloader):
                 last_modified=response.headers.get("Last-Modified") or response.headers.get("last-modified"),
             )
 
-        if adapter_key != "ppfas":
-            raise NotImplementedError(f"No downloader configured for adapter_key={adapter_key}")
-
-        adapter = PPFASAdapter(user_agent=self.user_agent, timeout_seconds=int(self.timeout_seconds))
-        response = adapter.download_document(discovered.url)
-        source_url = getattr(response, "url", None) or discovered.url
+        referer = discovered.discovery_page_url or _base_site_url(discovered.url)
+        try:
+            response = _request_with_retry(
+                "GET",
+                discovered.url,
+                timeout_seconds=self.timeout_seconds,
+                headers={
+                    "User-Agent": _download_user_agent(self.source, self.user_agent),
+                    "Referer": referer,
+                    **(conditional_headers or {}),
+                },
+            )
+        except Exception:
+            if not (
+                adapter_key == "edelweiss"
+                and (discovered.document_type or "").strip().lower() == "factsheet"
+                and _browser_fallback_allowed_for_source(self.source)
+            ):
+                raise
+            logger.warning(
+                "edelweiss:browser_download_fallback url=%s",
+                discovered.url,
+            )
+            return _download_edelweiss_document_with_browser(
+                self.source,
+                discovered,
+                timeout_seconds=self.timeout_seconds,
+                user_agent=self.user_agent,
+            )
+        if response.status_code == 304:
+            return DownloadedDocument(
+                amc_name=discovered.amc_name,
+                amc_code=discovered.amc_code,
+                document_type=discovered.document_type,
+                source_url=response.url or discovered.url,
+                discovery_page_url=discovered.discovery_page_url,
+                file_name=_derive_file_name(discovered.url, discovered.title),
+                file_ext=discovered.file_ext,
+                report_month=discovered.report_month,
+                content_type=response.headers.get("Content-Type"),
+                file_size_bytes=0,
+                file_bytes=b"",
+                etag=response.headers.get("ETag") or response.headers.get("etag"),
+                last_modified=response.headers.get("Last-Modified") or response.headers.get("last-modified"),
+                not_modified=True,
+            )
+        _validate_generic_download_response(self.source, discovered, response)
+        source_url = response.url or discovered.url
         file_name = _derive_file_name(source_url, discovered.title)
         file_ext = _normalize_download_file_ext(discovered.file_ext, response.content)
         return DownloadedDocument(

@@ -39,6 +39,31 @@ EXTRA_OFFICIAL_HOST_SUFFIXES: dict[str, tuple[str, ...]] = {
     "edelweiss": ("edelweissmf.com",),
     "invesco": ("invescomutualfund.com",),
     "hsbc": ("assetmanagement.hsbc.co.in",),
+    "quant": ("quantmutual.com",),
+    "canara_robeco": ("canararobeco.com",),
+    "groww": ("growwmf.in", "assets-netstorage.growwmf.in"),
+    "zerodha": ("zerodhafundhouse.com", "assets.zerodhafundhouse.com"),
+    "baroda_bnp": ("barodabnpparibasmf.in",),
+    "lic": ("licmf.com",),
+    "sundaram": ("sundarammutual.com",),
+    "pgim": ("pgimindia.com", "amfiindia.com"),
+    "quantum": ("quantumamc.com",),
+    "bajaj_finserv": ("bajajamc.com", "media.bajajamc.com"),
+    "capitalmind": ("capitalmindmf.com",),
+    "abakkus": ("abakkusmf.com",),
+    "unifi": ("unifimf.com",),
+    "shriram": ("shriramamc.in", "cdn.shriramamc.in"),
+    "helios": ("heliosmf.in",),
+    "nj": ("downloads.njmutualfund.com", "njmutualfund.com"),
+    "old_bridge": ("oldbridgemf.com",),
+    "360_one": ("360.one", "s3.ap-south-1.amazonaws.com"),
+    "navi": ("navi.com", "navimutualfund.com"),
+    "taurus": ("taurusmutualfund.com",),
+    "angel_one": ("angelonemf.com", "cms.angelonemf.com"),
+    "boi": ("boimf.in",),
+    "choice": ("choicemf.com",),
+    "wealth_company": ("wealthcompanyamc.in",),
+    "jio_blackrock": ("jioblackrockamc.com", "azurefd.net"),
 }
 
 
@@ -292,7 +317,7 @@ def content_sha256(downloaded: DownloadedDocument) -> str:
 
 def _is_official_host(source: AMCDocumentSource, hostname: str) -> bool:
     host = hostname.strip().lower().rstrip(".")
-    allowed = set(EXTRA_OFFICIAL_HOST_SUFFIXES.get(source.adapter_key.lower(), ()))
+    allowed = set(EXTRA_OFFICIAL_HOST_SUFFIXES.get(source.adapter_key.lower(), ())) | set(getattr(source, "allowed_host_suffixes", ()))
     for raw_url in (source.factsheet_page_url, source.portfolio_disclosure_page_url):
         parsed = urlsplit(str(raw_url or ""))
         if parsed.hostname:

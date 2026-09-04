@@ -46,6 +46,31 @@ from app.mf_ingestion.parsers.adapters.bandhan_adapter import BandhanAdapter
 from app.mf_ingestion.parsers.adapters.edelweiss_adapter import EdelweissAdapter
 from app.mf_ingestion.parsers.adapters.invesco_adapter import InvescoAdapter
 from app.mf_ingestion.parsers.adapters.hsbc_adapter import HSBCAdapter
+from app.mf_ingestion.parsers.adapters.quant_adapter import QuantAdapter
+from app.mf_ingestion.parsers.adapters.canara_robeco_adapter import CanaraRobecoAdapter
+from app.mf_ingestion.parsers.adapters.groww_adapter import GrowwAdapter
+from app.mf_ingestion.parsers.adapters.zerodha_adapter import ZerodhaAdapter
+from app.mf_ingestion.parsers.adapters.baroda_bnp_adapter import BarodaBNPAdapter
+from app.mf_ingestion.parsers.adapters.lic_adapter import LICAdapter
+from app.mf_ingestion.parsers.adapters.sundaram_adapter import SundaramAdapter
+from app.mf_ingestion.parsers.adapters.pgim_adapter import PGIMAdapter
+from app.mf_ingestion.parsers.adapters.quantum_adapter import QuantumAdapter
+from app.mf_ingestion.parsers.adapters.bajaj_finserv_adapter import BajajFinservAdapter
+from app.mf_ingestion.parsers.adapters.capitalmind_adapter import CapitalmindAdapter
+from app.mf_ingestion.parsers.adapters.abakkus_adapter import AbakkusAdapter
+from app.mf_ingestion.parsers.adapters.unifi_adapter import UnifiAdapter
+from app.mf_ingestion.parsers.adapters.shriram_adapter import ShriramAdapter
+from app.mf_ingestion.parsers.adapters.helios_adapter import HeliosAdapter
+from app.mf_ingestion.parsers.adapters.nj_adapter import NJAdapter
+from app.mf_ingestion.parsers.adapters.old_bridge_adapter import OldBridgeAdapter
+from app.mf_ingestion.parsers.adapters.three_sixty_one_adapter import ThreeSixtyOneAdapter
+from app.mf_ingestion.parsers.adapters.navi_adapter import NaviAdapter
+from app.mf_ingestion.parsers.adapters.taurus_adapter import TaurusAdapter
+from app.mf_ingestion.parsers.adapters.angel_one_adapter import AngelOneAdapter
+from app.mf_ingestion.parsers.adapters.boi_adapter import BOIAdapter
+from app.mf_ingestion.parsers.adapters.choice_adapter import ChoiceAdapter
+from app.mf_ingestion.parsers.adapters.wealth_company_adapter import WealthCompanyAdapter
+from app.mf_ingestion.parsers.adapters.jio_blackrock_adapter import JioBlackRockAdapter
 from app.mf_ingestion.parsers.base_parser import ParseContext
 from app.mf_ingestion.parsers.factsheet_parser import FactsheetParser, filter_factsheet_records_for_amc
 from app.mf_ingestion.parsers.holdings_parser import HoldingsParser
@@ -162,6 +187,32 @@ class ParsingService:
             "edelweiss": EdelweissAdapter(),
             "invesco": InvescoAdapter(),
             "hsbc": HSBCAdapter(),
+            "quant": QuantAdapter(),
+            "canara_robeco": CanaraRobecoAdapter(),
+            "canara": CanaraRobecoAdapter(),
+            "groww": GrowwAdapter(),
+            "zerodha": ZerodhaAdapter(),
+            "baroda_bnp": BarodaBNPAdapter(),
+            "lic": LICAdapter(),
+            "sundaram": SundaramAdapter(),
+            "pgim": PGIMAdapter(),
+            "quantum": QuantumAdapter(),
+            "bajaj_finserv": BajajFinservAdapter(),
+            "capitalmind": CapitalmindAdapter(),
+            "abakkus": AbakkusAdapter(),
+            "unifi": UnifiAdapter(),
+            "shriram": ShriramAdapter(),
+            "helios": HeliosAdapter(),
+            "nj": NJAdapter(),
+            "old_bridge": OldBridgeAdapter(),
+            "360_one": ThreeSixtyOneAdapter(),
+            "navi": NaviAdapter(),
+            "taurus": TaurusAdapter(),
+            "angel_one": AngelOneAdapter(),
+            "boi": BOIAdapter(),
+            "choice": ChoiceAdapter(),
+            "wealth_company": WealthCompanyAdapter(),
+            "jio_blackrock": JioBlackRockAdapter(),
         }
         self.llm_extractor = StrictJSONLLMExtractor(
             enabled=self.config.llm_extractor_enabled,

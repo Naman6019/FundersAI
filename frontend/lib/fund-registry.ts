@@ -134,6 +134,174 @@ export const AMC_REGISTRY: AmcEntry[] = [
     description:
       'Part of the storied Tata Group. Known for disciplined thematic, sectoral, and diversified equity funds.',
   },
+  {
+    slug: 'canara-robeco',
+    name: 'Canara Robeco Mutual Fund',
+    shortName: 'Canara Robeco',
+    description:
+      'Joint venture of Canara Bank and ORIX Corporation. Known for strong performance in small cap and emerging equities.',
+  },
+  {
+    slug: 'groww',
+    name: 'Groww Mutual Fund',
+    shortName: 'Groww',
+    description:
+      'Tech-driven mutual fund house focused on accessible passive and low-cost systematic investment strategies.',
+  },
+  {
+    slug: 'zerodha',
+    name: 'Zerodha Fund House',
+    shortName: 'Zerodha',
+    description:
+      'Passive-only, direct fund house focused on transparent, low-cost index and ETF investment solutions.',
+  },
+  {
+    slug: 'baroda-bnp',
+    name: 'Baroda BNP Paribas Mutual Fund',
+    shortName: 'Baroda BNP',
+    description:
+      'Partnership between Bank of Baroda and BNP Paribas Asset Management offering global and domestic strategies.',
+  },
+  {
+    slug: 'lic',
+    name: 'LIC Mutual Fund',
+    shortName: 'LIC',
+    description:
+      'Associated with Life Insurance Corporation of India, focusing on systematic long-term wealth creation.',
+  },
+  {
+    slug: 'sundaram',
+    name: 'Sundaram Mutual Fund',
+    shortName: 'Sundaram',
+    description:
+      'Wholly owned subsidiary of Sundaram Finance, recognized for mid and small-cap equity fund expertise.',
+  },
+  {
+    slug: 'pgim',
+    name: 'PGIM India Mutual Fund',
+    shortName: 'PGIM India',
+    description:
+      'Part of PGIM, the global investment management business of Prudential Financial, offering global solutions.',
+  },
+  {
+    slug: 'quantum',
+    name: 'Quantum Mutual Fund',
+    shortName: 'Quantum',
+    description:
+      'Pioneer of direct-to-investor low-cost investing in India with a disciplined value investment process.',
+  },
+  {
+    slug: 'bajaj-finserv',
+    name: 'Bajaj Finserv Mutual Fund',
+    shortName: 'Bajaj Finserv',
+    description:
+      'Backed by Bajaj Finserv, providing innovative equity, debt, and hybrid investment solutions.',
+  },
+  {
+    slug: 'capitalmind',
+    name: 'Capitalmind Mutual Fund',
+    shortName: 'Capitalmind',
+    description:
+      'Quantitative and factor-based asset manager focused on systematic momentum and data-driven equity strategies.',
+  },
+  {
+    slug: 'abakkus',
+    name: 'Abakkus Mutual Fund',
+    shortName: 'Abakkus',
+    description:
+      'Value-focused asset manager founded by Sunil Singhania with a fundamental bottom-up research framework.',
+  },
+  {
+    slug: 'unifi',
+    name: 'Unifi Mutual Fund',
+    shortName: 'Unifi',
+    description:
+      'Specialized investment house focused on niche equity themes and disciplined risk-adjusted compounding.',
+  },
+  {
+    slug: 'shriram',
+    name: 'Shriram Mutual Fund',
+    shortName: 'Shriram',
+    description:
+      'Part of the Shriram Group, catering to retail wealth creation across tier-2 and tier-3 India.',
+  },
+  {
+    slug: 'helios',
+    name: 'Helios Mutual Fund',
+    shortName: 'Helios',
+    description:
+      'Founded by Samir Arora, managing long-biased equity portfolios with high conviction themes.',
+  },
+  {
+    slug: 'nj',
+    name: 'NJ Mutual Fund',
+    shortName: 'NJ',
+    description:
+      'Rule-based investment manager utilizing quantitative factors for automated portfolio construction.',
+  },
+  {
+    slug: 'old-bridge',
+    name: 'Old Bridge Mutual Fund',
+    shortName: 'Old Bridge',
+    description:
+      'Founded by Kenneth Andrade, specializing in capital-cycle and valuation-conscious equity investing.',
+  },
+  {
+    slug: '360-one',
+    name: '360 ONE Mutual Fund',
+    shortName: '360 ONE',
+    description:
+      'Formerly IIFL Asset Management, delivering specialized high-net-worth and institutional investment strategies.',
+  },
+  {
+    slug: 'navi',
+    name: 'Navi Mutual Fund',
+    shortName: 'Navi',
+    description:
+      'Technology-driven fund house offering ultra low-cost passive index funds and global feeder funds.',
+  },
+  {
+    slug: 'taurus',
+    name: 'Taurus Mutual Fund',
+    shortName: 'Taurus',
+    description:
+      'One of India\'s earliest private mutual funds offering focused active equity and debt portfolios.',
+  },
+  {
+    slug: 'angel-one',
+    name: 'Angel One Mutual Fund',
+    shortName: 'Angel One',
+    description:
+      'Fintech-led asset manager offering accessible, low-friction passive products for retail investors.',
+  },
+  {
+    slug: 'boi',
+    name: 'Bank of India Mutual Fund',
+    shortName: 'Bank of India',
+    description:
+      'Public sector backed fund house offering conservative debt and diversified equity investment funds.',
+  },
+  {
+    slug: 'choice',
+    name: 'Choice Mutual Fund',
+    shortName: 'Choice',
+    description:
+      'Part of Choice International, focusing on accessible multi-asset and retail financial products.',
+  },
+  {
+    slug: 'wealth-company',
+    name: 'The Wealth Company Mutual Fund',
+    shortName: 'The Wealth Co',
+    description:
+      'Boutique wealth creation house focused on transparent goal-aligned mutual fund solutions.',
+  },
+  {
+    slug: 'jio-blackrock',
+    name: 'Jio BlackRock Mutual Fund',
+    shortName: 'Jio BlackRock',
+    description:
+      'Joint venture between Jio Financial Services and BlackRock bringing digital-first investing to Indian investors.',
+  },
 ];
 
 // ─── Fund registry ──────────────────────────────────────────────────────────
