@@ -14,6 +14,7 @@ import { ReportsSubNav } from "@/components/layout/ReportsSubNav";
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import type { User } from "@supabase/supabase-js";
 import { schemeDisplayName } from "@/lib/schemeDisplayName";
+import { trackWhopEvent } from "@/lib/whopPixel";
 
 interface SchemeOption {
     code: number;
@@ -385,6 +386,8 @@ function ReportChatContent() {
                     }
                 }
             }
+
+            trackWhopEvent('report_generated', user?.email ? { email: user.email } : undefined);
         } catch (e: unknown) {
             console.error("Stream error:", e);
             setStreamError("A network error occurred while generating the report. Please check your connection and try again.");
