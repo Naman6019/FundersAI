@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 import { MONTHLY_TIERS, PaidTier, UserTier } from '@/lib/billing/tiers';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
+import { trackWhopEvent } from '@/lib/whopPixel';
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Sparkles as SparklesComp } from "@/components/ui/sparkles";
 import { TimelineContent } from "@/components/ui/timeline-animation";
@@ -164,8 +165,14 @@ export default function BillingPage() {
       prefill: checkout.prefill,
       notes: checkout.notes,
       theme: { color: '#66a3ff' },
-      handler: () => {
+      handler: (response) => {
         console.info('[razorpay:checkout:success]', { tier });
+        trackWhopEvent('purchase', {
+          value: MONTHLY_TIERS[tier].amountPaise / 100,
+          currency: 'INR',
+          email: checkout.prefill?.email,
+          event_id: response.razorpay_payment_id,
+        });
         setMessage('Payment authorised. Your tier updates after Razorpay confirms the subscription.');
         setBusyTier(null);
         void refreshBilling();

@@ -5,6 +5,7 @@ import { ArrowLeft, Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getAuthErrorMessage } from '@/lib/authErrorMessage';
 import { hasSupabaseBrowserEnv, supabaseBrowser } from '@/lib/supabaseBrowser';
+import { trackWhopEvent } from '@/lib/whopPixel';
 import AuthShell from './AuthShell';
 
 type AuthMode = 'signin' | 'signup' | 'forgot';
@@ -144,6 +145,7 @@ export default function AuthForm() {
     }
 
     if (mode === 'signup') {
+      trackWhopEvent('complete_registration', { email: normalizedEmail });
       setFeedback({ kind: 'success', text: 'Check your email to confirm your account.' });
       return;
     }

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Sparkles, X, ArrowRight, Copy, Check } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
+import { trackWhopEvent } from "@/lib/whopPixel";
 
 const STORAGE_KEY_REFERRAL = "fundersai_ph_referral";
 const STORAGE_KEY_DISMISSED = "fundersai_ph_dismissed";
@@ -55,6 +56,7 @@ export default function ProductHuntWelcomeBanner() {
       navigator.clipboard.writeText("PRODUCTHUNT");
       setCopied(true);
       trackEvent("ph_coupon_copied");
+      trackWhopEvent("lead");
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Ignore
