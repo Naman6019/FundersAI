@@ -382,10 +382,11 @@ export function EcosystemHeader({
 
                 <Link
                   href={ecosystemHref("/dashboard")}
-                  className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 rounded-lg shadow-lg shadow-emerald-950/40 border border-emerald-400/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  aria-label="Launch App"
+                  className="flex items-center gap-2 px-2.5 sm:px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 rounded-lg shadow-lg shadow-emerald-950/40 border border-emerald-400/30 transition-all hover:scale-[1.02] active:scale-[0.98] shrink-0"
                 >
-                  <span>Launch App</span>
-                  <ArrowUpRight className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline whitespace-nowrap">Launch App</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 shrink-0" />
                 </Link>
               </>
             )}

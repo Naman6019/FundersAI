@@ -14,6 +14,17 @@ import { ReportsSubNav } from "@/components/layout/ReportsSubNav";
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import type { User } from "@supabase/supabase-js";
 import { schemeDisplayName } from "@/lib/schemeDisplayName";
+import { trackWhopEvent } from "@/lib/whopPixel";
+import {
+    MessageSquareText,
+    SlidersHorizontal,
+    ArrowRight,
+    X,
+    Check,
+    AlertTriangle,
+    Zap,
+    FileText,
+} from "lucide-react";
 
 interface SchemeOption {
     code: number;
@@ -65,7 +76,7 @@ function MermaidChart({ chart, isStreaming }: { chart: string; isStreaming: bool
     if (isStreaming) {
         return (
             <div className="w-full h-64 bg-surface-2/30 animate-pulse rounded-lg border border-gray-700/50 flex flex-col items-center justify-center my-8">
-                <svg className="animate-spin h-8 w-8 text-violet-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <svg className="animate-spin h-8 w-8 text-accent-synthesis mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
@@ -385,6 +396,8 @@ function ReportChatContent() {
                     }
                 }
             }
+
+            trackWhopEvent('report_generated', user?.email ? { email: user.email } : undefined);
         } catch (e: unknown) {
             console.error("Stream error:", e);
             setStreamError("A network error occurred while generating the report. Please check your connection and try again.");
@@ -423,7 +436,7 @@ function ReportChatContent() {
                     />
                     <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight flex items-center gap-3 font-serif-display">
                         <span>Synthesis Studio</span>
-                        <span className="text-xs font-mono font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-md bg-violet-500/10 text-violet-400 border border-violet-500/30">
+                        <span className="text-xs font-mono font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-md bg-accent-synthesis/10 text-accent-synthesis border border-accent-synthesis/30">
                             AI Multi-Agent Research Engine
                         </span>
                     </h1>
@@ -448,7 +461,7 @@ function ReportChatContent() {
                         <div className="h-6 w-px bg-surface-2" />
                         <div className="text-left">
                             <div className="text-[10px] text-text-3 uppercase tracking-wider">Ingestion Speed</div>
-                            <div className="text-sm font-bold text-violet-400">0.4s</div>
+                            <div className="text-sm font-bold text-accent-synthesis">0.4s</div>
                         </div>
                     </div>
 
@@ -465,12 +478,12 @@ function ReportChatContent() {
                             </button>
                         </div>
                     ) : (
-                        <a 
+                        <a
                             href="/login?next=/synthesis/generate"
-                            className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-mono font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-violet-900/30 flex items-center gap-1.5"
+                            className="px-4 py-2 bg-accent-synthesis hover:brightness-110 text-slate-950 rounded-xl font-mono font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-accent-synthesis/20 flex items-center gap-1.5"
                         >
                             <span>Log In to Save</span>
-                            <span>→</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
                         </a>
                     )}
                 </div>
@@ -481,7 +494,7 @@ function ReportChatContent() {
             
             {/* Main Interactive Dual Input Controls */}
             <div className="relative z-30 bg-surface-1 border border-line rounded-2xl p-6 space-y-5 shadow-2xl backdrop-blur-xl overflow-hidden print:hidden">
-                <Sparkles density={35} color="#8b5cf6" className="absolute inset-0 pointer-events-none opacity-25" />
+                <Sparkles density={35} color="#a78bfa" className="absolute inset-0 pointer-events-none opacity-25" />
                 {/* Mode Selector Tabs */}
                 <div className="flex items-center justify-between border-b border-line pb-4">
                     <div className="flex items-center gap-2">
@@ -489,11 +502,12 @@ function ReportChatContent() {
                             onClick={() => setGenerationMode("PROMPT")}
                             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
                                 generationMode === "PROMPT"
-                                    ? "bg-violet-600 text-white shadow-lg shadow-violet-600/30"
+                                    ? "bg-accent-synthesis text-slate-950 shadow-lg shadow-accent-synthesis/20"
                                     : "bg-gray-900 text-text-2 hover:bg-surface-2 hover:text-white border border-line"
                             }`}
                         >
-                            <span>💬 Option 1: AI Prompt Input</span>
+                            <MessageSquareText className="w-3.5 h-3.5" />
+                            <span>Option 1: AI Prompt Input</span>
                         </button>
                         <button
                             onClick={() => setGenerationMode("SELECTOR")}
@@ -503,16 +517,17 @@ function ReportChatContent() {
                                     : "bg-gray-900 text-text-2 hover:bg-surface-2 hover:text-white border border-line"
                             }`}
                         >
-                            <span>🎯 Option 2: Fund Selector & Catalog</span>
+                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                            <span>Option 2: Fund Selector & Catalog</span>
                         </button>
                     </div>
 
-                    <Link 
-                        href="/synthesis/supported-funds" 
-                        className="text-xs font-mono text-violet-400 hover:text-violet-300 flex items-center gap-1"
+                    <Link
+                        href="/synthesis/supported-funds"
+                        className="text-xs font-mono text-accent-synthesis hover:brightness-110 flex items-center gap-1"
                     >
                         <span>Browse 1,000+ Funds Directory</span>
-                        <span>→</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
                 </div>
 
@@ -527,10 +542,10 @@ function ReportChatContent() {
                             value={userPrompt}
                             onChange={(e) => setUserPrompt(e.target.value)}
                             placeholder="e.g. Give me a comprehensive report on comparison of HDFC Flexi cap and Parag Flexi Cap."
-                            className="w-full bg-gray-900/80 border border-line rounded-xl p-4 text-xs sm:text-sm text-white placeholder-gray-500 focus:outline-none focus:border-violet-500 transition-colors font-sans leading-relaxed"
+                            className="w-full bg-gray-900/80 border border-line rounded-xl p-4 text-xs sm:text-sm text-white placeholder-gray-500 focus:outline-none focus:border-accent-synthesis transition-colors font-sans leading-relaxed"
                         />
                         <div className="flex items-center gap-2 text-[11px] font-mono text-text-3">
-                            <span className="text-violet-400 font-bold">Quick Examples:</span>
+                            <span className="text-accent-synthesis font-bold">Quick Examples:</span>
                             <button 
                                 onClick={() => setUserPrompt("Give me a comprehensive report on comparison of HDFC Flexi cap and Parag Flexi Cap.")}
                                 className="hover:text-white underline"
@@ -566,7 +581,9 @@ function ReportChatContent() {
                                 <div key={s.code} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-2 border border-emerald-500/40 text-white text-xs font-semibold shadow-md">
                                     <span className="text-[10px] font-mono text-emerald-400">#{s.code}</span>
                                     <span>{s.name}</span>
-                                    <button onClick={() => removeScheme(s.code)} className="text-text-2 hover:text-red-400 text-sm ml-1 font-bold">✕</button>
+                                    <button onClick={() => removeScheme(s.code)} aria-label={`Remove ${s.name}`} className="text-text-2 hover:text-red-400 ml-1">
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
                                 </div>
                             ))}
                             {selectedSchemes.length === 0 && (
@@ -601,7 +618,7 @@ function ReportChatContent() {
                                                 <span className="font-bold text-white block">{scheme.name}</span>
                                                 <span className="text-[10px] text-text-3 font-mono">{scheme.amc}</span>
                                             </div>
-                                            <span className="text-[10px] font-mono text-violet-400 px-2 py-0.5 rounded bg-violet-500/10 border border-violet-500/20">
+                                            <span className="text-[10px] font-mono text-accent-synthesis px-2 py-0.5 rounded bg-accent-synthesis/10 border border-accent-synthesis/20">
                                                 + Add #{scheme.code}
                                             </span>
                                         </button>
@@ -637,8 +654,9 @@ function ReportChatContent() {
                                             <div className="flex items-start justify-between gap-2">
                                                 <span className="text-xs font-bold text-white leading-snug line-clamp-2">{scheme.name}</span>
                                                 {isSelected ? (
-                                                    <span className="shrink-0 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500 text-black">
-                                                        ✓ Selected
+                                                    <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500 text-black">
+                                                        <Check className="w-3 h-3" />
+                                                        Selected
                                                     </span>
                                                 ) : (
                                                     <span className="shrink-0 px-2 py-0.5 rounded text-[10px] font-mono text-text-2 bg-surface-2 border border-gray-700">
@@ -661,7 +679,7 @@ function ReportChatContent() {
                 {streamError && (
                     <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
-                            <span className="text-base">⚠️</span>
+                            <AlertTriangle className="w-4 h-4 shrink-0" />
                             <span className="font-mono">{streamError}</span>
                         </div>
                         <button
@@ -684,14 +702,14 @@ function ReportChatContent() {
                         onClick={generateReport}
                         disabled={isLoading}
                         className="px-8 py-3 disabled:opacity-50 shadow-xl"
-                        shimmerColor="#ffffff"
+                        shimmerColor="#2e1065"
                         shimmerSize="0.05em"
                         borderRadius="0.75rem"
-                        background="#7c3aed"
+                        background="#a78bfa"
                     >
-                        <span className="text-white text-xs font-bold tracking-wide flex items-center gap-2">
+                        <span className="text-slate-950 text-xs font-bold tracking-wide flex items-center gap-2">
                             <span>{isLoading ? "Synthesizing AI Report..." : "Start Synthesis Engine"}</span>
-                            <span>⚡</span>
+                            <Zap className="w-3.5 h-3.5" />
                         </span>
                     </ShimmerButton>
                 </div>
@@ -701,23 +719,23 @@ function ReportChatContent() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                 {/* Left Sidebar: Execution Progress Monitor */}
                 <div className="lg:col-span-3 xl:col-span-3 space-y-4 print:hidden">
-                    <div className="bg-surface-1 border border-line rounded-2xl p-5 space-y-4 shadow-xl backdrop-blur-xl border-t-violet-500/20">
+                    <div className="bg-surface-1 border border-line rounded-2xl p-5 space-y-4 shadow-xl backdrop-blur-xl border-t-accent-synthesis/20">
                         <div className="flex items-center justify-between border-b border-line pb-3">
-                            <span className="text-xs font-mono font-bold uppercase tracking-wider text-violet-400">AI Execution Pipeline</span>
-                            <span className={`w-2 h-2 rounded-full ${isLoading ? 'bg-violet-400 animate-ping' : 'bg-emerald-500'}`} />
+                            <span className="text-xs font-mono font-bold uppercase tracking-wider text-accent-synthesis">AI Execution Pipeline</span>
+                            <span className={`w-2 h-2 rounded-full ${isLoading ? 'bg-accent-synthesis animate-ping' : 'bg-emerald-500'}`} />
                         </div>
 
                         <div className="space-y-3 font-mono text-[11px]">
                             <div className="flex items-center gap-2.5 text-text-2">
-                                <span className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${isLoading ? 'bg-violet-500/20 text-violet-400 border border-violet-500/40' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'}`}>#01</span>
+                                <span className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${isLoading ? 'bg-accent-synthesis/20 text-accent-synthesis border border-accent-synthesis/40' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'}`}>#01</span>
                                 <span className="font-semibold">Ingesting AMC Disclosures</span>
                             </div>
                             <div className="flex items-center gap-2.5 text-text-2">
-                                <span className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${isLoading ? 'bg-violet-500/20 text-violet-400 border border-violet-500/40 animate-pulse' : reportText ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-gray-900 text-gray-600 border border-line'}`}>#02</span>
+                                <span className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${isLoading ? 'bg-accent-synthesis/20 text-accent-synthesis border border-accent-synthesis/40 animate-pulse' : reportText ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-gray-900 text-gray-600 border border-line'}`}>#02</span>
                                 <span className="font-semibold">Calculating Risk Metrics</span>
                             </div>
                             <div className="flex items-center gap-2.5 text-text-2">
-                                <span className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${isLoading ? 'bg-violet-500/20 text-violet-400 border border-violet-500/40 animate-pulse' : reportText ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-gray-900 text-gray-600 border border-line'}`}>#03</span>
+                                <span className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${isLoading ? 'bg-accent-synthesis/20 text-accent-synthesis border border-accent-synthesis/40 animate-pulse' : reportText ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-gray-900 text-gray-600 border border-line'}`}>#03</span>
                                 <span className="font-semibold">Building Visual Diagrams</span>
                             </div>
                             <div className="flex items-center gap-2.5 text-text-2">
@@ -727,13 +745,13 @@ function ReportChatContent() {
                         </div>
                     </div>
 
-                    <div className="bg-surface-1 border border-line rounded-2xl p-5 space-y-3 backdrop-blur-xl border-t-violet-500/20">
+                    <div className="bg-surface-1 border border-line rounded-2xl p-5 space-y-3 backdrop-blur-xl border-t-accent-synthesis/20">
                         <div className="flex items-center justify-between border-b border-line pb-2">
                             <span className="text-xs font-mono font-bold uppercase tracking-wider text-text-2">Selected Target Schemes</span>
-                            <span className="text-[10px] font-mono text-violet-400 font-semibold">({selectedSchemes.length}/3)</span>
+                            <span className="text-[10px] font-mono text-accent-synthesis font-semibold">({selectedSchemes.length}/3)</span>
                         </div>
 
-                        <div className="text-[10px] font-mono text-violet-400 font-medium px-2 py-1 rounded bg-violet-500/10 border border-violet-500/20">
+                        <div className="text-[10px] font-mono text-accent-synthesis font-medium px-2 py-1 rounded bg-accent-synthesis/10 border border-accent-synthesis/20">
                             {generationMode === "PROMPT" ? "[ OPTION 1: PROMPT AUTO-EXTRACT ]" : "[ OPTION 2: CUSTOM FUND CATALOG ]"}
                         </div>
 
@@ -742,8 +760,10 @@ function ReportChatContent() {
                                 <div key={s.code} className="flex items-center justify-between p-2.5 rounded-xl bg-gray-900/80 border border-line text-xs hover:border-gray-700 transition-colors">
                                     <span className="font-semibold text-white truncate max-w-[150px]">{s.name}</span>
                                     <div className="flex items-center gap-1.5">
-                                        <span className="font-mono text-[10px] text-violet-400">#{s.code}</span>
-                                        <button onClick={() => removeScheme(s.code)} className="text-text-3 hover:text-red-400 text-xs font-bold px-1">✕</button>
+                                        <span className="font-mono text-[10px] text-accent-synthesis">#{s.code}</span>
+                                        <button onClick={() => removeScheme(s.code)} aria-label={`Remove ${s.name}`} className="text-text-3 hover:text-red-400 px-1">
+                                            <X className="w-3 h-3" />
+                                        </button>
                                     </div>
                                 </div>
                             ))}
@@ -792,7 +812,7 @@ function ReportChatContent() {
                         className="relative min-h-[500px] text-text-2 [&_h1]:text-white [&_h2]:text-white [&_h2]:text-2xl [&_h2]:mt-8 [&_h2]:mb-4 [&_h3]:text-white [&_h3]:text-xl [&_h3]:mt-6 [&_h3]:mb-3 [&_h4]:text-white [&_h4]:text-lg [&_h4]:mt-4 [&_h4]:mb-2 [&_strong]:text-white [&_table]:w-full [&_table]:mt-4 [&_table]:mb-8 [&_th]:text-left [&_th]:border-b [&_th]:border-gray-500 [&_th]:pb-3 [&_th]:text-white [&_td]:border-b [&_td]:border-line [&_td]:py-3 [&_li]:mb-2 [&_ul]:list-disc [&_ul]:pl-6 p-6 sm:p-8 bg-surface-1 border border-line rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden"
                     >
                         {isLoading && (
-                            <BorderBeam size={300} duration={10} delay={0} colorFrom="#8b5cf6" colorTo="#8b5cf6" />
+                            <BorderBeam size={300} duration={10} delay={0} colorFrom="#a78bfa" colorTo="#a78bfa" />
                         )}
                         {reportText ? (
                             <ReactMarkdown
@@ -803,8 +823,8 @@ function ReportChatContent() {
                             </ReactMarkdown>
                         ) : (
                             <div className="h-96 flex flex-col items-center justify-center text-center space-y-3">
-                                <div className="w-12 h-12 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
-                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                <div className="w-12 h-12 rounded-2xl bg-accent-synthesis/10 border border-accent-synthesis/20 flex items-center justify-center text-accent-synthesis">
+                                    <FileText className="w-6 h-6" />
                                 </div>
                                 <div className="space-y-1">
                                     <h3 className="text-base font-semibold text-white">Ready for Synthesis</h3>

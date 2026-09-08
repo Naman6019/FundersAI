@@ -17,7 +17,12 @@ export async function POST(request: Request) {
     return json({ error: 'Not Found' }, 404);
   }
 
-  const userContext = await getUserContext(request);
+  let userContext;
+  try {
+    userContext = await getUserContext(request);
+  } catch {
+    return json({ error: 'authentication_unavailable' }, 503);
+  }
   if (process.env.NODE_ENV === 'production' && !userContext) {
     return json({ error: 'Unauthorized' }, 401);
   }

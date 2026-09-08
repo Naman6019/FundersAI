@@ -4,18 +4,20 @@ import React from "react";
 import Image from "next/image";
 
 interface ProductHuntBadgeProps {
-  postSlug?: string;
+  postId: string;
+  postSlug: string;
   theme?: "light" | "neutral" | "dark";
   className?: string;
 }
 
 export default function ProductHuntBadge({
-  postSlug = "fundersai",
+  postId,
+  postSlug,
   theme = "neutral",
   className = "",
 }: ProductHuntBadgeProps) {
-  const badgeUrl = `https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=${postSlug}&theme=${theme}`;
-  const targetUrl = `https://www.producthunt.com/posts/${postSlug}?utm_source=badge-featured&utm_medium=badge&utm_souce=badge-${postSlug}`;
+  const badgeUrl = `https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=${postId}&theme=${theme}`;
+  const targetUrl = `https://www.producthunt.com/posts/${postSlug}?utm_source=badge-featured&utm_medium=badge&utm_source=badge-${postSlug}`;
 
   return (
     <a

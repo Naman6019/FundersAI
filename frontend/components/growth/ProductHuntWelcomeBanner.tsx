@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Sparkles, X, ArrowRight, Copy, Check } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
+import { trackWhopEvent } from "@/lib/whopPixel";
 
 const STORAGE_KEY_REFERRAL = "fundersai_ph_referral";
 const STORAGE_KEY_DISMISSED = "fundersai_ph_dismissed";
@@ -55,6 +56,7 @@ export default function ProductHuntWelcomeBanner() {
       navigator.clipboard.writeText("PRODUCTHUNT");
       setCopied(true);
       trackEvent("ph_coupon_copied");
+      trackWhopEvent("lead");
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Ignore
@@ -91,12 +93,12 @@ export default function ProductHuntWelcomeBanner() {
 
         <div className="flex items-center gap-3 ml-auto">
           <Link
-            href="/compare/parag-parikh-flexi-cap-fund-vs-hdfc-flexi-cap-fund"
+            href="/fund-truth-check"
             onClick={() => trackEvent("ph_banner_demo_clicked")}
             className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00FF9D]/15 hover:bg-[#00FF9D]/25 border border-[#00FF9D]/40 text-[#00FF9D] font-semibold text-[11px] transition-all hover:scale-[1.02]"
           >
             <Sparkles className="w-3 h-3" />
-            <span>Try 1-Click Instant Demo</span>
+            <span>See Fund Truth Check</span>
             <ArrowRight className="w-3 h-3" />
           </Link>
 

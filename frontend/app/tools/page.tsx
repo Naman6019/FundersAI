@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Layers, Calculator, Search, Scale, Sparkles, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Layers, Calculator, Search, Scale, Sparkles, ArrowRight, ShieldCheck, FileCheck2 } from 'lucide-react';
 import { ToolJsonLd } from '@/components/seo/JsonLd';
 import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
 import PublicFooter from '@/components/layout/PublicFooter';
@@ -23,6 +23,16 @@ export const metadata: Metadata = {
 };
 
 const TOOLS = [
+  {
+    title: 'Fund Truth Check',
+    slug: '/fund-truth-check',
+    badge: 'Private Beta',
+    icon: FileCheck2,
+    color: '#66a3ff',
+    description:
+      'See how FundersAI breaks a mutual-fund claim into a scheme, metric, source, date and clear evidence boundary before it returns a result.',
+    highlights: ['Interactive Evidence Preview', 'Dated Source Boundaries', 'No Forecasts or Advice'],
+  },
   {
     title: 'Portfolio Overlap Calculator',
     slug: '/tools/portfolio-overlap',

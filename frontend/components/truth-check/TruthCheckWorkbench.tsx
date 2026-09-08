@@ -1,11 +1,13 @@
 'use client';
 
-import { FormEvent, useRef, useState } from 'react';
-import { LoaderCircle, SearchCheck, ShieldCheck } from 'lucide-react';
+import { FormEvent, type CSSProperties, useRef, useState } from 'react';
+import { FlaskConical, LoaderCircle, Pencil, RotateCw, SearchCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { trackEvent } from '@/lib/analytics';
 import ClaimResultCard from './ClaimResultCard';
+import ClaimEquation from './ClaimEquation';
+import ThesisMonitorPanel from './ThesisMonitorPanel';
 import type { ClaimCheckResponse } from './types';
 
 const EXAMPLES = [
@@ -38,7 +40,9 @@ export default function TruthCheckWorkbench() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
+  const [editing, setEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const primaryClaim = result?.claims[0];
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -70,6 +74,7 @@ export default function TruthCheckWorkbench() {
       if (!response.ok) throw new Error(userFacingError(response.status, body?.error));
       const nextResult = body as ClaimCheckResponse;
       setResult(nextResult);
+      setEditing(false);
       trackEvent('fund_truth_check_completed', {
         claim_count: nextResult.claims.length,
         definitive_count: nextResult.claims.filter((claim) => claim.verdict !== 'unverifiable').length,
@@ -86,87 +91,93 @@ export default function TruthCheckWorkbench() {
   const chooseClarification = (choice: string) => {
     const label = CLARIFICATION_LABELS[choice] || choice.replaceAll('_', ' ');
     const subjectivePattern = /\b(less risky|lower risk|safer|safe|stable|consistent|diversified)\b/i;
-    setInput((current) => subjectivePattern.test(current)
-      ? current.replace(subjectivePattern, label)
-      : `${current.trim()} Use ${label} as the definition.`);
+    setInput((current) => (subjectivePattern.test(current)
+      ? current.replace(subjectivePattern, label).replace(/\bis (lower|higher|a lower)\b/i, 'has $1')
+      : `${current.trim()} Use ${label} as the definition.`).slice(0, 2_000));
     setNotice(`Updated the wording to use ${label}. Review it, then run the check again.`);
     textareaRef.current?.focus();
     textareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
   return (
-    <div className="space-y-8">
-      <section className="rounded-2xl border border-white/10 bg-white/[0.025] p-5 sm:p-7">
-        <form onSubmit={submit} className="space-y-4">
-          <div>
-            <label htmlFor="fund-claim" className="text-sm font-semibold text-white">What claim should be checked?</label>
-            <p id="fund-claim-help" className="mt-1 text-xs leading-relaxed text-text-3">
-              Use factual claims about supported mutual funds. Advice, predictions, and undefined terms will be declined or clarified.
-            </p>
+    <div
+      className="space-y-6"
+      style={{ '--primary': '#00ff9d', '--primary-foreground': '#04120c', '--accent': '#00ff9d', '--ring': '#00ff9d' } as CSSProperties}
+    >
+      <div className="grid gap-5 border-b border-line pb-4 lg:grid-cols-[380px_minmax(0,1fr)] lg:items-end">
+        <header>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-primary">Fund Truth Check</p>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/25 bg-amber-300/[0.06] px-2.5 py-1 text-[10px] font-semibold text-amber-200"><FlaskConical className="size-3" /> Private review</span>
           </div>
-          <textarea
-            ref={textareaRef}
-            id="fund-claim"
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            aria-describedby="fund-claim-help fund-claim-count"
-            placeholder="Example: Fund A has a lower expense ratio than Fund B."
-            rows={5}
-            maxLength={2_000}
-            className="w-full resize-y rounded-xl border border-white/15 bg-black/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-text-3 focus:border-primary/60 focus:ring-2 focus:ring-primary/20"
-          />
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span id="fund-claim-count" className="text-xs text-text-3">{input.length.toLocaleString('en-IN')} / 2,000</span>
-            <Button type="submit" size="lg" disabled={loading || input.trim().length < 3}>
-              {loading ? <LoaderCircle className="animate-spin" /> : <SearchCheck />}
-              {loading ? 'Checking evidence…' : 'Check claim'}
+          <h1 className="mt-2 font-serif-display text-4xl font-extrabold tracking-tight text-white">Claim Autopsy</h1>
+          <p className="mt-2 max-w-md text-xs leading-relaxed text-text-3 sm:text-sm">We dissect the claim and show the dated evidence, calculation, and uncertainty behind every part.</p>
+        </header>
+
+        <section className="rounded-xl border border-white/10 bg-[#08111d]/80 p-3">
+          <form onSubmit={submit} className="space-y-3">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <label htmlFor="fund-claim" className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-primary">{primaryClaim ? 'Claim under review' : 'Enter a claim'}</label>
+              <p id="fund-claim-help" className={`mt-1 text-xs leading-relaxed text-text-3 ${primaryClaim ? 'hidden' : ''}`}>Use factual claims about supported mutual funds. Advice, predictions, and undefined terms will be declined or clarified.</p>
+            </div>
+            {(!primaryClaim || editing) && <span id="fund-claim-count" className="text-xs text-text-3">{input.length.toLocaleString('en-IN')} / 2,000</span>}
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+            {primaryClaim && !editing ? (
+              <div className="flex min-h-12 min-w-0 flex-1 items-center rounded-lg border border-white/15 bg-black/20 px-4 py-2.5">
+                <ClaimEquation claim={primaryClaim} resolvedEntities={result.resolved_entities} />
+              </div>
+            ) : (
+              <textarea
+                ref={textareaRef}
+                id="fund-claim"
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                aria-describedby="fund-claim-help fund-claim-count"
+                placeholder="Example: HDFC Flexi Cap has a higher 3-year CAGR than Parag Parikh Flexi Cap."
+                rows={1}
+                maxLength={2_000}
+                className="min-h-12 w-full resize-none rounded-lg border border-white/15 bg-black/20 px-4 py-3 text-sm leading-relaxed text-white outline-none transition placeholder:text-text-3 focus:border-primary/60 focus:ring-2 focus:ring-primary/20"
+              />
+            )}
+            {primaryClaim && !editing && (
+              <Button type="button" variant="outline" size="lg" onClick={() => { setEditing(true); requestAnimationFrame(() => textareaRef.current?.focus()); }} className="shrink-0 border-white/15 bg-transparent text-text-2 hover:border-primary/40 hover:text-primary">
+                <Pencil /> Edit
+              </Button>
+            )}
+            <Button type="submit" size="lg" disabled={loading || input.trim().length < 3} className="shrink-0 bg-[#00ff9d] text-[#04120c] hover:bg-[#00e68d] sm:min-w-40">
+              {loading ? <LoaderCircle className="animate-spin" /> : result ? <RotateCw /> : <SearchCheck />}
+              {loading ? 'Checking evidence…' : result ? 'Re-check claim' : 'Check claim'}
             </Button>
           </div>
-        </form>
+          </form>
 
-        <div className="mt-6 border-t border-white/10 pt-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-3">Try an example</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {EXAMPLES.map((example) => (
-              <button key={example} type="button" onClick={() => { setInput(example); setResult(null); setError(''); }} className="rounded-full border border-white/10 px-3 py-2 text-left text-xs text-text-2 transition hover:border-primary/30 hover:text-white">
-                {example}
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
+          {!result && <div className="mt-4 border-t border-white/10 pt-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-text-3">Try an example</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {EXAMPLES.map((example) => (
+                <button key={example} type="button" onClick={() => { setInput(example); setResult(null); setError(''); }} className="rounded-full border border-white/10 px-3 py-1.5 text-left text-[11px] text-text-2 transition hover:border-primary/30 hover:text-white">{example}</button>
+              ))}
+            </div>
+          </div>}
+        </section>
+      </div>
 
       {error && <div role="alert" className="rounded-xl border border-rose-400/30 bg-rose-400/10 p-4 text-sm text-rose-200">{error}</div>}
       {notice && <div role="status" className="rounded-xl border border-blue-400/30 bg-blue-400/10 p-4 text-sm text-blue-100">{notice}</div>}
 
       {result && (
         <section aria-live="polite" className="space-y-5">
-          <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-white">{result.claims.length} atomic {result.claims.length === 1 ? 'claim' : 'claims'} checked</p>
-              <p className="mt-1 text-xs text-text-3">Generated {new Date(result.generated_at).toLocaleString('en-IN')}</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {result.resolved_entities.map((entity, index) => (
-                <span key={`${entity.scheme_code || entity.input}-${index}`} className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-text-2">
-                  {entity.scheme_name || entity.input}{entity.scheme_code ? ` · ${entity.scheme_code}` : ''}
-                </span>
-              ))}
-            </div>
-          </div>
           {result.claims.map((claim, index) => (
-            <ClaimResultCard key={`${claim.statement}-${index}`} claim={claim} index={index} onClarification={chooseClarification} />
+            <ClaimResultCard key={`${claim.statement}-${index}`} claim={claim} index={index} resolvedEntities={result.resolved_entities} onClarification={chooseClarification} />
           ))}
         </section>
       )}
 
-      <aside className="grid gap-3 rounded-xl border border-primary/20 bg-primary/5 p-5 text-sm text-text-2 sm:grid-cols-[auto_1fr]">
-        <ShieldCheck className="mt-0.5 size-5 text-primary" />
-        <div>
-          <p className="font-semibold text-white">Private review build</p>
-          <p className="mt-1 leading-relaxed">Checks are not saved by this interface. Results are research-only, may be incomplete, and are not investment advice. Verify dates and linked official evidence before relying on any statement.</p>
-        </div>
-      </aside>
+      {result && <ThesisMonitorPanel result={result} />}
+
+      <p className="border-t border-white/10 pt-4 text-xs leading-relaxed text-text-3">Research only. Results may be incomplete and are not investment advice. Verify dates and linked official evidence before relying on any statement.</p>
     </div>
   );
 }

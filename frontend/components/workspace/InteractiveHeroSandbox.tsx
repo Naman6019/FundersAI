@@ -3,22 +3,14 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  BarChart2, 
-  Zap, 
-  ArrowRight, 
-  ShieldCheck, 
-  TrendingUp, 
-  CheckCircle2,
-  Sparkles,
-  Layers
-} from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 import { TrustBadge } from "./TrustBadge";
-import { ExplainableSignalChips } from "./ExplainableSignalChips";
+import { ExplainableSignalChips, type SignalChipData } from "./ExplainableSignalChips";
 
 const presetPairings = [
   {
     id: "flexicap",
+    label: "PPFAS vs HDFC",
     name: "Parag Parikh vs HDFC Flexi Cap",
     tag: "Flexi Cap Alpha Battle",
     codes: "119551,118955",
@@ -31,6 +23,7 @@ const presetPairings = [
   },
   {
     id: "smallcap",
+    label: "Quant vs Nippon",
     name: "Quant Small Cap vs Nippon Small Cap",
     tag: "High Beta Volatility Review",
     codes: "120828,118668",
@@ -43,6 +36,7 @@ const presetPairings = [
   },
   {
     id: "largecap",
+    label: "ICICI vs Mirae",
     name: "ICICI Bluechip vs Mirae Large Cap",
     tag: "Large Cap Core Battle",
     codes: "100356,112090",
@@ -55,13 +49,53 @@ const presetPairings = [
   },
 ];
 
+function parseSignedPercent(value: string): number {
+  return parseFloat(value.replace("%", "").replace("+", ""));
+}
+
+function buildSignals(pairing: (typeof presetPairings)[number]): SignalChipData[] {
+  const { fundA, fundB, alphaDiff } = pairing.metrics;
+  const higherCagr = parseSignedPercent(fundA.cagr3y) >= parseSignedPercent(fundB.cagr3y) ? fundA : fundB;
+  const shallowerDrawdown =
+    parseSignedPercent(fundA.maxDrawdown) >= parseSignedPercent(fundB.maxDrawdown) ? fundA : fundB;
+  const lowerExpense = parseSignedPercent(fundA.ter) <= parseSignedPercent(fundB.ter) ? fundA : fundB;
+  const higherSharpe = parseFloat(fundA.sharpe) >= parseFloat(fundB.sharpe) ? fundA : fundB;
+
+  return [
+    { type: "alpha", label: "Alpha Advantage", value: `${alphaDiff} 3Y CAGR Edge`, winner: higherCagr.name, isPositive: true },
+    {
+      type: "drawdown",
+      label: "Lower Drawdown Protection",
+      value: `${shallowerDrawdown.maxDrawdown} Max Drawdown`,
+      winner: shallowerDrawdown.name,
+      isPositive: true,
+    },
+    {
+      type: "expense",
+      label: "Lower Expense Ratio",
+      value: `${lowerExpense.ter} Direct TER`,
+      winner: lowerExpense.name,
+      isPositive: true,
+    },
+    {
+      type: "sharpe",
+      label: "Higher Sharpe Ratio",
+      value: `${higherSharpe.sharpe} Risk-Adjusted`,
+      winner: higherSharpe.name,
+      isPositive: true,
+    },
+  ];
+}
+
 export function InteractiveHeroSandbox() {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const currentPairing = presetPairings[selectedIdx];
+  const signals = React.useMemo(() => buildSignals(currentPairing), [currentPairing]);
 
   return (
-    <div className="w-full max-w-5xl mx-auto my-8 p-6 rounded-2xl bg-gradient-to-b from-[#0F111A]/90 to-[#07080C]/90 border border-white/10 shadow-2xl backdrop-blur-xl relative overflow-hidden">
-      
+    <div className="relative w-full max-w-5xl mx-auto my-8 rounded-2xl p-px bg-gradient-to-r from-[#00FF9D]/30 via-white/10 to-cyan-500/30">
+      <div className="relative rounded-[calc(1rem-1px)] p-6 bg-gradient-to-b from-[#0F111A]/95 to-[#07080C]/95 shadow-2xl backdrop-blur-xl overflow-hidden">
+
       {/* Background Decorative Glow */}
       <div className="absolute top-0 right-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -86,13 +120,20 @@ export function InteractiveHeroSandbox() {
             <button
               key={preset.id}
               onClick={() => setSelectedIdx(idx)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+              className={`relative px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                 selectedIdx === idx
-                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm"
+                  ? "text-emerald-300"
                   : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
               }`}
             >
-              {preset.id.toUpperCase()}
+              {selectedIdx === idx && (
+                <motion.span
+                  layoutId="sandbox-tab-highlight"
+                  className="absolute inset-0 rounded-md bg-emerald-500/20 border border-emerald-500/40 shadow-sm"
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+              )}
+              <span className="relative">{preset.label}</span>
             </button>
           ))}
         </div>
@@ -100,64 +141,75 @@ export function InteractiveHeroSandbox() {
 
       {/* Main Sandbox Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-        
+
         {/* Left Side: Side-by-Side Metric Cards */}
         <div className="lg:col-span-7 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            {/* Fund A Card */}
-            <div className="p-4 rounded-xl bg-slate-900/60 border border-emerald-500/30 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/10 rounded-bl-full pointer-events-none" />
-              <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-semibold">Fund A</span>
-              <h4 className="text-sm font-bold text-white mt-1 line-clamp-1">{currentPairing.metrics.fundA.name}</h4>
-              
-              <div className="mt-3 space-y-2 text-xs">
-                <div className="flex justify-between font-mono">
-                  <span className="text-slate-400">3Y CAGR:</span>
-                  <span className="text-emerald-400 font-bold">{currentPairing.metrics.fundA.cagr3y}</span>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentPairing.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                {/* Fund A Card */}
+                <div className="p-4 rounded-xl bg-slate-900/60 border border-emerald-500/30 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/10 rounded-bl-full pointer-events-none" />
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-semibold">Fund A</span>
+                  <h4 className="text-sm font-bold text-white mt-1 line-clamp-1">{currentPairing.metrics.fundA.name}</h4>
+
+                  <div className="mt-3 space-y-2 text-xs">
+                    <div className="flex justify-between font-mono">
+                      <span className="text-slate-400">3Y CAGR:</span>
+                      <span className="text-emerald-400 font-bold">{currentPairing.metrics.fundA.cagr3y}</span>
+                    </div>
+                    <div className="flex justify-between font-mono">
+                      <span className="text-slate-400">Sharpe Ratio:</span>
+                      <span className="text-white font-semibold">{currentPairing.metrics.fundA.sharpe}</span>
+                    </div>
+                    <div className="flex justify-between font-mono">
+                      <span className="text-slate-400">Max Drawdown:</span>
+                      <span className="text-rose-400 font-semibold">{currentPairing.metrics.fundA.maxDrawdown}</span>
+                    </div>
+                    <div className="flex justify-between font-mono">
+                      <span className="text-slate-400">Expense Ratio:</span>
+                      <span className="text-slate-300">{currentPairing.metrics.fundA.ter}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between font-mono">
-                  <span className="text-slate-400">Sharpe Ratio:</span>
-                  <span className="text-white font-semibold">{currentPairing.metrics.fundA.sharpe}</span>
-                </div>
-                <div className="flex justify-between font-mono">
-                  <span className="text-slate-400">Max Drawdown:</span>
-                  <span className="text-rose-400 font-semibold">{currentPairing.metrics.fundA.maxDrawdown}</span>
-                </div>
-                <div className="flex justify-between font-mono">
-                  <span className="text-slate-400">Expense Ratio:</span>
-                  <span className="text-slate-300">{currentPairing.metrics.fundA.ter}</span>
+
+                {/* Fund B Card */}
+                <div className="p-4 rounded-xl bg-slate-900/60 border border-white/10 relative overflow-hidden">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold">Fund B</span>
+                  <h4 className="text-sm font-bold text-white mt-1 line-clamp-1">{currentPairing.metrics.fundB.name}</h4>
+
+                  <div className="mt-3 space-y-2 text-xs">
+                    <div className="flex justify-between font-mono">
+                      <span className="text-slate-400">3Y CAGR:</span>
+                      <span className="text-emerald-400 font-bold">{currentPairing.metrics.fundB.cagr3y}</span>
+                    </div>
+                    <div className="flex justify-between font-mono">
+                      <span className="text-slate-400">Sharpe Ratio:</span>
+                      <span className="text-white font-semibold">{currentPairing.metrics.fundB.sharpe}</span>
+                    </div>
+                    <div className="flex justify-between font-mono">
+                      <span className="text-slate-400">Max Drawdown:</span>
+                      <span className="text-rose-400 font-semibold">{currentPairing.metrics.fundB.maxDrawdown}</span>
+                    </div>
+                    <div className="flex justify-between font-mono">
+                      <span className="text-slate-400">Expense Ratio:</span>
+                      <span className="text-slate-300">{currentPairing.metrics.fundB.ter}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Fund B Card */}
-            <div className="p-4 rounded-xl bg-slate-900/60 border border-white/10 relative overflow-hidden">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold">Fund B</span>
-              <h4 className="text-sm font-bold text-white mt-1 line-clamp-1">{currentPairing.metrics.fundB.name}</h4>
-              
-              <div className="mt-3 space-y-2 text-xs">
-                <div className="flex justify-between font-mono">
-                  <span className="text-slate-400">3Y CAGR:</span>
-                  <span className="text-emerald-400 font-bold">{currentPairing.metrics.fundB.cagr3y}</span>
-                </div>
-                <div className="flex justify-between font-mono">
-                  <span className="text-slate-400">Sharpe Ratio:</span>
-                  <span className="text-white font-semibold">{currentPairing.metrics.fundB.sharpe}</span>
-                </div>
-                <div className="flex justify-between font-mono">
-                  <span className="text-slate-400">Max Drawdown:</span>
-                  <span className="text-rose-400 font-semibold">{currentPairing.metrics.fundB.maxDrawdown}</span>
-                </div>
-                <div className="flex justify-between font-mono">
-                  <span className="text-slate-400">Expense Ratio:</span>
-                  <span className="text-slate-300">{currentPairing.metrics.fundB.ter}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Explainable Signals Component */}
-          <ExplainableSignalChips />
+              {/* Explainable Signals Component */}
+              <ExplainableSignalChips signals={signals} />
+            </motion.div>
+          </AnimatePresence>
         </div>
 
         {/* Right Side: Dual Product CTA Actions */}
@@ -216,6 +268,7 @@ export function InteractiveHeroSandbox() {
           </div>
         </div>
 
+      </div>
       </div>
     </div>
   );

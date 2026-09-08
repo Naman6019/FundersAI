@@ -16,6 +16,7 @@ export type RateLimitGroup =
   | 'data-health'
   | 'feedback'
   | 'claim-check'
+  | 'claim-monitor'
   | 'cron-sync-mf'
   | 'admin-mutation'
   | 'reports';
@@ -58,6 +59,10 @@ export const RATE_LIMIT_GROUPS: Record<RateLimitGroup, RateLimitWindow[]> = {
     { name: 'day', limit: 100, seconds: 86400 },
   ],
   'claim-check': [
+    { name: 'minute', limit: 10, seconds: 60 },
+    { name: 'day', limit: 100, seconds: 86400 },
+  ],
+  'claim-monitor': [
     { name: 'minute', limit: 10, seconds: 60 },
     { name: 'day', limit: 100, seconds: 86400 },
   ],
@@ -106,6 +111,7 @@ export const RATE_LIMIT_TIERS: Record<UserTier, Partial<Record<RateLimitGroup, R
       { name: 'day', limit: 30, seconds: 86400 },
     ],
     'claim-check': RATE_LIMIT_GROUPS['claim-check'],
+    'claim-monitor': RATE_LIMIT_GROUPS['claim-monitor'],
     reports: [
       { name: 'minute', limit: 1, seconds: 60 },
       { name: 'day', limit: 3, seconds: 86400 },
@@ -141,6 +147,7 @@ export const RATE_LIMIT_TIERS: Record<UserTier, Partial<Record<RateLimitGroup, R
       { name: 'day', limit: 300, seconds: 86400 },
     ],
     'claim-check': RATE_LIMIT_GROUPS['claim-check'],
+    'claim-monitor': RATE_LIMIT_GROUPS['claim-monitor'],
     'cron-sync-mf': RATE_LIMIT_GROUPS['cron-sync-mf'],
     'admin-mutation': RATE_LIMIT_GROUPS['admin-mutation'],
     reports: [
