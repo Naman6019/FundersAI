@@ -1,0 +1,215 @@
+{
+  "source": "https://portal.amfiindia.com/spages/NAVAll.txt",
+  "capturedOn": "2026-08-24",
+  "navAsOf": "2026-08-23",
+  "description": "AMFI scheme-code identity snapshot. Each key is an AMFI scheme code; the values are verbatim from the AMFI scheme master. Regenerate by re-downloading NAVAll.txt; never edit by hand.",
+  "planOptionUndeclared": [
+    "127042"
+  ],
+  "planOptionUndeclaredNote": "AMFI publishes blank Plan/Option columns for the Motilal Oswal Midcap Fund rows. 127042 is identified as the Direct Growth line by the file itself: its ISIN Div Reinvestment column is \"-\" (Growth, not IDCW), and its NAV is the higher of the two Growth lines (Direct carries the lower expense ratio). Treat the plan/option as unverified until AMFI populates those columns.",
+  "schemes": {
+    "118668": {
+      "amfiSchemeName": "Nippon India Growth Mid Cap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth Option",
+      "amfiAmcName": "Nippon India Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Mid Cap Fund)"
+    },
+    "118778": {
+      "amfiSchemeName": "Nippon India Small Cap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth Option",
+      "amfiAmcName": "Nippon India Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Small Cap Fund)"
+    },
+    "118825": {
+      "amfiSchemeName": "Mirae Asset Large Cap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth",
+      "amfiAmcName": "Mirae Asset Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Schemes - Large Cap Fund)"
+    },
+    "118834": {
+      "amfiSchemeName": "Mirae Asset Large & Midcap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth",
+      "amfiAmcName": "Mirae Asset Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Schemes - Large & Mid Cap Fund)"
+    },
+    "118955": {
+      "amfiSchemeName": "HDFC Flexi Cap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth Option",
+      "amfiAmcName": "HDFC Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Flexi Cap Fund)"
+    },
+    "118989": {
+      "amfiSchemeName": "HDFC Mid Cap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth Option",
+      "amfiAmcName": "HDFC Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Mid Cap Fund)"
+    },
+    "119018": {
+      "amfiSchemeName": "HDFC Large Cap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth Option",
+      "amfiAmcName": "HDFC Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Large Cap Fund)"
+    },
+    "119071": {
+      "amfiSchemeName": "DSP Midcap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth",
+      "amfiAmcName": "DSP Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Mid Cap Fund)"
+    },
+    "119528": {
+      "amfiSchemeName": "Aditya Birla Sun Life Large Cap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "GROWTH",
+      "amfiAmcName": "Aditya Birla Sun Life Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Large Cap Fund)"
+    },
+    "119598": {
+      "amfiSchemeName": "SBI Large Cap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth",
+      "amfiAmcName": "SBI Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Large Cap Fund)"
+    },
+    "119775": {
+      "amfiSchemeName": "Kotak Midcap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth",
+      "amfiAmcName": "Kotak Mahindra Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Mid Cap Fund)"
+    },
+    "119835": {
+      "amfiSchemeName": "SBI CONTRA FUND",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth",
+      "amfiAmcName": "SBI Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Contra Fund)"
+    },
+    "120166": {
+      "amfiSchemeName": "Kotak Flexicap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth",
+      "amfiAmcName": "Kotak Mahindra Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Flexi Cap Fund)"
+    },
+    "120323": {
+      "amfiSchemeName": "ICICI Prudential Value Fund (erstwhile Value Discovery Fund)",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth",
+      "amfiAmcName": "ICICI Prudential Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Value Fund)"
+    },
+    "120586": {
+      "amfiSchemeName": "ICICI Prudential Large Cap Fund (erstwhile Bluechip Fund)",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth",
+      "amfiAmcName": "ICICI Prudential Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Large Cap Fund)"
+    },
+    "120594": {
+      "amfiSchemeName": "ICICI Prudential Technology Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth",
+      "amfiAmcName": "ICICI Prudential Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Sectoral/ Thematic)"
+    },
+    "120716": {
+      "amfiSchemeName": "UTI Nifty 50 Index Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth",
+      "amfiAmcName": "UTI Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Other Scheme - Index Funds)"
+    },
+    "120823": {
+      "amfiSchemeName": "Quant Multi Cap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth Option",
+      "amfiAmcName": "quant Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Multi Cap Fund)"
+    },
+    "120828": {
+      "amfiSchemeName": "Quant Small Cap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth Option",
+      "amfiAmcName": "quant Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Small Cap Fund)"
+    },
+    "122639": {
+      "amfiSchemeName": "Parag Parikh Flexi Cap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth",
+      "amfiAmcName": "PPFAS Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Flexi Cap Fund)"
+    },
+    "125354": {
+      "amfiSchemeName": "Axis Small Cap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth Option",
+      "amfiAmcName": "Axis Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Small Cap Fund)"
+    },
+    "125497": {
+      "amfiSchemeName": "SBI SMALL CAP FUND",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth",
+      "amfiAmcName": "SBI Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Small Cap Fund)"
+    },
+    "127042": {
+      "amfiSchemeName": "Motilal Oswal Midcap Fund",
+      "amfiPlan": null,
+      "amfiOption": null,
+      "amfiAmcName": "Motilal Oswal Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Mid Cap Fund)"
+    },
+    "130503": {
+      "amfiSchemeName": "HDFC Small Cap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth Option",
+      "amfiAmcName": "HDFC Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Small Cap Fund)"
+    },
+    "135800": {
+      "amfiSchemeName": "Tata Digital India Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth Option",
+      "amfiAmcName": "Tata Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Sectoral/ Thematic)"
+    },
+    "141925": {
+      "amfiSchemeName": "Axis Flexi Cap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth Option",
+      "amfiAmcName": "Axis Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Flexi Cap Fund)"
+    },
+    "147445": {
+      "amfiSchemeName": "Mirae Asset Midcap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth",
+      "amfiAmcName": "Mirae Asset Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Schemes - Mid Cap Fund)"
+    },
+    "147481": {
+      "amfiSchemeName": "Parag Parikh ELSS Tax Saver Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth",
+      "amfiAmcName": "PPFAS Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - ELSS)"
+    },
+    "147946": {
+      "amfiSchemeName": "BANDHAN Small Cap Fund",
+      "amfiPlan": "Direct Plan",
+      "amfiOption": "Growth",
+      "amfiAmcName": "Bandhan Mutual Fund",
+      "amfiCategory": "Open Ended Schemes(Equity Scheme - Small Cap Fund)"
+    }
+  }
+}

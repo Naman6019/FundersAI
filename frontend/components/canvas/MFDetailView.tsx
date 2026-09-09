@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useCanvasStore } from '@/store/useCanvasStore';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Sparkles, TrendingUp, AlertTriangle } from 'lucide-react';
@@ -9,12 +9,7 @@ import { MagicCard } from '@/components/ui/magic-card';
 import { NumberTicker } from '@/components/ui/number-ticker';
 import type { MFDetailApiResponse } from '@/types/funds';
 import FundResearchChat from '@/components/chat/FundResearchChat';
-
-const SUGGESTED_COMPARISONS = [
-  { code: '119062', name: 'Axis Bluechip Fund' },
-  { code: '120503', name: 'Nippon India Small Cap Fund' },
-  { code: '118269', name: 'HDFC Mid-Cap Opportunities Fund' }
-];
+import { getPeerFunds } from '@/lib/fund-registry';
 
 type NavTooltipProps = {
   active?: boolean;
@@ -75,6 +70,11 @@ export default function MFDetailView({ schemeCode }: { schemeCode: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { openCanvas } = useCanvasStore();
+
+  // Comparison targets come from the AMFI-verified registry rather than a
+  // hardcoded list, so a peer card can never point at a different fund than the
+  // name it displays.
+  const peerFunds = useMemo(() => getPeerFunds(Number(schemeCode), 3), [schemeCode]);
 
   useEffect(() => {
     if (!schemeCode) return;
@@ -267,16 +267,19 @@ export default function MFDetailView({ schemeCode }: { schemeCode: string }) {
           <div className="pt-6 border-t border-white/5">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-white mb-4 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-[#00FF9D]" />
-              AI Suggested Comparisons
+              Compare with peer funds
             </h3>
+            <p className="text-xs text-slate-500 mb-4">
+              Same-category funds from our AMFI-verified registry. Not a recommendation or a ranking.
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {SUGGESTED_COMPARISONS.map((fund, idx) => (
-                <div key={idx} onClick={() => { openCanvas({ view: 'COMPARISON', ids: [schemeCode, fund.code] }); }} className="cursor-pointer group">
+              {peerFunds.map((fund) => (
+                <div key={fund.schemeCode} onClick={() => { openCanvas({ view: 'COMPARISON', ids: [schemeCode, String(fund.schemeCode)] }); }} className="cursor-pointer group">
                   <MagicCard gradientColor="rgba(0,255,157,0.1)" className="p-4 group-hover:border-[#00FF9D]/30 transition-colors">
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-xs text-[#00FF9D] font-mono mb-1">VS</div>
-                      <div className="text-sm font-semibold text-slate-200">{fund.name}</div>
+                      <div className="text-sm font-semibold text-slate-200">{fund.schemeName}</div>
                     </div>
                     <button className="bg-white/5 hover:bg-white/10 p-2 rounded-lg transition-colors">
                       <TrendingUp className="w-4 h-4 text-slate-300" />

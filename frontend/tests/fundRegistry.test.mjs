@@ -74,10 +74,10 @@ test('categorySlug and getCategoryBySlug maintain bidirectional mapping', () => 
 test('Fund lookup helpers return correct entities', () => {
   const hdfcFlexi = getFundBySlug('hdfc', 'hdfc-flexi-cap-fund');
   assert.ok(hdfcFlexi);
-  assert.equal(hdfcFlexi.schemeCode, 120503);
+  assert.equal(hdfcFlexi.schemeCode, 118955);
   assert.equal(hdfcFlexi.category, 'Flexi Cap');
 
-  const byCode = getFundBySchemeCode(120503);
+  const byCode = getFundBySchemeCode(118955);
   assert.equal(byCode?.fundSlug, 'hdfc-flexi-cap-fund');
 
   const hdfcAmc = getAmcBySlug('hdfc');
