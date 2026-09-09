@@ -3,17 +3,23 @@ Standalone AMFI Mutual Fund NAV Sync script for GitHub Actions.
 Downloads the full NAVAll.txt from AMFI and upserts to Supabase.
 """
 import os
+import argparse
 import logging
 import re
 import requests
 import time
 from datetime import datetime, timezone
+from pathlib import Path
+from dotenv import load_dotenv
 from supabase import create_client
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
+
+BASE_DIR = Path(__file__).resolve().parents[1]
+load_dotenv(BASE_DIR / ".env")
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
@@ -38,13 +44,25 @@ _FAMILY_REMOVABLE_SUFFIXES = {
 }
 
 
-def _is_supported_scheme_name(scheme_name: str) -> bool:
-    """Keep direct-growth variants plus planless ETFs from AMFI NAVAll."""
-    normalized = str(scheme_name or "").strip().lower()
-    is_direct_growth = "direct" in normalized and (
-        "growth" in normalized or "cumulative" in normalized
+def _is_supported_scheme_name(
+    scheme_name: str,
+    plan: str = "",
+    option: str = "",
+) -> bool:
+    """Keep direct-growth variants plus planless ETFs from AMFI NAVAll.
+
+    AMFI's current semicolon feed puts the plan and option in their own
+    columns. Legacy pipe rows keep them in the scheme name, so inspect all
+    three fields rather than silently dropping current-format direct plans.
+    """
+    normalized_name = str(scheme_name or "").strip().lower()
+    normalized_variant = " ".join(
+        value.strip().lower() for value in (scheme_name, plan, option) if value
     )
-    return is_direct_growth or bool(re.search(r"\betf\b", normalized))
+    is_direct_growth = "direct" in normalized_variant and (
+        "growth" in normalized_variant or "cumulative" in normalized_variant
+    )
+    return is_direct_growth or bool(re.search(r"\betf\b", normalized_name))
 
 
 def _infer_amc_name(scheme_name: str) -> str | None:
@@ -53,6 +71,12 @@ def _infer_amc_name(scheme_name: str) -> str | None:
     if normalized.startswith("edelweiss "):
         return "Edelweiss Mutual Fund"
     return None
+
+
+def _canonical_scheme_name(scheme_name: str, plan: str = "", option: str = "") -> str:
+    """Retain AMFI's plan and option when the current feed separates them."""
+    parts = [str(value or "").strip() for value in (scheme_name, plan, option)]
+    return " - ".join(part for part in parts if part)
 
 
 def _auto_family_id(scheme_name: str) -> str:
@@ -82,14 +106,19 @@ def parse_amfi_nav_payload(payload: str) -> list[dict]:
             continue
         try:
             scheme_code = int(cols[0])
-            scheme_name = cols[3]
+            base_scheme_name = cols[3]
             nav = float(cols[-2])
             date_str = cols[-1]
         except (ValueError, IndexError):
             continue
 
-        if not _is_supported_scheme_name(scheme_name):
+        # Current NAVAll uses eight semicolon columns (name, plan, option),
+        # while the legacy pipe format embeds plan and option in the name.
+        plan = cols[4] if len(cols) >= 8 else ""
+        option = cols[5] if len(cols) >= 8 else ""
+        if not _is_supported_scheme_name(base_scheme_name, plan, option):
             continue
+        scheme_name = _canonical_scheme_name(base_scheme_name, plan, option)
 
         isin = next(
             (cols[index] for index in (1, 2) if index < len(cols) and cols[index] not in {"", "-"}),
@@ -98,7 +127,10 @@ def parse_amfi_nav_payload(payload: str) -> list[dict]:
         try:
             nav_date = datetime.strptime(date_str, "%d-%b-%Y").strftime("%Y-%m-%d")
         except ValueError:
-            nav_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            # A malformed official row must never acquire a fabricated "today"
+            # date. Skipping it keeps the reconciliation gate honest.
+            logger.warning("Skipping AMFI NAV row with invalid date for scheme %s: %r", scheme_code, date_str)
+            continue
 
         updates.append(
             {
@@ -120,7 +152,7 @@ def parse_amfi_nav_payload(payload: str) -> list[dict]:
 def fetch_amfi_nav():
     """
     Downloads NAVAll.txt with retries and exponential backoff.
-    Parses pipe-delimited lines.
+    Parses AMFI's semicolon-delimited fund rows and ETF rows.
     """
     session = requests.Session()
     retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
@@ -132,9 +164,6 @@ def fetch_amfi_nav():
         response.raise_for_status()
         
         # Handle encoding issues
-        text = response.content.decode('utf-8', errors='replace')
-        lines = text.split('\n')
-        
         return parse_amfi_nav_payload(response.content.decode("utf-8", errors="replace"))
     except Exception as e:
         logger.error(f"Failed to fetch AMFI NAV: {e}")
@@ -225,7 +254,14 @@ def _build_core_snapshot_row(update: dict, existing: dict | None = None) -> dict
     return row
 
 
-def main():
+def main(argv: list[str] | None = None):
+    parser = argparse.ArgumentParser(description="Sync AMFI NAVAll into the mutual-fund snapshots.")
+    parser.add_argument(
+        "--nav-only",
+        action="store_true",
+        help="Skip ETF family-mapping creation; use for the daily NAV reliability job.",
+    )
+    args = parser.parse_args(argv)
     if not SUPABASE_URL or not SUPABASE_KEY:
         raise RuntimeError("Missing SUPABASE_URL or SUPABASE_KEY environment variables.")
 
@@ -233,12 +269,12 @@ def main():
 
     updates = fetch_amfi_nav()
     if not updates:
-        logger.error("No updates found or fetch failed.")
-        return
+        raise RuntimeError("AMFI NAV feed returned no supported scheme updates.")
 
     logger.info(f"Parsed {len(updates)} fund schemes.")
 
     success = 0
+    failed_batch_offsets: list[int] = []
     for i in range(0, len(updates), BATCH_SIZE):
         batch = updates[i:i + BATCH_SIZE]
         try:
@@ -260,21 +296,28 @@ def main():
             ]
             supabase.table('mutual_fund_core_snapshot').upsert(core_snapshot_batch, on_conflict='scheme_code').execute()
 
-            # ETF identities have no Direct Growth suffix; create only missing
-            # mappings so reviewed mappings for existing schemes are untouched.
-            existing_mappings = _load_existing_family_mappings(supabase, batch)
-            missing_mappings = _build_missing_etf_family_mappings(batch, existing_mappings)
-            if missing_mappings:
-                supabase.table("mutual_fund_family_mapping").upsert(
-                    missing_mappings, on_conflict="scheme_code"
-                ).execute()
+            if not args.nav_only:
+                # ETF identities have no Direct Growth suffix; create only missing
+                # mappings so reviewed mappings for existing schemes are untouched.
+                existing_mappings = _load_existing_family_mappings(supabase, batch)
+                missing_mappings = _build_missing_etf_family_mappings(batch, existing_mappings)
+                if missing_mappings:
+                    supabase.table("mutual_fund_family_mapping").upsert(
+                        missing_mappings, on_conflict="scheme_code"
+                    ).execute()
             
             success += len(batch)
             logger.info(f"Upserted batch {i//BATCH_SIZE + 1}: {success}/{len(updates)} schemes done.")
         except Exception as e:
             logger.error(f"Batch upsert failed at offset {i}: {e}")
+            failed_batch_offsets.append(i)
 
     logger.info(f"Finished. {success}/{len(updates)} schemes synced to Supabase.")
+    if failed_batch_offsets:
+        raise RuntimeError(
+            "AMFI NAV sync did not persist every batch; failed offsets: "
+            + ", ".join(str(offset) for offset in failed_batch_offsets)
+        )
 
 if __name__ == "__main__":
     main()

@@ -139,3 +139,11 @@ backend/test_regex_axis.py
 backend/test_search_ter.py
 graphify-out/
 
+# Catalog rollout contract and permanent URL reservations.
+!backend/config/mf_catalog_legacy_urls.json
+!docs/MF_CATALOG_ROLLOUT.md
+
+# Worktrees and temporary cli dumps
+.codex-worktrees/
+supabase/.temp/
+

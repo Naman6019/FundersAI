@@ -1,0 +1,53 @@
+name: MF catalog bounded readiness and backfill
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [readiness, backfill, catalog-dry-run, catalog-apply]
+        default: readiness
+      limit:
+        description: Snapshot rows scanned (1-500)
+        required: true
+        default: '30'
+      after:
+        description: Resume after this scheme code; use next_after from the previous report
+        default: '0'
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: mf-catalog
+  cancel-in-progress: false
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      MODE: ${{ inputs.mode }}
+      LIMIT: ${{ inputs.limit }}
+      AFTER: ${{ inputs.after }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r backend/requirements.txt
+      - name: Run bounded job
+        shell: bash
+        run: |
+          case "$MODE" in
+            readiness) python backend/app/jobs/backfill_catalog_nav_history.py --limit "$LIMIT" --after "$AFTER" --output report.json ;;
+            backfill) python backend/app/jobs/backfill_catalog_nav_history.py --limit "$LIMIT" --after "$AFTER" --apply --require-ready --output report.json ;;
+            catalog-dry-run) python backend/app/jobs/build_mf_page_catalog.py --limit "$LIMIT" --after "$AFTER" --output report.json ;;
+            catalog-apply) python backend/app/jobs/build_mf_page_catalog.py --limit "$LIMIT" --after "$AFTER" --apply --output report.json ;;
+            *) exit 1 ;;
+          esac
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mf-catalog-report
+          path: report.json
+          if-no-files-found: error

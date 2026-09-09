@@ -98,6 +98,34 @@ def test_supported_targets_keep_latest_validated_row_per_scheme():
     }]
 
 
+def test_supported_targets_expose_selected_candidate_provenance_additively():
+    client = Client({
+        "mf_factsheet_candidates": [
+            {
+                "id": "candidate-101",
+                "source_document_id": "document-101",
+                "amc_code": "HDFC",
+                "report_month": "2026-07-01",
+                "mapped_scheme_code": "101",
+                "mapped_family_id": "family-a",
+                "mapping_status": "mapped",
+                "mapping_confidence": 99,
+                "promotion_status": "staged",
+            },
+        ]
+    })
+
+    assert supported_metric_targets(client) == [{
+        "scheme_code": "101",
+        "family_id": "family-a",
+        "amc_code": "HDFC",
+        "report_month": "2026-07-01",
+        "promotion_status": "staged",
+        "candidate_id": "candidate-101",
+        "source_document_id": "document-101",
+    }]
+
+
 def test_request_cache_expiry_does_not_expire_metric_history():
     now = datetime(2026, 8, 6, tzinfo=timezone.utc)
 

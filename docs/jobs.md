@@ -112,3 +112,10 @@ Add `--mlflow` to log a successful run. Add `--register-model` only for live rev
 - Deprecated CSV scripts under `backend/scripts/deprecated/` are not scheduled.
 - Keepalive workflow pings backend directly; frontend `/api/keepalive` is a separate client-side warm-up route.
 - Complete MFAPI histories are cached on demand in server-only `nav_api_cache`; current NAV and derived metrics remain in `mutual_fund_core_snapshot`.
+
+
+## Bounded MF catalog jobs (2026-09-05; not activated)
+
+- `backend/app/jobs/backfill_catalog_nav_history.py`: explicit `--limit` (1..500 scanned snapshot rows), `--after` cursor, `--output`; read-only default. `--apply` refreshes missing/unready MFapi histories and re-reads persistence. `--require-ready` fails on empty eligibility or any unready eligible scheme. A partial deadline exit is nonzero and includes a resume cursor.
+- `backend/app/jobs/build_mf_page_catalog.py`: explicit `--limit`, `--after`, `--output`; dry-run default. `--apply` upserts audited eligible/rejected rows and atomic versioned metrics. Requires the catalog migration first.
+- `.github/workflows/mf-catalog.yml`: manual-only readiness/backfill/catalog-dry-run/catalog-apply modes, concurrency lock, 35-minute timeout, JSON report artifact. Existing factsheet-gated sync is unchanged. Refresh scheduling follows measured full-cycle throughput; see `MF_CATALOG_ROLLOUT.md`.

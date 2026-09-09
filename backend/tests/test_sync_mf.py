@@ -3,6 +3,7 @@ from __future__ import annotations
 from backend.scripts.sync_mf import (
     _build_core_snapshot_row,
     _build_missing_etf_family_mappings,
+    main,
     parse_amfi_nav_payload,
 )
 
@@ -23,6 +24,27 @@ def test_parse_amfi_nav_payload_keeps_direct_growth_and_eight_column_etf_rows():
     assert rows[1]["amc_name"] == "Edelweiss Mutual Fund"
     assert rows[1]["nav"] == 36.835
     assert rows[1]["nav_date"] == "2026-08-21"
+
+
+def test_parse_amfi_nav_payload_keeps_current_amfi_direct_plan_growth_rows():
+    rows = parse_amfi_nav_payload(
+        "122639;INF879O01027;-;Parag Parikh Flexi Cap Fund;Direct Plan;Growth;90.6349;03-Sep-2026"
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["scheme_code"] == 122639
+    assert rows[0]["scheme_name"] == "Parag Parikh Flexi Cap Fund - Direct Plan - Growth"
+    assert rows[0]["isin"] == "INF879O01027"
+    assert rows[0]["nav"] == 90.6349
+    assert rows[0]["nav_date"] == "2026-09-03"
+
+
+def test_parse_amfi_nav_payload_rejects_rows_without_an_official_nav_date():
+    rows = parse_amfi_nav_payload(
+        "1|INF000A00001|-|Example Fund - Direct Growth|10.0|not-a-date"
+    )
+
+    assert rows == []
 
 
 def test_core_snapshot_backfills_missing_amc_name_without_overwriting_existing_value():
@@ -57,3 +79,40 @@ def test_missing_etf_family_mapping_does_not_overwrite_existing_mapping():
             "source": "amfi-navall-etf-v1",
         }
     ]
+
+
+def test_nav_only_mode_skips_family_mapping_writes(monkeypatch):
+    monkeypatch.setattr("backend.scripts.sync_mf.SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr("backend.scripts.sync_mf.SUPABASE_KEY", "test-key")
+    monkeypatch.setattr(
+        "backend.scripts.sync_mf.fetch_amfi_nav",
+        lambda: [{"scheme_code": 1, "scheme_name": "Example Fund - Direct Growth", "nav": 10.0, "nav_date": "2026-09-03"}],
+    )
+
+    calls: list[str] = []
+
+    class _Query:
+        data: list[dict] = []
+
+        def select(self, _fields):
+            return self
+
+        def in_(self, _field, _values):
+            return self
+
+        def upsert(self, _rows, **_kwargs):
+            return self
+
+        def execute(self):
+            return self
+
+    class _Client:
+        def table(self, name):
+            calls.append(name)
+            return _Query()
+
+    monkeypatch.setattr("backend.scripts.sync_mf.create_client", lambda *_args: _Client())
+
+    main(["--nav-only"])
+
+    assert "mutual_fund_family_mapping" not in calls
