@@ -96,7 +96,24 @@ def validate_candidate(
         errors.append(f"unsupported_file_type:{extension or 'missing'}")
 
     if document.report_month is None:
-        warnings.append("report_month_unknown")
+        if document_type == "portfolio_disclosure":
+            # A monthly portfolio disclosure that does not identify its month cannot be
+            # staged as any month's portfolio, so accepting it only fills the pipeline
+            # with documents that parse to nothing. Every month-less portfolio candidate
+            # observed across a full 42-AMC run was in fact a different document that
+            # merely had "portfolio" somewhere in its path or marketing copy: PGIM's
+            # AMFI Ready Reckoner, Commission Payout Framework and GST Invoice guide
+            # (all under a /Portfolios/ URL), Bajaj's
+            # "Invest_in_Quality_Portfolio_backed_by_Strong_Fundamentals" leaflets, and
+            # Unifi's category-wise portfolio *overlap* disclosure. No legitimate
+            # portfolio disclosure lacked a detectable month.
+            #
+            # Factsheets are deliberately exempt: several AMCs publish a factsheet whose
+            # month is only confirmable from the PDF body, and the Edelweiss path clears
+            # report_month on purpose for exactly that reason.
+            errors.append("portfolio_disclosure_report_month_unknown")
+        else:
+            warnings.append("report_month_unknown")
     elif expected_month and _month_index(document.report_month) != _month_index(expected_month):
         next_month = (
             date(expected_month.year + 1, 1, 1)

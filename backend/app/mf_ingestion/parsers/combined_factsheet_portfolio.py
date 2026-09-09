@@ -52,9 +52,18 @@ STANDALONE_CATEGORY_HOLDINGS = (
     "net receivables",
     "net receivables/payables",
 )
+# Lines that are table furniture rather than holdings. This list has to stay in step
+# with the start anchors below: a column-header spelling recognised as a table start
+# but missing here is not discarded during the body scan, so it gets accumulated into
+# the pending-name window and prefixed onto the first real holding (observed:
+# "Name of Instrument % of Net Assets HDFC Bank Ltd").
 HEADER_MARKERS = (
     "issuer/instrument",
     "% to net assets",
+    "% of net assets",
+    "name of instrument",
+    "name of the instrument",
+    "% to aum",
     "scrip",
     "weightage (%)",
     "portfolio",
@@ -65,6 +74,52 @@ PORTFOLIO_STOP_MARKERS = (
     "sip performance",
     "systematic investment plan",
     "performance -",
+)
+# Heading lines that can open a holdings table. Only "portfolio" matches Kotak's and
+# Motilal's layout, which is all this parser originally recognised; every other AMC
+# whose factsheet carries a full portfolio prints a different heading, so their pages
+# were scanned, matched on scheme name, and then discarded for want of a start anchor.
+# Measured against live R2 factsheets: adding these headings takes the factsheet lane
+# from 2 AMCs extracting anything (invesco, capitalmind) to 8 (+canara_robeco, helios,
+# quantum, uti, unifi, baroda_bnp) with no per-AMC code.
+PORTFOLIO_START_HEADINGS = (
+    "portfolio",
+    "scheme portfolio",
+    "portfolio holdings",
+    "portfolio details",
+    "portfolio disclosure",
+    "complete portfolio",
+    "holdings",
+    "top holdings",
+)
+# Many AMCs date the heading in place -- "Scheme Portfolio as on 31st July 2026",
+# "Portfolio Holdings as of 31-Jul-2026". The date is stripped before the heading is
+# matched so every dated spelling is covered by the list above, rather than only the
+# parenthesised "Portfolio (as on ...)" form that was special-cased.
+PORTFOLIO_HEADING_DATE_SUFFIX = re.compile(r"\s*[\(\[]?\s*as\s+(?:on|of|at)\b.*$", re.IGNORECASE)
+# Corroboration required before a generic heading above is treated as a real table
+# start -- the heading alone is too common in contents pages and section dividers.
+PORTFOLIO_START_EVIDENCE = (
+    "issuer/instrument",
+    "% to net assets",
+    "% of net assets",
+    "name of instrument",
+    "% to aum",
+    "weightage",
+    "rating",
+    "quantity",
+    "market value",
+)
+# Column headers strong enough to anchor a table on their own: an AMC that prints the
+# instrument-name column header has started the table whether or not it also printed a
+# "Portfolio" heading above it (several factsheets print the heading in a graphic).
+# Matched as a prefix, because AMCs qualify the same header in their own way --
+# "Name of Instrument/Issuer" (Choice), "Name of Instrument / Company" -- and an exact
+# match silently skipped those tables.
+PORTFOLIO_START_COLUMN_HEADERS = (
+    "issuer/instrument",
+    "name of instrument",
+    "name of the instrument",
 )
 
 
@@ -255,8 +310,17 @@ def _extract_portfolio_candidate(
 
 
 def _find_scheme_name(lines: list[str], prefixes: tuple[str, ...]) -> str:
+    """Find the scheme a page belongs to, scanning the whole page.
+
+    This used to stop after 80 lines, on the assumption that the scheme name heads the
+    page. PDF text extraction does not preserve visual order, so on Choice's factsheet
+    the portfolio table lands at line 83 and the scheme name ("Choice Nifty 50 Index
+    Fund") only at line 245 -- the page was matched, found nameless, and discarded.
+    Widening the scan can only add matches where there previously were none: the first
+    match still wins, so every page that already resolved a name resolves the same one.
+    """
     lowered_prefixes = tuple(prefix.lower() for prefix in prefixes)
-    for line in lines[:80]:
+    for line in lines:
         low = line.lower()
         if not low.startswith(lowered_prefixes):
             continue
@@ -271,14 +335,23 @@ def _find_scheme_name(lines: list[str], prefixes: tuple[str, ...]) -> str:
 def _find_portfolio_starts(lines: list[str]) -> list[int]:
     starts: list[int] = []
     for index, line in enumerate(lines):
-        low = line.lower()
-        if low.startswith("portfolio (as on") or low.startswith("portfolio (as of"):
+        low = line.lower().strip()
+        if low.startswith(PORTFOLIO_START_COLUMN_HEADERS):
             starts.append(index)
             continue
-        if low != "portfolio":
+        # "Scheme Portfolio as on 31st July 2026" is the same heading as "Portfolio",
+        # dated in place; strip the date clause so one list covers every spelling.
+        heading = PORTFOLIO_HEADING_DATE_SUFFIX.sub("", low).strip().rstrip(":").strip()
+        if heading != low and heading in PORTFOLIO_START_HEADINGS:
+            starts.append(index)
             continue
-        evidence = " ".join(candidate.lower() for candidate in lines[index + 1 : index + 10])
-        if "issuer/instrument" in evidence or "% to net assets" in evidence:
+        if low not in PORTFOLIO_START_HEADINGS:
+            continue
+        # Look a little further ahead than the original nine lines: AMCs that print a
+        # date stamp, a footnote or a blank-collapsed spacer between the heading and
+        # the column header push the evidence past a nine-line window.
+        evidence = " ".join(candidate.lower() for candidate in lines[index + 1 : index + 12])
+        if any(marker in evidence for marker in PORTFOLIO_START_EVIDENCE):
             starts.append(index)
     return starts
 

@@ -28,7 +28,7 @@ Manual lanes are separate from runtime capability flags:
 - A specialist escalates instead of guessing a URL.
 - Agents emit evidence-rich manifests; ingestion, raw R2 storage, parsing, and user-facing promotion remain separate stages.
 - Browser fallback is disabled unless `MF_DISCOVERY_BROWSER_ENABLED=true` and the AMC is listed in `MF_DISCOVERY_BROWSER_AMCS`.
-- LLM recovery is disabled unless `MF_DISCOVERY_LLM_RECOVERY_ENABLED=true` with an explicit model. It can choose only links already present on the approved AMC listing page and cannot fetch candidates, persist data, or change configuration.
+- There is no LLM recovery step. A bounded LLM link-picker existed but was never reachable: no workflow ever passed `MF_DISCOVERY_LLM_RECOVERY_ENABLED`, so it returned `[]` immediately while tracing `recover / skipped`, which read like it had run and found nothing. Checked against the nine AMCs that were actually broken in September 2026 it would have fixed none of them -- it re-read the same served HTML as the deterministic scraper, so it could not see client-rendered document tables, and the one AMC whose links were in the HTML (NJ) failed on a `.php` path suffix that its own candidate validation also rejects. It was removed rather than left as a dormant safety net.
 
 ## Discovery strategies
 
@@ -113,4 +113,4 @@ The worker emits:
 - action counts and limits;
 - a validated source manifest.
 
-Discovery is provider-free by default. The optional bounded LLM recovery flag can use the configured OpenRouter/OpenAI key only after deterministic and browser recovery produce no candidates.
+Discovery is provider-free. It makes no model calls: recovery is deterministic (manifest, last-known-good, browser render) and a run that still finds nothing escalates for review.

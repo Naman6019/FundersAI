@@ -110,6 +110,19 @@ DAY_FIRST_MONTH_PATTERN = re.compile(
     re.IGNORECASE,
 )
 SUPPORTED_FILE_EXTENSIONS = {".pdf", ".xls", ".xlsx", ".xlsm", ".csv", ".zip", ".html", ".htm"}
+
+
+def _positive_int_env(name: str, default: int) -> int:
+    try:
+        value = int(str(os.getenv(name, "")).strip())
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
+# How long a browser-rendered listing is given to populate its document table after
+# DOMContentLoaded, before its anchors are read.
+BROWSER_RENDER_SETTLE_MS = _positive_int_env("MF_DISCOVERY_BROWSER_SETTLE_MS", 6_000)
 KOTAK_DOWNLOAD_PATH_MARKERS = (
     "/reportupload/download/",
 )
@@ -359,6 +372,21 @@ class AMCDownloader(BaseDownloader):
                     len(docs),
                 )
                 return docs
+            if adapter_key == "choice":
+                docs = _discover_choice_documents(
+                    self.source,
+                    document_type=document_type,
+                    timeout_seconds=self.timeout_seconds,
+                    user_agent=self.user_agent,
+                )
+                logger.info(
+                    "event=amc_discovery_complete amc_code=%s adapter=%s document_type=%s count=%s",
+                    self.source.amc_code,
+                    adapter_key,
+                    document_type,
+                    len(docs),
+                )
+                return docs
             if adapter_key == "aditya_birla" and (
                 document_type or ""
             ).strip().lower() == "portfolio_disclosure":
@@ -395,19 +423,31 @@ class AMCDownloader(BaseDownloader):
                 timeout_seconds=self.timeout_seconds,
                 user_agent=self.user_agent,
             )
-            if (
-                adapter_key == "kotak"
-                and (document_type or "").strip().lower()
-                == "portfolio_disclosure"
-                and not docs
-                and _browser_fallback_allowed_for_source(self.source)
-            ):
-                docs = _discover_kotak_browser_documents(
-                    self.source,
-                    document_type=document_type,
-                    timeout_seconds=self.timeout_seconds,
-                    user_agent=self.user_agent,
-                )
+            # Browser recovery applies to any source that declares it, not just the two
+            # AMCs that happened to get a bespoke function. A client-side-rendered
+            # listing returns HTTP 200 with an empty document table, so the plain scrape
+            # above succeeds and finds nothing -- indistinguishable from "the AMC has
+            # not published yet" unless something re-reads the page after its scripts
+            # run. Kotak keeps its own portfolio routine (it drives that page's own
+            # controls); everything else falls back to the shared rendered-anchor scrape.
+            if not docs and _browser_fallback_allowed_for_source(self.source):
+                if (
+                    adapter_key == "kotak"
+                    and (document_type or "").strip().lower() == "portfolio_disclosure"
+                ):
+                    docs = _discover_kotak_browser_documents(
+                        self.source,
+                        document_type=document_type,
+                        timeout_seconds=self.timeout_seconds,
+                        user_agent=self.user_agent,
+                    )
+                if not docs:
+                    docs = _discover_browser_rendered_anchor_documents(
+                        self.source,
+                        document_type=document_type,
+                        timeout_seconds=self.timeout_seconds,
+                        user_agent=self.user_agent,
+                    )
             logger.info(
                 "event=amc_discovery_complete amc_code=%s adapter=%s document_type=%s count=%s",
                 self.source.amc_code,
@@ -707,7 +747,7 @@ def _discover_generic_anchor_documents(
         if title.lower().strip() in {"download", "click here"} and context_text:
             title = context_text
         combined = f"{title} {context_text} {url}".lower()
-        ext = Path(urlsplit(url).path).suffix.lower() or _infer_file_ext_from_text(combined)
+        ext = _resolve_listing_file_ext(url, combined)
         if ext in {".html", ".htm"}:
             # Listing/inner pages are discovery inputs, not ingestible documents.
             continue
@@ -3321,6 +3361,25 @@ def _detect_report_month_from_text(text: str) -> date | None:
     return None
 
 
+def _resolve_listing_file_ext(url: str, combined_text: str) -> str:
+    """Resolve a listing link's real file type.
+
+    Taking the URL path suffix and only falling back to text inference when it is
+    empty misses documents served through a viewer script, where the path suffix is
+    the script's own extension and the real file name sits in the query string --
+    NJ publishes every current factsheet as
+    "viewfile.php?file=NJ-MF-Factsheet-July-2026-....pdf", so the suffix resolved to
+    ".php", failed the allowed-extension check, and all 58 matching factsheet links
+    on the page were dropped. Only a stale 2021 direct-PDF link survived, which then
+    failed the expected-month gate, leaving the AMC with zero candidates.
+    """
+    path_ext = Path(urlsplit(url).path).suffix.lower()
+    if path_ext in SUPPORTED_FILE_EXTENSIONS:
+        return path_ext
+    inferred = _infer_file_ext_from_text(combined_text)
+    return inferred or path_ext
+
+
 def _infer_file_ext_from_text(text: str) -> str:
     low = str(text or "").lower()
     if ".xlsx" in low:
@@ -3518,7 +3577,7 @@ def _discover_invesco_documents(
     )
     if documents or not _browser_fallback_allowed_for_source(source):
         return documents
-    return _discover_invesco_browser_documents(
+    return _discover_browser_rendered_anchor_documents(
         source,
         document_type=document_type,
         timeout_seconds=timeout_seconds,
@@ -3526,17 +3585,27 @@ def _discover_invesco_documents(
     )
 
 
-def _discover_invesco_browser_documents(
+def _discover_browser_rendered_anchor_documents(
     source: AMCDocumentSource,
     document_type: str,
     timeout_seconds: float,
     user_agent: str,
 ) -> list[DiscoveredDocument]:
-    """Read document links rendered by Invesco's public literature page."""
+    """Scrape document anchors from a listing page after its scripts have run.
+
+    This is the generic counterpart to `_discover_generic_anchor_documents`, and it
+    applies the identical keyword/extension/month filtering -- the only difference is
+    that the DOM is read after `networkidle` rather than from the served HTML. It was
+    previously reachable only by Invesco despite containing nothing Invesco-specific,
+    which left `browser_recovery_allowed` inert for every other AMC that declares it:
+    Kotak (15 KB shell, 0 anchors), 360 ONE, BOI, Choice, Navi, Sundaram and The Wealth
+    Company all return HTTP 200 with their document tables rendered client-side, so the
+    plain fetch finds nothing and there was nothing to fall back to.
+    """
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        logger.error("invesco:playwright_not_installed")
+        logger.error("discovery:playwright_not_installed amc_code=%s", source.amc_code)
         return []
 
     doc_type = (document_type or "").strip().lower()
@@ -3547,13 +3616,25 @@ def _discover_invesco_browser_documents(
     )
     if not listing_url:
         return []
+    # `networkidle` waits for a 500ms gap in network activity, which several AMC sites
+    # never produce -- analytics beacons, chat widgets and polling keep a connection
+    # busy indefinitely, so goto() raised a timeout and discovery returned zero even
+    # though the anchors had rendered many seconds earlier. Observed on Kotak, BOI and
+    # The Wealth Company. Wait for the DOM instead and then allow a bounded settle
+    # window for client-side rendering to populate the document table.
     timeout_ms = max(5_000, min(int(timeout_seconds * 1_000), 90_000))
+    settle_ms = BROWSER_RENDER_SETTLE_MS
     try:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             context = browser.new_context(user_agent=user_agent)
             page = context.new_page()
-            page.goto(listing_url, wait_until="networkidle", timeout=timeout_ms)
+            page.goto(listing_url, wait_until="domcontentloaded", timeout=timeout_ms)
+            try:
+                page.wait_for_load_state("networkidle", timeout=settle_ms)
+            except Exception:
+                # Best-effort only: a page that never goes idle is the normal case here.
+                page.wait_for_timeout(settle_ms)
             candidates = page.locator("a[href]").evaluate_all(
                 """anchors => anchors.slice(0, 500).map(anchor => ({
                     title: (anchor.textContent || "").trim(),
@@ -3563,7 +3644,12 @@ def _discover_invesco_browser_documents(
             )
             browser.close()
     except Exception as exc:
-        logger.warning("invesco:browser_discovery_failed document_type=%s error=%s", doc_type, exc)
+        logger.warning(
+            "discovery:browser_discovery_failed amc_code=%s document_type=%s error=%s",
+            source.amc_code,
+            doc_type,
+            exc,
+        )
         return []
 
     required_keywords = _required_keywords_for_generic_source(source, doc_type)
@@ -3597,6 +3683,145 @@ def _discover_invesco_browser_documents(
                 title=title,
                 url=url,
                 discovery_page_url=listing_url,
+                file_ext=ext,
+                report_month=report_month,
+                priority_score=_generic_base_score(ext=ext, document_type=doc_type) + recency_score,
+            )
+        )
+    documents.sort(key=lambda item: item.priority_score, reverse=True)
+    return documents
+
+
+CHOICE_DOCUMENT_API_URL = (
+    str(os.getenv("MF_CHOICE_DOCUMENT_API_URL", "") or "").strip()
+    or "https://choicemf.com/api/document-master-list"
+)
+
+
+def _host_allowed_for_source(source: AMCDocumentSource, url: str) -> bool:
+    """Keep a discovered URL on one of the AMC's own declared hosts."""
+    allowed = {
+        suffix.strip().lower().rstrip(".")
+        for suffix in source.allowed_host_suffixes
+        if suffix and suffix.strip()
+    }
+    if not allowed:
+        return True
+    host = (urlsplit(url).hostname or "").strip().lower().rstrip(".")
+    if not host:
+        return False
+    return any(host == suffix or host.endswith(f".{suffix}") for suffix in allowed)
+# Category names as they appear in Choice's own document tree. Fortnightly and
+# half-yearly portfolios live in sibling categories and are deliberately excluded:
+# the ingestion contract wants the monthly scheme portfolio.
+CHOICE_FACTSHEET_CATEGORIES = ("fund factsheets",)
+CHOICE_PORTFOLIO_CATEGORIES = ("monthly portfolio",)
+
+
+def _iter_choice_documents(nodes: list[dict], path: tuple[str, ...] = ()) -> list[tuple[tuple[str, ...], dict]]:
+    """Flatten Choice's nested category tree into (category path, file) pairs."""
+    found: list[tuple[tuple[str, ...], dict]] = []
+    for node in nodes or []:
+        if not isinstance(node, dict):
+            continue
+        current = (*path, str(node.get("name") or node.get("slug") or ""))
+        for financial_year in node.get("financial_years") or []:
+            for file_entry in (financial_year or {}).get("files") or []:
+                if isinstance(file_entry, dict):
+                    found.append((current, file_entry))
+        found.extend(_iter_choice_documents(node.get("children") or [], current))
+    return found
+
+
+def _discover_choice_documents(
+    source: AMCDocumentSource,
+    document_type: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> list[DiscoveredDocument]:
+    """Read Choice's document tree from the JSON API its own listing page calls.
+
+    `choicemf.com/disclosures/factsheets` is a Next.js page whose document table is
+    populated client-side, so both the plain fetch and a rendered-DOM scrape see only
+    a stray CAMS branch list -- discovery returned zero. The page itself loads
+    `/api/document-master-list`, which returns every published document with its
+    category, scheme, month and an official `open_file_url`, so that is read directly.
+    """
+    doc_type = (document_type or "").strip().lower()
+    if doc_type == "factsheet":
+        wanted_categories = CHOICE_FACTSHEET_CATEGORIES
+    elif doc_type == "portfolio_disclosure":
+        wanted_categories = CHOICE_PORTFOLIO_CATEGORIES
+    else:
+        return []
+
+    try:
+        response = _request_with_retry(
+            "GET",
+            CHOICE_DOCUMENT_API_URL,
+            timeout_seconds=timeout_seconds,
+            headers={"User-Agent": user_agent, "Accept": "application/json"},
+        )
+        payload = response.json()
+    except Exception as exc:
+        logger.warning("choice:document_api_failed document_type=%s error=%s", doc_type, exc)
+        return []
+
+    body = payload.get("body") if isinstance(payload, dict) else payload
+    if not isinstance(body, list):
+        logger.warning("choice:document_api_unexpected_shape document_type=%s", doc_type)
+        return []
+
+    allowed_extensions = (
+        source.factsheet_extensions if doc_type == "factsheet" else source.portfolio_extensions
+    )
+    documents: list[DiscoveredDocument] = []
+    seen_urls: set[str] = set()
+    for category_path, file_entry in _iter_choice_documents(body):
+        category = " > ".join(category_path).lower()
+        if not any(wanted in category for wanted in wanted_categories):
+            continue
+        url = str(file_entry.get("open_file_url") or "").strip()
+        if not url or url in seen_urls:
+            continue
+        title = str(file_entry.get("doc_name") or "").strip() or _human_title_from_url(url)
+        ext = str(file_entry.get("file_type") or "").strip().lower() or _resolve_listing_file_ext(
+            url, f"{title} {url}"
+        )
+        if ext not in allowed_extensions:
+            continue
+        if not _host_allowed_for_source(source, url):
+            continue
+        seen_urls.add(url)
+        # Month wording lives in the record's own fields as often as in the file name
+        # ("month": "july" with a doc_name of "Choice Gold ETF Jul 26.pdf"), so both
+        # feed month detection.
+        combined = " ".join(
+            str(part)
+            for part in (
+                title,
+                file_entry.get("scheme_name"),
+                file_entry.get("month"),
+                file_entry.get("created_at"),
+                url,
+            )
+            if part
+        )
+        report_month = _detect_report_month_from_text(combined)
+        recency_score = (report_month.year * 12 + report_month.month) * 10 if report_month else 0
+        documents.append(
+            DiscoveredDocument(
+                amc_name=source.amc_name,
+                amc_code=source.amc_code,
+                document_type=doc_type,
+                title=title,
+                url=url,
+                discovery_page_url=(
+                    source.factsheet_page_url
+                    if doc_type == "factsheet"
+                    else source.portfolio_disclosure_page_url
+                )
+                or CHOICE_DOCUMENT_API_URL,
                 file_ext=ext,
                 report_month=report_month,
                 priority_score=_generic_base_score(ext=ext, document_type=doc_type) + recency_score,

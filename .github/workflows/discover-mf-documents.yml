@@ -98,8 +98,13 @@ jobs:
       R2_COLD_BUCKET: ${{ secrets.R2_COLD_BUCKET }}
       MF_INGESTION_USER_AGENT: ${{ vars.MF_INGESTION_USER_AGENT || 'FundersAIResearchBot/1.0' }}
       MF_SOURCE_MANIFEST_PATH: backend/config/mf_document_sources.json
-      MF_DISCOVERY_BROWSER_ENABLED: ${{ (github.event_name == 'schedule' && (matrix.amc == 'bandhan' || matrix.amc == 'edelweiss' || matrix.amc == 'invesco')) || inputs.browser_fallback || 'false' }}
-      MF_DISCOVERY_BROWSER_AMCS: ${{ github.event_name == 'schedule' && (matrix.amc == 'bandhan' || matrix.amc == 'edelweiss' || matrix.amc == 'invesco') && matrix.amc || inputs.browser_amcs || '' }}
+      # Reviewed browser-fallback allowlist. An AMC belongs here only once a live run
+      # has shown the rendered page yields documents the plain fetch cannot see -- BOI
+      # went from 0 to 6 discovered documents. Kotak is deliberately absent: its
+      # downloads page renders zero anchors even in a real browser, so enabling it would
+      # buy a browser launch per scheduled run and still discover nothing.
+      MF_DISCOVERY_BROWSER_ENABLED: ${{ (github.event_name == 'schedule' && contains(fromJson('["bandhan","edelweiss","invesco","boi"]'), matrix.amc)) || inputs.browser_fallback || 'false' }}
+      MF_DISCOVERY_BROWSER_AMCS: ${{ github.event_name == 'schedule' && contains(fromJson('["bandhan","edelweiss","invesco","boi"]'), matrix.amc) && matrix.amc || inputs.browser_amcs || '' }}
 
     steps:
       - name: Checkout repository
@@ -175,9 +180,24 @@ jobs:
           max_candidates="${max_candidates:-3}"
           probe_downloads="${probe_downloads:-true}"
 
-          if [ "${MF_DISCOVERY_BROWSER_ENABLED}" = "true" ] && [ "$lane" != "validation_only" ] && [ "$amc" != "bandhan" ] && [ "$amc" != "edelweiss" ] && [ "$amc" != "invesco" ]; then
-            echo "Browser fallback is scheduled only for the reviewed Bandhan, Edelweiss, and Invesco public-page adapters."
+          case "$amc" in
+            bandhan|edelweiss|invesco|boi) browser_reviewed=true ;;
+            *) browser_reviewed=false ;;
+          esac
+          if [ "${MF_DISCOVERY_BROWSER_ENABLED}" = "true" ] && [ "$lane" != "validation_only" ] && [ "$browser_reviewed" != "true" ]; then
+            echo "Browser fallback is scheduled only for the reviewed Bandhan, Edelweiss, Invesco, and BOI public-page adapters."
             exit 2
+          fi
+
+          # An AMC that discovers nothing has almost always had its listing page change
+          # shape. Across a full 42-AMC run this cleanly separated the 9 structurally
+          # broken AMCs from the 33 healthy ones -- every healthy AMC returned at least
+          # one document -- so a scheduled run that finds none fails the job and raises
+          # a notification instead of leaving a zero in a report nobody reads. Only on
+          # schedule: a manual dispatch is often deliberately narrow.
+          minimum_documents_per_amc=0
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
+            minimum_documents_per_amc=1
           fi
 
           args=(
@@ -187,6 +207,7 @@ jobs:
             --max-actions "$max_actions"
             --max-candidates "$max_candidates"
             --minimum-completed "$minimum_completed"
+            --minimum-documents-per-amc "$minimum_documents_per_amc"
             --output discovery-output/report.json
             --manifest-output discovery-output/manifest.json
             --persist-run

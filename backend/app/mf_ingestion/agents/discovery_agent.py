@@ -20,7 +20,6 @@ from app.mf_ingestion.sources.registry import AMCDocumentSource, get_source
 
 ManifestLoader = Callable[[str, AMCDocumentSource, str], list[DiscoveredDocument]]
 LastKnownGoodLoader = Callable[[AMCDocumentSource, str], list[DiscoveredDocument]]
-LLMRecoveryLoader = Callable[[AMCDocumentSource, str], list[DiscoveredDocument]]
 
 
 class AMCLinkDiscoveryAgent:
@@ -36,7 +35,6 @@ class AMCLinkDiscoveryAgent:
         manifest_path: str = "",
         manifest_loader: ManifestLoader = load_source_manifest_documents,
         last_known_good_loader: LastKnownGoodLoader | None = None,
-        llm_recovery_loader: LLMRecoveryLoader | None = None,
         max_actions: int = 12,
     ) -> None:
         if self.expected_adapter_key and source.adapter_key.lower() != self.expected_adapter_key:
@@ -46,7 +44,6 @@ class AMCLinkDiscoveryAgent:
         self.manifest_path = manifest_path
         self.manifest_loader = manifest_loader
         self.last_known_good_loader = last_known_good_loader
-        self.llm_recovery_loader = llm_recovery_loader
         self.max_actions = max(max_actions, 1)
 
     @property
@@ -204,30 +201,6 @@ class AMCLinkDiscoveryAgent:
                 ],
                 expected_month=expected_month,
             )
-            if not candidates and self.llm_recovery_loader and actions_used < self.max_actions:
-                actions_used += 1
-                try:
-                    recovered = self.llm_recovery_loader(self.source, document_type)
-                    candidates = _dedupe_candidates(recovered, expected_month=expected_month)
-                    trace.append(
-                        AgentTraceEvent(
-                            step="recover",
-                            status="ok" if candidates else "skipped",
-                            detail=f"Bounded LLM recovery returned {len(candidates)} existing-page candidate(s).",
-                            document_type=document_type,
-                            strategy="bounded_llm_page_recovery",
-                        )
-                    )
-                except Exception as exc:
-                    trace.append(
-                        AgentTraceEvent(
-                            step="recover",
-                            status="warning",
-                            detail=f"Bounded LLM recovery failed: {exc}",
-                            document_type=document_type,
-                            strategy="bounded_llm_page_recovery",
-                        )
-                    )
             if not candidates:
                 trace.append(
                     AgentTraceEvent(
@@ -804,7 +777,6 @@ def build_discovery_agent(
     config: IngestionConfig | None = None,
     max_actions: int = 12,
     last_known_good_loader: LastKnownGoodLoader | None = None,
-    llm_recovery_loader: LLMRecoveryLoader | None = None,
 ) -> AMCLinkDiscoveryAgent:
     requested_key = str(amc or "").strip().lower()
     key = AGENT_KEY_ALIASES.get(requested_key, requested_key)
@@ -819,7 +791,6 @@ def build_discovery_agent(
         downloader=downloader,
         manifest_path=resolved_config.source_manifest_path,
         last_known_good_loader=last_known_good_loader,
-        llm_recovery_loader=llm_recovery_loader,
         max_actions=max_actions,
     )
 

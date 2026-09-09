@@ -8,6 +8,16 @@ import pandas as pd
 from app.mf_ingestion.parsers.adapters.base_adapter import BaseAMCAdapter
 from app.mf_ingestion.parsers.base_parser import ParseContext, ParsedDocument
 from app.mf_ingestion.parsers.holdings_parser import HoldingsParser
+from app.mf_ingestion.parsers.pdf_table_parser import TableExtractionResult
+
+
+def _stub_frames(parser, frames):
+    """Table extraction reports whether it was cut short by its page/time budget, so
+    tests stub the status-returning primitive. An untruncated result keeps these
+    cases on the normal path."""
+    parser.pdf_table_parser.extract_tables_with_status = lambda *_a, **_k: TableExtractionResult(
+        frames=frames, truncated_reason=None, pages_scanned=len(frames), pages_total=len(frames)
+    )
 
 
 class _PdfMultiAdapter(BaseAMCAdapter):
@@ -59,11 +69,11 @@ def test_holdings_parser_returns_multiple_schemes_for_multi_frame_pdf(tmp_path: 
     file_path.write_bytes(b"%PDF-1.4 test")
 
     parser = HoldingsParser(_PdfMultiAdapter())
-    parser.pdf_table_parser.extract_tables = lambda _path: [
+    _stub_frames(parser, [
         pd.DataFrame([["A1"]]),
         pd.DataFrame([["A2"]]),
         pd.DataFrame([["B1"]]),
-    ]
+    ])
 
     parsed = parser.parse_many(
         str(file_path),
@@ -87,7 +97,7 @@ def test_holdings_parser_pdf_falls_back_to_all_frames_when_per_frame_empty(tmp_p
     file_path.write_bytes(b"%PDF-1.4 test")
 
     parser = HoldingsParser(_FallbackOnlyAdapter())
-    parser.pdf_table_parser.extract_tables = lambda _path: [pd.DataFrame([["A1"]]), pd.DataFrame([["B1"]])]
+    _stub_frames(parser, [pd.DataFrame([["A1"]]), pd.DataFrame([["B1"]])])
 
     parsed = parser.parse_many(
         str(file_path),
@@ -128,7 +138,7 @@ def test_holdings_parser_merge_recomputes_out_of_band_and_month_warnings(tmp_pat
     file_path.write_bytes(b"%PDF-1.4 test")
 
     parser = HoldingsParser(_WarningMergeAdapter())
-    parser.pdf_table_parser.extract_tables = lambda _path: [pd.DataFrame([["X1"]]), pd.DataFrame([["X2"]])]
+    _stub_frames(parser, [pd.DataFrame([["X1"]]), pd.DataFrame([["X2"]])])
 
     parsed = parser.parse_many(
         str(file_path),

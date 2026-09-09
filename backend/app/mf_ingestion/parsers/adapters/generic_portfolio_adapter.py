@@ -46,6 +46,33 @@ class GenericPortfolioAdapter(BaseAMCAdapter):
     amc_code = ""
     scheme_markers: tuple[str, ...] = ()
     fractional_percent_cells = False
+    # Set False for an AMC whose factsheet text layout defeats the shared combined
+    # parser and needs its own parse_pdf_file_many (Kotak, Motilal, Axis and HSBC
+    # already carry theirs).
+    combined_factsheet_text_parse = True
+
+    def parse_pdf_file_many(self, file_path: str, context: ParseContext) -> list[ParsedDocument]:
+        """Try the shared combined-factsheet text parser before falling back to
+        pdfplumber table extraction.
+
+        Multi-scheme factsheets lay their holdings out as free text under a per-scheme
+        heading rather than as an extractable table, so the table path returns nothing
+        for them -- measured across every AMC factsheet in R2, it produced zero
+        holdings for 21 of 22 documents. Returning an empty list here is not a
+        failure: HoldingsParser falls through to the table path, so this is strictly
+        an additional attempt, and it is also far cheaper (text extraction, no
+        per-page extract_tables/extract_words).
+        """
+        if not self.combined_factsheet_text_parse or not self.scheme_markers:
+            return []
+        from app.mf_ingestion.parsers.combined_factsheet_portfolio import (
+            parse_combined_factsheet_pdf,
+        )
+
+        prefixes = tuple(marker.strip() for marker in self.scheme_markers if marker.strip())
+        if not prefixes:
+            return []
+        return parse_combined_factsheet_pdf(file_path, context, scheme_prefixes=prefixes)
 
     def parse_excel_frame_many(self, frame: pd.DataFrame, context: ParseContext) -> list[ParsedDocument]:
         return self._parse_frame_many(frame, context)
