@@ -126,7 +126,6 @@ function ReportChatContent() {
     const [isSaving, setIsSaving] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [user, setUser] = useState<User | null>(null);
-    const [streamError, setStreamError] = useState<string | null>(null);
 
     useEffect(() => {
         if (initialCodesParam) {
