@@ -34,7 +34,7 @@ export default function AuthForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = safeNextPath(searchParams.get('next'));
-  const [mode, setMode] = useState<AuthMode>('signin');
+  const [mode, setMode] = useState<AuthMode>(searchParams.get('mode') === 'signup' ? 'signup' : 'signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -132,7 +132,9 @@ export default function AuthForm() {
         : supabaseBrowser.auth.signUp({
             email: normalizedEmail,
             password,
-            options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+            options: {
+              emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}&signup=1`,
+            },
           });
 
     const { error } = await authCall;

@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import AuthShell from '@/components/auth/AuthShell';
 import { getAuthErrorMessage } from '@/lib/authErrorMessage';
 import { hasSupabaseBrowserEnv, supabaseBrowser } from '@/lib/supabaseBrowser';
+import { trackWhopEvent } from '@/lib/whopPixel';
 
 const AUTH_NEXT_STORAGE_KEY = 'fundersai_auth_next';
 
@@ -71,18 +72,25 @@ function AuthCallbackContent() {
       }
 
       const code = url.searchParams.get('code');
+      let email: string | undefined;
       if (code) {
-        const { error } = await supabaseBrowser.auth.exchangeCodeForSession(code);
+        const { data, error } = await supabaseBrowser.auth.exchangeCodeForSession(code);
         if (error) {
           showError(error);
           return;
         }
+        email = data.user?.email || data.session?.user.email;
       } else {
         const { data } = await supabaseBrowser.auth.getSession();
         if (!data.session) {
           showError(new Error('Invalid or expired token'));
           return;
         }
+        email = data.session.user.email;
+      }
+
+      if (searchParams.get('signup') === '1') {
+        trackWhopEvent('complete_registration', email ? { email } : undefined);
       }
 
       if (!cancelled) {

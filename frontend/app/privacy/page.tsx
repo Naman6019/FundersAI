@@ -32,7 +32,7 @@ export default function PrivacyPage() {
             ← Home
           </Link>
         <h1 className="mt-6 text-3xl font-semibold tracking-tight text-white">Privacy Policy</h1>
-        <p className="mt-2 text-sm text-[#7183a0]">Last updated: July 31, 2026</p>
+        <p className="mt-2 text-sm text-[#7183a0]">Last updated: September 9, 2026</p>
 
         <div className="mt-8 space-y-8 text-sm leading-7 text-[#aebed6]">
 
@@ -81,6 +81,7 @@ export default function PrivacyPage() {
                     ['OpenAI', 'Text embeddings for document search', 'Document chunks only (no user queries to embedding API)'],
                     ['OpenRouter / Groq', 'LLM inference for chat synthesis', 'Research query and retrieved context for the current request'],
                     ['Razorpay', 'Subscription payments', 'Billing details, plan selection'],
+                    ['Whop Pixel', 'Product-launch and conversion measurement', 'Page views and conversion events; email or payment identifiers only when an event supplies them'],
                     ['Cloudflare R2', 'Cold storage for AMC documents', 'AMC disclosure documents only'],
                     ['Upstash (Redis)', 'Rate limiting', 'Request counts keyed by user ID or IP'],
                     ['Langfuse', 'Optional LLM tracing (feature-flagged)', 'Prompt and completion traces when enabled'],
@@ -126,12 +127,12 @@ export default function PrivacyPage() {
 
           <Section title="Cookies and analytics">
             <p>
-              FundersAI uses cookies and browser storage for session authentication (via Supabase Auth) and to
-              remember UI preferences. We do not use third-party advertising or tracking cookies.
+              FundersAI uses cookies and browser storage for session authentication (via Supabase Auth), UI preferences,
+              and Product Hunt referral state. Whop Pixel measures FundersAI page views and the conversion events described above.
             </p>
             <p>
-              Basic operational analytics (page loads, error rates) may be collected via Vercel. No cross-site
-              tracking or behavioural profiling is performed.
+              Basic operational analytics (page loads, error rates) may be collected via Vercel. We do not sell personal
+              data or share it with data brokers.
             </p>
           </Section>
 

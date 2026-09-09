@@ -17,6 +17,7 @@ import {
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { FUND_REGISTRY } from "@/lib/fund-registry";
 import { useEcosystemHref } from "@/lib/ecosystem-origin";
+import ProductHuntWelcomeBanner from "@/components/growth/ProductHuntWelcomeBanner";
 
 // The Synthesis product has no separate "home" for signed-in users — logged-out
 // visitors see the marketing landing page, logged-in users should land straight
@@ -283,6 +284,8 @@ export function EcosystemHeader({
       >
         Skip to content
       </a>
+
+      <ProductHuntWelcomeBanner />
 
       <header className="sticky top-0 z-50 w-full border-b border-line bg-background/80 backdrop-blur-xl transition-all">
         <div className={`${containerClassName} h-16 flex items-center justify-between gap-4`}>
