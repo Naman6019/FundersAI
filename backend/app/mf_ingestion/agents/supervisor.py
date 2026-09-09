@@ -29,7 +29,6 @@ class AMCDiscoverySupervisor:
         config: IngestionConfig | None = None,
         max_actions_per_agent: int = 12,
         last_known_good_loader=None,
-        llm_recovery_loader=None,
     ) -> "AMCDiscoverySupervisor":
         resolved_config = config or get_config()
         agents = {
@@ -38,7 +37,6 @@ class AMCDiscoverySupervisor:
                 config=resolved_config,
                 max_actions=max_actions_per_agent,
                 last_known_good_loader=last_known_good_loader,
-                llm_recovery_loader=llm_recovery_loader,
             )
             for key in _normalize_amcs(amcs)
         }

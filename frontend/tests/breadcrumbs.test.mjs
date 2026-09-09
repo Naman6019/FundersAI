@@ -80,7 +80,6 @@ test('pages that show a trail use the shared component', () => {
     'app/synthesis/generate/page.tsx',
     'app/synthesis/methodology/page.tsx',
     'app/synthesis/supported-funds/page.tsx',
-    'app/synthesis/tools/portfolio-overlap/page.tsx',
     'app/synthesis/vs/[slug]/page.tsx',
     'app/tools/page.tsx',
     'app/tools/portfolio-overlap/page.tsx',

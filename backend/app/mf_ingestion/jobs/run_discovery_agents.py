@@ -25,7 +25,6 @@ from app.mf_ingestion.agents.history import (
     load_last_known_good_documents,
     load_recent_document_observations,
 )
-from app.mf_ingestion.agents.llm_recovery import BoundedLLMPageRecovery
 from app.mf_ingestion.agents.persistence import persist_discovery_run
 from app.mf_ingestion.agents.supervisor import AMCDiscoverySupervisor
 from app.mf_ingestion.config import get_config
@@ -57,6 +56,16 @@ def main() -> int:
     parser.add_argument("--run-id", help="Stable run identifier; defaults to a generated UUID.")
     parser.add_argument("--trigger-source", default="local_cli", help="Run source recorded in the persisted summary.")
     parser.add_argument("--minimum-completed", type=int, default=0, help="Exit non-zero when fewer agents complete.")
+    parser.add_argument(
+        "--minimum-documents-per-amc",
+        type=int,
+        default=0,
+        help=(
+            "Exit non-zero when any AMC discovers fewer documents than this (0 disables "
+            "the gate). An AMC that discovers nothing has almost always had its listing "
+            "page change shape, not run out of documents to publish."
+        ),
+    )
     parser.add_argument("--strict", action="store_true", help="Exit non-zero unless every agent completes.")
     args = parser.parse_args()
 
@@ -85,15 +94,10 @@ def main() -> int:
         except Exception as exc:
             logger.warning("Unable to load discovery history: %s", exc)
     config = get_config()
-    llm_recovery_loader = BoundedLLMPageRecovery(
-        enabled=config.discovery_llm_recovery_enabled,
-        model=config.discovery_llm_recovery_model,
-    )
     supervisor = AMCDiscoverySupervisor.build(
         amcs,
         max_actions_per_agent=args.max_actions,
         last_known_good_loader=last_known_good_loader,
-        llm_recovery_loader=llm_recovery_loader,
     )
     result = supervisor.run(
         document_types=document_types,
@@ -156,6 +160,27 @@ def main() -> int:
             args.minimum_completed,
         )
         return 1
+
+    if args.minimum_documents_per_amc > 0:
+        starved = sorted(
+            f"{agent.amc}={len(agent.documents)}"
+            for agent in result.agents
+            if len(agent.documents) < args.minimum_documents_per_amc
+        )
+        if starved:
+            # An AMC discovering nothing is the cheapest reliable signal that its
+            # listing page changed shape. Across a full 42-AMC run this separated the
+            # 9 structurally broken AMCs from the 33 healthy ones with no overlap:
+            # every healthy AMC returned at least one document. Failing the job turns
+            # that into a notification instead of a number nobody reads.
+            logger.error(
+                "Discovery document gate failed: minimum=%s per AMC; below threshold: %s. "
+                "Check whether the listing page still serves document links to a plain "
+                "fetch before assuming the AMC has not published.",
+                args.minimum_documents_per_amc,
+                ", ".join(starved),
+            )
+            return 1
 
     return 1 if args.strict and result.status != "completed" else 0
 

@@ -45,7 +45,7 @@ def test_next_batch_amcs_are_in_production_target_keys():
 
 def test_next_batch_amcs_are_in_the_unattended_staging_lane():
     assert set(NEXT_BATCH_AMCS).issubset(set(GREEN_AMCS))
-    assert VALIDATION_ONLY_AMCS == ()
+    assert not any(amc in VALIDATION_ONLY_AMCS for amc in NEXT_BATCH_AMCS)
 
 
 @pytest.mark.parametrize("amc", NEXT_BATCH_AMCS)

@@ -1,289 +1,56 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import {
-  FUND_REGISTRY,
-  getFundBySlug,
-  getAmcBySlug,
-  getFundsByAmc,
-  getFundsByCategory,
-  getComparePair,
-} from '@/lib/fund-registry';
-import { FundJsonLd } from '@/components/seo/JsonLd';
+import { getPublishedFund } from '@/lib/mf/catalog';
 import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
 import PublicFooter from '@/components/layout/PublicFooter';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 
+// Check freshness on every request; stale ISR HTML must not bypass the gate.
+export const dynamic = 'force-dynamic';
+export const dynamicParams = true;
 type Props = { params: Promise<{ amcSlug: string; fundSlug: string }> };
-
-export async function generateStaticParams() {
-  return FUND_REGISTRY.map((f) => ({
-    amcSlug: f.amcSlug,
-    fundSlug: f.fundSlug,
-  }));
-}
-
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+async function requiredFund(params: Props['params']) {
   const { amcSlug, fundSlug } = await params;
-  const fund = getFundBySlug(amcSlug, fundSlug);
-  if (!fund) return { title: 'Fund Not Found | FundersAI' };
-  const canonicalUrl = `https://www.fundersai.co.in/mutual-funds/${amcSlug}/${fundSlug}`;
-  return {
-    title: `${fund.schemeName} – NAV, Returns & Metrics | FundersAI`,
-    description: `${fund.schemeName} (${fund.plan} ${fund.option}): NAV, 1Y/3Y/5Y CAGR, Sharpe ratio, expense ratio, benchmark vs ${fund.benchmark}, and portfolio holdings. Deterministic metrics from official AMC sources.`,
-    alternates: {
-      canonical: canonicalUrl,
-    },
-    openGraph: {
-      images: ['/opengraph-image'],
-      title: `${fund.schemeName} – NAV, Returns & Risk Metrics | FundersAI`,
-      description: `Analyze ${fund.schemeName} (${fund.category}, ${fund.plan} plan) with verified NAV and benchmark comparisons against ${fund.benchmark}.`,
-      url: canonicalUrl,
-    },
-  };
-}
-
-// ─── Stat helpers ────────────────────────────────────────────────────────────
-
-function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.025] px-4 py-4 text-center">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-[#7183a0] mb-1">{label}</p>
-      <p className="text-xl font-bold text-white">{value}</p>
-      {sub && <p className="text-[10px] text-[#7183a0] mt-0.5">{sub}</p>}
-    </div>
-  );
-}
-
-function SectionHead({ label, title }: { label: string; title: string }) {
-  return (
-    <div className="mb-5">
-      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#00FF9D]/60 mb-1">{label}</p>
-      <h2 className="text-xl font-bold text-white">{title}</h2>
-    </div>
-  );
-}
-
-// ─── Static fallback display data ────────────────────────────────────────────
-// Pre-renders rich semantic content for crawlers & users while live metrics stream in.
-
-function StaticFundDisplay({ fund }: { fund: ReturnType<typeof getFundBySlug> & {} }) {
-  const otherFunds = getFundsByAmc(fund.amcSlug).filter((f) => f.fundSlug !== fund.fundSlug);
-  const categoryFunds = getFundsByCategory(fund.category).filter((f) => f.fundSlug !== fund.fundSlug);
-  const comparablePeers = categoryFunds
-    .map((cf) => ({ peer: cf, pair: getComparePair(fund.fundSlug, cf.fundSlug) }))
-    .filter((entry): entry is { peer: typeof entry.peer; pair: NonNullable<typeof entry.pair> } => Boolean(entry.pair))
-    .slice(0, 4);
-
-  return (
-    <div className="space-y-14">
-      {/* Overview */}
-      <section>
-        <SectionHead label="Overview" title="Fund details & classification" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          <StatCard label="AMC" value={fund.amcName.split(' ')[0]} />
-          <StatCard label="Category" value={fund.category} />
-          <StatCard label="Plan" value={fund.plan} />
-          <StatCard label="Option" value={fund.option} />
-          <StatCard label="Benchmark" value={fund.benchmark} sub="vs this index" />
-          <StatCard label="AMFI Code" value={fund.schemeCode.toString()} />
-        </div>
-      </section>
-
-      {/* Fund Mandate & Profile */}
-      <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
-        <SectionHead label="Investment Mandate" title={`About ${fund.schemeName}`} />
-        <div className="space-y-4 text-sm leading-7 text-[#aebed6]">
-          <p>
-            <strong className="text-white">{fund.schemeName}</strong> is an open-ended equity scheme falling under the SEBI-defined <strong className="text-[#00FF9D]">{fund.category}</strong> category. It is managed by {fund.amcName} and designed for investors seeking long-term capital appreciation by tracking and outperforming its primary benchmark, <span className="text-white">{fund.benchmark}</span>.
-          </p>
-          <div className="grid sm:grid-cols-3 gap-4 pt-2">
-            <div className="rounded-xl border border-white/5 bg-white/[0.015] p-4">
-              <p className="text-xs font-semibold text-white mb-1">Direct Plan Advantage</p>
-              <p className="text-xs text-[#7183a0]">Zero distributor commissions charged. Savings are added directly to daily NAV compound growth.</p>
-            </div>
-            <div className="rounded-xl border border-white/5 bg-white/[0.015] p-4">
-              <p className="text-xs font-semibold text-white mb-1">Benchmark Standard</p>
-              <p className="text-xs text-[#7183a0]">Compared against {fund.benchmark} Total Return Index (TRI) to measure true active Alpha generation.</p>
-            </div>
-            <div className="rounded-xl border border-white/5 bg-white/[0.015] p-4">
-              <p className="text-xs font-semibold text-white mb-1">AMFI Verification</p>
-              <p className="text-xs text-[#7183a0]">Official NAV data updated each business evening under AMFI Code {fund.schemeCode}.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Live-data CTA notice */}
-      <section className="rounded-xl border border-[#66a3ff]/20 bg-[#66a3ff]/[0.04] px-5 py-5">
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-[#66a3ff]/60" />
-          <div>
-            <p className="font-semibold text-white text-sm mb-1">Live Quantitative Metrics & Overlap in Workspace</p>
-            <p className="text-xs leading-6 text-[#7183a0]">
-              Calculated 1Y/3Y/5Y CAGR, Sharpe ratio, Sortino, Maximum Drawdown, monthly portfolio sector weights, and stock holdings are fetched directly from official AMFI and AMC disclosures.
-            </p>
-            <Link
-              rel="nofollow"
-              href={`/dashboard?query=Give me a full quantitative analysis of ${fund.schemeName} vs ${fund.benchmark}`}
-              className="inline-flex mt-3 items-center gap-1.5 rounded-full bg-[#66a3ff]/10 border border-[#66a3ff]/20 px-4 py-2 text-xs font-semibold text-[#66a3ff] hover:bg-[#66a3ff]/20 transition-colors"
-            >
-              Run live analysis in workspace →
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Methodology */}
-      <section>
-        <SectionHead label="Transparency" title="Data sources & verification" />
-        <div className="grid sm:grid-cols-2 gap-3">
-          {[
-            { label: 'NAV history', desc: 'Daily NAV fetched directly from AMFI via MFapi, updated every business evening.' },
-            { label: 'Expense ratio', desc: `Published in official ${fund.amcName} monthly disclosures and SID.` },
-            { label: 'Portfolio holdings', desc: `Monthly AMC disclosures mandated by SEBI within 10 business days of month-end.` },
-            { label: 'Benchmark', desc: `${fund.benchmark} — as declared in the official Scheme Information Document.` },
-          ].map((item) => (
-            <div key={item.label} className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-4">
-              <p className="font-semibold text-white text-sm mb-1">{item.label}</p>
-              <p className="text-xs leading-5 text-[#7183a0]">{item.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Frequently Asked Questions */}
-      <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
-        <SectionHead label="FAQ" title={`Frequently Asked Questions: ${fund.schemeName}`} />
-        <div className="space-y-5 text-sm">
-          <div className="border-b border-white/5 pb-4">
-            <h3 className="font-semibold text-white mb-1">What is the AMFI Scheme Code for {fund.schemeName}?</h3>
-            <p className="text-xs leading-6 text-[#7183a0]">
-              The official AMFI Scheme Code for {fund.schemeName} ({fund.plan} {fund.option}) is <code className="text-[#00FF9D]">{fund.schemeCode}</code>. This code is used to fetch official daily Net Asset Value (NAV) updates.
-            </p>
-          </div>
-          <div className="border-b border-white/5 pb-4">
-            <h3 className="font-semibold text-white mb-1">What is the benchmark index for this fund?</h3>
-            <p className="text-xs leading-6 text-[#7183a0]">
-              This fund benchmarks its performance against {fund.benchmark}. FundersAI measures active alpha and beta relative to this index Total Return Index (TRI).
-            </p>
-          </div>
-          <div>
-            <h3 className="font-semibold text-white mb-1">Why invest in the Direct Plan over Regular Plan?</h3>
-            <p className="text-xs leading-6 text-[#7183a0]">
-              Direct plans do not pay intermediary distribution commissions, resulting in a lower expense ratio and higher compounding net returns for the investor over long investment horizons.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Compare CTA & Category Links */}
-      <section className="rounded-xl border border-white/10 bg-white/[0.02] px-5 py-5">
-        <p className="font-semibold text-white mb-2">Compare {fund.schemeName} against category peers</p>
-        <p className="text-xs text-[#7183a0] mb-4">
-          Compare risk-adjusted returns, Sharpe ratios, and portfolio overlap with other {fund.category} funds:
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {comparablePeers.map(({ peer, pair }) => (
-            <Link
-              key={peer.fundSlug}
-              href={`/compare/${pair.pair}`}
-              className="text-xs font-semibold text-[#82aff6] hover:text-[#b8d3ff] transition-colors rounded-full border border-[#82aff6]/20 px-3 py-1.5"
-            >
-              vs {peer.schemeName.split(' ')[0]} {peer.category} →
-            </Link>
-          ))}
-          <Link
-            rel="nofollow"
-            href={`/dashboard?query=Compare ${fund.schemeName} with its benchmark ${fund.benchmark}`}
-            className="text-xs font-semibold text-[#00FF9D] hover:text-[#66ffba] transition-colors rounded-full border border-[#00FF9D]/20 bg-[#00FF9D]/[0.06] px-3 py-1.5"
-          >
-            Full comparison in workspace →
-          </Link>
-        </div>
-      </section>
-
-      {/* Other funds from same AMC */}
-      {otherFunds.length > 0 && (
-        <section>
-          <h2 className="text-lg font-bold text-white mb-4">More funds from {fund.amcName}</h2>
-          <div className="flex flex-wrap gap-2">
-            {otherFunds.map((f) => (
-              <Link
-                key={f.fundSlug}
-                href={`/mutual-funds/${f.amcSlug}/${f.fundSlug}`}
-                className="rounded-full border border-white/10 bg-white/[0.02] px-3.5 py-1.5 text-xs font-medium text-[#7183a0] transition hover:border-white/20 hover:text-white"
-              >
-                {f.schemeName}
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-    </div>
-  );
-}
-
-// ─── Page ────────────────────────────────────────────────────────────────────
-
-export default async function FundDetailPage({ params }: Props) {
-  const { amcSlug, fundSlug } = await params;
-  const fund = getFundBySlug(amcSlug, fundSlug);
+  const fund = await getPublishedFund(amcSlug, fundSlug);
   if (!fund) notFound();
-
-  const amc = getAmcBySlug(amcSlug);
-
-  return (
-    <div className="min-h-dvh bg-[#070b12] text-[#dce8fa] flex flex-col justify-between">
-      <FundJsonLd fund={fund} amc={amc} />
-      <EcosystemHeader currentApp="mutual-funds" />
-
-      <main className="flex-1">
-        <div className="mx-auto max-w-5xl px-5 py-12 sm:px-8">
-          {/* Breadcrumb */}
-          <Breadcrumbs
-            className="mb-8"
-            items={[
-              { label: 'Home', href: '/' },
-              { label: 'Mutual Funds', href: '/mutual-funds' },
-              { label: amc?.shortName ?? amcSlug, href: `/mutual-funds/${amcSlug}` },
-              { label: fund.schemeName, truncate: true },
-            ]}
-          />
-
-          {/* Hero */}
-          <div className="mb-12">
-            <div className="flex flex-wrap gap-2 mb-4">
-              <span className="inline-flex items-center rounded-full border border-[#00FF9D]/20 bg-[#00FF9D]/[0.08] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#00FF9D]">
-                {fund.category}
-              </span>
-              <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#7183a0]">
-                {fund.plan} · {fund.option}
-              </span>
-            </div>
-            <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl mb-3">{fund.schemeName}</h1>
-            <p className="text-sm text-[#7183a0]">
-              {fund.amcName} · AMFI scheme code {fund.schemeCode} · Benchmark: {fund.benchmark}
-            </p>
-          </div>
-
-          <StaticFundDisplay fund={fund} />
-
-          {/* Disclosure */}
-          <div className="mt-14 rounded-xl border border-white/8 bg-white/[0.015] px-5 py-4 text-xs text-[#7183a0]">
-            <p>
-              <span className="font-semibold text-white/60">Research only. </span>
-              This page provides reference data for {fund.schemeName}. Nothing here constitutes personalised
-              investment advice. CAGR, Sharpe, and other performance metrics shown in the workspace are calculated
-              deterministically from AMFI NAV data. Past performance is not a guarantee of future returns.
-              Verify all data with official AMFI sources before any decision.{' '}
-              <Link href="/methodology" className="text-[#82aff6] hover:text-[#b8d3ff]">Full methodology →</Link>
-            </p>
-          </div>
-        </div>
-      </main>
-
-      <PublicFooter />
-    </div>
-  );
+  return fund;
+}
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const fund = await requiredFund(params);
+  return { title: `${fund.scheme_name} – NAV & Returns | FundersAI`,
+    description: `NAV dated ${fund.metrics.nav_date} and full-window returns for ${fund.scheme_name}. Research only.`,
+    alternates: { canonical: `https://www.fundersai.co.in/mutual-funds/${fund.amc_slug}/${fund.fund_slug}` } };
+}
+export default async function Page({ params }: Props) {
+  const fund = await requiredFund(params);
+  const m = fund.metrics;
+  return <div className="min-h-dvh bg-background text-foreground">
+    <EcosystemHeader currentApp="mutual-funds" />
+    <main className="mx-auto max-w-5xl px-5 py-12 space-y-8">
+      <Breadcrumbs items={[{ label: 'Home', href: '/' },
+        { label: 'Mutual Funds', href: '/mutual-funds' },
+        { label: fund.amc_name, href: `/mutual-funds/${fund.amc_slug}` },
+        { label: fund.scheme_name }]} />
+      <h1 className="text-3xl font-bold">{fund.scheme_name}</h1>
+      <p>{fund.category} · Direct · Growth · AMFI code {fund.scheme_code}</p>
+      <section className="rounded-xl border p-6 space-y-3">
+        <h2 className="text-xl font-semibold">NAV and returns</h2>
+        <p className="text-2xl">₹{m.nav.toFixed(4)}</p><p>As of {m.nav_date}</p>
+        <table className="w-full text-left"><caption className="text-left">Annualized returns ending {m.nav_date}</caption>
+          <thead><tr><th scope="col">Period</th><th scope="col">CAGR</th></tr></thead>
+          <tbody>{([['1 year', m.cagr_1y], ['3 years', m.cagr_3y], ['5 years', m.cagr_5y]] as const).map(([label, value]) =>
+            <tr key={label}><th scope="row">{label}</th><td>{value == null ? 'Insufficient history' : `${value.toFixed(2)}%`}</td></tr>)}</tbody>
+        </table>
+      </section>
+      <section className="space-y-3"><h2 className="text-xl font-semibold">Sources and method</h2>
+        <p>NAV history supplied by <a href={`https://api.mfapi.in/mf/${fund.scheme_code}`} rel="noreferrer">MFapi</a>.
+          FundersAI computes annualized returns using actual elapsed days and a 365-day year. Each period requires full history, at least 250 observations per year, and no gap exceeding seven calendar days.</p>
+        <p>Stored history begins {m.history_start}; {m.observation_count} unique observations. Method: {m.method_version}.</p>
+        <p>Risk metrics, holdings, expense ratio, manager and benchmark evidence are not available on this page.</p>
+      </section>
+      <p>Research only. This is not personalized investment advice. Past performance does not guarantee future returns.</p>
+      <Link href="/methodology">Full methodology</Link>
+    </main><PublicFooter />
+  </div>;
 }

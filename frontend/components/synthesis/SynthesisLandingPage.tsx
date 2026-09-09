@@ -9,11 +9,9 @@ import { BorderBeam } from "@/components/ui/border-beam";
 import { AnimatedShinyText } from "@/components/ui/animated-shiny-text";
 import { Sparkles } from "@/components/ui/sparkles";
 import { FlickeringGrid } from "@/components/ui/flickering-grid";
-import { VerticalCutReveal } from "@/components/ui/vertical-cut-reveal";
 import { AgentGraphVisualizer } from "@/components/synthesis/AgentGraphVisualizer";
 import { BentoReportGrid } from "@/components/synthesis/BentoReportGrid";
 import { InstitutionalPDFTemplate } from "@/components/synthesis/InstitutionalPDFTemplate";
-import PublicFooter from "@/components/layout/PublicFooter";
 
 // Data Definitions
 const heroPresets = [
@@ -69,12 +67,12 @@ const previewTabs = [
 ];
 
 const amcPipelines = [
-    { name: "PPFAS Mutual Fund", status: "Factsheets Ingested", time: "2m ago", color: "text-emerald-400" },
-    { name: "HDFC Mutual Fund", status: "NAV Synced", time: "Just now", color: "text-emerald-400" },
-    { name: "SBI Mutual Fund", status: "Factsheets Ingested", time: "5m ago", color: "text-emerald-400" },
-    { name: "ICICI Prudential MF", status: "Disclosures Verified", time: "12m ago", color: "text-cyan-400" },
-    { name: "Kotak Mutual Fund", status: "Factsheets Ingested", time: "1m ago", color: "text-emerald-400" },
-    { name: "Quant Mutual Fund", status: "Risk Metrics Synced", time: "Just now", color: "text-blue-400" }
+    { name: "PPFAS Mutual Fund", status: "Factsheets Ingested", time: "July 2026 sample", color: "text-emerald-400" },
+    { name: "HDFC Mutual Fund", status: "NAV Synced", time: "July 2026 sample", color: "text-emerald-400" },
+    { name: "SBI Mutual Fund", status: "Factsheets Ingested", time: "July 2026 sample", color: "text-emerald-400" },
+    { name: "ICICI Prudential MF", status: "Disclosures Verified", time: "July 2026 sample", color: "text-cyan-400" },
+    { name: "Kotak Mutual Fund", status: "Factsheets Ingested", time: "July 2026 sample", color: "text-emerald-400" },
+    { name: "Quant Mutual Fund", status: "Risk Metrics Synced", time: "July 2026 sample", color: "text-blue-400" }
 ];
 
 const faqs = [
@@ -134,7 +132,7 @@ export default function SynthesisLandingPage() {
                     <div className="min-h-[80vh] flex flex-col items-center justify-center text-center space-y-8 max-w-4xl mx-auto">
                     {/* Status Badge */}
                     <motion.div
-                        initial={{ opacity: 0, y: -8 }}
+                        initial={false}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.4, ease: "easeOut" }}
                         className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 shadow-sm backdrop-blur-md"
@@ -145,34 +143,14 @@ export default function SynthesisLandingPage() {
                         </AnimatedShinyText>
                     </motion.div>
 
-                    {/* Per-Letter Character Reveal Headline with 60fps GPU Acceleration */}
-                    <div className="flex flex-col items-center justify-center space-y-3">
-                        <VerticalCutReveal
-                            splitBy="characters"
-                            staggerDuration={0.015}
-                            staggerFrom="first"
-                            transition={{ duration: 0.4, ease: [0.25, 1, 0.5, 1] }}
-                            containerClassName="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.1] font-serif-display justify-center text-center"
-                            elementClassName="text-white"
-                        >
-                            Institutional-Grade Synthesis.
-                        </VerticalCutReveal>
-
-                        <VerticalCutReveal
-                            splitBy="characters"
-                            staggerDuration={0.015}
-                            staggerFrom="first"
-                            transition={{ duration: 0.4, ease: [0.25, 1, 0.5, 1], delay: 0.35 }}
-                            containerClassName="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.1] font-serif-display justify-center text-center"
-                            elementClassName="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-400 to-emerald-400"
-                        >
-                            Generated in Seconds.
-                        </VerticalCutReveal>
-                    </div>
+                    <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.1] font-serif-display text-center">
+                        <span className="block text-white">Institutional-Grade Synthesis.</span>
+                        <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-400 to-emerald-400">Generated in Seconds.</span>
+                    </h1>
 
                     {/* Hero Subtitle */}
                     <motion.p
-                        initial={{ opacity: 0, y: 15 }}
+                        initial={false}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.4, delay: 0.7, ease: "easeOut" }}
                         className="text-base sm:text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed font-sans"
@@ -182,7 +160,7 @@ export default function SynthesisLandingPage() {
 
                     {/* Action Button Group */}
                     <motion.div
-                        initial={{ opacity: 0, y: 15 }}
+                        initial={false}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.4, delay: 0.85, ease: "easeOut" }}
                         className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2"
@@ -237,7 +215,7 @@ export default function SynthesisLandingPage() {
                             </div>
                             <div className="text-left font-mono">
                                 <div className="text-[10px] text-gray-400 uppercase tracking-wider">Zero-Hallucination</div>
-                                <div className="text-xs font-bold text-emerald-400">100% Factsheet Verifiable</div>
+                                <div className="text-xs font-bold text-emerald-400">Sample citations included</div>
                             </div>
                         </div>
 
@@ -247,8 +225,8 @@ export default function SynthesisLandingPage() {
                                 ⚡
                             </div>
                             <div className="text-left font-mono">
-                                <div className="text-[10px] text-gray-400 uppercase tracking-wider">PDF Export Speed</div>
-                                <div className="text-xs font-bold text-cyan-400">0.4s Serverless Latency</div>
+                                <div className="text-[10px] text-gray-400 uppercase tracking-wider">PDF Export</div>
+                                <div className="text-xs font-bold text-cyan-400">Generated reports include citations</div>
                             </div>
                         </div>
 
@@ -264,11 +242,11 @@ export default function SynthesisLandingPage() {
                                     <span className="w-3 h-3 rounded-full bg-red-500/80 inline-block" />
                                     <span className="w-3 h-3 rounded-full bg-amber-500/80 inline-block" />
                                     <span className="w-3 h-3 rounded-full bg-emerald-500/80 inline-block" />
-                                    <span className="text-xs font-mono text-gray-400 ml-2 font-bold">FundersAI / Synthesis / [ LIVE_DEMO_WORKSTATION ]</span>
+                                    <span className="text-xs font-mono text-gray-400 ml-2 font-bold">FundersAI / Synthesis / [ SAMPLE_WORKSTATION ]</span>
                                 </div>
                                 <div className="flex items-center gap-2 font-mono text-[10px]">
                                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                                    <span className="text-emerald-400 font-bold">SEBI AMC PIPELINE ACTIVE</span>
+                                    <span className="text-emerald-400 font-bold">JULY 2026 SAMPLE</span>
                                 </div>
                             </div>
 
@@ -276,9 +254,9 @@ export default function SynthesisLandingPage() {
                             <div className="space-y-3 relative z-10">
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs font-mono font-bold uppercase tracking-wider text-gray-300">
-                                        Test Live Synthesis Presets:
+                                        Try sample report presets:
                                     </span>
-                                    <span className="text-[10px] font-mono text-blue-400 font-semibold">Click to run interactive pipeline ↓</span>
+                                    <span className="text-[10px] font-mono text-blue-400 font-semibold">Preview the report flow ↓</span>
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -593,7 +571,7 @@ export default function SynthesisLandingPage() {
                     </div>
                 </motion.div>
 
-                {/* SECTION 4: AMC Data Provenance & Real-time Sync Ticker */}
+                {/* SECTION 4: AMC Data Provenance Sample */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
@@ -604,11 +582,11 @@ export default function SynthesisLandingPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800 pb-4">
                         <div>
                             <span className="text-xs font-mono font-semibold uppercase tracking-wider text-blue-400">AMC Source Provenance</span>
-                            <h3 className="text-xl font-bold text-white mt-1">Live Factsheet Document Ingestion Pipeline</h3>
+                            <h3 className="text-xl font-bold text-white mt-1">Illustrative Factsheet Ingestion Walkthrough</h3>
                         </div>
                         <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                            <span>12+ Asset Management Companies Synced</span>
+                            <span className="w-2 h-2 rounded-full bg-amber-400" />
+                            <span>July 2026 sample coverage</span>
                         </div>
                     </div>
 
@@ -844,8 +822,6 @@ export default function SynthesisLandingPage() {
                 }}
             />
         </div>
-        {/* Common Public Footer */}
-        <PublicFooter />
         </div>
     );
 }

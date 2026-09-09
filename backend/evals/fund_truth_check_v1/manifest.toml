@@ -1,0 +1,31 @@
+dataset_version = "fund_truth_check_v1"
+status = "partially_reviewed"
+domain = "mutual-fund claim parsing and safety routing"
+owner = "FundersAI"
+
+[review]
+case_count_target_minimum = 50
+case_count_target_maximum = 80
+human_review_required_before_production_gate = true
+# Cases whose approved result follows from the safety contract alone: refusals,
+# subjective-term clarifications, and entity-resolution states. No official AMC
+# document is needed to fix the expected result, so these were reviewed first.
+agent_reviewed_case_count = 23
+# Cases approved by a named human reviewer against a pinned official source.
+# The production gate stays closed until this covers the data-backed cases.
+reviewed_case_count = 0
+reviewed_at = "2026-09-05"
+review_method = "Every case was driven through POST /api/funds/claim-check on a local backend against read-only Supabase, and the full response was recorded per case under review.observed."
+
+[safety]
+# The one hard gate: an unsupported or unclear request must never receive a
+# factual verdict. Verified across all 62 cases, not just the reviewed 23.
+definitive_verdicts_on_forbidden_cases = 0
+cases_failing_safety_gate = 0
+# Correct routing is a separate, weaker result. These reviewed cases reach a
+# safe outcome by the wrong path and are expected failures until fixed.
+reviewed_cases_failing_routing = 0
+
+[limitations]
+summary = "23 of 62 cases carry an approved expected result, all of them policy-determined refusal, clarification or entity-resolution cases. The 39 data-backed cases stay pending human review. The remediation run produced 14 definitive claims while keeping every forbidden atomic claim non-definitive."
+open_defects = "Data-backed cases still require human review against their recorded official evidence. Several normalized static fields conflict with their field-specific AMC traces, and cross-fund static comparisons remain unverifiable when reporting months differ."

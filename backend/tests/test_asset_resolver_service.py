@@ -70,6 +70,57 @@ def test_empty_and_wildcard_only_fund_searches_do_not_create_match_all_patterns(
         assert chat_search_pattern(value) is None
 
 
+def test_resolver_rejects_stopwords_without_querying_fund_data():
+    resolver, fake = _resolver([
+        {
+            "scheme_code": "118512",
+            "scheme_name": "Franklin India Life Stage Fund of Funds - The 20s Plan - Direct - Growth",
+            "amc_name": "Franklin Templeton Mutual Fund",
+        }
+    ])
+
+    for value in ("the", "a fund", "which fund", "the fund"):
+        result = resolver.resolve(value, asset_type="mutual_fund")
+        assert result.is_high_confidence is False
+        assert result.id is None
+
+    assert fake.calls == []
+
+
+def test_resolver_does_not_map_a_known_stock_name_to_a_mutual_fund():
+    resolver, fake = _resolver([
+        {
+            "scheme_code": "debt-101",
+            "scheme_name": "HDFC Banking and PSU Debt Fund Direct Growth",
+            "amc_name": "HDFC Mutual Fund",
+        }
+    ])
+
+    result = resolver.resolve("HDFC Bank", asset_type="mutual_fund")
+
+    assert result.is_high_confidence is False
+    assert result.id is None
+    assert result.match_reason == "stock_name_not_fund"
+    assert fake.calls == []
+
+
+def test_resolver_maps_an_explicit_scheme_code_without_name_search():
+    resolver, fake = _resolver([
+        {
+            "scheme_code": "122639",
+            "scheme_name": "Parag Parikh Flexi Cap Fund Direct Growth",
+            "amc_name": "PPFAS Mutual Fund",
+        }
+    ])
+
+    result = resolver.resolve("scheme 122639", asset_type="mutual_fund")
+
+    assert result.is_high_confidence is True
+    assert result.id == "122639"
+    assert result.match_reason == "exact_scheme_code"
+    assert fake.calls == [("mutual_fund_core_snapshot", "select")]
+
+
 def test_resolver_maps_ppfas_typo_to_high_confidence_fund_and_caches():
     resolver, fake = _resolver([
         {
@@ -161,6 +212,30 @@ def test_resolver_prefers_growth_variant_over_idcw():
     assert result.id == "axis-growth"
 
 
+def test_resolver_preserves_explicit_direct_and_regular_variants():
+    rows = [
+        {
+            "scheme_code": "hdfc-direct",
+            "scheme_name": "HDFC Flexi Cap Fund - Direct Plan - Growth Option",
+            "amc_name": "HDFC Mutual Fund",
+        },
+        {
+            "scheme_code": "hdfc-regular",
+            "scheme_name": "HDFC Flexi Cap Fund - Regular Plan - Growth Option",
+            "amc_name": "HDFC Mutual Fund",
+        },
+    ]
+    resolver, _fake = _resolver(rows)
+
+    direct = resolver.resolve("HDFC Flexi Cap Direct Growth", asset_type="mutual_fund")
+    regular = resolver.resolve("HDFC Flexi Cap Regular Growth", asset_type="mutual_fund")
+
+    assert direct.id == "hdfc-direct"
+    assert regular.id == "hdfc-regular"
+    assert direct.is_high_confidence is True
+    assert regular.is_high_confidence is True
+
+
 def test_resolver_ignores_snapshot_rows_without_scheme_codes_and_uses_fallback_table():
     fake = _FakeSupabase(
         {
@@ -191,7 +266,7 @@ def test_resolver_ignores_snapshot_rows_without_scheme_codes_and_uses_fallback_t
 def test_resolver_rejects_unsupported_amc_without_db_lookup():
     resolver, fake = _resolver([])
 
-    result = resolver.resolve("Quant Small Cap Fund", asset_type="mutual_fund")
+    result = resolver.resolve("Franklin Small Cap Fund", asset_type="mutual_fund")
 
     assert result.coverage_status == "unsupported"
     assert result.confidence == 0

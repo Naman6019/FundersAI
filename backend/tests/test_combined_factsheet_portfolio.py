@@ -133,3 +133,218 @@ def test_kotak_two_column_layout_no_longer_drops_the_second_column():
     assert any("L&T Metro Rail" in name for name in names)
     assert len(names) == 2
     assert parsed.metrics["total_percent_aum"] == 4.57
+
+
+def test_portfolio_holdings_heading_anchors_a_table():
+    """Only "Portfolio" used to anchor a holdings table, which is Kotak's and
+    Motilal's layout and nobody else's. Measured against live R2 factsheets, every
+    other AMC that publishes a full portfolio in its factsheet prints a different
+    heading -- their pages matched on scheme name and were then discarded for want
+    of a start anchor, so the whole factsheet lane returned zero holdings for them.
+    "Portfolio Holdings" is the Helios/Zerodha spelling."""
+    lines = [
+        "Helios Flexi Cap Fund",
+        "An open ended dynamic equity scheme investing across market capitalisation",
+        "Portfolio Holdings",
+        "Name of Instrument",
+        "% of Net Assets",
+        "HDFC Bank Ltd",
+        "5.10",
+        "Bharti Airtel Ltd",
+        "4.20",
+        "Grand Total",
+        "9.30",
+    ]
+
+    parsed = parse_combined_factsheet_page(
+        "\n".join(lines),
+        SimpleNamespace(source_document_id="doc-helios", source_url="local", report_month=date(2026, 7, 1)),
+        scheme_prefixes=("helios",),
+    )
+
+    assert parsed is not None
+    assert parsed.scheme_name == "Helios Flexi Cap Fund"
+    names = {row["instrument_name"] for row in parsed.holdings}
+    assert names == {"HDFC Bank Ltd", "Bharti Airtel Ltd"}
+    assert parsed.metrics["total_percent_aum"] == 9.30
+
+
+def test_bare_instrument_column_header_anchors_a_table_without_a_heading():
+    """Several AMCs print the "Portfolio" heading as a graphic, so the extracted
+    text jumps straight from the scheme name to the column header. The instrument
+    column header is itself proof the table has started, so it anchors on its own
+    -- without this, those pages yield nothing at all."""
+    lines = [
+        "Quantum Ethical Fund",
+        "An open ended equity scheme following ethical principles",
+        "Name of Instrument",
+        "% to Net Assets",
+        "Infosys Ltd",
+        "6.40",
+        "Tata Consultancy Services Ltd",
+        "3.60",
+        "Grand Total",
+        "10.00",
+    ]
+
+    parsed = parse_combined_factsheet_page(
+        "\n".join(lines),
+        SimpleNamespace(source_document_id="doc-quantum", source_url="local", report_month=date(2026, 7, 1)),
+        scheme_prefixes=("quantum",),
+    )
+
+    assert parsed is not None
+    names = {row["instrument_name"] for row in parsed.holdings}
+    assert names == {"Infosys Ltd", "Tata Consultancy Services Ltd"}
+
+
+def test_evidence_window_reaches_past_a_date_stamp_under_the_heading():
+    """The corroboration window used to stop nine lines after the heading. AMCs
+    that print a date stamp and a footnote between the heading and the column
+    header push the evidence past that, so the heading was rejected."""
+    lines = [
+        "Canara Robeco Multi Asset Allocation Fund",
+        "Portfolio",
+        "(as at July 31, 2026)",
+        "Note 1",
+        "Note 2",
+        "Note 3",
+        "Note 4",
+        "Note 5",
+        "Note 6",
+        "Note 7",
+        "% to Net Assets",
+        "Reliance Industries Ltd",
+        "7.15",
+        "Grand Total",
+        "7.15",
+    ]
+
+    parsed = parse_combined_factsheet_page(
+        "\n".join(lines),
+        SimpleNamespace(source_document_id="doc-canara", source_url="local", report_month=date(2026, 7, 1)),
+        scheme_prefixes=("canara robeco", "canara"),
+    )
+
+    assert parsed is not None
+    assert any("Reliance Industries" in row["instrument_name"] for row in parsed.holdings)
+
+
+def test_bare_heading_without_table_evidence_is_not_a_portfolio_start():
+    """The relaxed heading list must still not fire on contents pages and section
+    dividers, which is what the corroboration check is for. A "Holdings" line with
+    no table underneath it must not open a scan."""
+    lines = [
+        "Taurus Flexi Cap Fund",
+        "Holdings",
+        "Refer page 12 for the complete portfolio",
+        "Fund Manager: Someone",
+        "Inception Date: 01-Jan-2020",
+    ]
+
+    parsed = parse_combined_factsheet_page(
+        "\n".join(lines),
+        SimpleNamespace(source_document_id="doc-taurus", source_url="local", report_month=date(2026, 7, 1)),
+        scheme_prefixes=("taurus",),
+    )
+
+    assert parsed is None
+
+
+def test_dated_heading_anchors_a_table():
+    """AMCs date the heading in place -- "Scheme Portfolio as on 31st July 2026" is the
+    same heading as "Portfolio". Only the parenthesised "Portfolio (as on ...)" form was
+    special-cased, so Choice's factsheet tables were skipped entirely."""
+    lines = [
+        "Choice Nifty 50 Index Fund",
+        "Scheme Portfolio as on 31st July 2026",
+        "Name of Instrument/Issuer",
+        "% to AUM",
+        "HDFC Bank Ltd.",
+        "10.21",
+        "ICICI Bank Ltd.",
+        "9.17",
+        "Grand Total",
+        "19.38",
+    ]
+
+    parsed = parse_combined_factsheet_page(
+        "\n".join(lines),
+        SimpleNamespace(source_document_id="doc-choice", source_url="local", report_month=date(2026, 7, 1)),
+        scheme_prefixes=("choice",),
+    )
+
+    assert parsed is not None
+    names = {row["instrument_name"] for row in parsed.holdings}
+    assert names == {"HDFC Bank Ltd.", "ICICI Bank Ltd."}
+
+
+def test_qualified_instrument_column_header_still_anchors():
+    """The column header is matched as a prefix: AMCs qualify it their own way, and an
+    exact match skipped "Name of Instrument/Issuer" tables."""
+    lines = [
+        "Choice Overnight Fund",
+        "Name of Instrument/Issuer",
+        "% to AUM",
+        "TREPS / Reverse Repo Investments",
+        "99.25",
+    ]
+
+    parsed = parse_combined_factsheet_page(
+        "\n".join(lines),
+        SimpleNamespace(source_document_id="doc-choice-on", source_url="local", report_month=date(2026, 7, 1)),
+        scheme_prefixes=("choice",),
+    )
+
+    assert parsed is not None
+    assert len(parsed.holdings) == 1
+
+
+def test_scheme_name_is_found_below_the_table():
+    """PDF text extraction does not preserve visual order. On Choice's factsheet the
+    portfolio table lands at line 83 and the scheme name only at line 245, so an
+    80-line scan found the page nameless and discarded a complete portfolio."""
+    lines = [
+        "Scheme Portfolio as on 31st July 2026",
+        "Name of Instrument/Issuer",
+        "% to AUM",
+        "Reliance Industries Ltd.",
+        "7.15",
+        "Grand Total",
+        "7.15",
+        *[f"filler line {n}" for n in range(120)],
+        "Choice Nifty 50 Index Fund",
+    ]
+
+    parsed = parse_combined_factsheet_page(
+        "\n".join(lines),
+        SimpleNamespace(source_document_id="doc-late-name", source_url="local", report_month=date(2026, 7, 1)),
+        scheme_prefixes=("choice",),
+    )
+
+    assert parsed is not None
+    assert parsed.scheme_name == "Choice Nifty 50 Index Fund"
+
+
+def test_the_first_scheme_name_on_a_page_still_wins():
+    """Widening the scan must not change any page that already resolved a name: the
+    first match wins, so a later mention cannot displace the page's own heading."""
+    lines = [
+        "Kotak Bond Short Term Fund",
+        "PORTFOLIO",
+        "Issuer/Instrument",
+        "% to Net Assets",
+        "7.08% Karnataka State Govt Ltd",
+        "3.49",
+        *[f"filler {n}" for n in range(100)],
+        "Kotak Flexicap Fund",
+    ]
+
+    parsed = parse_combined_factsheet_page(
+        "\n".join(lines),
+        SimpleNamespace(source_document_id="doc-kotak", source_url="local", report_month=date(2026, 6, 1)),
+        scheme_prefixes=("kotak",),
+    )
+
+    assert parsed is not None
+    assert parsed.scheme_name == "Kotak Bond Short Term Fund"

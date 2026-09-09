@@ -15,6 +15,10 @@ logger = logging.getLogger(__name__)
 
 HIGH_CONFIDENCE = 0.88
 MEDIUM_CONFIDENCE = 0.68
+_MF_QUERY_STOPWORDS = frozenset({
+    "a", "an", "and", "are", "do", "does", "fund", "funds", "growth", "have", "has",
+    "is", "mutual", "of", "option", "plan", "scheme", "the", "what", "which", "who",
+})
 
 
 @dataclass(frozen=True)
@@ -181,18 +185,27 @@ def supported_amc_from_text(value: str) -> str | None:
 
 def canonical_fund_query(value: str) -> str:
     text = normalize_text(value)
+    variant = ""
+    if "regular" in text:
+        variant += " Regular"
+    elif "direct" in text:
+        variant += " Direct"
+    if "idcw" in text or "dividend" in text:
+        variant += " IDCW"
+    elif "growth" in text:
+        variant += " Growth"
     if looks_like_ppfas_alias(text) and "flexi" in text:
-        return "Parag Parikh Flexi Cap"
+        return f"Parag Parikh Flexi Cap{variant}"
     if looks_like_axis_alias(text) and "flexi" in text:
-        return "Axis Flexi Cap"
+        return f"Axis Flexi Cap{variant}"
     if looks_like_axis_alias(text) and "large" in text:
-        return "Axis Large Cap"
+        return f"Axis Large Cap{variant}"
     if "hdfc" in text and "flexi" in text:
-        return "HDFC Flexi Cap"
+        return f"HDFC Flexi Cap{variant}"
     if "hdfc" in text and "mid" in text:
-        return "HDFC Mid Cap"
+        return f"HDFC Mid Cap{variant}"
     if "hdfc" in text and "large" in text:
-        return "HDFC Large Cap"
+        return f"HDFC Large Cap{variant}"
     if "icici" in text and "multi" in text:
         return "ICICI Multi Asset"
     if "icici" in text and "large" in text:
@@ -226,8 +239,21 @@ def _fund_search_pattern(search_term: str) -> str | None:
         .replace("_", "")
         .strip()
     )
-    words = [word for word in cleaned.split() if word not in {"fund", "growth"}]
+    words = [word for word in cleaned.split() if word not in _MF_QUERY_STOPWORDS]
     return f"%{'%'.join(words)}%" if words else None
+
+
+def _explicit_scheme_code(value: str) -> str | None:
+    match = re.fullmatch(r"\s*(?:scheme(?:\s+code)?\s*)?(\d{5,9})\s*", str(value or ""), re.IGNORECASE)
+    return match.group(1) if match else None
+
+
+def _is_low_information_fund_query(value: str) -> bool:
+    words = [word for word in normalize_text(value).split() if word not in _MF_QUERY_STOPWORDS]
+    if not words:
+        return True
+    # An AMC name alone identifies a fund house, not one scheme.
+    return len(words) == 1 and supported_amc_from_text(value) is not None
 
 
 def _coerce_scheme_code_filter(value: Any) -> Any:
@@ -295,6 +321,61 @@ class AssetResolver:
                 match_reason="unsupported_amc_keyword",
             )
 
+        scheme_code = _explicit_scheme_code(raw_input)
+        if scheme_code:
+            try:
+                row = self.repository.get_fund_by_scheme_code(scheme_code) if self.repository else None
+            except Exception as exc:
+                logger.warning("asset resolver scheme-code lookup failed for %s: %s", scheme_code, exc)
+                row = None
+            if row:
+                name = str(row.get("scheme_name") or scheme_code)
+                amc = supported_amc_from_text(" ".join([name, str(row.get("amc_name") or row.get("fund_house") or "")]))
+                if amc:
+                    result = AssetResolution(
+                        input=raw_input,
+                        resolved_name=name,
+                        asset_type="mutual_fund",
+                        id=str(row.get("scheme_code") or scheme_code),
+                        confidence=1.0,
+                        coverage_status="supported",
+                        amc=amc,
+                        match_reason="exact_scheme_code",
+                    )
+                    self.cache.set(cache_key, result)
+                    return result
+            return AssetResolution(
+                input=raw_input,
+                resolved_name=None,
+                asset_type="mutual_fund",
+                id=None,
+                confidence=0.0,
+                coverage_status="not_found",
+                match_reason="scheme_code_not_found",
+            )
+
+        if _is_low_information_fund_query(raw_input):
+            return AssetResolution(
+                input=raw_input,
+                resolved_name=None,
+                asset_type="mutual_fund",
+                id=None,
+                confidence=0.0,
+                coverage_status="not_found",
+                match_reason="insufficient_fund_identity",
+            )
+
+        if not has_mf_category_hint(fund_name_words(raw_input)) and resolve_stock_symbol(raw_input):
+            return AssetResolution(
+                input=raw_input,
+                resolved_name=None,
+                asset_type="mutual_fund",
+                id=None,
+                confidence=0.0,
+                coverage_status="not_found",
+                match_reason="stock_name_not_fund",
+            )
+
         query = canonical_fund_query(raw_input)
         rows = self._candidate_rows(query)
         if not rows and query != raw_input:
@@ -341,14 +422,15 @@ class AssetResolver:
     def _candidate_rows(self, query: str) -> list[dict[str, Any]]:
         if not self.repository:
             return []
-        pattern = _fund_search_pattern(query)
+        query_lower = query.lower()
+        # Legacy AMFI names often omit the word "Regular" (for example,
+        # "Growth Plan"). Keep plan intent for ranking, not SQL name matching.
+        search_query = re.sub(r"\b(?:direct|regular)\b", "", query, flags=re.I)
+        pattern = _fund_search_pattern(search_query)
         if not pattern:
             return []
-        
-        query_lower = query.lower()
-        plan_type = "Direct"
-        if "regular" in query_lower:
-            plan_type = "Regular"
+
+        plan_type = None if "regular" in query_lower else "Direct"
             
         option_type = "Growth"
         if "idcw" in query_lower or "dividend" in query_lower:
@@ -368,7 +450,10 @@ class AssetResolver:
     def _score_candidates(self, raw_input: str, query: str, rows: list[dict[str, Any]]) -> list[ResolverCandidate]:
         input_norm = normalize_text(query or raw_input)
         raw_norm = normalize_text(raw_input)
-        input_words = [word for word in input_norm.split() if len(word) > 2]
+        input_words = [
+            word for word in input_norm.split()
+            if len(word) > 2 and word not in {"direct", "regular", "growth", "idcw", "dividend"}
+        ]
         scored: list[ResolverCandidate] = []
         for row in rows:
             scheme_code = row.get("scheme_code")
@@ -393,13 +478,26 @@ class AssetResolver:
                 score += 0.28
                 reasons.append("alias_canonical_match")
             if "direct" in name_norm:
-                score += 0.03
+                if "direct" in raw_norm:
+                    score += 0.2
+                    reasons.append("requested_direct_plan")
+                elif "regular" in raw_norm:
+                    score -= 0.25
+                else:
+                    score += 0.03
             if "growth" in name_norm:
                 score += 0.04
             if "idcw" in name_norm or "dividend" in name_norm:
                 score -= 0.12
             if "regular" in name_norm:
-                score -= 0.05
+                if "regular" in raw_norm:
+                    score += 0.2
+                    reasons.append("requested_regular_plan")
+                else:
+                    score -= 0.05
+            elif "regular" in raw_norm and "direct" not in name_norm:
+                score += 0.25
+                reasons.append("inferred_legacy_regular_plan")
             amc = supported_amc_from_text(" ".join([name, str(row.get("amc_name") or "")]))
             if amc:
                 score += 0.08

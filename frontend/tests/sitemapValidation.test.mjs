@@ -26,8 +26,8 @@ test('sitemap.ts is configured for the two supported production hosts', () => {
   assert.doesNotMatch(source, /emergent-replica/);
 
   // Index core routes
-  assert.match(source, /FUND_REGISTRY/);
-  assert.match(source, /AMC_REGISTRY/);
+  assert.match(source, /await getPublishedFunds\(\)/);
+  assert.match(source, /await getPublishedAmcs\(\)/);
   assert.match(source, /CATEGORY_LIST/);
   assert.match(source, /COMPARE_PAIRS/);
 

@@ -49,35 +49,33 @@ const faqs = [
 
 export default function PricingPage() {
   return (
-    <div className="min-h-screen bg-[#050810] text-[#dce8fa] flex flex-col selection:bg-blue-500/30 cyber-grid-bg relative">
+    <div className="min-h-screen bg-background text-foreground flex flex-col selection:bg-primary/20 relative">
       {/* Background Subtle Radial Aura */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-blue-600/10 blur-[140px] pointer-events-none rounded-full" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-primary/5 blur-[140px] pointer-events-none rounded-full" />
       
       <EcosystemHeader />
 
       <main className="flex-1 max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-20 w-full space-y-16 relative z-10">
         {/* Breadcrumb */}
         <Breadcrumbs
-          tone="synthesis"
           items={[
-            { label: 'FundersAI', href: '/' },
-            { label: 'Synthesis', href: '/synthesis' },
-            { label: '[ PRICING_PLANS ]' },
+            { label: 'Home', href: '/' },
+            { label: 'Pricing & Plans' },
           ]}
         />
 
         {/* Hero Header */}
         <div className="text-center space-y-4 max-w-3xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-mono font-medium">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-mono font-medium">
             <span>⚡ UNIFIED RESEARCH &amp; SYNTHESIS SUBSCRIPTION</span>
           </div>
           <h1 className="text-4xl sm:text-6xl font-extrabold text-white tracking-tight leading-tight font-serif-display">
             Simple, Transparent Pricing. <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-cyan-400">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400">
               No Hidden Fees.
             </span>
           </h1>
-          <p className="text-sm sm:text-base text-gray-400 max-w-xl mx-auto leading-relaxed">
+          <p className="text-sm sm:text-base text-text-3 max-w-xl mx-auto leading-relaxed">
             One unified subscription unlocks both Research Platform AI query quotas and Synthesis Studio daily report creation.
           </p>
         </div>
@@ -85,7 +83,7 @@ export default function PricingPage() {
         {/* Pricing Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
           {/* Free Tier Card */}
-          <MagicCard className="p-8 bg-[#070b12]/80 border-gray-800/80 rounded-3xl flex flex-col justify-between space-y-8 backdrop-blur-xl">
+          <MagicCard className="p-8 bg-surface-1/90 border-line rounded-3xl flex flex-col justify-between space-y-8 backdrop-blur-xl">
             <div className="space-y-6">
               <div>
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-gray-400">Free Tier</span>

@@ -76,11 +76,18 @@
   --radius-surface: 1rem;
 
   --font-data-mono: var(--font-plex-mono), monospace;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
   --font-serif-display: var(--font-playfair), Georgia, serif;
 }
 
 .font-serif-display {
   font-family: var(--font-serif-display), serif;
+}
+
+/* Tailwind's built-in `font-mono` utility ships its own generic stack;
+   this overrides it so `font-mono` actually renders IBM Plex Mono. */
+.font-mono {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
 }
 
 @layer utilities {
@@ -891,4 +898,53 @@ h6[id] {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* AMC logo marquee (landing page trust bar) */
+@theme {
+  --animate-marquee-scroll: marquee-scroll 36s linear infinite;
+  @keyframes marquee-scroll {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .amc-marquee-track {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+/* Zero-hallucination pipeline connector flow (landing page) */
+@theme {
+  --animate-pipeline-flow-x: pipeline-flow-x 2.2s linear infinite;
+  @keyframes pipeline-flow-x {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(600%);
+    }
+  }
+  --animate-pipeline-flow-y: pipeline-flow-y 2.2s linear infinite;
+  @keyframes pipeline-flow-y {
+    from {
+      transform: translateY(-100%);
+    }
+    to {
+      transform: translateY(600%);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pipeline-connector-pulse {
+    animation: none !important;
+    opacity: 0.5;
+  }
 }

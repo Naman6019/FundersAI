@@ -212,6 +212,11 @@ SOURCES: dict[str, AMCDocumentSource] = {
         browser_recovery_allowed=True,
         factsheet_required_keywords=("factsheet", "fact sheet"),
         portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
+        # Discovery blocked, not misconfigured: kotakmf.com serves headless browsers a
+        # Radware CAPTCHA (redirects to validate.perfdrive.com), so the page renders zero
+        # anchors and browser recovery cannot help. Deliberately excluded from the
+        # scheduled browser allowlist. Needs a non-scraping route (an AMC-provided feed,
+        # or reviewed entries in backend/config/mf_document_sources.json).
         allowed_host_suffixes=("kotakmf.com",),
     ),
     "aditya_birla": AMCDocumentSource(
@@ -421,6 +426,628 @@ SOURCES: dict[str, AMCDocumentSource] = {
         browser_recovery_allowed=True,
         allowed_host_suffixes=("assetmanagement.hsbc.co.in", "hsbc.co.in"),
     ),
+    "quant": AMCDocumentSource(
+        amc_name="quant Mutual Fund",
+        amc_code="QUANT",
+        adapter_key="quant",
+        factsheet_page_url=_env_url(
+            "MF_QUANT_FACTSHEET_PAGE_URL",
+            "https://quantmutual.com/downloads/factsheet",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_QUANT_PORTFOLIO_PAGE_URL",
+            "https://quantmutual.com/statutory-disclosures",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "statutory"),
+        # Live-checked against the R2 factsheet: 150-page factsheet is presentation-style; holdings appear only as Top-10 panels,
+        # so reusing it as the portfolio_disclosure document yields zero holdings.
+        factsheet_contains_holdings=False,
+        allowed_host_suffixes=("quantmutual.com",),
+    ),
+    "canara_robeco": AMCDocumentSource(
+        amc_name="Canara Robeco Mutual Fund",
+        amc_code="CANARA_ROBECO",
+        adapter_key="canara_robeco",
+        factsheet_page_url=_env_url(
+            "MF_CANARA_ROBECO_FACTSHEET_PAGE_URL",
+            "https://www.canararobeco.com/documents/forms-downloads/forms-information-documents/information-documents/factsheets/",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_CANARA_ROBECO_PORTFOLIO_PAGE_URL",
+            "https://www.canararobeco.com/documents/statutory-disclosures/scheme-dashboard/scheme-monthly-portfolio/",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio"),
+        factsheet_contains_holdings=True,
+        allowed_host_suffixes=("canararobeco.com",),
+    ),
+    "groww": AMCDocumentSource(
+        amc_name="Groww Mutual Fund",
+        amc_code="GROWW",
+        adapter_key="groww",
+        factsheet_page_url=_env_url(
+            "MF_GROWW_FACTSHEET_PAGE_URL",
+            "https://www.growwmf.in/downloads/fact-sheet",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_GROWW_PORTFOLIO_PAGE_URL",
+            "https://growwmf.in/statutory-disclosure/portfolio",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet", "monthly factsheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio"),
+        # Live-checked against the R2 factsheet: 12-page factsheet is a fund-summary one-pager with no portfolio table,
+        # so reusing it as the portfolio_disclosure document yields zero holdings.
+        factsheet_contains_holdings=False,
+        allowed_host_suffixes=("growwmf.in", "assets-netstorage.growwmf.in"),
+    ),
+    "zerodha": AMCDocumentSource(
+        amc_name="Zerodha Fund House",
+        amc_code="ZERODHA",
+        adapter_key="zerodha",
+        factsheet_page_url=_env_url(
+            "MF_ZERODHA_FACTSHEET_PAGE_URL",
+            "https://www.zerodhafundhouse.com/resources/fund-documents",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_ZERODHA_PORTFOLIO_PAGE_URL",
+            "https://www.zerodhafundhouse.com/resources/disclosures",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet", "fund document"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
+        # Live-checked against the R2 factsheet: factsheet lists Top-10 per scheme; the monthly workbook is the full source,
+        # so reusing it as the portfolio_disclosure document yields zero holdings.
+        factsheet_contains_holdings=False,
+        allowed_host_suffixes=("zerodhafundhouse.com", "assets.zerodhafundhouse.com"),
+    ),
+    "baroda_bnp": AMCDocumentSource(
+        amc_name="Baroda BNP Paribas Mutual Fund",
+        amc_code="BARODA_BNP",
+        adapter_key="baroda_bnp",
+        factsheet_page_url=_env_url(
+            "MF_BARODA_BNP_FACTSHEET_PAGE_URL",
+            "https://www.barodabnpparibasmf.in/downloads/monthly-factsheet",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_BARODA_BNP_PORTFOLIO_PAGE_URL",
+            "https://www.barodabnpparibasmf.in/downloads/monthly-portfolio-scheme",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet", "fund facts"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "holding"),
+        # Live-checked against the R2 factsheet: factsheet is Top-10 per scheme; the monthly workbook carries the full portfolio,
+        # so reusing it as the portfolio_disclosure document yields zero holdings.
+        factsheet_contains_holdings=False,
+        allowed_host_suffixes=("barodabnpparibasmf.in",),
+    ),
+    "lic": AMCDocumentSource(
+        amc_name="LIC Mutual Fund",
+        amc_code="LIC",
+        adapter_key="lic",
+        factsheet_page_url=_env_url(
+            "MF_LIC_FACTSHEET_PAGE_URL",
+            "https://www.licmf.com/downloads/factsheet",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_LIC_PORTFOLIO_PAGE_URL",
+            "https://www.licmf.com/downloads/monthly-portfolio",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet", "monthly factsheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "dashboard"),
+        # Live-checked against the R2 factsheet: 88-page factsheet exposes Top-10 holdings only,
+        # so reusing it as the portfolio_disclosure document yields zero holdings.
+        factsheet_contains_holdings=False,
+        allowed_host_suffixes=("licmf.com",),
+    ),
+    "sundaram": AMCDocumentSource(
+        amc_name="Sundaram Mutual Fund",
+        amc_code="SUNDARAM",
+        adapter_key="sundaram",
+        factsheet_page_url=_env_url(
+            "MF_SUNDARAM_FACTSHEET_PAGE_URL",
+            "https://www.sundarammutual.com/fundwise-factsheet",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_SUNDARAM_PORTFOLIO_PAGE_URL",
+            "https://www.sundarammutual.com/Monthly-Fortnightly-Adhoc-Portfolios",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet", "digital factsheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio"),
+        factsheet_contains_holdings=True,
+        # Listing page returns HTTP 200 but renders its document table client-side
+        # (5 document links served, all forms), so the plain fetch discovers nothing. Inert until the AMC is also
+        # added to MF_DISCOVERY_BROWSER_AMCS in the discovery workflow.
+        browser_recovery_allowed=True,
+        # Factsheets are not files: each scheme has an extensionless HTML page at
+        # /digital-factsheet/<SCHEME-CODE>. Generic anchor discovery skips .html/.htm as
+        # listing pages, and nothing here is downloadable, so this needs a per-scheme
+        # HTML ingestion path rather than a discovery fix. The portfolio page renders
+        # 258 anchors but its only document links are an NPCI bank list and an
+        # investor charter.
+        allowed_host_suffixes=("sundarammutual.com",),
+    ),
+    "pgim": AMCDocumentSource(
+        amc_name="PGIM India Mutual Fund",
+        amc_code="PGIM",
+        adapter_key="pgim",
+        factsheet_page_url=_env_url(
+            "MF_PGIM_FACTSHEET_PAGE_URL",
+            "https://www.pgimindia.com/mutual-funds/forms-and-updates/Fund-Factsheet",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_PGIM_PORTFOLIO_PAGE_URL",
+            "https://www.pgimindia.com/mutual-funds/disclosures/Portfolios/Monthly-Portfolio",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
+        factsheet_contains_holdings=True,
+        # Listing page returns HTTP 200 but renders its document table client-side
+        # (4 document links served, all AMFI circulars), so the plain fetch discovers nothing. Inert until the AMC is also
+        # added to MF_DISCOVERY_BROWSER_AMCS in the discovery workflow.
+        browser_recovery_allowed=True,
+        allowed_host_suffixes=("pgimindia.com", "amfiindia.com"),
+    ),
+    "quantum": AMCDocumentSource(
+        amc_name="Quantum Mutual Fund",
+        amc_code="QUANTUM",
+        adapter_key="quantum",
+        factsheet_page_url=_env_url(
+            "MF_QUANTUM_FACTSHEET_PAGE_URL",
+            "https://www.quantumamc.com/factsheets/combined/-1/0/0",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_QUANTUM_PORTFOLIO_PAGE_URL",
+            "https://www.quantumamc.com/FileCDN/FactSheet/5f6c4b6e-5264-472c-b378-d54727d45369.xlsx",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet", "combined", "all funds"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "factsheet"),
+        factsheet_contains_holdings=True,
+        allowed_host_suffixes=("quantumamc.com",),
+    ),
+    "bajaj_finserv": AMCDocumentSource(
+        amc_name="Bajaj Finserv Mutual Fund",
+        amc_code="BAJAJ_FINSERV",
+        adapter_key="bajaj_finserv",
+        factsheet_page_url=_env_url(
+            "MF_BAJAJ_FINSERV_FACTSHEET_PAGE_URL",
+            "https://www.bajajamc.com/downloads?factsheet",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_BAJAJ_FINSERV_PORTFOLIO_PAGE_URL",
+            "https://www.bajajamc.com/downloads?statutory-disclosures=",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "statutory"),
+        # Live-checked against the R2 factsheet: 60-page factsheet has no instrument-level table,
+        # so reusing it as the portfolio_disclosure document yields zero holdings.
+        factsheet_contains_holdings=False,
+        allowed_host_suffixes=("bajajamc.com", "media.bajajamc.com"),
+    ),
+    "capitalmind": AMCDocumentSource(
+        amc_name="Capitalmind Mutual Fund",
+        amc_code="CAPITALMIND",
+        adapter_key="capitalmind",
+        factsheet_page_url=_env_url(
+            "MF_CAPITALMIND_FACTSHEET_PAGE_URL",
+            "https://capitalmindmf.com/factsheet.html",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_CAPITALMIND_PORTFOLIO_PAGE_URL",
+            "https://capitalmindmf.com/statutory-disclosures.html",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "product dashboard", "dashboard"),
+        factsheet_contains_holdings=True,
+        allowed_host_suffixes=("capitalmindmf.com",),
+    ),
+    "abakkus": AMCDocumentSource(
+        amc_name="Abakkus Mutual Fund",
+        amc_code="ABAKKUS",
+        adapter_key="abakkus",
+        factsheet_page_url=_env_url(
+            "MF_ABAKKUS_FACTSHEET_PAGE_URL",
+            "https://www.abakkusmf.com/factsheet.html",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_ABAKKUS_PORTFOLIO_PAGE_URL",
+            "https://www.abakkusmf.com/statutory-disclosures.html",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "half yearly"),
+        # Live-checked against the R2 factsheet: factsheet is a 16-page brochure whose only holdings are a Top-10 panel,
+        # so reusing it as the portfolio_disclosure document yields zero holdings.
+        factsheet_contains_holdings=False,
+        allowed_host_suffixes=("abakkusmf.com",),
+    ),
+    "unifi": AMCDocumentSource(
+        amc_name="Unifi Mutual Fund",
+        amc_code="UNIFI",
+        adapter_key="unifi",
+        factsheet_page_url=_env_url(
+            "MF_UNIFI_FACTSHEET_PAGE_URL",
+            "https://unifimf.com/factsheet/",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_UNIFI_PORTFOLIO_PAGE_URL",
+            "https://unifimf.com/statutorydocuments/#monthly-portfolio-disclosure",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio"),
+        factsheet_contains_holdings=True,
+        allowed_host_suffixes=("unifimf.com",),
+    ),
+    "shriram": AMCDocumentSource(
+        amc_name="Shriram Mutual Fund",
+        amc_code="SHRIRAM",
+        adapter_key="shriram",
+        factsheet_page_url=_env_url(
+            "MF_SHRIRAM_FACTSHEET_PAGE_URL",
+            "https://www.shriramamc.in/factsheet",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_SHRIRAM_PORTFOLIO_PAGE_URL",
+            "https://www.shriramamc.in/investor-statutory-disclosures",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "statutory"),
+        # Live-checked against the R2 factsheet: factsheet Top-10 only; the monthly workbook carries all 10 schemes in full,
+        # so reusing it as the portfolio_disclosure document yields zero holdings.
+        factsheet_contains_holdings=False,
+        allowed_host_suffixes=("shriramamc.in", "cdn.shriramamc.in"),
+    ),
+    "helios": AMCDocumentSource(
+        amc_name="Helios Mutual Fund",
+        amc_code="HELIOS",
+        adapter_key="helios",
+        factsheet_page_url=_env_url(
+            "MF_HELIOS_FACTSHEET_PAGE_URL",
+            "https://www.heliosmf.in/downloads",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_HELIOS_PORTFOLIO_PAGE_URL",
+            "https://www.heliosmf.in/portfolio-disclosure",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet", "downloads"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "fortnightly"),
+        factsheet_contains_holdings=True,
+        allowed_host_suffixes=("heliosmf.in",),
+    ),
+    "nj": AMCDocumentSource(
+        amc_name="NJ Mutual Fund",
+        amc_code="NJ",
+        adapter_key="nj",
+        factsheet_page_url=_env_url(
+            "MF_NJ_FACTSHEET_PAGE_URL",
+            "https://downloads.njmutualfund.com/downloads.php",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_NJ_PORTFOLIO_PAGE_URL",
+            "https://downloads.njmutualfund.com/njmf_download.php?nme=127",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio"),
+        factsheet_contains_holdings=True,
+        allowed_host_suffixes=("downloads.njmutualfund.com", "njmutualfund.com"),
+    ),
+    "old_bridge": AMCDocumentSource(
+        amc_name="Old Bridge Mutual Fund",
+        amc_code="OLD_BRIDGE",
+        adapter_key="old_bridge",
+        factsheet_page_url=_env_url(
+            "MF_OLD_BRIDGE_FACTSHEET_PAGE_URL",
+            "https://oldbridgemf.com/uploads/OLD_BRIDGE_MF_Factsheet_11305a79bc.pdf",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_OLD_BRIDGE_PORTFOLIO_PAGE_URL",
+            "https://oldbridgemf.com/statutory-disclosures.html#v-pills-tabContent2",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "financials"),
+        factsheet_contains_holdings=True,
+        allowed_host_suffixes=("oldbridgemf.com",),
+    ),
+    "360_one": AMCDocumentSource(
+        amc_name="360 ONE Mutual Fund",
+        amc_code="THREE_SIXTY_ONE",
+        adapter_key="360_one",
+        factsheet_page_url=_env_url(
+            "MF_360_ONE_FACTSHEET_PAGE_URL",
+            "https://www.360.one/asset/mutual-funds/downloads/",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_360_ONE_PORTFOLIO_PAGE_URL",
+            "https://www.360.one/asset/mutual-funds/downloads/",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio"),
+        factsheet_contains_holdings=True,
+        # Listing page returns HTTP 200 but renders its document table client-side
+        # (8 document links served, all forms and policies; no factsheet or portfolio in the HTML), so the plain fetch discovers nothing. Inert until the AMC is also
+        # added to MF_DISCOVERY_BROWSER_AMCS in the discovery workflow.
+        browser_recovery_allowed=True,
+        # The downloads page is a React tab UI: clicking the 'Factsheets (127)' tab does
+        # render the list (Fund Factsheet - July, etc.), but each row is a <div> with a
+        # click handler and no href, so no URL is exposed to anchor scraping and the row
+        # click did not register headless. Note the tab labels contain a non-breaking
+        # space ('Factsheets (127)'), which defeats naive text matching.
+        allowed_host_suffixes=("360.one", "s3.ap-south-1.amazonaws.com"),
+    ),
+    "navi": AMCDocumentSource(
+        amc_name="Navi Mutual Fund",
+        amc_code="NAVI",
+        adapter_key="navi",
+        factsheet_page_url=_env_url(
+            "MF_NAVI_FACTSHEET_PAGE_URL",
+            "https://navi.com/mutual-fund/downloads/factsheet",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_NAVI_PORTFOLIO_PAGE_URL",
+            "https://navi.com/mutual-fund/downloads/portfolio",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio"),
+        factsheet_contains_holdings=True,
+        # Listing page returns HTTP 200 but renders its document table client-side
+        # (238 anchors served, zero document links), so the plain fetch discovers nothing. Inert until the AMC is also
+        # added to MF_DISCOVERY_BROWSER_AMCS in the discovery workflow.
+        browser_recovery_allowed=True,
+        # Documents come from a WordPress REST endpoint, not from anchors:
+        #   POST https://navi.com/wp-json/nv/v1/documents
+        #   application/x-www-form-urlencoded, X-Requested-With: XMLHttpRequest
+        #   financial_year=2026-2027&value=<Month>&category=<id>&type=Monthly&order=DESC
+        #   category 867 = factsheet, 884 = monthly portfolio
+        # The site's own jQuery call returns 200; a plain server-side POST with the same
+        # headers, and a same-origin fetch() from inside the loaded page, both return 403.
+        # Something further in the client fingerprint is required, so this is unresolved.
+        allowed_host_suffixes=("navi.com", "navimutualfund.com"),
+    ),
+    "taurus": AMCDocumentSource(
+        amc_name="Taurus Mutual Fund",
+        amc_code="TAURUS",
+        adapter_key="taurus",
+        factsheet_page_url=_env_url(
+            "MF_TAURUS_FACTSHEET_PAGE_URL",
+            "https://www.taurusmutualfund.com/factsheet",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_TAURUS_PORTFOLIO_PAGE_URL",
+            "https://taurusmutualfund.com/monthly-portfolio",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet", "one pager"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio"),
+        # Live-checked against the R2 factsheet: 16-page factsheet is a one-pager with no portfolio table,
+        # so reusing it as the portfolio_disclosure document yields zero holdings.
+        factsheet_contains_holdings=False,
+        allowed_host_suffixes=("taurusmutualfund.com",),
+    ),
+    "angel_one": AMCDocumentSource(
+        amc_name="Angel One Mutual Fund",
+        amc_code="ANGEL_ONE",
+        adapter_key="angel_one",
+        factsheet_page_url=_env_url(
+            "MF_ANGEL_ONE_FACTSHEET_PAGE_URL",
+            "https://www.angelonemf.com/downloads",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_ANGEL_ONE_PORTFOLIO_PAGE_URL",
+            "https://www.angelonemf.com/downloads",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "aaum"),
+        # Live-checked against the R2 factsheet: factsheet carries Top-10 weightages only,
+        # so reusing it as the portfolio_disclosure document yields zero holdings.
+        factsheet_contains_holdings=False,
+        allowed_host_suffixes=("angelonemf.com", "cms.angelonemf.com"),
+    ),
+    "boi": AMCDocumentSource(
+        amc_name="Bank of India Mutual Fund",
+        amc_code="BOI",
+        adapter_key="boi",
+        factsheet_page_url=_env_url(
+            "MF_BOI_FACTSHEET_PAGE_URL",
+            "https://www.boimf.in/investor-corner",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_BOI_PORTFOLIO_PAGE_URL",
+            "https://www.boimf.in/investor-corner#t2",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "report"),
+        factsheet_contains_holdings=True,
+        # Listing page returns HTTP 200 but renders its document table client-side
+        # (93 anchors served, zero document links), so the plain fetch discovers nothing. Inert until the AMC is also
+        # added to MF_DISCOVERY_BROWSER_AMCS in the discovery workflow.
+        browser_recovery_allowed=True,
+        allowed_host_suffixes=("boimf.in",),
+    ),
+    "choice": AMCDocumentSource(
+        amc_name="Choice Mutual Fund",
+        amc_code="CHOICE",
+        adapter_key="choice",
+        factsheet_page_url=_env_url(
+            "MF_CHOICE_FACTSHEET_PAGE_URL",
+            "https://choicemf.com/disclosures/factsheets",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_CHOICE_PORTFOLIO_PAGE_URL",
+            "https://choicemf.com/disclosures/monthly-portfolio",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio"),
+        factsheet_contains_holdings=True,
+        # Listing page returns HTTP 200 but renders its document table client-side
+        # (1 document link served (a CAMS branch list)), so the plain fetch discovers nothing. Inert until the AMC is also
+        # added to MF_DISCOVERY_BROWSER_AMCS in the discovery workflow.
+        browser_recovery_allowed=True,
+        allowed_host_suffixes=("choicemf.com",),
+    ),
+    "wealth_company": AMCDocumentSource(
+        amc_name="The Wealth Company Mutual Fund",
+        amc_code="WEALTH_COMPANY",
+        adapter_key="wealth_company",
+        factsheet_page_url=_env_url(
+            "MF_WEALTH_COMPANY_FACTSHEET_PAGE_URL",
+            "https://www.wealthcompanyamc.in/literature-forms/scheme-documents/factsheets/",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_WEALTH_COMPANY_PORTFOLIO_PAGE_URL",
+            "https://www.wealthcompanyamc.in/literature-forms/portfolio-documents/monthly/",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio"),
+        factsheet_contains_holdings=True,
+        # Listing page returns HTTP 200 but renders its document table client-side
+        # (54 anchors served, zero document links), so the plain fetch discovers nothing. Inert until the AMC is also
+        # added to MF_DISCOVERY_BROWSER_AMCS in the discovery workflow.
+        browser_recovery_allowed=True,
+        # The listing renders 56 anchors and no document links; the only file URLs in the
+        # rendered HTML are grievance/GST/distributor forms embedded in a Next.js chunk.
+        # No factsheet or portfolio document is reachable from this page.
+        allowed_host_suffixes=("wealthcompanyamc.in",),
+    ),
+    "jio_blackrock": AMCDocumentSource(
+        amc_name="Jio BlackRock Mutual Fund",
+        amc_code="JIO_BLACKROCK",
+        adapter_key="jio_blackrock",
+        factsheet_page_url=_env_url(
+            "MF_JIO_BLACKROCK_FACTSHEET_PAGE_URL",
+            "https://www.jioblackrockamc.com/statutory-disclosure/fund-documents/factsheet",
+        ),
+        portfolio_disclosure_page_url=_env_url(
+            "MF_JIO_BLACKROCK_PORTFOLIO_PAGE_URL",
+            "https://www.jioblackrockamc.com/statutory-disclosure/disclosures/monthly-portfolio-disclosure",
+        ),
+        requires_confirmation=False,
+        confirmation_type=None,
+        confirmation_notes=None,
+        enabled=True,
+        runtime_enabled=True,
+        factsheet_required_keywords=("factsheet", "fact sheet"),
+        portfolio_required_keywords=("portfolio", "monthly portfolio", "disclosure"),
+        # Live-checked against the R2 factsheet: 4-page factsheet is a fund-summary one-pager with no portfolio table,
+        # so reusing it as the portfolio_disclosure document yields zero holdings.
+        factsheet_contains_holdings=False,
+        allowed_host_suffixes=("jioblackrockamc.com", "azurefd.net"),
+    ),
 }
 
 PRODUCTION_TARGET_AMC_KEYS = (
@@ -441,6 +1068,31 @@ PRODUCTION_TARGET_AMC_KEYS = (
     "edelweiss",
     "invesco",
     "hsbc",
+    "quant",
+    "canara_robeco",
+    "groww",
+    "zerodha",
+    "baroda_bnp",
+    "lic",
+    "sundaram",
+    "pgim",
+    "quantum",
+    "bajaj_finserv",
+    "capitalmind",
+    "abakkus",
+    "unifi",
+    "shriram",
+    "helios",
+    "nj",
+    "old_bridge",
+    "360_one",
+    "navi",
+    "taurus",
+    "angel_one",
+    "boi",
+    "choice",
+    "wealth_company",
+    "jio_blackrock",
 )
 
 

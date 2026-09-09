@@ -1,6 +1,6 @@
 # Deployment
 
-**Last updated:** 2026-08-10
+**Last updated:** 2026-09-06
 
 ## Current Topology
 - Frontend: Vercel project rooted at `frontend/`
@@ -46,6 +46,9 @@ Do not migrate business data to Cloud SQL or raw documents to GCS solely to matc
   - `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_KEY` (server routes needing admin Supabase access)
   - `MF_INTERNAL_ADMIN_KEY` (server-to-backend admin resolver debug proxy)
   - `CHAT_INTERNAL_PROXY_KEY` (must match the backend for trusted chat proxy metadata)
+  - `CLAIM_CHECK_INTERNAL_PROXY_KEY` (server-only; must match the backend)
+  - `CLAIM_MONITOR_INTERNAL_KEY` (server-only; protects source-change-triggered thesis re-evaluation)
+  - `FUND_TRUTH_CHECK_PRIVATE_ENABLED=false` (keep false or unset until private review is approved)
   - `RATE_LIMIT_ENABLED=true`
   - `UPSTASH_REDIS_REST_URL`
   - `UPSTASH_REDIS_REST_TOKEN`
@@ -89,6 +92,12 @@ Do not migrate business data to Cloud SQL or raw documents to GCS solely to matc
 - Chat proxy:
   - `CHAT_INTERNAL_PROXY_KEY` must match the Vercel value.
   - The supported frontend route authenticates users; direct FastAPI chat does not validate a Supabase bearer token.
+- Fund Truth Check private proxy:
+  - `CLAIM_CHECK_INTERNAL_PROXY_KEY` must match the Vercel value.
+  - Keep `FUND_TRUTH_CHECK_PRIVATE_ENABLED` unset/false in production until deep testing and both reviewer approvals are complete. Enabling it exposes only an authenticated, noindex review route; it does not add public navigation or SEO pages.
+  - Phase 3 additionally requires `backend/migrations/20260906_add_research_claim_monitor.sql` and a strong Vercel-only `CLAIM_MONITOR_INTERNAL_KEY`. Neither the migration nor the key should be activated in production before owner review.
+  - The source-change route is event-driven and accepts explicit changed scheme/scope/fingerprint tuples. Do not add a daily full-claim sweep; connect it only to a reviewed ingestion/promotion event after private database verification.
+  - No alert or notification delivery is configured in Phase 3.
 - Internal admin endpoints:
   - `GET /api/admin/ops-overview`
   - `GET /api/admin/mf-resolver-debug`
@@ -186,6 +195,39 @@ gcloud run services update fundersai-api --region <region>
 - The workflow requires direct OpenAI embeddings by default. Add `OPENAI_API_KEY` as a GitHub Actions secret; strict runs fail early when it is absent and re-index documents that only have lexical chunks.
 - The workflow probes the repaired chunk schema before downloading PDFs and fails when any selected indexing attempt fails.
 - Verify the exact evidence-page query returns at least one official source before recording the demo.
+
+### Portfolio Phase-One Migration
+
+Production was reverified on 2026-09-03. The boundary is authenticated, owner-only manual research snapshots: no transaction import, account linking, execution, or personalized advice.
+
+Apply and deploy in this order:
+
+1. Confirm the target Supabase project and take a database backup or verify point-in-time recovery is available.
+2. Apply `backend/migrations/20260825_add_user_portfolios.sql` in one transaction.
+3. Apply `backend/migrations/20260825_harden_portfolio_updated_at.sql`.
+4. Run Supabase security and performance advisors. Resolve any new finding tied to these tables before deploying the app.
+5. Confirm the Data API exposes `public.portfolios` and `public.portfolio_positions`. The migration grants CRUD to `authenticated`; `anon` must remain revoked.
+6. Deploy Next.js only after the schema is available. Keep `SUPABASE_SERVICE_ROLE_KEY` server-only; the browser receives only the publishable/anon key.
+7. Start a fresh app process connected to the target project, then run the production smoke:
+
+```powershell
+Set-Location frontend
+npm run build
+npm run start -- --port 3011
+```
+
+In a second PowerShell session:
+
+```powershell
+Set-Location frontend
+$env:PORTFOLIO_E2E_CONFIRM_PRODUCTION='1'
+$env:PORTFOLIO_E2E_BASE_URL='http://127.0.0.1:3011'
+node --env-file=.env.local scripts/verify_portfolio_phase_one.mjs
+```
+
+The smoke must pass signed-out API denial, direct `anon` denial (`42501`), owner spoof denial, owner CRUD, cross-user list/read/insert/update isolation, and `position_source='manual'`. It deletes both temporary auth users; `ON DELETE CASCADE` removes their test rows.
+
+Do not add transaction, folio, lot, cost-basis, return, QR/CAS, broker, or execution fields to these tables. A future import phase needs a separate immutable ledger and explicit source/consent audit design.
 
 ## Workflow Secrets (GitHub Actions)
 - Base:

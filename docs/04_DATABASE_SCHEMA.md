@@ -1,6 +1,6 @@
 # Database Schema
 
-**Last updated:** 2026-08-04
+**Last updated:** 2026-09-06
 
 FundersAI uses Supabase PostgreSQL for structured application data and authentication. Browser access is limited by Row Level Security (RLS); service-role writes are server-side only.
 
@@ -92,6 +92,34 @@ Raw document bytes belong in Cloudflare R2. Supabase stores the object location 
   - activity and lifecycle timestamps
 - RLS policies allow users to read their own profile; server-side admin checks control privileged reads and role/tier mutations.
 
+## Portfolio Phase One
+
+- `portfolios`
+  - User-owned research container with `user_id`, bounded `name`, and timestamps.
+  - Authenticated users can select, insert, update, and delete only rows where `user_id = auth.uid()`.
+- `portfolio_positions`
+  - Manual snapshot row with `portfolio_id`, positive `scheme_code`, positive `units`, non-negative user-entered `current_value`, and fixed `position_source='manual'`.
+  - Unique on `(portfolio_id, scheme_code)` and deleted with its parent portfolio.
+  - Authenticated access requires an owned parent `portfolios` row for every select, insert, update, and delete.
+- `anon` has no table privileges. `authenticated` receives CRUD privileges constrained by RLS. `service_role` retains server-only access.
+- `20260825_harden_portfolio_updated_at.sql` pins the trigger function to an empty `search_path`.
+- These tables are not a transaction ledger: no folio/account identifier, transaction, lot, cost basis, import artifact, or execution field is stored.
+
+## Fund Truth Check Thesis Monitor
+
+- `research_claims` (`20260906_add_research_claim_monitor.sql`, local only; not applied to production)
+  - Stores the authenticated owner, original text, restricted normalized atomic claims, resolved entities, active state, and creation time.
+  - Authenticated users may select only their rows and update only the `active` column. They cannot directly insert, rewrite, or delete claim records through the Data API.
+- `research_claim_evaluations` (same pending migration)
+  - Stores append-only verdict, freshness, full deterministic result, evidence, aggregate source fingerprint, and evaluation time.
+  - Unique on `(claim_id, source_fingerprint)`, preventing duplicate history rows for unchanged evidence.
+  - Authenticated users can select evaluations only through an owned parent claim. Neither authenticated nor service-role Data API access receives update/delete privileges; account deletion may still cascade through the owned parent.
+- `save_research_claim_with_evaluation(...)`
+  - Service-role-only RPC that inserts the initial owned claim and canonical evaluation in one transaction. The browser cannot supply a stored verdict or call this RPC directly.
+- `list_active_research_claims_for_source_change(p_limit)`
+  - Service-role-only bounded RPC returning active claims with each claim's latest evidence and aggregate fingerprint. It supports source-triggered refresh without loading or guessing evaluation history client-side.
+- RLS is enabled on both tables; `anon` receives no privileges. No production migration application has been performed or claimed.
+
 ## Chat Persistence
 
 ### Current owned-session model
@@ -163,3 +191,10 @@ The Next.js proxy uses the service role only after authenticating the user and c
 19. `20260728_make_mf_factsheet_promotion_atomic.sql`
 
 Equivalent production SQL is not a substitute for keeping the migration in version control.
+
+
+## Public MF catalog slice (2026-09-05; migration not applied)
+
+`backend/migrations/20260905_add_mf_page_catalog.sql` adds `mf_page_catalog` with scheme identity, immutable AMC/fund slug pair, category, `is_published`, JSON `gate_reasons`, method-versioned JSON `metrics`, and `last_evaluated_at`. Metrics include dated NAV, history start/count, and independently gated 1Y/3Y/5Y CAGR. A single upsert commits evidence and publication eligibility together.
+
+RLS is enabled; PUBLIC/anon/authenticated privileges are revoked, and service_role has SELECT/INSERT/UPDATE. The publication check rejects missing category, nonempty reasons, missing 1Y CAGR and unknown method versions. A trigger blocks URL changes. All 29 current registry URLs are seeded as unpublished reservations. No existing tables or browser API contracts change. See `MF_CATALOG_ROLLOUT.md` for deployment and acceptance checks.

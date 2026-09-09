@@ -23,9 +23,9 @@ export function BentoReportGrid({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-cyan-950 text-cyan-300 border border-cyan-800/50">
-              Synthesis Studio Report #8492
+              Illustrative Report Preview
             </span>
-            <TrustBadge status="verified" asOfDate="07 Aug 2026" sourceDoc="AMFI & Factsheet" />
+            <TrustBadge status="verified" asOfDate="July 2026" sourceDoc="Sample · AMFI & Factsheet" />
           </div>
           <h2 className="text-xl font-bold text-white tracking-tight font-sans">
             Institutional Research Whitepaper: {fundA} vs {fundB}

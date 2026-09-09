@@ -73,7 +73,7 @@ export default async function ComparePage({ params }: Props) {
   const snapshot = STATIC_SNAPSHOTS[pair];
 
   return (
-    <div className="min-h-dvh bg-[#070b12] text-[#dce8fa] flex flex-col justify-between">
+    <div className="min-h-dvh bg-background text-foreground flex flex-col justify-between">
       <CompareJsonLd fundA={fundA} fundB={fundB} pair={pair} />
       <EcosystemHeader currentApp="tools" />
 
@@ -91,10 +91,10 @@ export default async function ComparePage({ params }: Props) {
           />
         {/* Hero */}
         <div className="mb-12 text-center">
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#00FF9D]/70 mb-4">Fund Comparison</p>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white mb-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-primary mb-4 font-mono">Fund Comparison</p>
+          <h1 className="text-2xl sm:text-3xl font-bold font-serif-display tracking-tight text-white mb-3">
             {fundA.schemeName}
-            <span className="mx-3 text-[#7183a0] font-normal">vs</span>
+            <span className="mx-3 text-text-3 font-normal font-sans">vs</span>
             {fundB.schemeName}
           </h1>
           {/*

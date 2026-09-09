@@ -145,6 +145,10 @@ def test_category_search_reads_core_snapshot_and_ranks_by_3y_return(monkeypatch)
 
 
 def test_category_list_includes_unsupported_as_coming_soon(monkeypatch):
+    """Franklin Templeton is the stand-in for an unsupported AMC: a real AMFI member
+    with no document source, listed in UNSUPPORTED_MF_AMC_KEYWORDS. This used to use
+    Quant, which stopped being unsupported when Quant was onboarded, silently turning
+    both of these into assertions that a supported fund is unsupported."""
     from app.services import chat_service as app_main
 
     fake = _FakeSupabase(
@@ -161,8 +165,8 @@ def test_category_list_includes_unsupported_as_coming_soon(monkeypatch):
                 },
                 {
                     "scheme_code": "2",
-                    "scheme_name": "Quant Large Cap Fund",
-                    "amc_name": "Quant Mutual Fund",
+                    "scheme_name": "Franklin India Large Cap Fund",
+                    "amc_name": "Franklin Templeton Mutual Fund",
                     "category": "Large Cap",
                     "return_3y": 16.0,
                     "aum": 2000,
@@ -177,7 +181,7 @@ def test_category_list_includes_unsupported_as_coming_soon(monkeypatch):
     payload = app_main._category_list_payload("large_cap")
 
     assert len(payload["rows"]) == 2
-    unsupported = [row for row in payload["rows"] if row["scheme_name"] == "Quant Large Cap Fund"][0]
+    unsupported = [row for row in payload["rows"] if row["scheme_name"] == "Franklin India Large Cap Fund"][0]
     assert unsupported["is_supported"] is False
     assert unsupported["disabled_reason"] == "Coming Soon"
     supported = [row for row in payload["rows"] if row["scheme_name"] == "HDFC Large Cap Fund"][0]
@@ -193,7 +197,7 @@ def test_category_compare_rejects_unsupported_fund(monkeypatch):
         {
             "mutual_fund_core_snapshot": [
                 {"scheme_code": "1", "scheme_name": "HDFC Large Cap Fund", "amc_name": "HDFC Mutual Fund", "category": "Large Cap"},
-                {"scheme_code": "2", "scheme_name": "Quant Large Cap Fund", "amc_name": "Quant Mutual Fund", "category": "Large Cap"},
+                {"scheme_code": "2", "scheme_name": "Franklin India Large Cap Fund", "amc_name": "Franklin Templeton Mutual Fund", "category": "Large Cap"},
             ]
         }
     )

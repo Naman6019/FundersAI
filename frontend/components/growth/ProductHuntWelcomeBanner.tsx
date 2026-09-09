@@ -36,6 +36,12 @@ export default function ProductHuntWelcomeBanner() {
         </p>
         <div className="flex items-center gap-3">
           <Link
+            href="/fund-truth-check"
+            className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/5 px-3 py-1 font-semibold text-slate-200 hover:bg-white/10"
+          >
+            See Fund Truth Check <ArrowRight className="h-3 w-3" />
+          </Link>
+          <Link
             href={SIGNUP_HREF}
             onClick={() => trackWhopEvent("lead")}
             className="inline-flex items-center gap-1 rounded-full border border-[#00FF9D]/45 bg-[#00FF9D]/15 px-3 py-1 font-semibold text-[#00FF9D] hover:bg-[#00FF9D]/25"

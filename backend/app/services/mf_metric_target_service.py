@@ -21,7 +21,7 @@ def _fetch_candidate_pages(client: Any) -> list[dict[str, Any]]:
         response = (
             client.table("mf_factsheet_candidates")
             .select(
-                "amc_code,report_month,mapped_scheme_code,mapped_family_id,"
+                "id,source_document_id,amc_code,report_month,mapped_scheme_code,mapped_family_id,"
                 "mapping_status,mapping_confidence,promotion_status"
             )
             .eq("mapping_status", "mapped")
@@ -57,16 +57,22 @@ def supported_metric_targets(client: Any) -> list[dict[str, Any]]:
             continue
         if not source.runtime_enabled:
             continue
-        latest_by_code.setdefault(
-            scheme_code,
-            {
+        if scheme_code not in latest_by_code:
+            target = {
                 "scheme_code": scheme_code,
                 "family_id": family_id,
                 "amc_code": source.amc_code,
                 "report_month": row.get("report_month"),
                 "promotion_status": row.get("promotion_status"),
-            },
-        )
+            }
+            # Keep the exact selected candidate additive. Metric consumers still
+            # use the same scheme-code denominator, while read-only remediation
+            # reports can point a reviewer at the provenance row that selected it.
+            if row.get("id"):
+                target["candidate_id"] = row.get("id")
+            if row.get("source_document_id"):
+                target["source_document_id"] = row.get("source_document_id")
+            latest_by_code[scheme_code] = target
     return [latest_by_code[code] for code in sorted(latest_by_code)]
 
 

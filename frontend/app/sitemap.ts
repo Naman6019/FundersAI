@@ -1,7 +1,7 @@
+import { getPublishedFunds, getPublishedAmcs } from '@/lib/mf/catalog';
+export const dynamic = 'force-dynamic';
 import type { MetadataRoute } from 'next';
 import {
-  AMC_REGISTRY,
-  FUND_REGISTRY,
   CATEGORY_LIST,
   categorySlug,
   COMPARE_PAIRS,
@@ -10,7 +10,9 @@ import {
 
 const BASE_URL = 'https://www.fundersai.co.in';
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const funds = await getPublishedFunds();
+  const amcs = await getPublishedAmcs();
   const routes: MetadataRoute.Sitemap = [];
 
   // 1. Core Institutional & Marketing Pages (www.fundersai.co.in)
@@ -29,6 +31,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '/methodology/guardrails', priority: 0.85, changeFrequency: 'monthly' },
     { path: '/about', priority: 0.7, changeFrequency: 'monthly' },
     { path: '/tools', priority: 0.95, changeFrequency: 'weekly' },
+    { path: '/fund-truth-check', priority: 0.9, changeFrequency: 'weekly' },
     { path: '/tools/portfolio-overlap', priority: 0.95, changeFrequency: 'weekly' },
     { path: '/tools/sip-calculator', priority: 0.95, changeFrequency: 'weekly' },
     { path: '/contact', priority: 0.6, changeFrequency: 'monthly' },
@@ -76,7 +79,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   });
 
   // 3b. SEBI Category Pages
-  for (const cat of CATEGORY_LIST) {
+  for (const cat of new Set(funds.map(f => f.category))) {
     routes.push({
       url: `${BASE_URL}/mutual-funds/category/${categorySlug(cat)}`,
       changeFrequency: 'weekly',
@@ -85,7 +88,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   }
 
   // 3c. AMC Hub Pages
-  for (const amc of AMC_REGISTRY) {
+  for (const amc of amcs) {
     routes.push({
       url: `${BASE_URL}/mutual-funds/${amc.slug}`,
       changeFrequency: 'weekly',
@@ -94,9 +97,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
   }
 
   // 3d. Individual Scheme Factsheets
-  for (const fund of FUND_REGISTRY) {
+  for (const fund of funds) {
     routes.push({
-      url: `${BASE_URL}/mutual-funds/${fund.amcSlug}/${fund.fundSlug}`,
+      url: `${BASE_URL}/mutual-funds/${fund.amc_slug}/${fund.fund_slug}`,
       changeFrequency: 'weekly',
       priority: 0.85,
     });

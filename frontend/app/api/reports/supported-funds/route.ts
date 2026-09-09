@@ -53,7 +53,8 @@ export async function GET() {
     }
 
     // Group DB data by AMC
-    const groupsMap: Record<string, typeof dbData> = {};
+    type SchemeRow = (typeof dbData)[number];
+    const groupsMap: Record<string, SchemeRow[]> = {};
     dbData.forEach((row) => {
       const amc = row.amc_name?.trim() || 'Other Mutual Funds';
       if (!groupsMap[amc]) groupsMap[amc] = [];

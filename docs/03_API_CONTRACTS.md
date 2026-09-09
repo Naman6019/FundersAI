@@ -1,6 +1,6 @@
 # API Contracts
 
-**Last updated:** 2026-08-04
+**Last updated:** 2026-09-06
 
 The supported browser boundary is the Next.js `/api/*` surface. Browser code must not call FastAPI directly. Unless noted otherwise, routes return JSON; chat uses Server-Sent Events (SSE).
 
@@ -37,6 +37,17 @@ The supported browser boundary is the Next.js `/api/*` surface. Browser code mus
 - `GET /api/keepalive`: proxies backend `GET /health`.
 - `GET /api/data-health`: proxies the backend data-health summary.
 
+### Portfolio Phase One
+
+- All portfolio routes require a Supabase bearer token and use the bearer-scoped client, so RLS applies to every user-owned read and write.
+- `GET /api/portfolio`: returns the caller's portfolio snapshots with manual positions, current fund metadata, freshness, and aggregate-overlap coverage.
+- `POST /api/portfolio`: creates an owned portfolio from `{ "name": string }` and returns `201`.
+- `GET /api/portfolio/[portfolioId]/positions`: lists positions only when the caller owns the parent portfolio; an inaccessible parent returns `404`.
+- `POST /api/portfolio/[portfolioId]/positions`: creates one manual position from `{ "scheme_code": integer, "units": positive number, "current_value": non-negative number }`. One scheme is allowed per portfolio; duplicates return `409 position_already_exists`.
+- `PATCH /api/portfolio/[portfolioId]/positions/[positionId]`: updates `units` and/or `current_value`; ownership is enforced by RLS and inaccessible rows return `404`.
+- `DELETE /api/portfolio/[portfolioId]/positions/[positionId]`: deletes an owned manual position.
+- This API stores user-entered snapshots only. It does not accept transaction history, cost basis, broker/account credentials, QR/CAS imports, orders, or advice requests.
+
 ### Feedback
 
 - `POST /api/feedback`
@@ -61,6 +72,13 @@ These routes proxy to their matching `/api/quant/*` FastAPI endpoints.
 
 ### Funds, Search, and Research
 
+- `POST /api/funds/claim-check` exists at two private, read-only layers. FastAPI requires the server-only `X-Internal-Proxy-Key` / `CLAIM_CHECK_INTERNAL_PROXY_KEY` pair and is never called directly by the browser. The same-origin Next.js route accepts `{ "input": "..." }`, validates the 3–2,000 character boundary, uses its dedicated `claim-check` rate-limit group, and forwards only the normalized input. Production returns 404 unless `FUND_TRUTH_CHECK_PRIVATE_ENABLED=true`; when enabled, a valid Supabase bearer session is required. Responses are `no-store` and carry `X-Robots-Tag: noindex, nofollow, noarchive`.
+  - The response contains resolved schemes plus structured atomic claim results. A definitive result requires deterministic values, dated HTTPS official evidence, source fingerprints, field-specific provenance consistency, and comparable reporting periods. Freshness is independent of verdict: stale evidence may support a historical factual verdict, while missing evidence, conflicting values, or mismatched periods return `unverifiable`. NAV comparisons use a shared end date and calculation window. Subjective language returns `clarification_required`; advice, predictions, guarantees, suitability, tax, regulatory, and causal requests return `unsupported` before entity resolution.
+- `GET /api/funds/claim-monitor` is private, authenticated, rate-limited, and returns at most 100 of the caller's saved research claims with up to 20 append-only evaluations per claim. Reads use the bearer-scoped Supabase client, so RLS enforces ownership.
+- `POST /api/funds/claim-monitor` accepts `{ "input": "..." }`, runs a fresh canonical server-side claim check, and saves only results that contain at least one deterministic, trackable atomic claim with fingerprinted evidence. The initial claim and evaluation are inserted atomically by a service-role-only RPC. Browser-supplied verdicts, values, evidence, entities, and fingerprints are ignored because they are never accepted.
+- `PATCH /api/funds/claim-monitor/[claimId]` accepts `{ "active": boolean }`. It pauses or resumes an owned claim without deleting its evaluation history; inaccessible rows return 404.
+- `POST /api/internal/funds/claim-monitor/source-change` is a private server route protected by `X-Internal-Claim-Monitor-Key` / `CLAIM_MONITOR_INTERNAL_KEY`. It accepts 1–50 `{ scheme_code, scope, source_fingerprint }` changes, where scope is `nav|core|holdings|sectors|documents`. Only active claims whose saved scheme and metric dependency match a new fingerprint are re-evaluated. The route bypasses the five-minute read cache, appends only when the resulting aggregate source fingerprint differs, processes at most 20 affected claims per call in bounded batches, and reports truncation. No browser or scheduled cron calls this route in the local Phase 3 build.
+- All claim-monitor responses are `no-store`/`noindex`. Production returns 404 for the entire family unless `FUND_TRUTH_CHECK_PRIVATE_ENABLED=true`; user routes require authentication even in local development. There are no alerts, notifications, subscriptions, or public SEO pages.
 - `GET /api/mf/[schemeCode]`: MF snapshot plus NAV history from the server-only Supabase/MFapi cache path.
 - `GET /api/search`: searches stock and fund entities.
 - `GET /api/funds/category`: category fund list.

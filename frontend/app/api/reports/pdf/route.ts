@@ -65,10 +65,11 @@ export async function POST(req: Request) {
         'Content-Disposition': 'attachment; filename="synthesis-report.pdf"',
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Reports PDF Proxy Error]:', error);
+    const message = error instanceof Error ? error.message : 'Reports PDF proxy failed';
     return NextResponse.json(
-      { error: error?.message || 'Reports PDF proxy failed' },
+      { error: message },
       { status: 500 },
     );
   }

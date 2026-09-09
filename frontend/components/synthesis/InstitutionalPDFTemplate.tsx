@@ -17,7 +17,7 @@ export function InstitutionalPDFTemplate({
   date = "07 August 2026",
 }: InstitutionalPDFTemplateProps) {
   return (
-    <div className="hidden print:block w-full max-w-4xl mx-auto p-8 bg-white text-slate-900 font-sans leading-relaxed">
+    <div aria-hidden="true" className="hidden print:block w-full max-w-4xl mx-auto p-8 bg-white text-slate-900 font-sans leading-relaxed">
       
       {/* Cover Header */}
       <div className="border-b-2 border-slate-900 pb-6 mb-8 flex justify-between items-end">

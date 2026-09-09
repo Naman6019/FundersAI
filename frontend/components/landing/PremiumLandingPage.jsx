@@ -197,7 +197,10 @@ function LiveDataTicker() {
     const fetchTickerData = async () => {
       try {
         const res = await fetch('/api/funds/ticker');
-        if (!res.ok) return;
+        if (!res.ok) {
+          setTickerItems([{ label: "System", value: "Market data temporarily unavailable", isNeutral: true }]);
+          return;
+        }
         const data = await res.json();
         
         const newItems = [];
@@ -296,6 +299,7 @@ function LiveDataTicker() {
 }
 
 function AMCCoverageMarquee() {
+  const reduceMotion = useReducedMotion();
   const Card = ({ item }) => (
     <div className="flex w-[200px] shrink-0 flex-col items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 backdrop-blur-md transition-all hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.06]">
       {/* Logo area — white pill (dark pill for white-on-transparent logos) */}
@@ -316,12 +320,12 @@ function AMCCoverageMarquee() {
       <div className="pointer-events-none absolute right-0 top-0 z-10 h-full w-[60px] sm:w-[160px]" style={{ background: "linear-gradient(to left, var(--bg-base), transparent)" }} />
 
       <motion.div
-        animate={{ x: ["0%", "-50%"] }}
-        transition={{ ease: "linear", duration: 40, repeat: Infinity }}
+        animate={reduceMotion ? undefined : { x: ["0%", "-50%"] }}
+        transition={reduceMotion ? undefined : { ease: "linear", duration: 40, repeat: Infinity }}
         className="flex w-max shrink-0 items-stretch gap-5 pr-5"
       >
         {[...Array(2)].map((_, i) => (
-          <div key={i} className="flex shrink-0 items-stretch gap-5 pr-5">
+          <div key={i} aria-hidden={i === 1} className="flex shrink-0 items-stretch gap-5 pr-5">
             {amcData.map((amc) => (
               <Card key={`${i}-${amc.key}`} item={amc} />
             ))}

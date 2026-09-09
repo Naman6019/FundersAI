@@ -62,7 +62,7 @@ const FUND_CATEGORIES = [
 
 function CanvasPlaceholder() {
   return (
-    <div className="flex h-full flex-col rounded-2xl border border-gray-800/80 bg-[#050810]/95 p-6 shadow-2xl backdrop-blur-xl">
+    <div className="flex h-full flex-col rounded-2xl border border-gray-800/80 bg-surface-base/95 p-6 shadow-2xl backdrop-blur-xl">
       <div className="flex items-start justify-between">
         <div>
           <div className="font-mono text-[10px] uppercase font-bold tracking-widest text-blue-400 px-2.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 mb-2 inline-block">
@@ -80,7 +80,7 @@ function CanvasPlaceholder() {
           { label: 'COMPARE', value: 'Side-by-side', note: 'Returns, risk, overlap' },
           { label: 'EXPLAIN', value: 'Research Only', note: 'Zero financial advice' },
         ].map((item) => (
-          <div key={item.label} className="rounded-xl border border-gray-800/80 bg-[#070b12]/80 p-3.5">
+          <div key={item.label} className="rounded-xl border border-gray-800/80 bg-surface-base/80 p-3.5">
             <p className="font-mono text-[10px] uppercase tracking-wider text-blue-400">{item.label}</p>
             <p className="mt-1 text-base font-bold tracking-tight text-white">{item.value}</p>
             <p className="mt-0.5 text-[11px] text-gray-500">{item.note}</p>
@@ -88,7 +88,7 @@ function CanvasPlaceholder() {
         ))}
       </div>
 
-      <div className="mt-5 flex-1 rounded-xl border border-gray-800/80 bg-[#070b12]/60 p-4 relative overflow-hidden">
+      <div className="mt-5 flex-1 rounded-xl border border-gray-800/80 bg-surface-base/60 p-4 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(rgba(59,130,246,0.06)_1px,transparent_1px)] [background-size:20px_20px]" />
         <svg viewBox="0 0 700 260" className="h-full w-full relative z-10" aria-hidden>
           <path d="M30 210 C110 180, 150 192, 220 160 C270 138, 300 150, 360 122 C410 98, 450 112, 510 86 C560 66, 620 82, 670 72" fill="none" stroke="#2563eb" strokeWidth="3.5" strokeLinecap="round"/>
@@ -108,7 +108,7 @@ function FineGrid() {
   return (
     <motion.div
       aria-hidden="true"
-      className="absolute inset-0 z-0 bg-[linear-gradient(to_right,rgba(102,163,255,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(102,163,255,0.07)_1px,transparent_1px)] bg-[size:88px_88px] [mask-image:radial-gradient(ellipse_at_top,black_22%,transparent_74%)]"
+      className="absolute inset-0 z-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:88px_88px] [mask-image:radial-gradient(ellipse_at_top,black_22%,transparent_74%)]"
       animate={reduceMotion ? undefined : { backgroundPosition: ["0px 0px", "88px 88px"], opacity: [0.42, 0.62, 0.42] }}
       transition={reduceMotion ? undefined : { backgroundPosition: { duration: 34, repeat: Infinity, ease: "linear" }, opacity: { duration: 8, repeat: Infinity, ease: "easeInOut" } }}
     />
@@ -312,8 +312,8 @@ export default function DashboardLayout() {
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <h2 className="font-serif text-3xl font-semibold text-white tracking-tight">What can I safely do here?</h2>
-            <p className="font-body-sm text-[14px] text-slate-400 mt-1 max-w-2xl">
+            <h2 className="font-serif-display text-3xl font-semibold text-white tracking-tight">What can I safely do here?</h2>
+            <p className="text-sm text-slate-400 mt-1 max-w-2xl">
               Compare verified funds, ask source-backed research questions, and review portfolio structure without advisory output.
             </p>
           </div>
@@ -324,10 +324,8 @@ export default function DashboardLayout() {
             onClick={() => handleOverviewQuery('Compare Axis Flexi Cap and HDFC Flexi Cap')}
             className="p-6 hover:border-[#00FF9D]/40 transition-colors cursor-pointer group shadow-lg"
           >
-            <div className="w-10 h-10 rounded-lg bg-[#00FF9D]/10 flex items-center justify-center mb-4 group-hover:bg-[#00FF9D]/20 transition-colors">
-              <ArrowLeftRight className="text-[#00FF9D] h-5 w-5" />
-            </div>
-            <h3 className="font-serif text-lg font-medium text-white mb-2">Compare Funds</h3>
+            <ArrowLeftRight className="text-[#00FF9D] h-6 w-6 mb-4" />
+            <h3 className="font-serif-display text-lg font-medium text-white mb-2">Compare Funds</h3>
             <p className="text-sm text-slate-400 leading-relaxed">
               Compare returns, risk, expense ratio, AUM, fund category, and consistency side-by-side.
             </p>
@@ -339,10 +337,8 @@ export default function DashboardLayout() {
             className="border-[#00FF9D]/20 p-6 hover:border-[#00FF9D]/60 transition-colors cursor-pointer group relative overflow-hidden shadow-lg"
           >
             <div className="absolute top-0 right-0 w-32 h-32 bg-[#00FF9D]/5 rounded-full blur-3xl pointer-events-none"></div>
-            <div className="w-10 h-10 rounded-lg bg-[#00FF9D]/20 flex items-center justify-center mb-4 group-hover:bg-[#00FF9D]/30 transition-colors relative z-10">
-              <Brain className="text-[#00FF9D] h-5 w-5" />
-            </div>
-            <h3 className="font-serif text-lg font-medium text-white mb-2 relative z-10">Ask Research Question</h3>
+            <Brain className="text-[#00FF9D] h-6 w-6 mb-4 relative z-10" />
+            <h3 className="font-serif-display text-lg font-medium text-white mb-2 relative z-10">Ask Research Question</h3>
             <p className="text-sm text-slate-400 leading-relaxed relative z-10">
               Ask FundersAI to explain funds, compare strategies, or simplify complex fund data.
             </p>
@@ -353,10 +349,8 @@ export default function DashboardLayout() {
             onClick={() => handleOverviewQuery('Review my portfolio diversification')}
             className="p-6 hover:border-[#00FF9D]/40 transition-colors cursor-pointer group shadow-lg"
           >
-            <div className="w-10 h-10 rounded-lg bg-[#00FF9D]/10 flex items-center justify-center mb-4 group-hover:bg-[#00FF9D]/20 transition-colors">
-              <Wallet className="text-[#00FF9D] h-5 w-5" />
-            </div>
-            <h3 className="font-serif text-lg font-medium text-white mb-2">Portfolio Review</h3>
+            <Wallet className="text-[#00FF9D] h-6 w-6 mb-4" />
+            <h3 className="font-serif-display text-lg font-medium text-white mb-2">Portfolio Review</h3>
             <p className="text-sm text-slate-400 leading-relaxed">
               Review holdings structure, concentration, and diversification signals.
             </p>
@@ -405,7 +399,7 @@ export default function DashboardLayout() {
             <Panel className="relative z-30 p-6 shadow-lg">
               <div className="flex items-center gap-2 mb-4">
                 <ArrowLeftRight className="text-[#00FF9D] h-5 w-5" />
-                <h3 className="font-serif text-xl font-medium text-white">Quick Compare</h3>
+                <h3 className="font-serif-display text-xl font-medium text-white">Quick Compare</h3>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 items-center">
                 <div className="flex-1 w-full relative">
@@ -434,7 +428,7 @@ export default function DashboardLayout() {
             <div className="relative z-0">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-serif text-xl font-medium text-white">Explore by Category</h3>
+                  <h3 className="font-serif-display text-xl font-medium text-white">Explore by Category</h3>
                   <p className="mt-1 text-xs text-slate-400">List funds by bucket, select 2-3 supported funds, then compare metrics and portfolios.</p>
                 </div>
                 {selectedCategoryCodes.length > 0 && (
@@ -452,8 +446,8 @@ export default function DashboardLayout() {
                       onClick={() => loadCategoryFunds(cat.key)}
                       className={`text-left p-4 transition-all cursor-pointer group shadow-sm ${
                         activeCategory === cat.key
-                          ? 'border-[#00FF9D]/60 bg-[#00FF9D]/10 shadow-[0_4px_16px_rgba(102,163,255,0.15)]'
-                          : 'border-white/10 hover:border-[#00FF9D]/30 hover:bg-[#1a2333]'
+                          ? 'border-[#00FF9D]/60 bg-[#00FF9D]/10 shadow-[0_4px_16px_rgba(0,255,157,0.15)]'
+                          : 'border-white/10 hover:border-[#00FF9D]/30 hover:bg-surface-hover'
                       }`}
                     >
                       <CatIcon className="text-[#00FF9D] h-4 w-4 mb-2 opacity-80 group-hover:opacity-100 transition-opacity" />
@@ -465,7 +459,7 @@ export default function DashboardLayout() {
               </div>
 
               {activeCategory && (
-                <div className="mt-4 rounded-xl border border-white/10 bg-[#101827]/70 p-4">
+                <div className="mt-4 rounded-xl border border-white/10 bg-surface-1/70 p-4">
                   <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <h4 className="text-sm font-semibold text-white">
@@ -504,7 +498,7 @@ export default function DashboardLayout() {
                   {!categoryLoading && !categoryError && categoryFunds.length > 0 && (
                     <div className="max-h-96 overflow-y-auto rounded-lg border border-white/10">
                       <table className="min-w-full text-left text-xs">
-                        <thead className="sticky top-0 bg-[#172033] text-[#8ea7cd]">
+                        <thead className="sticky top-0 bg-surface-2 text-[#8ea7cd]">
                           <tr>
                             <th className="px-3 py-2 font-semibold">Select</th>
                             <th className="px-3 py-2 font-semibold">Fund</th>
@@ -601,7 +595,7 @@ export default function DashboardLayout() {
 
           <div className="space-y-6">
             <Panel className="p-6 shadow-lg">
-              <h3 className="font-serif text-lg font-medium text-white mb-4">Investor Tools</h3>
+              <h3 className="font-serif-display text-lg font-medium text-white mb-4">Investor Tools</h3>
               <div className="space-y-2">
                 <Link href="/dashboard/research-evidence" className="w-full text-left p-3 rounded-lg border border-[#00FF9D]/20 bg-[#00FF9D]/[0.06] hover:bg-[#00FF9D]/10 hover:border-[#00FF9D]/30 transition-all cursor-pointer flex items-center justify-between group">
                   <div>
@@ -635,10 +629,10 @@ export default function DashboardLayout() {
             </Panel>
 
             <Panel className="p-6 shadow-lg">
-              <h3 className="font-serif text-lg font-medium text-white mb-4">Recent Activity</h3>
+              <h3 className="font-serif-display text-lg font-medium text-white mb-4">Recent Activity</h3>
               <div className="space-y-3">
                 <div onClick={() => handleOverviewQuery('Analyze Parag Parikh Flexi Cap Fund')} className="flex items-center gap-3 cursor-pointer group">
-                  <div className="w-8 h-8 rounded bg-[#111] border border-[#222] flex items-center justify-center shrink-0">
+                  <div className="w-8 h-8 rounded bg-surface-2 border border-line flex items-center justify-center shrink-0">
                     <History className="h-3.5 w-3.5 text-slate-400" />
                   </div>
                   <div>
@@ -647,7 +641,7 @@ export default function DashboardLayout() {
                   </div>
                 </div>
                 <div onClick={() => handleOverviewQuery('Compare Axis Flexi Cap and HDFC Flexi Cap')} className="flex items-center gap-3 cursor-pointer group">
-                  <div className="w-8 h-8 rounded bg-[#111] border border-[#222] flex items-center justify-center shrink-0">
+                  <div className="w-8 h-8 rounded bg-surface-2 border border-line flex items-center justify-center shrink-0">
                     <History className="h-3.5 w-3.5 text-slate-400" />
                   </div>
                   <div>
@@ -710,18 +704,20 @@ export default function DashboardLayout() {
         setActiveTab={setActiveTab}
         currentTier={currentTier}
       />
-      <div className="relative h-screen w-full overflow-hidden bg-[#050505] text-[#e8f0ff] flex flex-col selection:bg-[#00FF9D]/30 selection:text-white flex-1">
+      <div className="relative h-screen w-full overflow-hidden bg-surface-base text-text-1 flex flex-col selection:bg-[#00FF9D]/30 selection:text-white flex-1">
         <FineGrid />
-        <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_0%,rgba(102,163,255,0.06),transparent_65%)]" />
+        <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,255,157,0.05),transparent_65%)]" />
 
         <div className="relative z-10 flex flex-col flex-1 h-full w-full overflow-hidden bg-transparent">
           <EcosystemHeader
             currentApp="research"
             dataTrustHref="/dashboard/data-trust"
             containerClassName="w-full px-4 sm:px-6"
-            leading={<SidebarTrigger className="text-slate-200 hover:text-white transition shrink-0" />}
+            desktopNavigationVisibilityClassName="hidden"
+            compactMenuVisibilityClassName=""
+            leading={<SidebarTrigger className="hidden sm:inline-flex text-slate-200 hover:text-white transition shrink-0" />}
             centerSlot={
-              <div className="hidden relative max-w-xs w-full sm:block">
+              <div className="hidden relative max-w-xs w-full xl:block">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 h-3.5 w-3.5" />
                 <input
                   type="text"
@@ -742,24 +738,26 @@ export default function DashboardLayout() {
               </div>
             }
             trailing={
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="hidden sm:flex items-center gap-3 shrink-0">
                 {currentTier === 'free' && (
                   <Link
                     href="/billing"
-                    className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 text-xs font-semibold text-white transition hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-950/40"
+                    aria-label="Upgrade plan"
+                    className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-3 2xl:px-4 text-xs font-semibold text-white transition hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-950/40"
                   >
                     <Sparkles className="h-3.5 w-3.5 text-emerald-100" />
-                    <span className="hidden sm:inline tracking-wide">Upgrade</span>
+                    <span className="hidden 2xl:inline tracking-wide">Upgrade</span>
                   </Link>
                 )}
                 <Link
                   href="/dashboard/data-trust"
-                  className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200 transition hover:border-amber-400/45 hover:text-white"
+                  aria-label={`Data & Trust: ${healthSummary.label}. Last checked ${lastSuccessfulCheck || 'pending'}.`}
+                  className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200 transition hover:border-amber-400/45 hover:text-white"
                   title={`Data & Trust: ${healthSummary.label}. Last checked ${lastSuccessfulCheck || 'pending'}.`}
                 >
                   <span className={`h-2 w-2 rounded-full ${statusDotClass(healthSummary.status)}`} aria-hidden="true" />
-                  <span className="hidden md:inline">Data &amp; Trust</span>
-                  <span className="hidden max-w-40 truncate font-normal text-slate-400 lg:inline">{healthSummary.label}</span>
+                  <span className="hidden 2xl:inline">Data &amp; Trust</span>
+                  <span className="hidden max-w-40 truncate font-normal text-slate-400 2xl:inline">{healthSummary.label}</span>
                 </Link>
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/15 bg-white/[0.04] hover:bg-white/10 transition-colors">
                   <LandingThemeToggle />
@@ -790,10 +788,10 @@ export default function DashboardLayout() {
                       isResizingCanvas ? 'bg-[#00FF9D]' : 'bg-[#222] group-hover:bg-[#00FF9D]/50'
                     }`} />
 
-                    <div className={`absolute w-5 h-12 rounded-full border bg-[#111] flex flex-col gap-1 items-center justify-center shadow-lg transition-all duration-200 pointer-events-none ${
+                    <div className={`absolute w-5 h-12 rounded-full border bg-surface-2 flex flex-col gap-1 items-center justify-center shadow-lg transition-all duration-200 pointer-events-none ${
                       isResizingCanvas
-                        ? 'border-[#00FF9D]/80 scale-105 opacity-100 shadow-[0_0_12px_rgba(102,163,255,0.3)]'
-                        : 'border-[#222] opacity-40 group-hover:opacity-100 group-hover:border-[#00FF9D]/40'
+                        ? 'border-[#00FF9D]/80 scale-105 opacity-100 shadow-[0_0_12px_rgba(0,255,157,0.3)]'
+                        : 'border-line-strong opacity-40 group-hover:opacity-100 group-hover:border-[#00FF9D]/40'
                     }`}>
                       <div className="flex flex-col gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-[#00FF9D]" />
@@ -805,7 +803,7 @@ export default function DashboardLayout() {
 
                   <main 
                     style={{ width: `${canvasWidth}px` }}
-                    className="min-h-0 min-w-0 h-full overflow-y-auto rounded-[1.2rem] border border-[#222] bg-[#0a0a0a] p-6 flex-shrink-0 relative"
+                    className="min-h-0 min-w-0 h-full overflow-y-auto rounded-[1.2rem] border border-line bg-surface-base p-6 flex-shrink-0 relative"
                   >
                     <button
                       onClick={() => { useCanvasStore.getState().closeCanvas(); }}

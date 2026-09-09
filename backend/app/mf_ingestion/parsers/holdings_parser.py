@@ -112,27 +112,58 @@ class HoldingsParser:
                 )
 
         try:
-            pdf_frames = self.pdf_table_parser.extract_tables(file_path)
+            extraction = self.pdf_table_parser.extract_tables_with_status(file_path)
         except Exception as exc:
             logger.exception("event=pdf_table_extract_failed source_document_id=%s", context.source_document_id)
             return ParseBatchResult(
                 diagnostics=[ParseDiagnostic("error", "pdf_tables", "pdf_table_extract_failed", error_type=type(exc).__name__)],
                 failed_sources=1,
             )
+        pdf_frames = extraction.frames
+        # A bounded scan that stopped early has seen only part of the document, so
+        # whatever it did parse is by definition an incomplete portfolio. Carry that
+        # through as a failed source: ParseBatchResult.has_failures is what routes a
+        # document to review, which is the only correct destination for a partial
+        # holdings table.
+        truncation_diagnostics: list[ParseDiagnostic] = []
+        if extraction.is_truncated:
+            logger.warning(
+                "event=pdf_table_extraction_truncated source_document_id=%s reason=%s pages=%s/%s",
+                context.source_document_id,
+                extraction.truncated_reason,
+                extraction.pages_scanned,
+                extraction.pages_total,
+            )
+            truncation_diagnostics.append(
+                ParseDiagnostic(
+                    "error",
+                    "pdf_tables",
+                    "pdf_table_extraction_truncated",
+                    error_type=extraction.truncated_reason,
+                )
+            )
+
+        def _with_truncation(batch: ParseBatchResult) -> ParseBatchResult:
+            if not truncation_diagnostics:
+                return batch
+            batch.diagnostics = [*batch.diagnostics, *truncation_diagnostics]
+            batch.failed_sources += 1
+            return batch
+
         if pdf_frames:
             frame_batch = self._parse_pdf_frames_batch(pdf_frames, context)
             if frame_batch.records or frame_batch.has_failures:
-                return frame_batch
+                return _with_truncation(frame_batch)
 
             # Backward-safe fallback for adapters that expect all frames together.
             try:
                 parsed = self.adapter.parse_holdings([], pdf_frames, "", context)
                 if parsed and parsed.holdings:
-                    return ParseBatchResult(records=[parsed], successful_sources=1)
+                    return _with_truncation(ParseBatchResult(records=[parsed], successful_sources=1))
             except Exception as exc:
                 return ParseBatchResult(
-                    diagnostics=[ParseDiagnostic("error", "pdf_tables", "pdf_table_parse_failed", error_type=type(exc).__name__)],
-                    failed_sources=1,
+                    diagnostics=[*truncation_diagnostics, ParseDiagnostic("error", "pdf_tables", "pdf_table_parse_failed", error_type=type(exc).__name__)],
+                    failed_sources=1 + len(truncation_diagnostics),
                 )
 
         try:

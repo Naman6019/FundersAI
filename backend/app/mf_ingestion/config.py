@@ -27,8 +27,6 @@ class IngestionConfig:
     discovery_expected_month_grace_days: int
     discovery_browser_enabled: bool
     discovery_browser_amcs: tuple[str, ...]
-    discovery_llm_recovery_enabled: bool
-    discovery_llm_recovery_model: str
 
 
 
@@ -66,6 +64,4 @@ def get_config() -> IngestionConfig:
             for item in os.getenv("MF_DISCOVERY_BROWSER_AMCS", "").split(",")
             if item.strip()
         ),
-        discovery_llm_recovery_enabled=os.getenv("MF_DISCOVERY_LLM_RECOVERY_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"},
-        discovery_llm_recovery_model=os.getenv("MF_DISCOVERY_LLM_RECOVERY_MODEL", "").strip(),
     )

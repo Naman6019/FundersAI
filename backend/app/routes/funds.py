@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 
 from app.repositories.mutual_fund_repository import MutualFundRepository
 from app.services.fund_category_service import CategoryCompareRequest, FundCategoryService, MutualFundDetailService
@@ -16,6 +16,8 @@ import time
 from app.providers.yfinance_provider import YFinanceProvider
 from app.repositories.admin_ops_repository import AdminOpsRepository
 from app.services.data_health_service import DataHealthService
+from app.services.claim_check_contract import ClaimCheckRequest
+from app.services.claim_check_service import ClaimCheckService, trusted_claim_check_proxy
 
 router = APIRouter(tags=["funds"])
 JUDGE_REPORT_PATH = Path(__file__).resolve().parents[2] / "evals" / "fund_research_v1" / "judge_report.json"
@@ -35,6 +37,10 @@ def get_mf_detail_service(repository: MutualFundRepository = Depends(get_mutual_
 
 def get_fund_similarity_service(repository: MutualFundRepository = Depends(get_mutual_fund_repository)) -> FundSimilarityService:
     return FundSimilarityService(repository)
+
+
+def get_claim_check_service(repository: MutualFundRepository = Depends(get_mutual_fund_repository)) -> ClaimCheckService:
+    return ClaimCheckService(repository)
 
 
 @router.get("/api/funds/search")
@@ -88,6 +94,19 @@ class DocumentResearchRequest(BaseModel):
     document_type: str | None = None
     report_month: str | None = None
     limit: int = 5
+
+
+@router.post("/api/funds/claim-check")
+def claim_check_endpoint(
+    request: ClaimCheckRequest,
+    x_internal_proxy_key: str | None = Header(default=None, alias="X-Internal-Proxy-Key"),
+    x_claim_check_cache: str | None = Header(default=None, alias="X-Claim-Check-Cache"),
+    service: ClaimCheckService = Depends(get_claim_check_service),
+):
+    """Read-only backend endpoint available only through trusted server callers."""
+    if not trusted_claim_check_proxy(x_internal_proxy_key):
+        raise HTTPException(status_code=403, detail="trusted_proxy_required")
+    return service.check(request, use_cache=x_claim_check_cache != "bypass")
 
 
 @router.post("/api/funds/research/search")

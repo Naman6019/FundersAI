@@ -4,6 +4,8 @@ on:
   schedule:
     # 02:00 AM IST Tuesday-Saturday, after each Mon-Fri AMFI business day.
     - cron: '30 20 * * 1-5'
+    # Fund-of-funds and overseas schemes can publish by 10:00 AM on T+1.
+    - cron: '0 5 * * 2-6' # 10:30 AM IST, Tue-Sat
   workflow_dispatch:
 
 permissions:
@@ -32,13 +34,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
 
-      - name: Check latest expected NAV date
+      - name: Reconcile every supported AMC NAV row with AMFI
         id: nav_health
         run: python backend/scripts/verify_mf_nav_sync.py --output mf-nav-sync-health-before.json --github-output "$GITHUB_OUTPUT"
 
       - name: Retry AMFI NAV sync when needed
         if: steps.nav_health.outputs.needs_retry == 'true'
-        run: python backend/scripts/sync_mf.py
+        run: python backend/scripts/sync_mf.py --nav-only
 
       - name: Verify retried NAV sync
         if: steps.nav_health.outputs.needs_retry == 'true'

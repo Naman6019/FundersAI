@@ -68,10 +68,11 @@ export async function POST(req: Request) {
         Connection: 'keep-alive',
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Reports Stream Proxy Error]:', error);
+    const message = error instanceof Error ? error.message : 'Reports stream proxy failed';
     return NextResponse.json(
-      { error: error?.message || 'Reports stream proxy failed' },
+      { error: message },
       { status: 500 },
     );
   }

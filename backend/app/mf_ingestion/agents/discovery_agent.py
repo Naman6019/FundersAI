@@ -20,7 +20,6 @@ from app.mf_ingestion.sources.registry import AMCDocumentSource, get_source
 
 ManifestLoader = Callable[[str, AMCDocumentSource, str], list[DiscoveredDocument]]
 LastKnownGoodLoader = Callable[[AMCDocumentSource, str], list[DiscoveredDocument]]
-LLMRecoveryLoader = Callable[[AMCDocumentSource, str], list[DiscoveredDocument]]
 
 
 class AMCLinkDiscoveryAgent:
@@ -36,7 +35,6 @@ class AMCLinkDiscoveryAgent:
         manifest_path: str = "",
         manifest_loader: ManifestLoader = load_source_manifest_documents,
         last_known_good_loader: LastKnownGoodLoader | None = None,
-        llm_recovery_loader: LLMRecoveryLoader | None = None,
         max_actions: int = 12,
     ) -> None:
         if self.expected_adapter_key and source.adapter_key.lower() != self.expected_adapter_key:
@@ -46,7 +44,6 @@ class AMCLinkDiscoveryAgent:
         self.manifest_path = manifest_path
         self.manifest_loader = manifest_loader
         self.last_known_good_loader = last_known_good_loader
-        self.llm_recovery_loader = llm_recovery_loader
         self.max_actions = max(max_actions, 1)
 
     @property
@@ -204,30 +201,6 @@ class AMCLinkDiscoveryAgent:
                 ],
                 expected_month=expected_month,
             )
-            if not candidates and self.llm_recovery_loader and actions_used < self.max_actions:
-                actions_used += 1
-                try:
-                    recovered = self.llm_recovery_loader(self.source, document_type)
-                    candidates = _dedupe_candidates(recovered, expected_month=expected_month)
-                    trace.append(
-                        AgentTraceEvent(
-                            step="recover",
-                            status="ok" if candidates else "skipped",
-                            detail=f"Bounded LLM recovery returned {len(candidates)} existing-page candidate(s).",
-                            document_type=document_type,
-                            strategy="bounded_llm_page_recovery",
-                        )
-                    )
-                except Exception as exc:
-                    trace.append(
-                        AgentTraceEvent(
-                            step="recover",
-                            status="warning",
-                            detail=f"Bounded LLM recovery failed: {exc}",
-                            document_type=document_type,
-                            strategy="bounded_llm_page_recovery",
-                        )
-                    )
             if not candidates:
                 trace.append(
                     AgentTraceEvent(
@@ -575,6 +548,106 @@ class HSBCLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
     expected_adapter_key = "hsbc"
 
 
+class QuantLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "quant"
+
+
+class CanaraRobecoLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "canara_robeco"
+
+
+class GrowwLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "groww"
+
+
+class ZerodhaLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "zerodha"
+
+
+class BarodaBNPLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "baroda_bnp"
+
+
+class LICLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "lic"
+
+
+class SundaramLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "sundaram"
+
+
+class PGIMLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "pgim"
+
+
+class QuantumLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "quantum"
+
+
+class BajajFinservLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "bajaj_finserv"
+
+
+class CapitalmindLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "capitalmind"
+
+
+class AbakkusLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "abakkus"
+
+
+class UnifiLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "unifi"
+
+
+class ShriramLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "shriram"
+
+
+class HeliosLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "helios"
+
+
+class NJLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "nj"
+
+
+class OldBridgeLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "old_bridge"
+
+
+class ThreeSixtyOneLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "360_one"
+
+
+class NaviLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "navi"
+
+
+class TaurusLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "taurus"
+
+
+class AngelOneLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "angel_one"
+
+
+class BOILinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "boi"
+
+
+class ChoiceLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "choice"
+
+
+class WealthCompanyLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "wealth_company"
+
+
+class JioBlackRockLinkDiscoveryAgent(AMCLinkDiscoveryAgent):
+    expected_adapter_key = "jio_blackrock"
+
+
 PRODUCTION_TARGET_AMC_AGENT_KEYS = (
     "sbi",
     "mirae",
@@ -593,6 +666,31 @@ PRODUCTION_TARGET_AMC_AGENT_KEYS = (
     "edelweiss",
     "invesco",
     "hsbc",
+    "quant",
+    "canara_robeco",
+    "groww",
+    "zerodha",
+    "baroda_bnp",
+    "lic",
+    "sundaram",
+    "pgim",
+    "quantum",
+    "bajaj_finserv",
+    "capitalmind",
+    "abakkus",
+    "unifi",
+    "shriram",
+    "helios",
+    "nj",
+    "old_bridge",
+    "360_one",
+    "navi",
+    "taurus",
+    "angel_one",
+    "boi",
+    "choice",
+    "wealth_company",
+    "jio_blackrock",
 )
 
 # Compatibility roster retained for callers and reports that still mean ten AMCs.
@@ -627,12 +725,49 @@ AGENT_CLASSES: dict[str, type[AMCLinkDiscoveryAgent]] = {
     "edelweiss": EdelweissLinkDiscoveryAgent,
     "invesco": InvescoLinkDiscoveryAgent,
     "hsbc": HSBCLinkDiscoveryAgent,
+    "quant": QuantLinkDiscoveryAgent,
+    "canara_robeco": CanaraRobecoLinkDiscoveryAgent,
+    "groww": GrowwLinkDiscoveryAgent,
+    "zerodha": ZerodhaLinkDiscoveryAgent,
+    "baroda_bnp": BarodaBNPLinkDiscoveryAgent,
+    "lic": LICLinkDiscoveryAgent,
+    "sundaram": SundaramLinkDiscoveryAgent,
+    "pgim": PGIMLinkDiscoveryAgent,
+    "quantum": QuantumLinkDiscoveryAgent,
+    "bajaj_finserv": BajajFinservLinkDiscoveryAgent,
+    "capitalmind": CapitalmindLinkDiscoveryAgent,
+    "abakkus": AbakkusLinkDiscoveryAgent,
+    "unifi": UnifiLinkDiscoveryAgent,
+    "shriram": ShriramLinkDiscoveryAgent,
+    "helios": HeliosLinkDiscoveryAgent,
+    "nj": NJLinkDiscoveryAgent,
+    "old_bridge": OldBridgeLinkDiscoveryAgent,
+    "360_one": ThreeSixtyOneLinkDiscoveryAgent,
+    "navi": NaviLinkDiscoveryAgent,
+    "taurus": TaurusLinkDiscoveryAgent,
+    "angel_one": AngelOneLinkDiscoveryAgent,
+    "boi": BOILinkDiscoveryAgent,
+    "choice": ChoiceLinkDiscoveryAgent,
+    "wealth_company": WealthCompanyLinkDiscoveryAgent,
+    "jio_blackrock": JioBlackRockLinkDiscoveryAgent,
 }
 
 AGENT_KEY_ALIASES = {
     "absl": "aditya_birla",
     "aditya-birla": "aditya_birla",
     "aditya_birla_sun_life": "aditya_birla",
+    "canara": "canara_robeco",
+    "canararobeco": "canara_robeco",
+    "canara-robeco": "canara_robeco",
+    "baroda": "baroda_bnp",
+    "licmf": "lic",
+    "bajaj": "bajaj_finserv",
+    "iifl": "360_one",
+    "360one": "360_one",
+    "bankofindia": "boi",
+    "bank_of_india": "boi",
+    "jioblackrock": "jio_blackrock",
+    "wealthcompany": "wealth_company",
 }
 
 
@@ -642,7 +777,6 @@ def build_discovery_agent(
     config: IngestionConfig | None = None,
     max_actions: int = 12,
     last_known_good_loader: LastKnownGoodLoader | None = None,
-    llm_recovery_loader: LLMRecoveryLoader | None = None,
 ) -> AMCLinkDiscoveryAgent:
     requested_key = str(amc or "").strip().lower()
     key = AGENT_KEY_ALIASES.get(requested_key, requested_key)
@@ -657,7 +791,6 @@ def build_discovery_agent(
         downloader=downloader,
         manifest_path=resolved_config.source_manifest_path,
         last_known_good_loader=last_known_good_loader,
-        llm_recovery_loader=llm_recovery_loader,
         max_actions=max_actions,
     )
 

@@ -1,0 +1,205 @@
+[
+  {
+    "scheme_code": "120503",
+    "amc_slug": "hdfc",
+    "fund_slug": "hdfc-flexi-cap-fund",
+    "amc_name": "HDFC Mutual Fund",
+    "scheme_name": "HDFC Flexi Cap Fund"
+  },
+  {
+    "scheme_code": "119552",
+    "amc_slug": "hdfc",
+    "fund_slug": "hdfc-mid-cap-opportunities-fund",
+    "amc_name": "HDFC Mutual Fund",
+    "scheme_name": "HDFC Mid-Cap Opportunities Fund"
+  },
+  {
+    "scheme_code": "119598",
+    "amc_slug": "hdfc",
+    "fund_slug": "hdfc-small-cap-fund",
+    "amc_name": "HDFC Mutual Fund",
+    "scheme_name": "HDFC Small Cap Fund"
+  },
+  {
+    "scheme_code": "119533",
+    "amc_slug": "hdfc",
+    "fund_slug": "hdfc-top-100-fund",
+    "amc_name": "HDFC Mutual Fund",
+    "scheme_name": "HDFC Top 100 Fund"
+  },
+  {
+    "scheme_code": "122639",
+    "amc_slug": "ppfas",
+    "fund_slug": "parag-parikh-flexi-cap-fund",
+    "amc_name": "PPFAS Mutual Fund",
+    "scheme_name": "Parag Parikh Flexi Cap Fund"
+  },
+  {
+    "scheme_code": "149021",
+    "amc_slug": "ppfas",
+    "fund_slug": "parag-parikh-elss-tax-saver-fund",
+    "amc_name": "PPFAS Mutual Fund",
+    "scheme_name": "Parag Parikh ELSS Tax Saver Fund"
+  },
+  {
+    "scheme_code": "118989",
+    "amc_slug": "mirae-asset",
+    "fund_slug": "mirae-asset-emerging-bluechip-fund",
+    "amc_name": "Mirae Asset Mutual Fund",
+    "scheme_name": "Mirae Asset Emerging Bluechip Fund"
+  },
+  {
+    "scheme_code": "118701",
+    "amc_slug": "mirae-asset",
+    "fund_slug": "mirae-asset-large-cap-fund",
+    "amc_name": "Mirae Asset Mutual Fund",
+    "scheme_name": "Mirae Asset Large Cap Fund"
+  },
+  {
+    "scheme_code": "147493",
+    "amc_slug": "mirae-asset",
+    "fund_slug": "mirae-asset-midcap-fund",
+    "amc_name": "Mirae Asset Mutual Fund",
+    "scheme_name": "Mirae Asset Midcap Fund"
+  },
+  {
+    "scheme_code": "125497",
+    "amc_slug": "sbi",
+    "fund_slug": "sbi-small-cap-fund",
+    "amc_name": "SBI Mutual Fund",
+    "scheme_name": "SBI Small Cap Fund"
+  },
+  {
+    "scheme_code": "119206",
+    "amc_slug": "sbi",
+    "fund_slug": "sbi-bluechip-fund",
+    "amc_name": "SBI Mutual Fund",
+    "scheme_name": "SBI Bluechip Fund"
+  },
+  {
+    "scheme_code": "119213",
+    "amc_slug": "sbi",
+    "fund_slug": "sbi-contra-fund",
+    "amc_name": "SBI Mutual Fund",
+    "scheme_name": "SBI Contra Fund"
+  },
+  {
+    "scheme_code": "120586",
+    "amc_slug": "icici-prudential",
+    "fund_slug": "icici-prudential-bluechip-fund",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "scheme_name": "ICICI Prudential Bluechip Fund"
+  },
+  {
+    "scheme_code": "120594",
+    "amc_slug": "icici-prudential",
+    "fund_slug": "icici-prudential-technology-fund",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "scheme_name": "ICICI Prudential Technology Fund"
+  },
+  {
+    "scheme_code": "120588",
+    "amc_slug": "icici-prudential",
+    "fund_slug": "icici-prudential-value-discovery-fund",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "scheme_name": "ICICI Prudential Value Discovery Fund"
+  },
+  {
+    "scheme_code": "118825",
+    "amc_slug": "nippon",
+    "fund_slug": "nippon-india-small-cap-fund",
+    "amc_name": "Nippon India Mutual Fund",
+    "scheme_name": "Nippon India Small Cap Fund"
+  },
+  {
+    "scheme_code": "118834",
+    "amc_slug": "nippon",
+    "fund_slug": "nippon-india-growth-fund",
+    "amc_name": "Nippon India Mutual Fund",
+    "scheme_name": "Nippon India Growth Fund"
+  },
+  {
+    "scheme_code": "120847",
+    "amc_slug": "quant",
+    "fund_slug": "quant-small-cap-fund",
+    "amc_name": "Quant Mutual Fund",
+    "scheme_name": "Quant Small Cap Fund"
+  },
+  {
+    "scheme_code": "120828",
+    "amc_slug": "quant",
+    "fund_slug": "quant-active-fund",
+    "amc_name": "Quant Mutual Fund",
+    "scheme_name": "Quant Active Fund"
+  },
+  {
+    "scheme_code": "120505",
+    "amc_slug": "kotak",
+    "fund_slug": "kotak-flexi-cap-fund",
+    "amc_name": "Kotak Mahindra Mutual Fund",
+    "scheme_name": "Kotak Flexi Cap Fund"
+  },
+  {
+    "scheme_code": "120152",
+    "amc_slug": "kotak",
+    "fund_slug": "kotak-emerging-equity-fund",
+    "amc_name": "Kotak Mahindra Mutual Fund",
+    "scheme_name": "Kotak Emerging Equity Fund"
+  },
+  {
+    "scheme_code": "141870",
+    "amc_slug": "axis",
+    "fund_slug": "axis-flexi-cap-fund",
+    "amc_name": "Axis Mutual Fund",
+    "scheme_name": "Axis Flexi Cap Fund"
+  },
+  {
+    "scheme_code": "120465",
+    "amc_slug": "axis",
+    "fund_slug": "axis-small-cap-fund",
+    "amc_name": "Axis Mutual Fund",
+    "scheme_name": "Axis Small Cap Fund"
+  },
+  {
+    "scheme_code": "120716",
+    "amc_slug": "uti",
+    "fund_slug": "uti-nifty-50-index-fund",
+    "amc_name": "UTI Mutual Fund",
+    "scheme_name": "UTI Nifty 50 Index Fund"
+  },
+  {
+    "scheme_code": "147622",
+    "amc_slug": "motilal-oswal",
+    "fund_slug": "motilal-oswal-midcap-fund",
+    "amc_name": "Motilal Oswal Mutual Fund",
+    "scheme_name": "Motilal Oswal Midcap Fund"
+  },
+  {
+    "scheme_code": "147890",
+    "amc_slug": "bandhan",
+    "fund_slug": "bandhan-small-cap-fund",
+    "amc_name": "Bandhan Mutual Fund",
+    "scheme_name": "Bandhan Small Cap Fund"
+  },
+  {
+    "scheme_code": "135781",
+    "amc_slug": "tata",
+    "fund_slug": "tata-digital-india-fund",
+    "amc_name": "Tata Mutual Fund",
+    "scheme_name": "Tata Digital India Fund"
+  },
+  {
+    "scheme_code": "119270",
+    "amc_slug": "aditya-birla-sun-life",
+    "fund_slug": "aditya-birla-sun-life-frontline-equity-fund",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "scheme_name": "Aditya Birla Sun Life Frontline Equity Fund"
+  },
+  {
+    "scheme_code": "119230",
+    "amc_slug": "dsp",
+    "fund_slug": "dsp-mid-cap-fund",
+    "amc_name": "DSP Mutual Fund",
+    "scheme_name": "DSP Mid Cap Fund"
+  }
+]
