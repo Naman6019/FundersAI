@@ -69,9 +69,9 @@ test('Screener search matches across multiple attributes', () => {
   assert.ok(parikh.every((f) => f.schemeName.includes('Parag Parikh')));
 
   // By AMFI Scheme Code
-  const codeMatch = filterFunds(FUND_REGISTRY, { amc: 'all', category: 'all', query: '120503' });
+  const codeMatch = filterFunds(FUND_REGISTRY, { amc: 'all', category: 'all', query: '118955' });
   assert.ok(codeMatch.length >= 1);
-  assert.ok(codeMatch.some((f) => f.schemeCode === 120503));
+  assert.ok(codeMatch.some((f) => f.schemeCode === 118955));
 
   // By Benchmark Index keyword
   const bse500 = filterFunds(FUND_REGISTRY, { amc: 'all', category: 'all', query: 'BSE 500' });

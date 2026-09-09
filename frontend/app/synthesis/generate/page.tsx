@@ -11,6 +11,7 @@ import { AnimatedShinyText } from "@/components/ui/animated-shiny-text";
 import { Sparkles } from "@/components/ui/sparkles";
 import { NumberTicker } from "@/components/ui/number-ticker";
 import { ReportsSubNav } from "@/components/layout/ReportsSubNav";
+import { getPopularFunds } from "@/lib/fund-registry";
 
 interface SchemeOption {
     code: number;
@@ -18,21 +19,14 @@ interface SchemeOption {
     amc: string;
 }
 
-const DEFAULT_POPULAR_SCHEMES: SchemeOption[] = [
-    { code: 119551, name: "Parag Parikh Flexi Cap Fund", amc: "PPFAS Mutual Fund" },
-    { code: 122639, name: "HDFC Flexi Cap Fund", amc: "HDFC Mutual Fund" },
-    { code: 151745, name: "HDFC Defence Fund", amc: "HDFC Mutual Fund" },
-    { code: 101823, name: "HDFC Top 100 Fund", amc: "HDFC Mutual Fund" },
-    { code: 120828, name: "Quant Small Cap Fund", amc: "Quant Mutual Fund" },
-    { code: 120823, name: "Quant Active Fund", amc: "Quant Mutual Fund" },
-    { code: 113177, name: "Nippon India Small Cap Fund", amc: "Nippon India Mutual Fund" },
-    { code: 125497, name: "SBI Small Cap Fund", amc: "SBI Mutual Fund" },
-    { code: 100033, name: "SBI Contra Fund", amc: "SBI Mutual Fund" },
-    { code: 100356, name: "ICICI Prudential Bluechip Fund", amc: "ICICI Prudential MF" },
-    { code: 125354, name: "Axis Small Cap Fund", amc: "Axis Mutual Fund" },
-    { code: 112090, name: "Mirae Asset Large Cap Fund", amc: "Mirae Asset Mutual Fund" },
-    { code: 120716, name: "UTI Nifty 50 Index Fund", amc: "UTI Mutual Fund" },
-];
+// Resolved from FUND_REGISTRY so scheme codes and current SEBI names come from a
+// single AMFI-verified source; tests/amfiSchemeIdentity.test.mjs pins that source
+// to AMFI's scheme master and forbids re-declaring codes here.
+const DEFAULT_POPULAR_SCHEMES: SchemeOption[] = getPopularFunds().map((fund) => ({
+    code: fund.schemeCode,
+    name: fund.schemeName,
+    amc: fund.amcName,
+}));
 
 function MermaidChart({ chart, isStreaming }: { chart: string; isStreaming: boolean }) {
     const [id] = useState(() => `mermaid-${Math.random().toString(36).substring(2, 9)}`);
@@ -221,16 +215,10 @@ function ReportChatContent() {
                 localMatches.forEach(s => combinedMap.set(s.code, s));
                 remoteMatches.forEach(s => combinedMap.set(s.code, s));
 
-                // 3. Fallback: If user typed custom query like "HDFC Defence" and nothing returned from DB, create a dynamic match entry
-                if (combinedMap.size === 0 && query.length >= 2) {
-                    const fallbackCode = 150000 + Math.abs(schemeSearchQuery.split('').reduce((a,b)=>{a=((a<<5)-a)+b.charCodeAt(0);return a&a},0) % 40000);
-                    combinedMap.set(fallbackCode, {
-                        code: fallbackCode,
-                        name: schemeSearchQuery.trim(),
-                        amc: "Live SEBI Ingestion Target"
-                    });
-                }
-
+                // A query that matches nothing yields nothing. We used to mint a
+                // synthetic scheme code here (150000 + hash of the query), which
+                // fabricated a fund identity and could collide with a real AMFI
+                // code. The UI now reports "no match" instead.
                 setDbSearchResults(Array.from(combinedMap.values()));
             }
         }
@@ -337,7 +325,9 @@ function ReportChatContent() {
 
         if (generationMode === "PROMPT") {
             payloadUserMessage = userPrompt;
-            payloadSchemeCodes = [119551, 122639];
+            // Grounding context for a free-form prompt: the first two registry
+            // funds, so these codes stay AMFI-verified instead of hardcoded.
+            payloadSchemeCodes = DEFAULT_POPULAR_SCHEMES.slice(0, 2).map(s => s.code);
         } else {
             payloadSchemeCodes = selectedSchemes.map(s => s.code);
             payloadUserMessage = `Write a comprehensive institutional comparison report for: ${selectedSchemes.map(s => s.name).join(" and ")}`;
@@ -574,6 +564,12 @@ function ReportChatContent() {
                             />
 
                             {/* Dropdown Overlay with high z-index */}
+                            {isDropdownOpen && schemeSearchQuery.trim().length >= 2 && filteredSchemes.length === 0 && (
+                                <div className="absolute left-0 right-0 top-full mt-2 bg-gray-950 border border-gray-800 rounded-xl shadow-2xl z-50 px-4 py-3 text-xs text-gray-400">
+                                    No scheme in the catalog matches &ldquo;{schemeSearchQuery.trim()}&rdquo;. Try the AMC name or the AMFI scheme code.
+                                </div>
+                            )}
+
                             {isDropdownOpen && filteredSchemes.length > 0 && (
                                 <div className="absolute left-0 right-0 top-full mt-2 bg-gray-950 border border-gray-800 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto divide-y divide-gray-900">
                                     {filteredSchemes.map(scheme => (

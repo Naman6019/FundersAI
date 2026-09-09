@@ -27,6 +27,9 @@ export default function SupportedFundsDirectoryPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("ALL");
     const [selectedFunds, setSelectedFunds] = useState<FundRow[]>([]);
+    // Set when the API could not reach the live snapshot and served the
+    // AMFI-verified registry instead (scheme identity only, no NAV/returns).
+    const [dataNotice, setDataNotice] = useState<string | null>(null);
 
     const toggleFundSelection = (fund: FundRow) => {
         const isAlreadySelected = selectedFunds.some(f => String(f.scheme_code) === String(fund.scheme_code));
@@ -50,6 +53,7 @@ export default function SupportedFundsDirectoryPage() {
                     if (json.amcGroups && json.amcGroups.length > 0) {
                         setAmcGroups(json.amcGroups);
                     }
+                    setDataNotice(json.metricsAvailable === false ? (json.notice ?? null) : null);
                 }
             } catch (err) {
                 console.error("Failed to fetch supported funds:", err);
@@ -130,6 +134,14 @@ export default function SupportedFundsDirectoryPage() {
                     </Link>
                 </div>
             </div>
+
+            {/* Live-data disclosure: shown when performance figures are unavailable */}
+            {dataNotice && (
+                <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-950/30 border border-amber-500/30 text-xs text-amber-200/90 leading-relaxed">
+                    <span aria-hidden="true" className="text-sm leading-none mt-0.5">⚠️</span>
+                    <p>{dataNotice}</p>
+                </div>
+            )}
 
             {/* In-Page Navigation Options Menu */}
             <ReportsSubNav />
