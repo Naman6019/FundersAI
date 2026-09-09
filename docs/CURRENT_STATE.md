@@ -14,6 +14,10 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 - Automation: GitHub Actions workflows
 
 ## Implemented
+- Sitemap metadata accuracy hotfix (2026-09-09): Removed the fixed August 15
+  `<lastmod>` value from every sitemap URL. The sitemap now omits `lastmod` until
+  a verified per-page significant-update timestamp is available; URLs, canonicals,
+  and mutual-fund eligibility gates are unchanged.
 - Scheme-name matching extracted out of the parse orchestrator (2026-08-24; local refactor, no behavior change):
   - `parsing_service.py` had absorbed the scheme-name domain: 11 pure text/matching helpers plus their two lookup tables lived there, while the module actually named for that job — `mf_ingestion/normalizers/scheme_name_normalizer.py` — was a 45-line stub holding only `match_scheme_name`. The graph clustered both files into one community for this reason, and `_select_best_scheme_candidate` was already reaching across modules to call `match_scheme_name`.
   - Moved `_normalize_scheme_text`, `_normalize_lookup_text`, `_scheme_name_for_matching`, `_build_ilike_pattern`, `_build_relaxed_ilike_pattern`, `_apply_family_category_subs`, `_normalize_family_scheme_name`, `_is_direct_growth_name`, `_has_plan_or_option_marker`, `_pick_best_scheme_candidate`, `_select_best_scheme_candidate`, `_FAMILY_CATEGORY_SUBS`, and `_FAMILY_PLAN_QUALIFIER_WORDS` into the normalizer (45 → 238 lines); `parsing_service.py` dropped 2,069 → 1,894 lines and now imports them.

@@ -10,11 +10,6 @@ import {
 
 const BASE_URL = 'https://www.fundersai.co.in';
 
-// Stable baseline release timestamp to prevent lastmod churn on uncached crawler fetches.
-// Because lastmod is pinned, changeFrequency must not claim 'daily' — a fixed lastmod paired
-// with a daily hint is self-contradictory and Google discards the pair.
-const RELEASE_DATE = new Date('2026-08-15T00:00:00.000Z');
-
 export default function sitemap(): MetadataRoute.Sitemap {
   const routes: MetadataRoute.Sitemap = [];
 
@@ -44,7 +39,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
   for (const page of corePages) {
     routes.push({
       url: `${BASE_URL}${page.path}`,
-      lastModified: RELEASE_DATE,
       changeFrequency: page.changeFrequency,
       priority: page.priority,
     });
@@ -61,7 +55,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   routes.push({
     url: `${BASE_URL}/learn`,
-    lastModified: RELEASE_DATE,
     changeFrequency: 'weekly',
     priority: 0.9,
   });
@@ -69,7 +62,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
   for (const slug of learnSlugs) {
     routes.push({
       url: `${BASE_URL}/learn/${slug}`,
-      lastModified: RELEASE_DATE,
       changeFrequency: 'monthly',
       priority: 0.85,
     });
@@ -79,7 +71,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
   // 3a. Hub Page
   routes.push({
     url: `${BASE_URL}/mutual-funds`,
-    lastModified: RELEASE_DATE,
     changeFrequency: 'weekly',
     priority: 0.95,
   });
@@ -88,7 +79,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
   for (const cat of CATEGORY_LIST) {
     routes.push({
       url: `${BASE_URL}/mutual-funds/category/${categorySlug(cat)}`,
-      lastModified: RELEASE_DATE,
       changeFrequency: 'weekly',
       priority: 0.9,
     });
@@ -98,7 +88,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
   for (const amc of AMC_REGISTRY) {
     routes.push({
       url: `${BASE_URL}/mutual-funds/${amc.slug}`,
-      lastModified: RELEASE_DATE,
       changeFrequency: 'weekly',
       priority: 0.85,
     });
@@ -108,7 +97,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
   for (const fund of FUND_REGISTRY) {
     routes.push({
       url: `${BASE_URL}/mutual-funds/${fund.amcSlug}/${fund.fundSlug}`,
-      lastModified: RELEASE_DATE,
       changeFrequency: 'weekly',
       priority: 0.85,
     });
@@ -117,7 +105,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
   // 3e. Head-to-Head Comparison Hub & Pages
   routes.push({
     url: `${BASE_URL}/compare`,
-    lastModified: RELEASE_DATE,
     changeFrequency: 'weekly',
     priority: 0.9,
   });
@@ -125,7 +112,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
   for (const cp of COMPARE_PAIRS) {
     routes.push({
       url: `${BASE_URL}/compare/${cp.pair}`,
-      lastModified: RELEASE_DATE,
       changeFrequency: 'weekly',
       priority: 0.85,
     });
@@ -145,7 +131,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   routes.push({
     url: SYNTHESIS_URL,
-    lastModified: RELEASE_DATE,
     changeFrequency: 'weekly',
     priority: 0.95,
   });
@@ -153,7 +138,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
   for (const path of ['/synthesis/methodology', '/synthesis/supported-funds']) {
     routes.push({
       url: `${SYNTHESIS_URL}${path}`,
-      lastModified: RELEASE_DATE,
       changeFrequency: 'monthly',
       priority: 0.8,
     });
@@ -162,7 +146,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
   for (const slug of SYNTHESIS_VS_SLUGS) {
     routes.push({
       url: `${SYNTHESIS_URL}/synthesis/vs/${slug}`,
-      lastModified: RELEASE_DATE,
       changeFrequency: 'weekly',
       priority: 0.75,
     });
@@ -171,7 +154,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
   for (const cat of CATEGORY_LIST) {
     routes.push({
       url: `${SYNTHESIS_URL}/synthesis/category/${categorySlug(cat)}`,
-      lastModified: RELEASE_DATE,
       changeFrequency: 'weekly',
       priority: 0.7,
     });

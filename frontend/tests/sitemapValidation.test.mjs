@@ -30,6 +30,10 @@ test('sitemap.ts is configured for the two supported production hosts', () => {
   assert.match(source, /AMC_REGISTRY/);
   assert.match(source, /CATEGORY_LIST/);
   assert.match(source, /COMPARE_PAIRS/);
+
+  // Do not claim one static update date for every page. Omit lastmod until it can
+  // be derived from verified, per-page content changes.
+  assert.doesNotMatch(source, /\blastModified\s*:/);
 });
 
 test('robots.ts configures search crawlers and points to primary sitemap.xml', () => {
