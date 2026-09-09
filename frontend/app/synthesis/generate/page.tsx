@@ -1,7 +1,7 @@
 "use client";
-import { useState, useEffect, useRef, useMemo, Suspense } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
@@ -14,6 +14,7 @@ import { ReportsSubNav } from "@/components/layout/ReportsSubNav";
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
 import type { User } from "@supabase/supabase-js";
 import { schemeDisplayName } from "@/lib/schemeDisplayName";
+import { trackWhopEvent } from "@/lib/whopPixel";
 
 interface SchemeOption {
     code: number;
@@ -87,6 +88,7 @@ function MermaidChart({ chart, isStreaming }: { chart: string; isStreaming: bool
 }
 
 function ReportChatContent() {
+    const router = useRouter();
     const searchParams = useSearchParams();
     const initialPromptParam = searchParams.get("prompt");
     const initialCodesParam = searchParams.get("codes") || searchParams.get("schemes");
@@ -119,6 +121,7 @@ function ReportChatContent() {
     const [isSaving, setIsSaving] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [user, setUser] = useState<User | null>(null);
+    const [streamError, setStreamError] = useState<string | null>(null);
 
     useEffect(() => {
         if (initialCodesParam) {
@@ -149,7 +152,7 @@ function ReportChatContent() {
                         });
                         setSelectedSchemes(dynamicSchemes);
                     }
-                } catch (e) {
+                } catch {
                     const dynamicSchemes: SchemeOption[] = codes.map(c => ({
                         code: c,
                         name: `Mutual Fund Scheme #${c}`,
@@ -335,6 +338,15 @@ function ReportChatContent() {
     const generateReport = async () => {
         setIsLoading(true);
         setReportText("");
+        setStreamError(null);
+
+        const { data: authData } = await supabaseBrowser.auth.getSession();
+        const session = authData.session;
+        if (!session?.access_token) {
+            router.push(`/login?mode=signup&next=${encodeURIComponent('/synthesis/generate')}`);
+            setIsLoading(false);
+            return;
+        }
         
         let payloadSchemeCodes: number[] = [];
         let payloadUserMessage = "";
@@ -350,7 +362,10 @@ function ReportChatContent() {
         try {
             const response = await fetch("/api/reports/stream", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${session.access_token}`,
+                },
                 body: JSON.stringify({
                     scheme_codes: payloadSchemeCodes,
                     thread_id: `session_${Date.now()}`,
@@ -358,34 +373,58 @@ function ReportChatContent() {
                 }),
             });
 
+            if (!response.ok) {
+                const payload = await response.json().catch(() => ({}));
+                throw new Error(payload.error || `Report synthesis failed (HTTP ${response.status}).`);
+            }
+
             const reader = response.body?.getReader();
             const decoder = new TextDecoder();
 
-            if (!reader) return;
+            if (!reader) throw new Error("Unable to initialize the report stream.");
+
+            let receivedReportText = false;
+            let sseBuffer = "";
+            const processEvent = (event: string) => {
+                const data = event
+                    .split(/\r?\n/)
+                    .filter((line) => line.startsWith("data: "))
+                    .map((line) => line.slice(6))
+                    .join("\n");
+                if (!data) return;
+
+                try {
+                    const parsedData = JSON.parse(data);
+                    if (parsedData.text) {
+                        receivedReportText = true;
+                        setReportText((prev) => prev + parsedData.text);
+                    }
+                } catch {
+                    // Ignore non-text status events from the SSE stream.
+                }
+            };
+
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
-                const chunk = decoder.decode(value, { stream: true });
-                const lines = chunk.split("\n\n");
+                sseBuffer += decoder.decode(value, { stream: true });
+                const events = sseBuffer.split(/\r?\n\r?\n/);
+                sseBuffer = events.pop() || "";
+                events.forEach(processEvent);
+            }
 
-                for (const line of lines) {
-                    if (line.startsWith("data: ")) {
-                        const dataStr = line.replace("data: ", "");
-                        try {
-                            const parsedData = JSON.parse(dataStr);
-                            if (parsedData.text) {
-                                setReportText((prev) => prev + parsedData.text);
-                            }
-                        } catch {
-                            // Ignore incomplete JSON chunks
-                        }
-                    }
-                }
+            sseBuffer += decoder.decode();
+            if (sseBuffer.trim()) processEvent(sseBuffer);
+
+            if (receivedReportText) {
+                trackWhopEvent('report_generated', session.user.email ? { email: session.user.email } : undefined);
             }
         } catch (e: unknown) {
             console.error("Stream error:", e);
+            setStreamError(e instanceof Error ? e.message : "A network error occurred while generating the report.");
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoading(false);
     };
 
     const markdownComponents = useMemo(() => ({
@@ -651,6 +690,12 @@ function ReportChatContent() {
                                 })}
                             </div>
                         </div>
+                    </div>
+                )}
+
+                {streamError && (
+                    <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
+                        {streamError}
                     </div>
                 )}
 
