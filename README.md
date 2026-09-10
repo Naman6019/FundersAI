@@ -11,7 +11,7 @@
 [![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS_4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 
-[Live App](https://www.fundersai.co.in) · [Synthesis Studio](https://synthesis.fundersai.co.in) · [Code Repository](https://github.com/Naman6019/FundersAI)
+[Live App](https://www.fundersai.co.in) · [Synthesis Studio](https://synthesis.fundersai.co.in) · [Public Tools](https://www.fundersai.co.in/tools) · [Fund Explorer](https://www.fundersai.co.in/mutual-funds) · [Fund Truth Check](https://www.fundersai.co.in/fund-truth-check) · [Code Repository](https://github.com/Naman6019/FundersAI)
 
 </div>
 
@@ -26,22 +26,27 @@ FundersAI is research-only: it does not execute trades or provide personalized i
 ## ✨ Key Features
 
 - 🤖 **Research Chat & Intent Routing**: Routes questions to structured stock, mutual-fund, market-current-events, and comparison paths with visible status and limitation metadata.
-- ⚡ **Synthesis Intelligence Engine & Reports Studio**: Deep-dive fund intelligence (`synthesis.fundersai.co.in`), agent research graphs, portfolio overlap analyzer, and downloadable institutional PDF reports.
+- ⚡ **Synthesis Intelligence Engine & Reports Studio**: Deep-dive fund intelligence (`synthesis.fundersai.co.in`), agent research graphs, portfolio overlap analyzer, and downloadable institutional PDF reports powered by a dedicated LangGraph microservice.
+- 🛠️ **Public Financial Tools Suite**: Standalone, deterministic financial calculators with no login required:
+  - **Portfolio Overlap Analyzer** (`/tools/portfolio-overlap`): Visual Venn diagrams, pairwise allocation matrix, and stock-level overlap percentages between Indian mutual funds.
+  - **SIP & Wealth Compounding Calculator** (`/tools/sip-calculator`): High-precision compounding curves, inflation-adjusted projections, and step-up calculations.
+- 🔎 **Fund Truth Check & Claim Autopsy**: Deterministic claim validation workbench (`/fund-truth-check`) evaluating factual assertions against official AMC factsheet disclosures through a strict 5-stage verification pipeline (parsing, AMFI entity resolution, metric windowing, official AMC evidence, and deterministic verdict: `supported`, `contradicted`, or `unverifiable`).
+- 🧭 **Mutual Fund Explorer & Catalog**: Fast directory browsing across SEBI categories and 25+ onboarded AMCs (`/mutual-funds`), with dedicated category hubs, AMC factsheets, and live Cmd+K fund search.
 - 📊 **Interactive Comparison Canvas & Programmatic Comparisons**: Side-by-side NAV, returns, alpha, beta, Sharpe, drawdown, cost, AUM, holdings, risk, and head-to-head comparisons (`/compare/[pair]`).
-- 🌐 **Programmatic SEO Directory & Learn Hub**: Dynamic multi-tier sitemaps, SEBI category hubs, AMC directories, individual scheme factsheets, and educational guides (`/learn/*`).
-- 📚 **Official-Document Evidence**: Indexes official AMC documents and returns citable excerpts, readable supported claims, or explicit abstention when evidence is insufficient.
-- ⚙️ **Automated Data Pipelines**: GitHub Actions workflows handle stock data, mutual-fund metadata, NAV sync, AMC disclosure ingestion, retries, indexing, archiving, and storage maintenance.
+- 🌐 **Programmatic SEO & AI Discoverability**: Host-pinned routing (`www.fundersai.co.in` vs `synthesis.fundersai.co.in`), dynamic multi-tier sitemaps, and Generative Engine Optimization endpoints (`/llms.txt`, `/llms-full.txt`).
+- 📚 **Official-Document Evidence**: Indexes official AMC documents (monthly factsheets, portfolio disclosures) and returns citable excerpts, readable supported claims, or explicit abstention when evidence is insufficient.
+- ⚙️ **Automated Data Pipelines**: 24 GitHub Actions workflows handle stock data, mutual-fund metadata, NAV sync, AMC disclosure ingestion, retries, indexing, archiving, and storage maintenance.
 - 🔒 **Quota-Safe Architecture**: Designed for resilience. Query-critical data is served directly from normalized Supabase tables, protected by intelligent quota guards for third-party enrichments (IndianAPI).
-- 💼 **Auth & Subscriptions**: Secure workspace powered by Supabase Auth (Email & Google OAuth) with a Razorpay-backed subscription foundation for tiered access (Free, Pro, Ultra).
-- 🛠️ **Admin Controls**: Dashboard surfaces AI usage, data coverage, parser diagnostics, resolver debugging, NAV sync, MF promotion review, and bounded review actions.
+- 💼 **Auth, Growth & Subscriptions**: Supabase Auth (Email & Google OAuth) with Product Hunt launch funnel, post-auth destination preservation, Whop Pixel conversion event telemetry (`lead`, `complete_registration`, `purchase`, `report_generated`), and a Razorpay-backed subscription foundation for tiered access (Free, Pro, Ultra).
+- 🛠️ **Admin Controls & Diagnostics**: Dashboard surfaces AI usage, data coverage, parser diagnostics, resolver debugging, NAV sync, MF promotion review, and bounded review actions.
 - 🧠 **Explainable ML Foundations**: Numeric mutual-fund similarity/clustering and human-in-the-loop parser-review prioritization, both grounded in stored data rather than investment recommendations.
 - 🔎 **Trust Metadata**: Freshness, missing fields, resolver confidence, partial coverage, research boundaries, and reasoning summaries remain visible around results.
 
 ## 🛠️ Tech Stack
 
 **Frontend**
-- Next.js 16.2.11 (App Router), React 19.2.4, TypeScript
-- Tailwind CSS 4 for styling
+- Next.js 16.2.11 (App Router, Turbopack), React 19.2.4, TypeScript
+- Tailwind CSS 4 for styling, Framer Motion for animations
 - Zustand for state management
 - Recharts for data visualization
 - *Deployed on Vercel*
@@ -52,20 +57,28 @@ FundersAI is research-only: it does not execute trades or provide personalized i
 - NSE and FinEdge scheduled stock providers with YFinance fallback paths
 - AMFI, MFapi, and official AMC documents for mutual-fund data
 - OpenRouter and Groq chat/extraction providers, direct OpenAI `text-embedding-3-small` document/query embeddings, and optional feature-flagged Langfuse tracing
+- Worker container (`backend/Dockerfile.worker`) for Prefect flows (`orchestration.research_evidence_flow`)
 - *Deployed on Render*
+
+**Reports Microservice**
+- Standalone FastAPI + LangGraph service (`microservices/reports/`)
+- Generates institutional Synthesis Studio PDF reports
+- Communicates directly with Supabase and OpenAI (bypasses main backend API)
+- *Containerized and deployed on AWS EC2 (K3s) with 2 replicas*
 
 **Database, Storage & Infra**
 - **Supabase (PostgreSQL)**: Primary datastore and authentication
-- **Cloudflare R2**: Object storage for raw AMC documents and cold archives
-- **GitHub Actions**: 22 workflows for sync, ingestion, retry, indexing, discovery, archive, migration, and compaction jobs
+- **Cloudflare R2**: Object storage for raw AMC documents and cold archives (S3-compatible API via SigV4)
+- **GitHub Actions**: 24 workflows for sync, ingestion, retry, indexing, discovery, archive, migration, and compaction jobs
 
 ## 📁 Project Structure
 
 ```text
 FundersAI/
-├── .github/workflows/      # Automated CRON jobs for data sync and storage compaction
-├── backend/                # Python/FastAPI app, fetching scripts, & parsers
-├── frontend/               # Next.js web application & dashboard UI
+├── .github/workflows/      # 24 automated CRON jobs for data sync and storage compaction
+├── backend/                # Python/FastAPI app, ingestion pipeline, parsers & worker container
+├── frontend/               # Next.js web application, public tools, & dashboard UI
+├── microservices/reports/  # Standalone LangGraph report generation microservice (AWS K3s)
 ├── docs/                   # Project documentation, architecture decisions, current state
 └── prompts/                # AI Agent instructions and routing logic
 ```
@@ -76,7 +89,7 @@ FundersAI is built to handle complex, high-volume financial data efficiently wit
 
 1. **Supabase-First Reads**: Runtime query-critical data lives in `stock_core_snapshot`, `mutual_fund_core_snapshot`, and the server-only `nav_api_cache` used for complete MFAPI histories.
 2. **Cold Storage Strategy**: To protect database limits, raw Mutual Fund documents (AMC holdings, portfolios) and archival payloads are routed to Cloudflare R2.
-3. **Resilient Ingestion Parsers**: Enabled AMC sources cover PPFAS, HDFC, ICICI, SBI, Axis, Motilal Oswal, and Nippon, with explicit tracking states (`pending`, `downloaded`, `needs_reparse`, `parsed`, `parsed_partial`, `needs_review`, `failed`, `skipped_not_supported`).
+3. **Resilient Ingestion Parsers**: Onboarded AMC sources cover 25+ Indian AMCs (PPFAS, HDFC, ICICI, SBI, Axis, Motilal Oswal, Nippon, DSP, Kotak, UTI, Aditya Birla Sun Life, Edelweiss, HSBC, Invesco, Bandhan, BOI, Choice, Quant, Tata, etc., with 42 tracked in the discovery registry), with explicit tracking states (`pending`, `downloaded`, `needs_reparse`, `parsed`, `parsed_partial`, `needs_review`, `failed`, `skipped_not_supported`).
 4. **Reviewable Ingestion**: Scheduled retries and admin review actions handle missed parses without hiding states such as `parsed_partial`, `needs_review`, or `failed`.
 5. **Evaluation-First Research Retrieval**: The deterministic lexical baseline and v2 reranker use a versioned development seed. OpenAI vector retrieval and hybrid ranking have lexical fallback and remain separately gated by quality, latency, and cost evidence. The bounded evidence path returns cited official-document claims or abstains.
 
@@ -128,6 +141,19 @@ npm install
 npm run dev
 ```
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+### 4. Running Verification Checks
+```powershell
+# Backend pytest (from repository root)
+.\.venv\Scripts\python.exe -m pytest backend/tests --basetemp=.pytest_tmp
+
+# Frontend tests & production build (from frontend/)
+cd frontend
+node --test tests/*.test.mjs
+.\node_modules\.bin\tsc.cmd --noEmit
+npm run lint
+npm run build
+```
 
 ## 📖 Documentation
 For agents and contributors, read [`Agents.md`](Agents.md) and the [documentation index](docs/README.md). The primary source of truth is [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md); see [the API contracts](docs/03_API_CONTRACTS.md), [database schema](docs/04_DATABASE_SCHEMA.md), [ML guide](docs/11_ML_SYSTEMS.md), and [interviewer guide](docs/12_INTERVIEW_GUIDE.md) for focused explanations.
