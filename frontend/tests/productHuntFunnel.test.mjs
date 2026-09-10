@@ -10,16 +10,21 @@ test('Product Hunt flow is routed through signup and keeps the research-only bou
   const header = read('components/ecosystem/EcosystemHeader.tsx');
   const auth = read('components/auth/AuthForm.tsx');
   const callback = read('app/auth/callback/page.tsx');
+  const login = read('app/login/page.tsx');
 
   assert.match(header, /ProductHuntWelcomeBanner/);
   assert.match(banner, /utm_source/);
-  assert.match(banner, /mode=signup/);
+  assert.match(banner, /\/auth\?mode=signup/);
   assert.match(banner, /research only/i);
   assert.match(banner, /trackWhopEvent\("lead"\)/);
   assert.doesNotMatch(banner, /50% off|PRODUCTHUNT/);
   assert.match(auth, /searchParams\.get\('mode'\) === 'signup'/);
   assert.match(auth, /signup=1/);
+  assert.doesNotMatch(auth, /trackWhopEvent/);
   assert.match(callback, /trackWhopEvent\('complete_registration'/);
+  assert.match(callback, /isFreshOAuthSignup/);
+  assert.match(login, /searchParams/);
+  assert.match(login, /\/auth\?\$\{query\}/);
 });
 
 test('Whop Pixel conversions map to completed funnel states without breaking the flow', () => {

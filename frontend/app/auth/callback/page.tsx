@@ -10,6 +10,7 @@ import { hasSupabaseBrowserEnv, supabaseBrowser } from '@/lib/supabaseBrowser';
 import { trackWhopEvent } from '@/lib/whopPixel';
 
 const AUTH_NEXT_STORAGE_KEY = 'fundersai_auth_next';
+const AUTH_SIGNUP_STARTED_AT_STORAGE_KEY = 'fundersai_auth_signup_started_at';
 
 function safeNextPath(value: string | null): string {
   if (!value || !value.startsWith('/') || value.startsWith('//')) return '/dashboard';
@@ -62,17 +63,20 @@ function AuthCallbackContent() {
       }
 
       const storedNext = window.localStorage.getItem(AUTH_NEXT_STORAGE_KEY);
+      const signupStartedAt = Number(window.localStorage.getItem(AUTH_SIGNUP_STARTED_AT_STORAGE_KEY));
       const nextPath = safeNextPath(searchParams.get('next') || storedNext);
       window.localStorage.removeItem(AUTH_NEXT_STORAGE_KEY);
       const url = new URL(window.location.href);
       const providerError = url.searchParams.get('error_description') || url.searchParams.get('error');
       if (providerError) {
+        window.localStorage.removeItem(AUTH_SIGNUP_STARTED_AT_STORAGE_KEY);
         showError(new Error(providerError));
         return;
       }
 
       const code = url.searchParams.get('code');
       let email: string | undefined;
+      let userCreatedAt: string | undefined;
       if (code) {
         const { data, error } = await supabaseBrowser.auth.exchangeCodeForSession(code);
         if (error) {
@@ -80,6 +84,7 @@ function AuthCallbackContent() {
           return;
         }
         email = data.user?.email || data.session?.user.email;
+        userCreatedAt = data.user?.created_at || data.session?.user.created_at;
       } else {
         const { data } = await supabaseBrowser.auth.getSession();
         if (!data.session) {
@@ -87,9 +92,15 @@ function AuthCallbackContent() {
           return;
         }
         email = data.session.user.email;
+        userCreatedAt = data.session.user.created_at;
       }
 
-      if (searchParams.get('signup') === '1') {
+      const isFreshOAuthSignup = Number.isFinite(signupStartedAt)
+        && Boolean(userCreatedAt)
+        && Date.parse(userCreatedAt) >= signupStartedAt - 60_000;
+      window.localStorage.removeItem(AUTH_SIGNUP_STARTED_AT_STORAGE_KEY);
+
+      if (searchParams.get('signup') === '1' || isFreshOAuthSignup) {
         trackWhopEvent('complete_registration', email ? { email } : undefined);
       }
 

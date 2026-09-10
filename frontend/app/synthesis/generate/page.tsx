@@ -337,29 +337,27 @@ function ReportChatContent() {
         setReportText("");
         setStreamError(null);
 
-        const { data: authData } = await supabaseBrowser.auth.getSession();
-        const session = authData.session;
-        if (!session?.access_token) {
-            router.push(`/login?mode=signup&next=${encodeURIComponent('/synthesis/generate')}`);
-            setIsLoading(false);
-            return;
-        }
-        
-        let payloadSchemeCodes: number[] = [];
-        let payloadUserMessage = "";
-
-        if (generationMode === "PROMPT") {
-            payloadUserMessage = userPrompt;
-            // Grounding context for a free-form prompt: the first two registry
-            // funds, so these codes stay AMFI-verified instead of hardcoded.
-            payloadSchemeCodes = DEFAULT_POPULAR_SCHEMES.slice(0, 2).map(s => s.code);
-        } else {
-            payloadSchemeCodes = selectedSchemes.map(s => s.code);
-            payloadUserMessage = `Write a comprehensive institutional comparison report for: ${selectedSchemes.map(s => s.name).join(" and ")}`;
-        }
-
-        setStreamError(null);
         try {
+            const { data: authData } = await supabaseBrowser.auth.getSession();
+            const session = authData.session;
+            if (!session?.access_token) {
+                router.push(`/auth?mode=signup&next=${encodeURIComponent('/synthesis/generate')}`);
+                return;
+            }
+
+            let payloadSchemeCodes: number[] = [];
+            let payloadUserMessage = "";
+
+            if (generationMode === "PROMPT") {
+                payloadUserMessage = userPrompt;
+                // Grounding context for a free-form prompt: the first two registry
+                // funds, so these codes stay AMFI-verified instead of hardcoded.
+                payloadSchemeCodes = DEFAULT_POPULAR_SCHEMES.slice(0, 2).map(s => s.code);
+            } else {
+                payloadSchemeCodes = selectedSchemes.map(s => s.code);
+                payloadUserMessage = `Write a comprehensive institutional comparison report for: ${selectedSchemes.map(s => s.name).join(" and ")}`;
+            }
+
             const response = await fetch("/api/reports/stream", {
                 method: "POST",
                 headers: {
@@ -501,7 +499,7 @@ function ReportChatContent() {
                         </div>
                     ) : (
                         <a
-                            href="/login?next=/synthesis/generate"
+                            href="/auth?next=/synthesis/generate"
                             className="px-4 py-2 bg-accent-synthesis hover:brightness-110 text-slate-950 rounded-xl font-mono font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-accent-synthesis/20 flex items-center gap-1.5"
                         >
                             <span>Log In to Save</span>

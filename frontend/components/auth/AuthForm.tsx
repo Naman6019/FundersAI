@@ -5,7 +5,6 @@ import { ArrowLeft, Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getAuthErrorMessage } from '@/lib/authErrorMessage';
 import { hasSupabaseBrowserEnv, supabaseBrowser } from '@/lib/supabaseBrowser';
-import { trackWhopEvent } from '@/lib/whopPixel';
 import AuthShell from './AuthShell';
 
 type AuthMode = 'signin' | 'signup' | 'forgot';
@@ -13,6 +12,7 @@ type Feedback = { kind: 'error' | 'success'; text: string } | null;
 type FieldErrors = { email?: string; password?: string };
 
 const AUTH_NEXT_STORAGE_KEY = 'fundersai_auth_next';
+const AUTH_SIGNUP_STARTED_AT_STORAGE_KEY = 'fundersai_auth_signup_started_at';
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function safeNextPath(value: string | null): string {
@@ -84,6 +84,11 @@ export default function AuthForm() {
     setIsGoogleLoading(true);
     setFeedback(null);
     window.localStorage.setItem(AUTH_NEXT_STORAGE_KEY, nextPath);
+    if (mode === 'signup') {
+      window.localStorage.setItem(AUTH_SIGNUP_STARTED_AT_STORAGE_KEY, String(Date.now()));
+    } else {
+      window.localStorage.removeItem(AUTH_SIGNUP_STARTED_AT_STORAGE_KEY);
+    }
 
     const { error } = await supabaseBrowser.auth.signInWithOAuth({
       provider: 'google',
@@ -91,6 +96,7 @@ export default function AuthForm() {
     });
 
     if (error) {
+      window.localStorage.removeItem(AUTH_SIGNUP_STARTED_AT_STORAGE_KEY);
       setIsGoogleLoading(false);
       setFeedback({ kind: 'error', text: getAuthErrorMessage(error) });
     }
@@ -147,7 +153,6 @@ export default function AuthForm() {
     }
 
     if (mode === 'signup') {
-      trackWhopEvent('complete_registration', { email: normalizedEmail });
       setFeedback({ kind: 'success', text: 'Check your email to confirm your account.' });
       return;
     }

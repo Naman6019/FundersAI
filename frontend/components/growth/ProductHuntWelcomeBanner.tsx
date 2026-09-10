@@ -7,7 +7,7 @@ import { trackWhopEvent } from "@/lib/whopPixel";
 
 const REFERRAL_KEY = "fundersai_producthunt_referral";
 const DISMISSED_KEY = "fundersai_producthunt_dismissed";
-const SIGNUP_HREF = "/login?mode=signup&next=%2Fsynthesis%2Fgenerate";
+const SIGNUP_HREF = "/auth?mode=signup&next=%2Fsynthesis%2Fgenerate";
 
 export default function ProductHuntWelcomeBanner() {
   const [visible, setVisible] = useState(false);

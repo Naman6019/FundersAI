@@ -1,6 +1,6 @@
 # Current State
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 ## Project Summary
 FundersAI is a research-first Indian stocks + mutual funds app with deterministic comparison outputs, Supabase-first runtime reads, and workflow-driven data ingestion.
@@ -18,12 +18,13 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   `<lastmod>` value from every sitemap URL. The sitemap now omits `lastmod` until
   a verified per-page significant-update timestamp is available; URLs, canonicals,
   and mutual-fund eligibility gates are unchanged.
-- Product Hunt conversion path and Whop Pixel events (2026-09-09; local verification complete, production deployment pending):
+- Product Hunt conversion path and Whop Pixel events (2026-09-10; live-path verification complete):
   - Product Hunt referrals show a research-only signup CTA, preserve the intended post-auth destination, and emit a `lead` event without making an unsupported discount claim.
   - Verified signup completion emits `complete_registration`; Razorpay subscription authorization emits `purchase` with the payment ID as its event ID. A purchase remains an authorization event until Razorpay confirms the subscription.
   - The report generator now redirects unauthenticated visitors to signup, supplies the authenticated request token, displays request failures, and emits `report_generated` only after report content arrives.
+  - The legacy `/login` alias now preserves `mode`, `next`, and `reset` query values; the Product Hunt CTA, billing gate, and report gate use `/auth` directly. Email signup emits only after confirmation; new Google signup is identified from its flow-start time and user creation time.
   - The privacy disclosure now identifies Whop Pixel as conversion measurement. A subscription offer is intentionally not promised until a configured Razorpay offer and its terms are approved.
-  - Focused Product Hunt funnel tests pass; the full frontend contract suite passes (100 tests), TypeScript passes, and the targeted lint check is clean.
+  - Focused Product Hunt funnel tests pass; the full frontend contract suite passes (150 tests), TypeScript passes, and the targeted lint check is clean.
 - Catalog NAV/page slice (2026-09-05; local implementation, not deployed):
   - Added bounded, resumable read-only NAV readiness checks and explicit-apply MFapi cache backfill, independent of factsheet mapping. Full windows, date freshness, gaps, finite positive NAVs and duplicate consistency gate publication.
   - Added a service-role-only catalog migration with atomic versioned metrics and immutable URL reservations for all 29 funds in the current registry. Grandfathering preserves URLs but never overrides eligibility.
