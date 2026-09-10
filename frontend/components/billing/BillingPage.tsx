@@ -11,9 +11,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Sparkles as SparklesComp } from "@/components/ui/sparkles";
 import { TimelineContent } from "@/components/ui/timeline-animation";
 import { VerticalCutReveal } from "@/components/ui/vertical-cut-reveal";
-import { cn } from "@/lib/utils";
 import NumberFlow from "@number-flow/react";
-import { motion } from "framer-motion";
 
 type RazorpayCheckoutOptions = {
   key: string;
@@ -134,7 +132,7 @@ export default function BillingPage() {
     const payload = await res.json().catch(() => ({}));
     if (res.status === 401) {
       setBusyTier(null);
-      router.push(`/login?mode=signup&next=${encodeURIComponent('/billing')}`);
+      router.push(`/auth?mode=signup&next=${encodeURIComponent('/billing')}`);
       return;
     }
     if (!res.ok) {
