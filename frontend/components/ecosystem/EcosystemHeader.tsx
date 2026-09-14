@@ -294,6 +294,13 @@ export function EcosystemHeader({
       <ProductHuntWelcomeBanner />
 
       <header className="sticky top-0 z-50 w-full border-b border-line bg-background/80 backdrop-blur-xl transition-all">
+        <aside
+          role="status"
+          aria-label="FundersAI service status"
+          className="border-b border-amber-400/30 bg-amber-400/10 px-4 py-2 text-center text-xs font-medium text-amber-100"
+        >
+          FundersAI is currently inactive due to some technical issues.
+        </aside>
         <div className={`${containerClassName} h-16 flex items-center justify-between gap-4`}>
 
           {/* Brand Logo & Product Identifier */}
