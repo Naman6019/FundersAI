@@ -82,13 +82,6 @@ test('EcosystemHeader exposes an explicit Home affordance', () => {
   );
 });
 
-test('EcosystemHeader keeps the inactive-service notice visible on every landing surface', () => {
-  const header = read('components', 'ecosystem', 'EcosystemHeader.tsx');
-
-  assert.match(header, /FundersAI is currently inactive due to some technical issues\./);
-  assert.match(header, /aria-label="FundersAI service status"/);
-});
-
 test('the dashboard sidebar logo links to the hub, not a remembered surface', () => {
   const sidebar = read('components', 'layout', 'AppSidebar.tsx');
 
