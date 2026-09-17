@@ -1,6 +1,6 @@
 # Jobs
 
-**Last updated:** 2026-07-21
+**Last updated:** 2026-09-17
 
 GitHub Actions runs stock and mutual-fund sync jobs from `.github/workflows/`.
 
@@ -29,7 +29,7 @@ GitHub Actions runs stock and mutual-fund sync jobs from `.github/workflows/`.
 | `migrate-mf-raw-to-r2.yml` | Manual | `migrate_mf_raw_to_r2` |
 | `reacquire-mf-raw-to-r2.yml` | Manual | reacquires missing local raw documents into R2 |
 | `compact-mf-storage.yml` | `45 3 * * 0`, plus manual | cleans expired `nav_api_cache` rows and compacts holdings to latest-only retention |
-| `keepalive.yml` | `*/10 * * * *` | Direct ping to Render `/health` |
+| `warm-ticker-cache.yml` | `*/30 * * * *` | Pings the Vercel ticker endpoint (`https://www.fundersai.co.in/api/funds/ticker`) to keep its Next.js data cache warm |
 
 ## Runtime Expectations
 - Jobs should be rerunnable (idempotent upserts).
@@ -110,7 +110,7 @@ Train and evaluate without MLflow registration:
 
 Add `--mlflow` to log a successful run. Add `--register-model` only for live reviewer data or an export explicitly confirmed with `--verified-reviewer-export`. Insufficient label volume or class coverage exits without creating a model artifact.
 - Deprecated CSV scripts under `backend/scripts/deprecated/` are not scheduled.
-- Keepalive workflow pings backend directly; frontend `/api/keepalive` is a separate client-side warm-up route.
+- `warm-ticker-cache.yml` warms the public Vercel ticker route. There is no scheduled `keepalive.yml` workflow or direct Google Cloud Run health ping.
 - Complete MFAPI histories are cached on demand in server-only `nav_api_cache`; current NAV and derived metrics remain in `mutual_fund_core_snapshot`.
 
 

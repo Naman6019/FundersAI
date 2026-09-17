@@ -1,6 +1,6 @@
 # Documentation Index
 
-**Last updated:** 2026-08-18
+**Last updated:** 2026-09-17
 
 ## Authoritative Current Documents
 
@@ -14,7 +14,7 @@ Read these in order for current implementation work:
 6. `03_API_CONTRACTS.md` — frontend/backend routes, authentication, rate limits, errors
 7. `04_DATABASE_SCHEMA.md` — tables, ownership, RLS, caches, migration order
 8. `05_FRONTEND_GUIDE.md` and `06_BACKEND_GUIDE.md` — implementation guides
-9. `08_DEPLOYMENT.md` — production topology, environment, migration, and release checks
+9. `08_DEPLOYMENT.md` — production topology, self-hosted Supabase operations, environment, migration, and release checks
 10. `09_DECISIONS.md` — accepted architectural decisions
 11. `10_TASKS.md` — active work, completed work, and known issues
 12. `11_ML_SYSTEMS.md` — implemented/experimental ML and retrieval boundaries
@@ -34,14 +34,17 @@ These files describe a specific test or implementation stage. Their dates and te
 
 Do not use an evidence snapshot to claim that a later commit is deployed unless the report explicitly tested that commit.
 
-## Legacy or Supplemental Documents
+## Historical and Supplemental Documents
 
-`PROJECT_SUMMARY.md`, `TECHNICAL_OVERVIEW.md`, `data-architecture.md`, `database-schema.md`, `deprecated-stock-paths.md`, and `no-screener-migration.md` preserve earlier context. When they conflict with the authoritative list above, use the authoritative document and current source code.
+- `HISTORY.md` records concise, dated evidence that no longer belongs in current-state documentation.
+- `MF_12_AMC_PRODUCTION_READINESS_RUNBOOK.md`, `MF_CATALOG_ROLLOUT.md`, and `AWS_K3S_DEPLOYMENT.md` are operator runbooks. Follow them only alongside the current architecture and deployment documents.
+
+Stale root-level summaries and the earlier duplicate overview/schema documents were removed on 2026-09-17. Use this index rather than retaining parallel architecture narratives.
 
 ## Maintenance Rules
 
 - Route/auth/rate-limit changes: update `03_API_CONTRACTS.md`.
-- Migration/table/RLS changes: update `04_DATABASE_SCHEMA.md` and `08_DEPLOYMENT.md`.
+- Database, auth, or self-hosted Supabase changes: update `CURRENT_STATE.md`, `02_ARCHITECTURE.md`, `04_DATABASE_SCHEMA.md`, and `08_DEPLOYMENT.md`.
 - Provider/workflow changes: update `providers.md`, `jobs.md`, and `CURRENT_STATE.md`.
 - Product feature changes: update `01_PRODUCT_SPEC.md`, `CURRENT_STATE.md`, and `10_TASKS.md`.
 - Live verification: record domain, tested commit, timestamp, result, and production logs without overwriting historical evidence.

@@ -1,8 +1,10 @@
 # Database Schema
 
-**Last updated:** 2026-09-06
+**Last updated:** 2026-09-17
 
-FundersAI uses Supabase PostgreSQL for structured application data and authentication. Browser access is limited by Row Level Security (RLS); service-role writes are server-side only.
+FundersAI uses Supabase PostgreSQL for structured application data and authentication. The complete Supabase stack is self-hosted with Docker Compose on an OCI Always Free ARM instance, with Caddy/TLS serving `https://db.fundersai.co.in`. Browser access is limited by Row Level Security (RLS); service-role writes are server-side only.
+
+Application traffic uses the Supabase API gateway, not a public PostgreSQL connection. Keep port `5432` private, apply tracked migrations only after a verified backup, and keep the service-role JWT outside browser bundles.
 
 ## Core Stock Tables
 
@@ -16,7 +18,7 @@ FundersAI uses Supabase PostgreSQL for structured application data and authentic
 
 ## Core Mutual-Fund Tables
 
-- `mutual_funds`: compatibility/source table
+- `mutual_funds`: optional compatibility/source mirror. `20260917_restore_mutual_funds_compatibility.sql` creates it with service-role-only access; canonical runtime writes remain in `mutual_fund_core_snapshot`.
 - `mutual_fund_core_snapshot`: query-critical fund snapshot. `20260722_repair_flexi_cap_comparison_metadata.sql` idempotently repairs verified category, benchmark, and risk metadata for scheme codes `118955` and `122639`, with official source provenance in `provider_payload`.
 - `mutual_fund_nav_history`: normalized historical table retained until the archive and drop-readiness gate passes
 - `mutual_fund_holdings`
@@ -191,6 +193,10 @@ The Next.js proxy uses the service role only after authenticating the user and c
 19. `20260728_make_mf_factsheet_promotion_atomic.sql`
 
 Equivalent production SQL is not a substitute for keeping the migration in version control.
+
+## OCI Compatibility-Mirror Repair (2026-09-17; migration pending)
+
+The initial OCI recreation omitted the old manual `mutual_funds` table. `backend/migrations/20260917_restore_mutual_funds_compatibility.sql` restores it idempotently with nullable enrichment fields, so NAV-only jobs can mirror rows before metadata is available. Apply it only after a verified OCI backup; it is not yet recorded as applied.
 
 
 ## Public MF catalog slice (2026-09-05; migration not applied)

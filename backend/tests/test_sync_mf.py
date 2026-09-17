@@ -116,3 +116,47 @@ def test_nav_only_mode_skips_family_mapping_writes(monkeypatch):
     main(["--nav-only"])
 
     assert "mutual_fund_family_mapping" not in calls
+
+
+def test_nav_only_mode_persists_core_snapshot_when_legacy_mirror_is_missing(monkeypatch):
+    monkeypatch.setattr("backend.scripts.sync_mf.SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr("backend.scripts.sync_mf.SUPABASE_KEY", "test-key")
+    monkeypatch.setattr(
+        "backend.scripts.sync_mf.fetch_amfi_nav",
+        lambda: [{"scheme_code": 1, "scheme_name": "Example Fund - Direct Growth", "nav": 10.0, "nav_date": "2026-09-03"}],
+    )
+
+    writes: list[str] = []
+
+    class _Query:
+        data: list[dict] = []
+
+        def __init__(self, table_name: str):
+            self.table_name = table_name
+            self.is_upsert = False
+
+        def select(self, _fields):
+            return self
+
+        def in_(self, _field, _values):
+            return self
+
+        def upsert(self, _rows, **_kwargs):
+            self.is_upsert = True
+            writes.append(self.table_name)
+            return self
+
+        def execute(self):
+            if self.table_name == "mutual_funds" and self.is_upsert:
+                raise RuntimeError("PGRST205: missing mutual_funds")
+            return self
+
+    class _Client:
+        def table(self, name):
+            return _Query(name)
+
+    monkeypatch.setattr("backend.scripts.sync_mf.create_client", lambda *_args: _Client())
+
+    main(["--nav-only"])
+
+    assert writes == ["mutual_fund_core_snapshot", "mutual_funds"]

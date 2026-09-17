@@ -279,22 +279,31 @@ def main(argv: list[str] | None = None):
         batch = updates[i:i + BATCH_SIZE]
         try:
             existing_core = _load_existing_core_rows(supabase, batch)
-            # 1. Update main table
-            mutual_fund_batch = [
-                {key: value for key, value in row.items() if key != "amc_name"}
-                for row in batch
-            ]
-            supabase.table('mutual_funds').upsert(
-                mutual_fund_batch,
-                on_conflict='scheme_code',
-            ).execute()
-
-            # 2. Keep latest NAV and core snapshot aligned. Full history is cached on demand.
+            # Persist the canonical runtime table first. The legacy mirror must not
+            # prevent current NAV data from reaching the application.
             core_snapshot_batch = [
                 _build_core_snapshot_row(u, existing_core.get(str(u["scheme_code"])))
                 for u in batch
             ]
             supabase.table('mutual_fund_core_snapshot').upsert(core_snapshot_batch, on_conflict='scheme_code').execute()
+
+            # Keep the compatibility table aligned when it is available. Fresh OCI
+            # installations can safely run before its idempotent migration is applied.
+            mutual_fund_batch = [
+                {key: value for key, value in row.items() if key != "amc_name"}
+                for row in batch
+            ]
+            try:
+                supabase.table('mutual_funds').upsert(
+                    mutual_fund_batch,
+                    on_conflict='scheme_code',
+                ).execute()
+            except Exception as exc:
+                logger.warning(
+                    "Legacy mutual_funds mirror failed after core snapshot persisted at offset %s: %s",
+                    i,
+                    exc,
+                )
 
             if not args.nav_only:
                 # ETF identities have no Direct Growth suffix; create only missing

@@ -40,7 +40,7 @@ The demo must distinguish ten hosted discovery agents from the six-AMC productio
    - the JSON report and manifest artifact are downloadable;
    - R2 contains the matching report and manifest;
    - Supabase contains the `mf_discovery_runs` summary row.
-5. Warm the Render backend and open the production app before recording.
+5. Warm the Google Cloud Run backend and open the production app before recording.
 6. Confirm `/dashboard/research-evidence` returns cited PPFAS excerpts covering the investment objective, benchmark, and riskometer for the exact demo query. The July 21 OpenAI backfill populated 186 vector chunks and the production-data probe passed in hybrid mode; deploy the updated backend and configure its OpenAI key before recording.
 7. Start from an authenticated test session. Never record login credentials, `.env` files, secret dashboards, or browser password prompts.
 8. Create a clean chat session containing only the demo prompts.
@@ -210,7 +210,7 @@ Use the GPT-5.6 sentence only if it accurately describes the development account
 - Do not wait through the provider-backed general-explanation query; the latest production run took about 50 seconds.
 - Do not use investment-performance marketing language such as “best fund,” “guaranteed,” or “no stale data.”
 - Do not hide partial coverage. Explain it as a trust boundary.
-- Do not show GitHub, Supabase, R2, Render, or Vercel secret values.
+- Do not show GitHub, Supabase, R2, Google Cloud Run, or Vercel secret values.
 - Use only official AMC source pages or FundersAI-owned screens.
 
 ## Claims You Can Make

@@ -1,6 +1,6 @@
 # Providers
 
-**Last updated:** 2026-07-21
+**Last updated:** 2026-09-17
 
 Provider selection is controlled by environment variables.
 
@@ -68,7 +68,7 @@ Daily MF NAV/history uses AMFI and MFapi. MF enrichment is AMFI + AMC disclosure
 All provider attempts are logged in `provider_usage_logs` with cache-hit and quota-skip markers.
 Provider response caching uses the server-only `provider_response_cache`; complete MFapi NAV histories use the server-only `nav_api_cache`. Both deny browser roles through RLS/revokes.
 
-The supported frontend chat route requires authentication and sends `X-Internal-Proxy-Key` when `CHAT_INTERNAL_PROXY_KEY` is configured on both Vercel and Render. Direct FastAPI chat does not independently validate a Supabase bearer token.
+The supported frontend chat route requires authentication and sends `X-Internal-Proxy-Key` when `CHAT_INTERNAL_PROXY_KEY` is configured on both Vercel and Google Cloud Run. Direct FastAPI chat does not independently validate a Supabase bearer token.
 
 If a selected paid provider is unavailable, backend code logs a warning and falls back to `manual`.
 

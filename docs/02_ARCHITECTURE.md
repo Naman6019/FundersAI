@@ -1,17 +1,17 @@
 # Architecture
 
-**Last updated:** 2026-08-10
+**Last updated:** 2026-09-17
 
 ## System Shape
 FundersAI is a split web architecture:
 - Next.js frontend for UI + server-side proxy/admin routes
 - FastAPI backend for analysis orchestration and internal admin diagnostics
 - A standalone LangGraph report-synthesis microservice (`microservices/reports/`), containerized and deployed on an AWS EC2 instance running K3s (lightweight Kubernetes)
-- Supabase as primary structured runtime store
+- Self-hosted Supabase as the primary structured runtime store and authentication system. PostgreSQL, GoTrue, PostgREST, Realtime, Storage, Envoy, Supavisor, Studio, and edge functions run through Docker Compose on OCI; Caddy terminates TLS for `https://db.fundersai.co.in`.
 - Cloudflare R2 for raw MF documents and cold archives, accessed through the S3-compatible API (`boto3` in the backend, `aws4fetch` SigV4 signing in edge functions) — not AWS S3 itself
 - GitHub Actions for recurring sync/ingestion/compaction jobs
 
-The next infrastructure work extends this shape rather than replacing it. The target is a versioned Fund Research Evidence Pipeline built on the existing Supabase, R2, FastAPI, and background-job boundaries.
+Production traffic runs through Vercel, Google Cloud Run, OCI-hosted Supabase, Cloudflare R2, and GitHub Actions. The Fund Research Evidence Pipeline extends these boundaries; it does not replace them.
 
 ## Component Boundaries
 
@@ -48,7 +48,7 @@ The next infrastructure work extends this shape rather than replacing it. The ta
 1. Frontend authenticates `/api/chat`; optional `session_id` ownership is checked before any service-role write.
 2. Frontend calls `/api/chat` or `/api/quant/*` and applies its route/tier limits.
 3. Proxy forwards trusted identity headers to the backend.
-4. Backend reads Supabase-first tables.
+4. Backend reads Supabase-first tables through the self-hosted Supabase API gateway; direct PostgreSQL access stays private to OCI operations.
 5. Response includes deterministic payloads and limitations where data is missing; owned chat messages are persisted only after a successful response.
 
 Public read-only backend groups (`quant`, `mf-detail`, `category-funds`, `data-health`) bypass only a failed/unconfigured rate-limit backend. Chat, fund research, cron, and admin mutations remain fail-closed.
@@ -85,7 +85,7 @@ The recorded v1 seed baseline passed 12 of 14 cases and had `0.3333` abstention 
 5. A LangGraph workflow limited to official-document research questions.
 6. Container/GCP deployment proof and end-to-end monitoring, drift checks, alerts, and runbooks.
 
-The implementation scaffolds for all six additions now exist, including separate API/worker containers, a GCP deployment script, log-derived alert setup, and offline feature-drift checks. GitHub Actions and the existing Render deployment remain production until Prefect and Cloud Run are exercised with live proof artifacts.
+The implementation scaffolds for all six additions now exist, including separate API/worker containers, a GCP deployment script, log-derived alert setup, and offline feature-drift checks. GitHub Actions remains the production scheduler until Prefect demonstrates equivalent retries, parameters, logs, and operator evidence.
 
 ## Provider Strategy
 - Runtime reads are Supabase-first.
@@ -95,6 +95,6 @@ The implementation scaffolds for all six additions now exist, including separate
 - IndianAPI endpoints are optional and quota-aware.
 
 ## Auth Model
-- User auth: Supabase auth session.
+- User auth: self-hosted Supabase (GoTrue) session issued through `db.fundersai.co.in`.
 - Admin auth: `user_profiles.role='admin'` + server-side checks.
 - Internal backend admin diagnostics: `X-Admin-Key` header.

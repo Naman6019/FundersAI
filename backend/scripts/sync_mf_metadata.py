@@ -171,7 +171,6 @@ def update_funds(supabase, updates: list[dict[str, Any]], source_name: str) -> i
         batch = updates[i:i + BATCH_SIZE]
         try:
             existing_core = _load_existing_core_rows(supabase, batch)
-            supabase.table("mutual_funds").upsert(batch, on_conflict="scheme_code").execute()
             core_batch = []
             for row in batch:
                 scheme_code = str(row["scheme_code"])
@@ -200,6 +199,13 @@ def update_funds(supabase, updates: list[dict[str, Any]], source_name: str) -> i
                     }
                 )
             supabase.table("mutual_fund_core_snapshot").upsert(core_batch, on_conflict="scheme_code").execute()
+            try:
+                supabase.table("mutual_funds").upsert(batch, on_conflict="scheme_code").execute()
+            except Exception as exc:
+                logger.warning(
+                    "Legacy mutual_funds metadata mirror failed after core snapshot persisted: %s",
+                    exc,
+                )
             written += len(batch)
         except Exception as e:
             logger.error("%s metadata upsert failed: %s", source_name, e)

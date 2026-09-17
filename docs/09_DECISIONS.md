@@ -10,6 +10,13 @@
 
 ## Confirmed Decisions
 
+**Date:** 2026-09-15
+**Decision:** Self-host the Supabase stack on Oracle Cloud Infrastructure rather than use Supabase Cloud.
+**Context:** The hosted project was unavailable and could not remain the production dependency. FundersAI needs Postgres, GoTrue, PostgREST, Realtime, Storage, pgvector, and service-role/RLS semantics without moving application boundaries or exposing PostgreSQL publicly.
+**Consequences:** OCI runs the Docker Compose Supabase stack behind Caddy/TLS at `https://db.fundersai.co.in`; Vercel, Cloud Run, reports, and GitHub Actions use the self-hosted API endpoint and current project keys. Operators own security patching, ingress, backups, restore drills, and configuration recovery. Raw documents and encrypted off-host backups remain in Cloudflare R2.
+
+---
+
 **Date:** 2026-07-21
 **Decision:** Keep public read-only data available during rate-limit-storage failures, while preserving fail-closed behavior for costly or mutating routes.
 **Context:** An Upstash failure caused public MF/quant requests to return `503` even when the underlying read path was healthy.
@@ -48,7 +55,7 @@
 
 **Date:** (Pre-existing)
 **Decision:** Normalized Supabase Local History over Live API.
-**Context:** YFinance frequently rate-limits and times out on Render free tiers.
+**Context:** YFinance frequently rate-limits and times out on constrained hosted runtimes.
 **Consequences:** `stock_prices_daily` remains the local stock-history source. Complete MF NAV requests use server-only `nav_api_cache`; `mutual_fund_nav_history` remains temporarily available until the documented archive/readiness gate permits its manual drop. Older heavy compatibility tables were removed or compacted to reduce free-tier storage usage.
 
 **Date:** (Pre-existing)

@@ -1,6 +1,8 @@
 # Current State
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-17
+
+> Read the project summary and stack snapshot first for the current production topology. Dated implementation notes below are retained as evidence; they do not override the OCI self-hosted Supabase, Vercel, and Google Cloud Run status recorded at the top of this document.
 
 ## Project Summary
 FundersAI is a research-first Indian stocks + mutual funds app with deterministic comparison outputs, Supabase-first runtime reads, and workflow-driven data ingestion.
@@ -9,11 +11,13 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 - Frontend: Next.js `16.2.11`, React `19.2.4`, Tailwind CSS 4, Zustand, Recharts
 - Backend: FastAPI + repository/service layers
 - Reports microservice: FastAPI + LangGraph (`microservices/reports/`), containerized and deployed on AWS EC2 (K3s), 2 replicas, independent Supabase/OpenAI credentials
-- Database: Supabase (PostgreSQL)
+- Database: Supabase (PostgreSQL), self-hosted via Docker Compose on an Oracle Cloud Infrastructure (OCI) Always Free ARM instance (`db.fundersai.co.in`), behind Caddy/TLS
 - Storage: Cloudflare R2 (raw MF docs + cold archives), via the S3-compatible API (`boto3`/`aws4fetch` SigV4)
 - Automation: GitHub Actions workflows
 
 ## Implemented
+- GitHub Actions NAV compatibility repair (2026-09-17; local implementation verified, OCI migration pending): The self-hosted recreation omitted `public.mutual_funds`, a legacy compatibility mirror whose original schema lived outside the tracked migration directory. Scheduled NAV syncs therefore reached OCI successfully but failed their legacy upsert with PostgREST `PGRST205`, even though `mutual_fund_core_snapshot` was available. `sync_mf.py` and `sync_mf_metadata.py` now persist the canonical snapshot first and only warn if the legacy mirror is unavailable. `backend/migrations/20260917_restore_mutual_funds_compatibility.sql` creates the mirror idempotently with nullable enrichment fields and service-role-only access. The migration has not been applied to OCI; take a verified backup before applying it. GitHub `SUPABASE_URL` and `SUPABASE_KEY` were last updated on 2026-09-15, but their values are write-only and are not independently verified here.
+- Supabase migrated to self-hosted on Oracle Cloud Infrastructure (2026-09-15; verified end-to-end, no remaining work items): The Supabase Cloud project was shut down (unpaid invoices, no backup available), so the full stack (Postgres, GoTrue auth, PostgREST, Realtime, Storage, Envoy API gateway, imgproxy, Supavisor pooler, Studio, edge-functions) was re-hosted via Docker Compose on an OCI Always Free ARM instance, with no data migration — schema was recreated from the repo's 50 tracked `backend/migrations/*.sql` files. Canonical API URL is `https://db.fundersai.co.in` (Caddy-terminated real Let's Encrypt TLS; the bare IP is no longer used). `SITE_URL` points at the real frontend (`https://www.fundersai.co.in`) rather than the API gateway, so GoTrue's post-confirmation redirect lands users in the app instead of hitting the gateway's basic-auth-protected root. Verified live: real signup, confirmation email delivered via Resend (SMTP relay; GoTrue still composes the email HTML from its own templates), password login, JWT session issuance, and an RLS-correct REST query that returned only the authenticated user's own row while a decoy other-user row was correctly excluded; `match_document_chunks` (pgvector RPC) correctly rejects a normal user session and succeeds only with the service-role key, by design. Daily `pg_dump` backups (gzip) now ship automatically to a dedicated Cloudflare R2 bucket via `rclone` cron, pruning anything older than 14 days. A branded confirmation-email template (GoTrue `GOTRUE_MAILER_TEMPLATES_CONFIRMATION`, hosted as a static file on the frontend) replaced GoTrue's plain default; recovery/magic-link/invite/email-change templates remain unbranded. A transient "service unavailable" notice shown during the cutover has since been removed now that the migration is stable.
 - Sitemap metadata accuracy hotfix (2026-09-09): Removed the fixed August 15
   `<lastmod>` value from every sitemap URL. The sitemap now omits `lastmod` until
   a verified per-page significant-update timestamp is available; URLs, canonicals,
@@ -431,7 +435,7 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - a minimal `text-embedding-3-small` API probe returned the required 1,536 dimensions;
   - the two existing PPFAS June 2026 factsheet records were re-indexed into 186 vector chunks with `index_mode=vector` and no failures;
   - the exact demo query returned `mode=hybrid`, `vector_status=active`, query coverage `1.0`, five sources, and visible investment-objective, benchmark, and riskometer evidence when the local updated backend queried production Supabase;
-  - this proves the provider, vectors, and pgvector RPC; `OPENAI_API_KEY` is now configured on Render and GitHub, while the deployed six-AMC retrieval behavior still needs a final hosted-page check.
+  - this proves the provider, vectors, and pgvector RPC; the previous backend deployment and GitHub Actions had `OPENAI_API_KEY`, while the deployed six-AMC retrieval behavior still needed a final hosted-page check.
 - The complete six-AMC OpenAI vector backfill is verified in production Supabase:
   - Axis: 1 document and 743 vector chunks;
   - HDFC: 2 documents and 1,178 vector chunks;
@@ -452,7 +456,7 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
   - expense-ratio location questions now answer with the readable `Base Expense Ratio (As on last business day of the month)` section name instead of returning raw PDF chunks.
   - the Technical audit trail lists the provider/model/component used at each active stage and its purpose, including `text-embedding-3-small` for semantic search and deterministic cited-answer construction with no generative answer model.
   - live Browser verification of commit `2203fea` passed the exact PPFAS expense-ratio-section question with one readable cited statement, 100% claim support, visible component purposes, and no browser-console errors.
-  - that live trace reported lexical retrieval, so Render still needs `MF_RESEARCH_VECTOR_SEARCH_ENABLED=true` in the service environment before the per-request audit will list OpenAI `text-embedding-3-small` semantic query search.
+  - that historical live trace reported lexical retrieval. The current open action is to enable and verify `MF_RESEARCH_VECTOR_SEARCH_ENABLED=true` in the active Google Cloud Run service before claiming semantic-query production coverage.
 - The first six-AMC OpenAI indexing run `29836844061` exposed document-scale hardening needs. The indexing path now removes database-unsafe control characters, deduplicates identical chunks within a document, sends OpenAI inputs in bounded batches, and writes Supabase vector rows in bounded batches to avoid statement timeouts.
 - July 21 chat/cache/domain hardening is committed at `25e8d193`:
   - neutral uses of `invest`, `investment`, `buying`, and `selling` survive the research-language sanitizer while direct recommendation phrases are rewritten;
@@ -487,12 +491,12 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 ## In Progress
 - Product Hunt launch package (2026-09-08; local implementation, not deployed): added a public `/fund-truth-check` preview page, Product Hunt listing/first-comment runbook, social/gallery/thumbnail sources and upload-ready assets. The preview makes the live checker’s private-beta boundary explicit and never submits an arbitrary claim. The private `/tools/fund-truth-check` route, source-review gate and production activation requirements remain unchanged.
 - Metric coverage remediation (2026-09-08; local implementation, not deployed): `mf-sync.yml` now emits a read-only `mf-metric-coverage-remediation-health.json` manifest for exact staged benchmark/risk candidates, including a conditional 95% gate projection. It does not lower gates or promote data; each batch must pass the existing manual dry-run and approval flow before any runtime write.
-- Enable `MF_RESEARCH_VECTOR_SEARCH_ENABLED=true` in the active Render service environment and confirm the hosted audit reports OpenAI `text-embedding-3-small` semantic query search. The complete production vector corpus is already populated.
+- Enable `MF_RESEARCH_VECTOR_SEARCH_ENABLED=true` in the active Google Cloud Run service environment and confirm the hosted audit reports OpenAI `text-embedding-3-small` semantic query search. The complete production vector corpus is already populated.
 - Hosted discovery is verified by run `github-29831363507-1`: 8 completed agents, 2 safe escalations, 8 validated documents, and persisted GitHub/R2/Supabase evidence.
 - The latest Browser production rerun passes signed-out guard, login, deterministic SIP, streamed chat, general explanation, comparison APIs/canvas, session restore, and sign-out. See `LIVE_LOGIN_CHAT_E2E_2026-07-21.md`.
 - Reduce provider-backed general-explanation latency, observed at about 50.5 seconds in the latest live run.
 - Remove the remaining Recharts negative-dimension warning when the comparison canvas first opens.
-- Capture Render application logs after an explicit Render workspace is selected; the latest rerun contains browser console, network, SSE, and persisted-session evidence only.
+- Capture Google Cloud Run application logs after an explicit Cloud Run service/revision is selected; the latest rerun contains browser console, network, SSE, and persisted-session evidence only.
 - Replace the development-seed retrieval fixtures with at least 50 reviewer-verified official-document cases before enabling a production regression gate.
 - Validate a Prefect deployment with equivalent parameters, retries, logs, and operator evidence before replacing any GitHub Actions scheduling.
 - Increase mutual-fund field coverage depth beyond AUM/TER/holdings for PPFAS, ICICI, HDFC, SBI (benchmark/risk/ratios completeness).
@@ -508,8 +512,8 @@ FundersAI is a research-first Indian stocks + mutual funds app with deterministi
 - The first golden dataset is a development seed rather than a production gate. V2 passes it completely, but that does not establish quality on real official-document questions.
 - V3 vector retrieval, the cross-encoder, and the LLM relevance grader are implemented behind independent flags and remain disabled by default until reviewer-verified quality, latency, and provider-cost evidence exists.
 - The committed v2/v3 judge report is provider-free and shows benchmark plumbing, not live cross-encoder quality; run the explicit live flags only with configured provider credentials.
-- No persisted production evaluation-run history, Prefect deployment, Cloud Run proof, or production-trained review-priority model/registry alias is active yet.
-- Production topology is Vercel for the frontend, GCP Cloud Run for the backend, Supabase + R2 for data/storage, and GitHub Actions for CI and data automation.
+- No persisted production evaluation-run history, Prefect deployment, or production-trained review-priority model/registry alias is active yet.
+- Production topology is Vercel for the frontend, GCP Cloud Run for the backend, self-hosted Supabase on Oracle Cloud Infrastructure + Cloudflare R2 for data/storage, and GitHub Actions for CI and data automation.
 - Scheduled fundamentals keep shareholding sparse when `ENABLE_SHAREHOLDING_SYNC=false`.
 - Some admin metrics rely on fallback sources when canonical tables are incomplete.
 - Data Coverage “fully covered” is strict and currently under-reports AMCs that only have partial field depth.

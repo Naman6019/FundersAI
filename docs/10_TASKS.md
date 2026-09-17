@@ -298,7 +298,7 @@ Acceptance Criteria:
 - None currently.
 
 ## Known Issues
-- YFinance rate limits often on Render deployments.
+- YFinance rate limits often on constrained hosted runtimes.
 - The direct FastAPI `/api/chat` route does not independently validate a Supabase bearer token; the supported authenticated boundary is the Next.js proxy.
 - [ ] Portfolio overlap is partial for schemes/months not yet covered by AMC disclosure parser outputs.
 - News uses Google News RSS and can be slow.

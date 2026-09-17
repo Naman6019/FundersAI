@@ -1,6 +1,6 @@
 # Deployment
 
-**Last updated:** 2026-09-06
+**Last updated:** 2026-09-17
 
 ## Current Topology
 - Frontend: Vercel project rooted at `frontend/`
@@ -9,11 +9,20 @@
   - Edge Middleware: Next.js `frontend/middleware.ts` rewrites `synthesis.fundersai.co.in/` requests to `/reports` and issues HTTP 308 permanent redirects for legacy `www.fundersai.co.in/synthesis` paths.
 - Backend: Google Cloud Run web service rooted at `backend/`
 - Reports Microservice: AWS EC2 (`t3.small`, Ubuntu 22.04) running K3s (lightweight Kubernetes), rooted at `microservices/reports/`
-- Database: Supabase
+- Database and authentication: Supabase self-hosted on an OCI Always Free ARM instance. The public API gateway is `https://db.fundersai.co.in`; Caddy provides TLS and PostgreSQL remains private.
 - Object Storage: Cloudflare R2 (raw docs + cold archives), accessed via the S3-compatible API
 - Scheduler: GitHub Actions workflows in `.github/workflows/`
 
-This is the active production topology. Prefect artifacts are also implemented as deployment proofs.
+This is the active production topology. Prefect artifacts are implemented, but GitHub Actions remains the production scheduler.
+
+## Self-Hosted Supabase (OCI)
+
+- The OCI host runs the Supabase Docker Compose stack: PostgreSQL, GoTrue, PostgREST, Realtime, Storage, Envoy gateway, imgproxy, Supavisor, Studio, and edge functions.
+- `https://db.fundersai.co.in` is the canonical browser and server API origin. `SITE_URL` is `https://www.fundersai.co.in`, so GoTrue confirmation and recovery redirects return to the app rather than the gateway root.
+- PostgreSQL port `5432` must not be public. Admin access uses the OCI private network or Bastion; application traffic uses the HTTPS gateway.
+- The hosted Supabase Cloud project was replaced on 2026-09-15. The OCI schema was recreated from the repository's tracked migrations; no source data migration was performed. Treat `docs/CURRENT_STATE.md` as the evidence-backed migration record.
+- The initial recreation omitted the legacy `mutual_funds` compatibility mirror because its original SQL was outside `backend/migrations/`. Before relying on legacy fallback reads, take a verified backup and apply `backend/migrations/20260917_restore_mutual_funds_compatibility.sql`; this migration is pending as of 2026-09-17.
+- Daily compressed `pg_dump` backups are sent to a dedicated Cloudflare R2 bucket through `rclone`, with a 14-day retention policy. A restore drill is required before changing backup, compose, database, or ingress configuration.
 
 ## Reproducible Deployment Proof
 
@@ -43,7 +52,7 @@ Do not migrate business data to Cloud SQL or raw documents to GCS solely to matc
   - `NEXT_PUBLIC_SUPABASE_URL`
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
   - `CRON_SECRET` (protects `/api/cron/sync-mf`)
-  - `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_KEY` (server routes needing admin Supabase access)
+  - `SUPABASE_SERVICE_ROLE_KEY` (server-only, self-hosted Supabase service-role JWT for routes that need admin access)
   - `MF_INTERNAL_ADMIN_KEY` (server-to-backend admin resolver debug proxy)
   - `CHAT_INTERNAL_PROXY_KEY` (must match the backend for trusted chat proxy metadata)
   - `CLAIM_CHECK_INTERNAL_PROXY_KEY` (server-only; must match the backend)
@@ -59,14 +68,18 @@ Do not migrate business data to Cloud SQL or raw documents to GCS solely to matc
   - `RAZORPAY_PLAN_PRO_MONTHLY_ID`
   - `RAZORPAY_PLAN_ULTRA_MONTHLY_ID`
 
+After changing a Vercel environment variable, create a new deployment before treating the change as active. Do not expose the service-role JWT in a `NEXT_PUBLIC_*` variable.
+
+`frontend/lib/supabase.ts` reads `SUPABASE_SERVICE_ROLE_KEY` for server-side admin clients, then falls back only to the browser anon key. It does not read a `SUPABASE_SERVICE_ROLE` or `SUPABASE_KEY` alias; use the exact server-only name above.
+
 ## Auth Provider Configuration
 - Supabase Site URL should be the production app origin, for example `https://www.fundersai.co.in`.
 - Supabase Redirect URLs should include:
   - `http://localhost:3000/auth/callback`
   - `https://www.fundersai.co.in/auth/callback`
   - `https://fundersai.co.in/auth/callback`
-- Google OAuth authorized redirect URI should use the Supabase provider callback URL:
-  - `https://<supabase-project-ref>.supabase.co/auth/v1/callback`
+- Google OAuth authorized redirect URI must use the self-hosted GoTrue callback:
+  - `https://db.fundersai.co.in/auth/v1/callback`
 - Google OAuth client id and client secret are configured in Supabase Auth provider settings, not in frontend code.
 
 ## Razorpay Configuration
@@ -120,7 +133,7 @@ Bound secrets (`deploy/gcp/deploy.ps1`):
 
 The runtime service account `fundersai-runtime@<project>.iam.gserviceaccount.com` has `roles/secretmanager.secretAccessor` on the project (`deploy/gcp/deploy.ps1:46`).
 
-Vercel-only secrets (Razorpay, `SUPABASE_KEY` for the frontend, `NEXT_PUBLIC_*`) stay in the Vercel project — Cloud Run does not need them.
+Vercel-only secrets (Razorpay, `SUPABASE_SERVICE_ROLE_KEY` for server routes, and `NEXT_PUBLIC_*` values) stay in the Vercel project. Cloud Run has its own `SUPABASE_URL` and `SUPABASE_KEY` bindings for the OCI-hosted Supabase API.
 
 #### Provisioning / rotation
 
@@ -163,7 +176,7 @@ gcloud run services update fundersai-api --region <region>
 - Cluster: K3s installed via `curl -sfL https://get.k3s.io | sh -`.
 - Security group: SSH (22), HTTP (80), and NodePort `30001` (the reports service's exposed port) opened for inbound traffic.
 - Image: built from `microservices/reports/Dockerfile` and pushed to a container registry, referenced by `microservices/reports/k8s/deployment.yaml` (2 replicas, container port `8001`).
-- Secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `OPENAI_API_KEY` injected via a Kubernetes secret (`reports-secrets`), not env files on the pod.
+- Secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (the self-hosted service-role JWT), and `OPENAI_API_KEY` injected via a Kubernetes secret (`reports-secrets`), not env files on the pod.
 - Frontend integration: `REPORTS_MICROSERVICE_URL` (set in the frontend environment) points at `http://<ec2-host>:30001` and is proxied by the Synthesis Studio (`/reports`) routes.
 - Full step-by-step provisioning/deploy guide: `docs/AWS_K3S_DEPLOYMENT.md` (present locally; excluded from git by a `*.MD` `.gitignore` rule — treat it as an operator runbook, not a tracked repo doc).
 - This service is intentionally separate from the Cloud Run backend: it owns its own DB/LLM credentials and streaming endpoint (`POST /api/v1/reports/stream`) rather than routing through FastAPI.
@@ -202,7 +215,7 @@ Production was reverified on 2026-09-03. The boundary is authenticated, owner-on
 
 Apply and deploy in this order:
 
-1. Confirm the target Supabase project and take a database backup or verify point-in-time recovery is available.
+1. Confirm the target OCI-hosted Supabase instance and complete a restore-tested backup before applying migrations.
 2. Apply `backend/migrations/20260825_add_user_portfolios.sql` in one transaction.
 3. Apply `backend/migrations/20260825_harden_portfolio_updated_at.sql`.
 4. Run Supabase security and performance advisors. Resolve any new finding tied to these tables before deploying the app.

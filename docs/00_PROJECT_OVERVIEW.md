@@ -1,6 +1,6 @@
 # Project Overview
 
-**Last updated:** 2026-08-04
+**Last updated:** 2026-09-17
 
 FundersAI is a research-first web app for Indian stocks and mutual funds.
 
@@ -20,8 +20,8 @@ FundersAI is a research-first web app for Indian stocks and mutual funds.
 
 ## High-Level Stack
 - Frontend: Next.js `16.2.11` (App Router), React `19.2.4`, TypeScript, Zustand, Recharts.
-- Backend: FastAPI, provider adapters, Supabase repository layer.
-- Database: Supabase/PostgreSQL.
+- Backend: FastAPI, provider adapters, Supabase repository layer on Google Cloud Run.
+- Database and authentication: Supabase/PostgreSQL, self-hosted with Docker Compose on an Oracle Cloud Infrastructure (OCI) Always Free ARM instance. The public API gateway is `https://db.fundersai.co.in`; PostgreSQL is private to the OCI network.
 - Object storage: Cloudflare R2 for MF raw files and cold archives.
 - Automation: GitHub Actions workflows in `.github/workflows/`.
 
