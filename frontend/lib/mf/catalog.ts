@@ -40,6 +40,18 @@ export const getPublishedFunds = cache(async (): Promise<CatalogFund[]> => {
   return funds;
 });
 
+// Directory discovery must never turn a catalog infrastructure outage into a false empty catalog.
+export async function tryGetPublishedFunds(): Promise<CatalogFund[] | null> {
+  try {
+    return await getPublishedFunds();
+  } catch (error) {
+    console.error('[mf-catalog] public catalog unavailable', {
+      message: error instanceof Error ? error.message : 'Unknown catalog error',
+    });
+    return null;
+  }
+}
+
 export const getPublishedFund = cache(async (amcSlug: string, fundSlug: string): Promise<CatalogFund | null> => {
   const { data, error } = await client().from('mf_page_catalog').select('*')
     .eq('amc_slug', amcSlug).eq('fund_slug', fundSlug).maybeSingle();

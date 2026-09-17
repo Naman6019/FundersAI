@@ -53,6 +53,13 @@ test('directory pagination keeps all eligible rows and fails on partial lookup f
   await assert.rejects(loadCatalog([{ data: page, error: null }, { data: null, error: {} }]).getPublishedFunds(), /Catalog lookup failed/);
 });
 
+test('directory recovery distinguishes an unavailable catalog from an empty published catalog', async () => {
+  assert.equal(await loadCatalog([{ data: null, error: { message: 'offline' } }]).tryGetPublishedFunds(), null);
+  const emptyCatalog = await loadCatalog([{ data: [], error: null }]).tryGetPublishedFunds();
+  assert.ok(Array.isArray(emptyCatalog));
+  assert.equal(emptyCatalog.length, 0);
+});
+
 test('public fund routes use catalog lookups without handwritten fallback or stale ISR', () => {
   for (const route of ['page.tsx', '[amcSlug]/page.tsx', '[amcSlug]/[fundSlug]/page.tsx', 'category/[categorySlug]/page.tsx']) {
     const source = readFileSync(`app/mutual-funds/${route}`, 'utf8');
@@ -60,4 +67,7 @@ test('public fund routes use catalog lookups without handwritten fallback or sta
     assert.match(source, /force-dynamic/);
     assert.doesNotMatch(source, /FUND_REGISTRY|getFundBySlug|StaticFundDisplay/);
   }
+  const directory = readFileSync('app/mutual-funds/page.tsx', 'utf8');
+  assert.match(directory, /tryGetPublishedFunds/);
+  assert.match(directory, /index: false/);
 });

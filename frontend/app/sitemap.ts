@@ -1,4 +1,4 @@
-import { getPublishedFunds, getPublishedAmcs } from '@/lib/mf/catalog';
+import { tryGetPublishedFunds } from '@/lib/mf/catalog';
 export const dynamic = 'force-dynamic';
 import type { MetadataRoute } from 'next';
 import {
@@ -11,8 +11,6 @@ import {
 const BASE_URL = 'https://www.fundersai.co.in';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const funds = await getPublishedFunds();
-  const amcs = await getPublishedAmcs();
   const routes: MetadataRoute.Sitemap = [];
 
   // 1. Core Institutional & Marketing Pages (www.fundersai.co.in)
@@ -70,39 +68,38 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
-  // 3. Mutual Fund Directory Hub & High-Value SEO Entities
-  // 3a. Hub Page
-  routes.push({
-    url: `${BASE_URL}/mutual-funds`,
-    changeFrequency: 'weekly',
-    priority: 0.95,
-  });
-
-  // 3b. SEBI Category Pages
-  for (const cat of new Set(funds.map(f => f.category))) {
+  // 3. Mutual-fund URLs are discoverable only after their verified catalog is published.
+  const funds = await tryGetPublishedFunds();
+  if (funds && funds.length > 0) {
     routes.push({
-      url: `${BASE_URL}/mutual-funds/category/${categorySlug(cat)}`,
+      url: `${BASE_URL}/mutual-funds`,
       changeFrequency: 'weekly',
-      priority: 0.9,
+      priority: 0.95,
     });
-  }
 
-  // 3c. AMC Hub Pages
-  for (const amc of amcs) {
-    routes.push({
-      url: `${BASE_URL}/mutual-funds/${amc.slug}`,
-      changeFrequency: 'weekly',
-      priority: 0.85,
-    });
-  }
+    for (const category of new Set(funds.map((fund) => fund.category))) {
+      routes.push({
+        url: `${BASE_URL}/mutual-funds/category/${categorySlug(category)}`,
+        changeFrequency: 'weekly',
+        priority: 0.9,
+      });
+    }
 
-  // 3d. Individual Scheme Factsheets
-  for (const fund of funds) {
-    routes.push({
-      url: `${BASE_URL}/mutual-funds/${fund.amc_slug}/${fund.fund_slug}`,
-      changeFrequency: 'weekly',
-      priority: 0.85,
-    });
+    for (const [slug] of new Map(funds.map((fund) => [fund.amc_slug, fund.amc_name]))) {
+      routes.push({
+        url: `${BASE_URL}/mutual-funds/${slug}`,
+        changeFrequency: 'weekly',
+        priority: 0.85,
+      });
+    }
+
+    for (const fund of funds) {
+      routes.push({
+        url: `${BASE_URL}/mutual-funds/${fund.amc_slug}/${fund.fund_slug}`,
+        changeFrequency: 'weekly',
+        priority: 0.85,
+      });
+    }
   }
 
   // 3e. Head-to-Head Comparison Hub & Pages

@@ -3,6 +3,7 @@ const originalFetch = global.fetch;
 global.fetch = async (input, init) => {
   const url = new URL(typeof input === 'string' ? input : input.url || input.toString());
   if (!url.pathname.endsWith('/rest/v1/mf_page_catalog')) return originalFetch(input, init);
+  if (process.env.MF_CATALOG_OUTAGE === '1') return Response.json({ message: 'Synthetic database outage' }, { status: 503 });
   const amc = url.searchParams.get('amc_slug');
   const slug = url.searchParams.get('fund_slug');
   if (amc === 'eq.outage') return Response.json({ message: 'Synthetic database outage' }, { status: 503 });

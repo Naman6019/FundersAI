@@ -25,9 +25,10 @@ test('sitemap.ts is configured for the two supported production hosts', () => {
   // Prototype route check
   assert.doesNotMatch(source, /emergent-replica/);
 
-  // Index core routes
-  assert.match(source, /await getPublishedFunds\(\)/);
-  assert.match(source, /await getPublishedAmcs\(\)/);
+  // Catalog-backed URLs are submitted only after a verified catalog read succeeds.
+  assert.match(source, /await tryGetPublishedFunds\(\)/);
+  assert.match(source, /funds && funds\.length > 0/);
+  assert.doesNotMatch(source, /await getPublishedAmcs\(\)/);
   assert.match(source, /CATEGORY_LIST/);
   assert.match(source, /COMPARE_PAIRS/);
 
