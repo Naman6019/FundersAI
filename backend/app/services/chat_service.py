@@ -4442,6 +4442,99 @@ def _build_official_research_chat_response(query: str, result: dict[str, Any]) -
     }
 
 
+def _record_langfuse_runtime_scores(response: dict[str, Any], trace_id: str | None = None) -> None:
+    if not langfuse:
+        return
+    try:
+        answer = response.get("answer")
+        if answer:
+            try:
+                langfuse.update_current_span(output=str(answer)[:2000])
+            except Exception:
+                pass
+
+        if "grounded" in response and response["grounded"] is not None:
+            is_grounded = bool(response["grounded"])
+            try:
+                langfuse.score_current_trace(
+                    name="groundedness",
+                    value=1.0 if is_grounded else 0.0,
+                    data_type="NUMERIC",
+                    comment="Factsheet evidence grounding verification",
+                )
+            except Exception:
+                if trace_id:
+                    langfuse.create_score(
+                        name="groundedness",
+                        value=1.0 if is_grounded else 0.0,
+                        trace_id=trace_id,
+                        data_type="NUMERIC",
+                        comment="Factsheet evidence grounding verification",
+                    )
+
+        raw_conf = response.get("confidence")
+        conf_str = str(raw_conf or "").lower()
+        if conf_str in {"high", "0.9", "1", "true"}:
+            conf_val = 1.0
+        elif conf_str in {"partial", "medium", "0.5"}:
+            conf_val = 0.5
+        elif conf_str in {"low", "0", "false", "unsupported"}:
+            conf_val = 0.0
+        elif isinstance(raw_conf, (int, float)) and 0.0 <= float(raw_conf) <= 1.0:
+            conf_val = float(raw_conf)
+        else:
+            conf_val = None
+
+        if conf_val is not None:
+            try:
+                langfuse.score_current_trace(
+                    name="confidence",
+                    value=conf_val,
+                    data_type="NUMERIC",
+                    comment=f"Resolution confidence: {conf_str}",
+                )
+            except Exception:
+                if trace_id:
+                    langfuse.create_score(
+                        name="confidence",
+                        value=conf_val,
+                        trace_id=trace_id,
+                        data_type="NUMERIC",
+                        comment=f"Resolution confidence: {conf_str}",
+                    )
+
+        cov = str(response.get("coverage_status") or "").lower()
+        if cov == "full":
+            cov_val = 1.0
+        elif cov == "partial":
+            cov_val = 0.5
+        elif cov == "unsupported":
+            cov_val = 0.0
+        else:
+            cov_val = None
+
+        if cov_val is not None:
+            try:
+                langfuse.score_current_trace(
+                    name="coverage",
+                    value=cov_val,
+                    data_type="NUMERIC",
+                    comment=f"AMC coverage status: {cov}",
+                )
+            except Exception:
+                if trace_id:
+                    langfuse.create_score(
+                        name="coverage",
+                        value=cov_val,
+                        trace_id=trace_id,
+                        data_type="NUMERIC",
+                        comment=f"AMC coverage status: {cov}",
+                    )
+    except Exception as e:
+        logger.debug(f"Langfuse runtime score recording warning: {e}")
+
+
+@observe(name="chat_request")
 async def chat_endpoint(
     req: ChatRequest,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
@@ -4452,7 +4545,26 @@ async def chat_endpoint(
     trusted_proxy = _trusted_chat_proxy(x_internal_proxy_key)
     usage_collector: list[dict[str, Any]] | None = [] if trusted_proxy else None
     asset_type = req.asset_type
-    trace_id = uuid.uuid4().hex
+    active_trace_id = None
+    if langfuse:
+        try:
+            active_trace_id = langfuse.get_current_trace_id()
+            session_id = getattr(req.conversation_context, "session_id", None) if req.conversation_context else None
+            metadata = {
+                "user_id": x_user_id,
+                "user_tier": x_user_tier,
+                "asset_type": asset_type,
+            }
+            if session_id:
+                metadata["session_id"] = session_id
+            langfuse.update_current_span(
+                input=req.query,
+                metadata=metadata,
+            )
+        except Exception as e:
+            logger.debug(f"Langfuse trace init warning: {e}")
+
+    trace_id = active_trace_id or uuid.uuid4().hex
     trace_started = time.perf_counter()
     coverage_status = "not_applicable"
     data_status: dict[str, Any] = {}
@@ -4486,6 +4598,7 @@ async def chat_endpoint(
             response.get("status_flag"),
             round((time.perf_counter() - trace_started) * 1000, 2),
         )
+        _record_langfuse_runtime_scores(response, trace_id=trace_id)
         return response
 
     deferred_response = _build_deferred_dashboard_response(req.query, req.history, req.conversation_context)

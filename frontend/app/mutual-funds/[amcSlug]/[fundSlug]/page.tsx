@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { getPublishedFund } from '@/lib/mf/catalog';
+import { tryGetPublishedFund } from '@/lib/mf/catalog';
+import { CatalogUnavailable } from '@/components/funds/CatalogDirectory';
 import { EcosystemHeader } from '@/components/ecosystem/EcosystemHeader';
 import PublicFooter from '@/components/layout/PublicFooter';
 import Breadcrumbs from '@/components/navigation/Breadcrumbs';
@@ -12,18 +13,21 @@ export const dynamicParams = true;
 type Props = { params: Promise<{ amcSlug: string; fundSlug: string }> };
 async function requiredFund(params: Props['params']) {
   const { amcSlug, fundSlug } = await params;
-  const fund = await getPublishedFund(amcSlug, fundSlug);
-  if (!fund) notFound();
+  const fund = await tryGetPublishedFund(amcSlug, fundSlug);
+  if (fund === undefined) return null;
+  if (fund === null) notFound();
   return fund;
 }
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const fund = await requiredFund(params);
+  if (fund === null) return { title: 'Mutual Fund Directory | FundersAI', robots: { index: false, follow: true } };
   return { title: `${fund.scheme_name} – NAV & Returns | FundersAI`,
     description: `NAV dated ${fund.metrics.nav_date} and full-window returns for ${fund.scheme_name}. Research only.`,
     alternates: { canonical: `https://www.fundersai.co.in/mutual-funds/${fund.amc_slug}/${fund.fund_slug}` } };
 }
 export default async function Page({ params }: Props) {
   const fund = await requiredFund(params);
+  if (fund === null) return <CatalogUnavailable title="Mutual Fund Directory" />;
   const m = fund.metrics;
   return <div className="min-h-dvh bg-background text-foreground">
     <EcosystemHeader currentApp="mutual-funds" />

@@ -47,7 +47,7 @@ ALL_MF_AMC_MARKERS: dict[str, tuple[str, ...]] = {
     "BOI": ("bank of india", "boi"),
     "CHOICE": ("choice",),
     "WEALTH_COMPANY": ("the wealth company", "wealth company"),
-    "JIO_BLACKROCK": ("jio blackrock", "jio"),
+    "JIO_BLACKROCK": ("jio blackrock", "jioblackrock", "jio"),
 }
 
 SUPPORTED_MF_AMC_MARKERS: dict[str, tuple[str, ...]] = {

@@ -680,10 +680,37 @@ def main() -> dict[str, Any]:
     session = create_session()
     registry = load_source_registry()
 
-    funds_res = supabase.table("mutual_funds").select("*").execute()
-    funds = build_scheme_index(funds_res.data or [])
+    try:
+        all_funds: list[dict[str, Any]] = []
+        offset = 0
+        batch_size = 1000
+        while True:
+            funds_res = (
+                supabase.table("mutual_fund_core_snapshot")
+                .select("scheme_code,scheme_name")
+                .range(offset, offset + batch_size - 1)
+                .execute()
+            )
+            chunk = funds_res.data or []
+            all_funds.extend(chunk)
+            if len(chunk) < batch_size:
+                break
+            offset += batch_size
+        funds = build_scheme_index(all_funds)
+    except Exception as exc:
+        logger.warning("Could not read mutual_fund_core_snapshot, trying legacy mutual_funds table: %s", exc)
+        funds = []
+
     if not funds:
-        logger.warning("No mutual_funds rows found. Run sync_mf.py first.")
+        try:
+            funds_res = supabase.table("mutual_funds").select("*").execute()
+            funds = build_scheme_index(funds_res.data or [])
+        except Exception as exc:
+            logger.warning("Legacy mutual_funds table query failed: %s", exc)
+            funds = []
+
+    if not funds:
+        logger.warning("No scheme rows found in mutual_fund_core_snapshot or mutual_funds. Run sync_mf.py first.")
         return {"status": "degraded", "reason": "no_mutual_funds", "counts": {}, "errors": []}
 
     counts: dict[str, int] = {}

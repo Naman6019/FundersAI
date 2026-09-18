@@ -36,6 +36,19 @@ FundersAI is research-only: it does not execute trades or provide personalized i
 - 🛠️ **Admin Controls**: Dashboard surfaces AI usage, data coverage, parser diagnostics, resolver debugging, NAV sync, MF promotion review, and bounded review actions.
 - 🧠 **Explainable ML Foundations**: Numeric mutual-fund similarity/clustering and human-in-the-loop parser-review prioritization, both grounded in stored data rather than investment recommendations.
 - 🔎 **Trust Metadata**: Freshness, missing fields, resolver confidence, partial coverage, research boundaries, and reasoning summaries remain visible around results.
+- 💼 **Portfolio Tracking**: Authenticated, per-user RLS-isolated manual portfolio and position tracking (scheme code, units, user-entered value) alongside FundersAI's research — no transactions, cost basis, account linking, or personalized advice.
+- ✅ **Fund Truth Check** *(private beta)*: A deterministic claim-verification workbench ("Claim Autopsy") that breaks a factual claim about a fund into its parsed statement, resolved fund identity, metric/window, dated official evidence, and rule-based verdict — plus a Thesis Monitor that re-checks saved claims as new official evidence lands.
+
+## 🆕 Recent Highlights
+
+- **Migrated Supabase to self-hosted on Oracle Cloud**: After the Supabase Cloud project was shut down, re-hosted the full stack (Postgres, GoTrue, PostgREST, Realtime, Storage, Envoy gateway) via Docker Compose on an OCI Always Free ARM instance, behind Caddy/TLS at `db.fundersai.co.in`. Schema was recreated from the repo's 50 tracked SQL migrations (no data migration needed). Verified end-to-end: real signup → confirmation email → login → JWT session → RLS-correct REST queries → vector search RPC. Daily `pg_dump` backups now ship automatically to Cloudflare R2, and the transient "service unavailable" notice added during the cutover has since been removed.
+- **Product Hunt launch & conversion tracking**: Shipped a research-only signup path for Product Hunt referrals with a preserved post-auth destination, and verified Whop Pixel signup/purchase event tracking end-to-end alongside a public preview of Fund Truth Check.
+- **Fund Truth Check**: Built out the deterministic claim parser, evaluators, private review workbench, and a Thesis Monitor for saved claims — gated behind a private-beta flag pending deeper review and reviewer sign-off.
+- **Portfolio Tracking**: Shipped authenticated manual portfolio and position tracking to production, verified with a two-user isolation smoke test.
+- **Mutual-fund catalog & NAV readiness gate**: Built a versioned catalog with immutable per-fund URL reservations and a resumable NAV-readiness check so fund/AMC/category pages only ever render eligible, gated data (implemented locally; not yet promoted to production).
+- **Broader AMC coverage**: Grew the mutual-fund ingestion registry to 42 AMCs; landed discovery/parser fixes across Edelweiss, HSBC, Choice, BOI, Bandhan, Invesco, DSP, UTI, NJ, and others, plus a zero-document discovery alert and a bound on PDF table parsing so one slow document can no longer stall an entire ingestion run.
+- **Reversible MF promotion**: Every mutual-fund promotion to production can now be safely reverted from a captured before/after snapshot.
+- **SEO accuracy fix**: Removed a stale fixed `lastmod` date from every sitemap URL so freshness signals aren't misleading.
 
 ## 🛠️ Tech Stack
 
@@ -52,10 +65,10 @@ FundersAI is research-only: it does not execute trades or provide personalized i
 - NSE and FinEdge scheduled stock providers with YFinance fallback paths
 - AMFI, MFapi, and official AMC documents for mutual-fund data
 - OpenRouter and Groq chat/extraction providers, direct OpenAI `text-embedding-3-small` document/query embeddings, and optional feature-flagged Langfuse tracing
-- *Deployed on Render*
+- *Deployed on Google Cloud Run*
 
 **Database, Storage & Infra**
-- **Supabase (PostgreSQL)**: Primary datastore and authentication
+- **Supabase (PostgreSQL)**: Primary datastore and authentication — self-hosted (Docker Compose: Postgres, GoTrue auth, PostgREST, Realtime, Storage, Envoy gateway) on an Oracle Cloud Infrastructure (OCI) Always Free ARM instance, fronted by Caddy/TLS, with daily automated backups to Cloudflare R2
 - **Cloudflare R2**: Object storage for raw AMC documents and cold archives
 - **GitHub Actions**: 22 workflows for sync, ingestion, retry, indexing, discovery, archive, migration, and compaction jobs
 
@@ -76,7 +89,7 @@ FundersAI is built to handle complex, high-volume financial data efficiently wit
 
 1. **Supabase-First Reads**: Runtime query-critical data lives in `stock_core_snapshot`, `mutual_fund_core_snapshot`, and the server-only `nav_api_cache` used for complete MFAPI histories.
 2. **Cold Storage Strategy**: To protect database limits, raw Mutual Fund documents (AMC holdings, portfolios) and archival payloads are routed to Cloudflare R2.
-3. **Resilient Ingestion Parsers**: Enabled AMC sources cover PPFAS, HDFC, ICICI, SBI, Axis, Motilal Oswal, and Nippon, with explicit tracking states (`pending`, `downloaded`, `needs_reparse`, `parsed`, `parsed_partial`, `needs_review`, `failed`, `skipped_not_supported`).
+3. **Resilient Ingestion Parsers**: The ingestion registry now spans 42 AMCs; 17 of them (including PPFAS, HDFC, ICICI, SBI, Axis, Motilal Oswal, Nippon, Kotak, Aditya Birla, DSP, UTI, Mirae, Tata, Bandhan, Edelweiss, Invesco, and HSBC) run on unattended discovery/parsing/retry automation into staging tables, with explicit tracking states (`pending`, `downloaded`, `needs_reparse`, `parsed`, `parsed_partial`, `needs_review`, `failed`, `skipped_not_supported`).
 4. **Reviewable Ingestion**: Scheduled retries and admin review actions handle missed parses without hiding states such as `parsed_partial`, `needs_review`, or `failed`.
 5. **Evaluation-First Research Retrieval**: The deterministic lexical baseline and v2 reranker use a versioned development seed. OpenAI vector retrieval and hybrid ranking have lexical fallback and remain separately gated by quality, latency, and cost evidence. The bounded evidence path returns cited official-document claims or abstains.
 
@@ -136,7 +149,10 @@ For agents and contributors, read [`Agents.md`](Agents.md) and the [documentatio
 
 - The production AMC evidence corpus has verified vector backfills for twelve AMC corpora; hosted semantic-query verification is still a separate deployment check.
 - The retrieval result of `14/14` is a development-seed benchmark, not a production-quality claim.
-- Prefect, MLflow, Docker, and GCP files provide implementation foundations and reproducible scaffolding; the active production topology remains Vercel, Render, Supabase, Cloudflare R2, and GitHub Actions.
+- Prefect and MLflow files provide implementation foundations and reproducible scaffolding; the active production topology is Vercel (frontend), Google Cloud Run (backend), self-hosted Supabase on Oracle Cloud Infrastructure, Cloudflare R2, and GitHub Actions.
+- The mutual-fund ingestion registry now covers 42 AMCs; 17 run on unattended staging automation, while the twelve AMCs above remain the fully promoted, user-facing production set. Runtime promotion to live tables is always a separate, manual, reviewed step for every AMC.
+- Manual portfolio tracking (`portfolios`/`portfolio_positions`) is live in production with per-user RLS isolation; it holds user-entered scheme/units/value snapshots only.
+- Fund Truth Check (the Claim Autopsy workbench and Thesis Monitor) is implemented but sits behind a private-beta flag, off public navigation and the sitemap, pending deeper review before wider release.
 - FundersAI shows missing, partial, and stale data as limitations and does not convert them into investment recommendations.
 
 ## 📝 OpenAI Build Week submission note

@@ -13,13 +13,14 @@ from app.services.mf_catalog_service import catalog_row
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--limit", type=int, required=True)
+    parser.add_argument("--limit", type=int, default=500)
     parser.add_argument("--after", default="0")
+    parser.add_argument("--scheme-codes", default="", help="Comma-separated scheme codes or 'all-registry'")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
-    if not 1 <= args.limit <= 500 or not args.after.isdigit():
-        parser.error("limit must be 1..500 and after numeric")
+    if not args.scheme_codes and (not 1 <= args.limit <= 500 or not args.after.isdigit()):
+        parser.error("limit must be 1..500 and after numeric when --scheme-codes is not provided")
     from dotenv import load_dotenv
     load_dotenv(BASE / ".env")
     from app.repositories.stock_repository import StockRepository
@@ -32,7 +33,12 @@ def main():
                       "boi axa mutual fund": "bank-of-india-mutual-fund",
                       "dhfl pramerica mutual fund": "pgim-india-mutual-fund"})
     rows = []
-    for snapshot in snapshot_batch(client, args.after, args.limit):
+    if args.scheme_codes:
+        codes = list(reservations.keys()) if args.scheme_codes == "all-registry" else [c.strip() for c in args.scheme_codes.split(",") if c.strip()]
+        snapshots = client.table("mutual_fund_core_snapshot").select("scheme_code,scheme_name,amc_name,category,plan_type,option_type").in_("scheme_code", codes).execute().data or []
+    else:
+        snapshots = snapshot_batch(client, args.after, args.limit)
+    for snapshot in snapshots:
         code = str(snapshot["scheme_code"])
         existing = client.table("mf_page_catalog").select("*").eq("scheme_code", code).execute().data or []
         row = catalog_row(snapshot, stored_history(client, code), existing[0] if existing else None,

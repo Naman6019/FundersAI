@@ -25,7 +25,7 @@ export type UserContext = {
 };
 
 function supabaseUrl(): string | null {
-  return process.env.NEXT_PUBLIC_SUPABASE_URL || null;
+  return process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || null;
 }
 
 function anonKey(): string | null {
@@ -33,7 +33,7 @@ function anonKey(): string | null {
 }
 
 function serviceKey(): string | null {
-  return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || null;
+  return process.env.SUPABASE_SERVICE_ROLE_KEY || null;
 }
 
 export function bearerToken(request: Request): string | null {

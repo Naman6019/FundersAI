@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Confirm your email</title>
+    <title>Reset your password</title>
 </head>
 
 <body style="margin:0; padding:0; background-color:#f4f5f7; font-family:Arial, Helvetica, sans-serif;">
@@ -14,52 +14,39 @@
             <td align="center">
                 <table role="presentation" width="480" cellpadding="0" cellspacing="0"
                     style="max-width:480px; width:100%; background-color:#ffffff; border-radius:8px; overflow:hidden; border:1px solid #e5e7eb;">
-
-                    <!-- Banner -->
                     <tr>
                         <td align="center" style="background-color:#0b1120; padding:28px 24px;">
                             <img src="https://www.fundersai.co.in/FUNDERSAI-nobackground.png" alt="FundersAI"
                                 width="180" style="display:block; max-width:180px; height:auto;">
                         </td>
                     </tr>
-
-                    <!-- Body -->
                     <tr>
                         <td style="padding:32px 32px 24px 32px;">
-                            <h1 style="margin:0 0 16px 0; font-size:20px; line-height:28px; color:#111827;">Confirm your
-                                email</h1>
+                            <h1 style="margin:0 0 16px 0; font-size:20px; line-height:28px; color:#111827;">Reset your password</h1>
                             <p style="margin:0 0 24px 0; font-size:15px; line-height:22px; color:#4b5563;">
-                                Thanks for signing up for FundersAI. Click the button below to confirm
-                                <strong>{{ .Email }}</strong> and activate your account.
+                                We received a request to reset the password for <strong>{{ .Email }}</strong>. Use the secure link below to choose a new password.
                             </p>
-
                             <table role="presentation" cellpadding="0" cellspacing="0">
                                 <tr>
                                     <td align="center" style="border-radius:6px; background-color:#111827;">
                                         <a href="{{ .ConfirmationURL }}"
-                                            style="display:inline-block; padding:12px 28px; font-size:15px; font-weight:bold; color:#ffffff; text-decoration:none; border-radius:6px;">
-                                            Confirm email
-                                        </a>
+                                            style="display:inline-block; padding:12px 28px; font-size:15px; font-weight:bold; color:#ffffff; text-decoration:none; border-radius:6px;">Reset password</a>
                                     </td>
                                 </tr>
                             </table>
-
                             <p style="margin:28px 0 0 0; font-size:13px; line-height:20px; color:#9ca3af;">
                                 If the button doesn't work, copy and paste this link into your browser:<br>
                                 <a href="{{ .ConfirmationURL }}" style="color:#2563eb; word-break:break-all;">{{ .ConfirmationURL }}</a>
                             </p>
                         </td>
                     </tr>
-
-                    <!-- Footer -->
                     <tr>
                         <td style="padding:20px 32px; background-color:#f9fafb; border-top:1px solid #e5e7eb;">
                             <p style="margin:0; font-size:12px; line-height:18px; color:#9ca3af;">
-                                If you didn't create an account with FundersAI, you can safely ignore this email.
+                                If you didn't request a password reset, you can safely ignore this email.
                             </p>
                         </td>
                     </tr>
-
                 </table>
             </td>
         </tr>

@@ -29,11 +29,18 @@ async function runServer({ port, verify }) {
 
 await runServer({ port: 3327, verify: async (base) => {
   if (outage) {
-    const directory = await fetch(base + '/mutual-funds');
-    const directoryHtml = await directory.text();
-    assert.equal(directory.status, 200);
-    assert.ok(directoryHtml.includes('temporarily unavailable'));
-    assert.ok(directoryHtml.includes('noindex'));
+    for (const path of [
+      '/mutual-funds',
+      '/mutual-funds/hdfc',
+      '/mutual-funds/category/flexi-cap',
+      '/mutual-funds/hdfc/hdfc-flexi-cap-fund',
+    ]) {
+      const directory = await fetch(base + path);
+      const directoryHtml = await directory.text();
+      assert.equal(directory.status, 200, path);
+      assert.ok(directoryHtml.includes('temporarily unavailable'), path);
+      assert.ok(directoryHtml.includes('noindex'), path);
+    }
 
     const sitemap = await (await fetch(base + '/sitemap.xml')).text();
     assert.ok(!sitemap.includes('/mutual-funds'));
@@ -46,7 +53,6 @@ await runServer({ port: 3327, verify: async (base) => {
     ['/mutual-funds/hdfc/hdfc-flexi-cap-fund', 200],
     ['/mutual-funds/hdfc/missing', 404],
     ['/mutual-funds/hdfc/rejected', 404],
-    ['/mutual-funds/outage/anything', 500],
     ['/mutual-funds/missing-amc', 404],
     ['/mutual-funds/category/missing-category', 404],
   ]) {
@@ -59,6 +65,12 @@ await runServer({ port: 3327, verify: async (base) => {
     }
     console.log(`${response.status} ${path}`);
   }
+  const routeOutage = await fetch(base + '/mutual-funds/outage/anything');
+  const routeOutageHtml = await routeOutage.text();
+  assert.equal(routeOutage.status, 200);
+  assert.ok(routeOutageHtml.includes('temporarily unavailable'));
+  assert.ok(routeOutageHtml.includes('noindex'));
+  console.log('200 /mutual-funds/outage/anything');
   const sitemap = await (await fetch(base + '/sitemap.xml')).text();
   assert.ok(sitemap.includes('/mutual-funds/hdfc/hdfc-flexi-cap-fund'));
   assert.ok(!sitemap.includes('/mutual-funds/ppfas/'));

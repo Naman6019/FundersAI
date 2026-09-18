@@ -12,7 +12,7 @@ export type CatalogFund = {
 };
 
 function client() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error('Catalog service credentials unavailable');
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false },
@@ -49,6 +49,18 @@ export async function tryGetPublishedFunds(): Promise<CatalogFund[] | null> {
       message: error instanceof Error ? error.message : 'Unknown catalog error',
     });
     return null;
+  }
+}
+
+// `undefined` denotes an infrastructure failure; `null` remains a definitive missing/ineligible fund.
+export async function tryGetPublishedFund(amcSlug: string, fundSlug: string): Promise<CatalogFund | null | undefined> {
+  try {
+    return await getPublishedFund(amcSlug, fundSlug);
+  } catch (error) {
+    console.error('[mf-catalog] public fund unavailable', {
+      message: error instanceof Error ? error.message : 'Unknown catalog error',
+    });
+    return undefined;
   }
 }
 

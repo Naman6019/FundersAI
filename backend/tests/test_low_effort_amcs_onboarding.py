@@ -170,6 +170,7 @@ def test_all_amcs_in_supported_amcs_catalog():
     ("Choice Multi Asset Allocation Fund", "CHOICE"),
     ("The Wealth Company Dynamic Asset Fund", "WEALTH_COMPANY"),
     ("Jio BlackRock India Large Cap Fund", "JIO_BLACKROCK"),
+    ("JioBlackRock Flexi Cap Fund", "JIO_BLACKROCK"),
 ])
 def test_supported_amc_label_extraction(sample_text: str, expected_label: str):
     assert supported_amc_label_from_text(sample_text) == expected_label

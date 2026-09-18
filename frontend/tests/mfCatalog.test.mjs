@@ -60,6 +60,11 @@ test('directory recovery distinguishes an unavailable catalog from an empty publ
   assert.equal(emptyCatalog.length, 0);
 });
 
+test('fund recovery distinguishes an unavailable catalog from a missing fund', async () => {
+  assert.equal(await loadCatalog([{ data: null, error: { message: 'offline' } }]).tryGetPublishedFund('a', 'b'), undefined);
+  assert.equal(await loadCatalog([{ data: null, error: null }]).tryGetPublishedFund('a', 'b'), null);
+});
+
 test('public fund routes use catalog lookups without handwritten fallback or stale ISR', () => {
   for (const route of ['page.tsx', '[amcSlug]/page.tsx', '[amcSlug]/[fundSlug]/page.tsx', 'category/[categorySlug]/page.tsx']) {
     const source = readFileSync(`app/mutual-funds/${route}`, 'utf8');
@@ -70,4 +75,9 @@ test('public fund routes use catalog lookups without handwritten fallback or sta
   const directory = readFileSync('app/mutual-funds/page.tsx', 'utf8');
   assert.match(directory, /tryGetPublishedFunds/);
   assert.match(directory, /index: false/);
+  const detail = readFileSync('app/mutual-funds/[amcSlug]/[fundSlug]/page.tsx', 'utf8');
+  assert.match(detail, /tryGetPublishedFund/);
+  assert.match(detail, /CatalogUnavailable/);
+  assert.doesNotMatch(readFileSync('app/not-found.tsx', 'utf8'), /1,000\+ verified schemes/);
+  assert.doesNotMatch(readFileSync('components/ecosystem/EcosystemHeader.tsx', 'utf8'), /30\+ funds/);
 });

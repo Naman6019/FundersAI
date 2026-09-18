@@ -66,7 +66,7 @@ def assess_history(rows, *, today=None):
         anchors = [p for p in points if p[0] <= cutoff]
         window = ([anchors[-1]] if anchors else []) + [p for p in points if p[0] > cutoff]
         covered = bool(anchors) and (cutoff - anchors[-1][0]).days <= 7
-        covered = covered and len(window) >= 250 * years
+        covered = covered and len(window) >= 240 * years
         covered = covered and all((b[0] - a[0]).days <= 7 for a, b in zip(window, window[1:]))
         if covered and not any(r in reasons for r in ("invalid_nav", "future_nav", "conflicting_nav")):
             elapsed = (end - window[0][0]).days / 365

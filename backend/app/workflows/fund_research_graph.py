@@ -374,7 +374,7 @@ def run_fund_research_workflow(
     try:
         graph = build_fund_research_graph(retrieval_service, relevance_grader=relevance_grader)
         payload = {"query": query, "filters": filters or {}, "limit": limit}
-        tracing_enabled = os.getenv("MF_RESEARCH_LANGFUSE_TRACING_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+        tracing_enabled = os.getenv("MF_RESEARCH_LANGFUSE_TRACING_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
         if tracing_enabled and os.getenv("LANGFUSE_PUBLIC_KEY", "").strip() and os.getenv("LANGFUSE_SECRET_KEY", "").strip():
             from langfuse import get_client
 
@@ -391,6 +391,15 @@ def run_fund_research_workflow(
                     metadata={"retrieval_version": (result.get("retrieval") or {}).get("retrieval_version")},
                 )
                 langfuse.score_current_span(name="grounded", value=bool(result.get("grounded")), data_type="BOOLEAN")
+                try:
+                    langfuse.score_current_trace(
+                        name="groundedness",
+                        value=1.0 if result.get("grounded") else 0.0,
+                        data_type="NUMERIC",
+                        comment="Official AMC research groundedness verification",
+                    )
+                except Exception:
+                    pass
                 run_id = langfuse.get_current_trace_id() or run_id
                 span.update()
         else:

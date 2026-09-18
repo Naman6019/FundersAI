@@ -54,7 +54,7 @@ export default function NotFound() {
               </div>
               <div>
                 <div className="text-sm font-semibold text-white">Fund Directory</div>
-                <div className="text-xs text-text-3">Screen 1,000+ verified schemes</div>
+                <div className="text-xs text-text-3">Check verified directory coverage</div>
               </div>
             </Link>
 

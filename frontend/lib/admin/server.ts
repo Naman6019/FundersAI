@@ -26,7 +26,7 @@ type RequireAdminResult =
   | { ok: false; response: NextResponse };
 
 function getSupabaseUrl(): string | null {
-  return process.env.NEXT_PUBLIC_SUPABASE_URL || null;
+  return process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || null;
 }
 
 function getAnonKey(): string | null {
@@ -34,7 +34,7 @@ function getAnonKey(): string | null {
 }
 
 function getServiceKey(): string | null {
-  return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || null;
+  return process.env.SUPABASE_SERVICE_ROLE_KEY || null;
 }
 
 function parseBearerToken(request: Request): string | null {

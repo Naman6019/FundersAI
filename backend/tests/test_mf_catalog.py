@@ -47,6 +47,18 @@ def test_depth_count_and_internal_gaps():
     assert "history_1y_incomplete" in assess_history(rows, today=TODAY)["gate_reasons"]
 
 
+def test_indian_market_trading_holidays_pass_1y_gate():
+    # A standard 365-day Indian calendar year with 104 weekend days and 15 scattered holidays = ~245-246 trading points.
+    rows = history(380)
+    for idx in [10, 25, 45, 60, 80, 100, 120, 140, 160, 180, 200, 215, 230, 245, 255]:
+        if idx < len(rows):
+            rows[idx] = None
+    realistic_rows = [r for r in rows if r is not None]
+    result = assess_history(realistic_rows, today=TODAY)
+    assert "history_1y_incomplete" not in result["gate_reasons"]
+    assert result["cagr_1y"] is not None
+
+
 @pytest.mark.parametrize("nav", [float('nan'), float('inf'), 0, -1, 'garbage'])
 def test_invalid_nav_fails_closed(nav):
     rows = history() + [{"nav_date": "2026-09-04", "nav": nav}]

@@ -30,7 +30,7 @@ Use this guide for repository conventions and quick orientation. For the authori
 
 **Database, storage, and automation**
 
-- Supabase PostgreSQL for structured data and authentication
+- Supabase PostgreSQL for structured data and authentication — self-hosted via Docker Compose on Oracle Cloud Infrastructure (OCI), not Supabase Cloud
 - Cloudflare R2 for raw AMC documents and cold archives
 - 22 GitHub Actions workflows for discovery, acquisition, parsing, indexing, promotion, retry, archive, migration, and compaction jobs
 - Razorpay for subscription and payment flows

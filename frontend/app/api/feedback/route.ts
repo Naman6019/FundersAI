@@ -36,6 +36,57 @@ function optionalUuid(value: unknown): string | null {
   return clean && UUID_PATTERN.test(clean) ? clean : null;
 }
 
+async function recordLangfuseFeedbackScore(options: {
+  traceId?: string | null;
+  sessionId?: string | null;
+  rating: number;
+  comment?: string | null;
+}): Promise<void> {
+  const publicKey = process.env.LANGFUSE_PUBLIC_KEY;
+  const secretKey = process.env.LANGFUSE_SECRET_KEY;
+  if (!publicKey || !secretKey) return;
+  const host = (process.env.LANGFUSE_HOST || 'https://jp.cloud.langfuse.com').replace(/\/+$/, '');
+  const auth = Buffer.from(`${publicKey}:${secretKey}`).toString('base64');
+
+  const target = options.traceId ? { traceId: options.traceId } : (options.sessionId ? { sessionId: options.sessionId } : null);
+  if (!target) return;
+
+  try {
+    await fetch(`${host}/api/public/scores`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Basic ${auth}`,
+      },
+      body: JSON.stringify({
+        name: 'user_feedback',
+        value: options.rating,
+        dataType: 'NUMERIC',
+        ...target,
+        comment: options.comment || undefined,
+      }),
+    });
+
+    if (options.rating === 1 || options.rating === 5) {
+      await fetch(`${host}/api/public/scores`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Basic ${auth}`,
+        },
+        body: JSON.stringify({
+          name: 'thumbs_up_down',
+          value: options.rating === 5 ? 1 : 0,
+          dataType: 'BOOLEAN',
+          ...target,
+        }),
+      });
+    }
+  } catch (err) {
+    console.warn('Langfuse score submission failed:', err);
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const securityError = requestSecurityError(request);
@@ -125,6 +176,13 @@ export async function POST(request: Request) {
         { status: storageUnavailable ? 503 : 500 },
       );
     }
+
+    await recordLangfuseFeedbackScore({
+      traceId,
+      sessionId,
+      rating,
+      comment: optionalText(body?.comment, 2000),
+    });
 
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (error) {

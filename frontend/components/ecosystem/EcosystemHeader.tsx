@@ -265,7 +265,7 @@ export function EcosystemHeader({
       { name: "Synthesis Studio", href: "/synthesis", type: "Studio", desc: "Autonomous multi-agent fund factsheet reports" },
       { name: "Portfolio Overlap Calculator", href: ecosystemHref("/tools/portfolio-overlap"), type: "Tool", desc: "Compare fund holdings overlap" },
       { name: "SIP & Compounding Calculator", href: ecosystemHref("/tools/sip-calculator"), type: "Tool", desc: "Calculate future corpus & step-up SIP" },
-      { name: "Mutual Fund Directory & Screener", href: ecosystemHref("/mutual-funds"), type: "Directory", desc: "Screen 30+ funds by AMC and category" },
+      { name: "Mutual Fund Directory & Screener", href: ecosystemHref("/mutual-funds"), type: "Directory", desc: "Check verified directory coverage and methodology" },
       { name: "Data & Trust Methodology Portal", href: ecosystemHref("/data-trust"), type: "Portal", desc: "Deterministic metrics & SEBI compliance" },
     ].filter(t => t.name.toLowerCase().includes(q) || t.desc.toLowerCase().includes(q));
 
@@ -509,7 +509,7 @@ export function EcosystemHeader({
                   <Search className="w-4 h-4 text-emerald-400 mr-2.5 shrink-0" />
                   <input
                     type="text"
-                    placeholder="Search 30+ funds, tools, categories, or AMFI codes..."
+                    placeholder="Search funds, tools, categories, or AMFI codes..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full bg-transparent text-white text-sm focus:outline-none placeholder-slate-500"

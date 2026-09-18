@@ -1,8 +1,21 @@
-from __future__ import annotations
-
 import argparse
 import os
+from pathlib import Path
+import sys
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[2]
+BACKEND_DIR = ROOT / "backend"
+for p in [str(ROOT), str(BACKEND_DIR)]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(BACKEND_DIR / ".env")
+    load_dotenv(ROOT / ".env")
+except ImportError:
+    pass
 
 from langfuse import get_client
 from langfuse.experiment import Evaluation
@@ -62,6 +75,26 @@ def run_langfuse_experiment(*, live_embeddings: bool = False, live_cross_encoder
         ),
     }
     client = get_client()
+    dataset_name = manifest.get("dataset_version", "fund_research_v1")
+    try:
+        client.create_dataset(
+            name=dataset_name,
+            description="FundersAI official AMC document retrieval and safety abstention benchmark.",
+            metadata={"domain": manifest.get("domain", "mutual_fund_research")},
+        )
+        for case in cases:
+            client.create_dataset_item(
+                dataset_name=dataset_name,
+                input={"query": case["query"], "filters": case.get("filters") or {}, "limit": 5},
+                expected_output={
+                    "document_ids": case.get("expected_document_ids") or [],
+                    "abstain": bool(case.get("expected_abstain")),
+                },
+                metadata={"case_id": case["id"], "tags": case.get("tags") or []},
+            )
+    except Exception:
+        pass
+
     results = []
     for variant, service in services.items():
         def task(*, item: Any, _service=service, **__: Any) -> dict[str, Any]:
