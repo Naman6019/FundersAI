@@ -4,27 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       amc:
-        description: AMC approved for this acquisition run
+        description: >-
+          AMC key approved for this acquisition run (for example: hdfc, sbi,
+          ppfas, aditya_birla, baroda_bnp, zerodha). Any key registered in
+          backend/app/mf_ingestion/sources/registry.py is accepted.
         required: true
-        type: choice
-        options:
-          - hdfc
-          - sbi
-          - icici
-          - axis
-          - ppfas
-          - nippon
-          - motilal
-          - mirae
-          - uti
-          - dsp
-          - kotak
-          - aditya_birla
-          - tata
-          - bandhan
-          - edelweiss
-          - invesco
-          - hsbc
+        type: string
       document_scope:
         description: Document type to acquire
         required: true
@@ -100,6 +85,25 @@ jobs:
           expected_approval="ACQUIRE ${EXPECTED_MONTH} ${SELECTED_AMC}"
           if [ "$APPROVAL_PHRASE" != "$expected_approval" ]; then
             echo "Approval phrase mismatch. Expected: $expected_approval"
+            exit 1
+          fi
+          # Fail fast with a clear message when the AMC key is not registered,
+          # instead of surfacing an opaque traceback from the ingest job.
+          if ! python - "$SELECTED_AMC" <<'PY'
+          import sys
+          from app.mf_ingestion.sources.registry import SOURCES
+          key = sys.argv[1].strip().lower()
+          if key not in SOURCES:
+              print(f"Unknown AMC key: {key}")
+              print("Registered keys: " + ", ".join(sorted(SOURCES)))
+              raise SystemExit(1)
+          source = SOURCES[key]
+          if not source.acquisition_enabled:
+              print(f"Acquisition disabled for AMC key: {key}")
+              raise SystemExit(1)
+          print(f"AMC key accepted: {key} ({source.amc_code})")
+          PY
+          then
             exit 1
           fi
           args=(

@@ -9,7 +9,7 @@ import tempfile
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse
 
 from app.database import supabase
 from app.mf_ingestion.constants import VALIDATION_STATUS_INVALID, VALIDATION_STATUS_REVIEW
@@ -1080,13 +1080,19 @@ class ParsingService:
         document_id = str(document.get("id") or "")
         amc_code = str(document.get("amc_code") or "")
         document_kind = str(document.get("file_ext") or "").lstrip(".").lower() or "unknown"
+        series_key = _layout_series_key(document.get("source_url"))
         try:
-            current = build_layout_fingerprint(records, document_kind=document_kind)
+            current = build_layout_fingerprint(
+                records,
+                document_kind=document_kind,
+                extra={"series_key": series_key},
+            )
             baseline = self._load_previous_layout_fingerprint(
                 amc_code=amc_code,
                 exclude_document_id=document_id,
                 report_month=_to_date_or_none(document.get("report_month")),
                 document_kind=document_kind,
+                series_key=series_key,
             )
             report = detect_layout_drift(current, baseline)
 
@@ -1123,12 +1129,22 @@ class ParsingService:
         exclude_document_id: str,
         report_month: date | None,
         document_kind: str | None = None,
+        series_key: str | None = None,
     ) -> Any:
-        """Most recent prior fingerprint for the same AMC and document kind."""
+        """Most recent prior fingerprint for the same AMC and document series.
+
+        The baseline must come from the *same* document series, not merely the
+        same AMC: an AMC publishes several factsheets per month (Active and
+        Passive, or the main factsheet plus a performance variant). Those differ
+        by design -- Motilal's Active factsheet covers 24 schemes and its Passive
+        one covers 67 -- so comparing across them fabricates drift. The series
+        key is derived from the source URL with the month and version churn
+        stripped.
+        """
         try:
             query = (
                 supabase.table("mf_raw_documents")
-                .select("id,file_ext,storage_metadata")
+                .select("id,file_ext,source_url,storage_metadata")
                 .eq("amc_code", amc_code)
                 .order("parsed_at", desc=True)
                 .limit(25)
@@ -1148,6 +1164,19 @@ class ParsingService:
             stored_kind = str(stored.get("document_kind") or "unknown").strip().lower()
             if document_kind and stored_kind != str(document_kind).strip().lower():
                 continue
+            # Require the same document series. A fingerprint written before the
+            # series key existed has no key and must not be treated as a match,
+            # or the baseline silently falls back to a different document
+            # (Active vs Passive) and reports false drift.
+            if series_key:
+                stored_extra = stored.get("extra")
+                stored_series = (
+                    str(stored_extra.get("series_key") or "")
+                    if isinstance(stored_extra, dict)
+                    else ""
+                )
+                if stored_series != series_key:
+                    continue
             return LayoutFingerprint(
                 document_kind=stored_kind,
                 record_count=int(stored.get("record_count") or 0),
@@ -1893,6 +1922,60 @@ def _to_date_or_none(value: Any) -> date | None:
         return datetime.fromisoformat(raw[:10]).date()
     except ValueError:
         return None
+
+
+_LAYOUT_SERIES_NOISE = frozenset(
+    {
+        # Month names, so the same document across months collapses to one series.
+        "january", "february", "march", "april", "may", "june",
+        "july", "august", "september", "october", "november", "december",
+        "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
+        # Version / revision churn.
+        "revised", "final", "version", "copy", "latest", "updated", "as", "on", "rv",
+    }
+)
+
+
+def _layout_series_key(source_url: object) -> str:
+    """Stable identity for a recurring document series within one AMC.
+
+    A factsheet URL carries the month and often version churn
+    (`.../most-factsheet-august-2026-active.pdf`). Stripping those yields a key
+    that is identical for the same document in different months but different
+    across genuinely distinct documents, so the layout baseline compares like
+    with like instead of treating Active vs Passive as drift.
+
+    Example:
+        most-factsheet-august-2026-active.pdf  -> "most factsheet active"
+        most-factsheet-july-2026-active.pdf    -> "most factsheet active"
+        most-factsheet-august-2026-passive.pdf -> "most factsheet passive"
+    """
+    raw = unquote(str(source_url or "")).lower()
+    if not raw:
+        return ""
+    path = urlparse(raw).path or raw
+    segments = [segment for segment in path.split("/") if segment]
+
+    # Walk from the file name outward until a segment yields meaningful tokens.
+    # A month-directory URL (the PPFAS digital factsheet) has no informative file
+    # name, so its series identity comes from the parent path instead.
+    for index in range(len(segments) - 1, -1, -1):
+        stem = re.sub(r"\.(pdf|xlsx?|xlsm|csv|zip|html?|bin)$", "", segments[index])
+        # Split letter/digit boundaries so compact month codes like `aug26` are seen.
+        stem = re.sub(r"(?<=[a-z])(?=\d)", " ", stem)
+        stem = re.sub(r"(?<=\d)(?=[a-z])", " ", stem)
+        tokens = []
+        for token in re.split(r"[^a-z0-9]+", stem):
+            if not token or token in _LAYOUT_SERIES_NOISE:
+                continue
+            if token.isdigit():
+                continue
+            if token.startswith("rv") and token[2:].isdigit():
+                continue
+            tokens.append(token)
+        if tokens:
+            return " ".join(tokens)
+    return ""
 
 
 def _field_merge_source_kind(document: dict[str, Any]) -> str:

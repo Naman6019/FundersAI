@@ -189,6 +189,80 @@ def test_same_kind_drift_is_still_detected():
     assert report.lost_fields == ("risk_level",)
 
 
+class TestLayoutSeriesKey:
+    """The baseline must compare the same document series, not just the AMC.
+
+    An AMC publishes several factsheets per month (Active and Passive, or a main
+    factsheet plus a performance variant). Those differ by design, so comparing
+    across them fabricates drift.
+    """
+
+    def test_same_series_across_months_collapses(self):
+        from app.mf_ingestion.services.parsing_service import _layout_series_key
+
+        august = _layout_series_key(
+            "https://x.com/mf/factsheet/2026/sep/Most%20Factsheet%20August%202026%20Active.pdf"
+        )
+        july = _layout_series_key(
+            "https://x.com/mf/factsheet/2026/aug/Most%20Factsheet%20July%202026%20Active.pdf"
+        )
+
+        assert august == july
+        assert "active" in august
+
+    def test_active_and_passive_are_different_series(self):
+        from app.mf_ingestion.services.parsing_service import _layout_series_key
+
+        active = _layout_series_key("https://x.com/Most%20Factsheet%20August%202026%20Active.pdf")
+        passive = _layout_series_key("https://x.com/Most%20Factsheet%20August%202026%20Passive.pdf")
+
+        assert active != passive
+
+    def test_revision_suffix_is_ignored(self):
+        from app.mf_ingestion.services.parsing_service import _layout_series_key
+
+        rv1 = _layout_series_key("https://x.com/uti_fund_watch_active_august_2026_rv1.pdf")
+        rv2 = _layout_series_key("https://x.com/uti_fund_watch_active_september_2026_rv2.pdf")
+
+        assert rv1 == rv2
+
+    def test_compact_month_code_is_normalized(self):
+        from app.mf_ingestion.services.parsing_service import _layout_series_key
+
+        aug = _layout_series_key("https://x.com/.../helios-mutual-fund-factsheet-aug26.pdf")
+        jul = _layout_series_key("https://x.com/.../helios-mutual-fund-factsheet-jul26.pdf")
+
+        assert aug == jul
+        assert "26" not in aug
+
+    def test_performance_variant_is_a_different_series(self):
+        from app.mf_ingestion.services.parsing_service import _layout_series_key
+
+        perf = _layout_series_key("https://x.com/performance-helios-mutual-fund-factsheet-aug26.pdf")
+        main = _layout_series_key("https://x.com/helios-mutual-fund-factsheet-aug26.pdf")
+
+        assert perf != main
+
+    def test_directory_url_gets_a_series_from_parent_path(self):
+        from app.mf_ingestion.services.parsing_service import _layout_series_key
+
+        august = _layout_series_key(
+            "https://amc.ppfas.com/downloads/digital-factsheet/2026/august-2026/"
+        )
+        july = _layout_series_key(
+            "https://amc.ppfas.com/downloads/digital-factsheet/2026/july-2026/"
+        )
+
+        assert august == july
+        assert august
+
+    def test_empty_url_yields_empty_key(self):
+        from app.mf_ingestion.services.parsing_service import _layout_series_key
+
+        assert _layout_series_key("") == ""
+        assert _layout_series_key(None) == ""
+
+
 def test_real_ppfas_august_vs_july_shape():
     """August carried risk for 6/7; July carried none for 7/7."""
     august = build_layout_fingerprint(
