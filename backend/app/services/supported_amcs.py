@@ -138,3 +138,29 @@ def supported_amc_label_from_text(value: object) -> str | None:
         matches.sort(key=lambda item: item[0], reverse=True)
         return matches[0][1]
     return None
+
+
+def canonical_amc_label(value: object) -> str | None:
+    """Resolve an AMC identifier to its canonical marker-map label.
+
+    Accepts the persisted DB value (`PPFAS`), a registry key (`aditya_birla`,
+    `360_one`), or a canonical code (`ABSL`). Registry keys do not always mirror
+    the code (`360_one` -> `THREE_SIXTY_ONE`), and underscore-joined codes such
+    as `ANGEL_ONE` do not match their own marker text, so resolve through the
+    registry before falling back to text matching.
+    """
+    key = str(value or "").strip()
+    if not key:
+        return None
+
+    direct = supported_amc_label_from_text(key)
+    if direct:
+        return direct
+
+    lowered = key.lower()
+    for candidate_key, source in SOURCES.items():
+        if lowered in {candidate_key, source.amc_code.lower()}:
+            if source.amc_code in ALL_MF_AMC_MARKERS:
+                return source.amc_code
+
+    return supported_amc_label_from_text(key.replace("_", " "))

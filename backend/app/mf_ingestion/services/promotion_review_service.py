@@ -13,7 +13,7 @@ from app.mf_ingestion.jobs.promote_mf_disclosures import (
     build_dry_run,
     build_family_invariant_propagation_plan,
 )
-from app.services.supported_amcs import supported_amc_label_from_text
+from app.services.supported_amcs import canonical_amc_label, supported_amc_label_from_text
 
 AMC_KEY_ALIASES = {"absl": "aditya_birla"}
 DECISIONS_TABLE = "mf_promotion_review_decisions"
@@ -184,13 +184,18 @@ def find_risk_conflicts(
     for row in staged:
         family_id = str(row["mapped_family_id"])
         staged_risk = " ".join(str(row["risk_level"]).lower().split())
-        source_label = supported_amc_label_from_text(row.get("amc_code"))
+        source_label = canonical_amc_label(row.get("amc_code"))
         mismatched = []
         for scheme_code in sorted(siblings_by_family.get(family_id, set())):
             live = snapshot_by_code.get(scheme_code)
             if not live or live.get("risk_level") in (None, ""):
                 continue
-            if source_label and supported_amc_label_from_text(live.get("amc_name")) != source_label:
+            # `amc_name` is NULL for most AMFI NAV rows; fall back to the scheme
+            # name before excluding a sibling from conflict detection.
+            if source_label and source_label not in {
+                supported_amc_label_from_text(live.get("amc_name")),
+                supported_amc_label_from_text(live.get("scheme_name")),
+            }:
                 continue
             live_risk = " ".join(str(live["risk_level"]).lower().split())
             if live_risk != staged_risk:

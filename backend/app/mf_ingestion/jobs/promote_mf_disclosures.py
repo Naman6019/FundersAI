@@ -19,7 +19,7 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 from app.database import supabase
 from app.mf_ingestion.sources.registry import get_source_by_code
-from app.services.supported_amcs import supported_amc_label_from_text
+from app.services.supported_amcs import canonical_amc_label, supported_amc_label_from_text
 
 CORE_SCOPES = {"risk", "ter_aum", "benchmark", "manager"}
 PORTFOLIO_SCOPES = {"holdings", "sectors"}
@@ -352,18 +352,25 @@ def build_family_invariant_propagation_plan(
         snapshot_rows.extend(
             (
                 supabase.table("mutual_fund_core_snapshot")
-                .select("scheme_code,amc_name,benchmark,risk_level,provider_payload")
+                .select("scheme_code,scheme_name,amc_name,benchmark,risk_level,provider_payload")
                 .in_("scheme_code", sibling_codes[start : start + 500])
                 .execute()
                 .data
                 or []
             )
         )
-    source_label = supported_amc_label_from_text(source_amc)
+    source_label = canonical_amc_label(source_amc)
+    # `amc_name` is NULL for most AMFI NAV rows, so fall back to the scheme name
+    # (which carries the AMC brand) before excluding a sibling from propagation.
     safe_rows = [
         row
         for row in snapshot_rows
-        if source_label and supported_amc_label_from_text(row.get("amc_name")) == source_label
+        if source_label
+        and source_label
+        in {
+            supported_amc_label_from_text(row.get("amc_name")),
+            supported_amc_label_from_text(row.get("scheme_name")),
+        }
     ]
     conflicts: dict[str, list[dict[str, Any]]] = {}
     safe_fields: dict[str, Any] = {}

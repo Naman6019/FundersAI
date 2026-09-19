@@ -23,6 +23,8 @@ Read these in order for current implementation work:
 
 Use `MF_12_AMC_PRODUCTION_READINESS_RUNBOOK.md` for the current June 2026 twelve-AMC execution order, approval boundaries, coverage gates, and production verification steps.
 
+Use `MF_DISCLOSURE_COLD_START_RUNBOOK.md` when the disclosure staging tables are empty (for example after the self-hosted cutover) and the scheduled MF workflows fail on missing upstream data. It records the ordered discovery → acquisition → parse → family-mapping → review/promotion procedure.
+
 ## Evidence Snapshots
 
 These files describe a specific test or implementation stage. Their dates and tested commit take precedence over generic words such as “current” inside the report:

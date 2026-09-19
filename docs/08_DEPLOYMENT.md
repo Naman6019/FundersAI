@@ -24,6 +24,27 @@ This is the active production topology. Prefect artifacts are implemented, but G
 - The initial recreation omitted the legacy `mutual_funds` compatibility mirror because its original SQL was outside `backend/migrations/`. Before relying on legacy fallback reads, take a verified backup and apply `backend/migrations/20260917_restore_mutual_funds_compatibility.sql`; this migration is pending as of 2026-09-17.
 - Daily compressed `pg_dump` backups are sent to a dedicated Cloudflare R2 bucket through `rclone`, with a 14-day retention policy. A restore drill is required before changing backup, compose, database, or ingress configuration.
 
+### Caddy ingress and Studio access (2026-09-19)
+
+Host-level Caddy terminates TLS on `80`/`443` and reverse-proxies to the Envoy gateway on `localhost:8000`. `/etc/caddy/Caddyfile` is not part of the compose stack, so it survives `sh run.sh recreate`; keep the timestamped backups in `/etc/caddy/`.
+
+- `db.fundersai.co.in` stays DNS-only in Cloudflare. It serves the public API and keeps the self-hosted Studio Basic-auth gate.
+- Studio's Envoy `basic_auth` filter emits no fixed `WWW-Authenticate` realm, so it derives a distinct realm per request URL. Browsers then treat every static asset as a separate protection space and re-prompt indefinitely. Basic auth is therefore applied at Caddy with a single fixed realm (`Supabase Studio`); `/_next/*` and other assets must not inherit a per-URL realm.
+- `studio.fundersai.co.in` is a proxied Cloudflare record protected by **Cloudflare Access** (one-time PIN). Caddy trusts only `https://api.cloudflare.com/client/v4/ips` ranges and returns `403` to everything else, so the origin cannot be reached by IP with a spoofed `Host`. Because Access authenticates the user, Caddy injects the fixed Basic credential on the upstream hop so Envoy accepts the request; the browser never sees a Basic popup.
+- The studio site uses the **Cloudflare Origin Certificate** (`/etc/caddy/certs/origin.{pem,key}`, `root:caddy` `0640`). Its SAN is a `*.fundersai.co.in` wildcard, which also matches `db.fundersai.co.in`; without `tls force_automate` Caddy skips ACME for the db host and would serve the untrusted origin certificate instead of the publicly trusted Let's Encrypt one. Keep `force_automate` on the db site (or scope future origin certs to `studio.fundersai.co.in` only).
+- The self-hosted MCP server (`/mcp`) has no OAuth and runs as `postgres`. Public access is blocked at Caddy on **both** hostnames; the required path is an SSH tunnel to `localhost:8000` (`ssh -L 127.0.0.1:8080:localhost:8000 ubuntu@<host>`), which bypasses Caddy entirely. Do not enable Envoy's `/mcp` allow-list, because the docker bridge address it would trust is also what Caddy presents.
+
+### Public-schema privilege hardening (2026-09-19)
+
+`backend/migrations/20260919_harden_public_schema_privileges.sql` closes an over-grant inherited from the 2026-09-15 OCI recreation. Every table created by `postgres` had picked up default privileges granting `anon` and `authenticated` SELECT/INSERT/UPDATE/DELETE/TRUNCATE, and 29 tables had RLS disabled. Because the publishable anon key ships in the browser bundle, any holder could write to production data through PostgREST.
+
+- Applied result: `anon` writes = 0, tables without RLS = 0, and the security advisor dropped from 29 ERROR to 0 ERROR.
+- `anon` retains SELECT only on curated public reference tables (market/fund snapshots). Operational tables (`mf_raw_documents`, `mf_parse_review_queue`, `mf_amc_sources`, `provider_*`, `data_*`, `mf_scheme_*`) are server-only.
+- `authenticated` keeps writes only on user-owned tables, each still gated by an `auth.uid()` RLS policy: `portfolios`, `portfolio_positions`, `saved_reports`, `watchlists`, `chat_messages`, `ai_chat_sessions`, `ai_chat_messages`, `user_profiles`, and the `active` column of `research_claims`.
+- `service_role` and `postgres` both have `rolbypassrls`, so the backend, server routes, Studio, edge functions, and GitHub Actions are unaffected.
+- Default privileges for `postgres` were revoked so new tables no longer inherit public access. The `supabase_admin` default-privilege block is skipped with a notice when run as `postgres` (which is not a superuser); re-run the migration as `supabase_admin` to apply that piece if the image ever creates tables as that role.
+- Applying this migration **requires** the Cloud Run `SUPABASE_KEY` correction above. Run it only after confirming every server-side consumer uses service-role, and take a verified backup first. The migration file contains its own `BEGIN`/`COMMIT`; do not wrap it in an outer transaction expecting a rollback.
+
 ## Reproducible Deployment Proof
 
 The repository now contains:
@@ -132,6 +153,16 @@ Bound secrets (`deploy/gcp/deploy.ps1`):
 - `MF_ENGINE_PARTNER_TOKEN`
 
 The runtime service account `fundersai-runtime@<project>.iam.gserviceaccount.com` has `roles/secretmanager.secretAccessor` on the project (`deploy/gcp/deploy.ps1:46`).
+
+> **Cloud Run key correction (2026-09-19).** The live `fundersai-git` revision was running with `SUPABASE_KEY` set to the **anon** JWT (`{"role":"anon"}`), not service-role — this was never applied to Cloud Run during the OCI cutover even though the secret name and this document specify service-role. It only appeared to work because the OCI recreation over-granted `anon` INSERT/UPDATE/DELETE/SELECT on every public table. Hardening those grants (see below) exposed it: backend reads on `mf_raw_documents`, `mf_parse_review_queue`, `data_provider_runs`, `nav_api_cache`, and `mutual_funds` returned `42501`. Fixed by updating the Cloud Run service to the OCI `SUPABASE_KEY` service-role JWT (revision `fundersai-git-00135-tfk`). Verify after any redeploy:
+>
+> ```powershell
+> gcloud run services describe fundersai-git --project=fundersai --region=europe-west1 `
+>   --format="value(spec.template.spec.containers[0].env)"
+> # SUPABASE_KEY must decode to {"role":"service_role"}, never "anon"
+> ```
+>
+> The backend holds 156 write call sites and performs no per-user JWT scoping, so service-role is the required binding. Never point Cloud Run at the anon key; it is published in the browser bundle.
 
 Vercel-only secrets (Razorpay, `SUPABASE_SERVICE_ROLE_KEY` for server routes, and `NEXT_PUBLIC_*` values) stay in the Vercel project. Cloud Run has its own `SUPABASE_URL` and `SUPABASE_KEY` bindings for the OCI-hosted Supabase API.
 
