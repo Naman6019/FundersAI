@@ -34,6 +34,10 @@ class AMCDocumentSource:
     factsheet_report_month_in_content_only: bool = False
     browser_recovery_allowed: bool = False
     allowed_host_suffixes: tuple[str, ...] = ()
+    # Optional per-month digital (HTML) factsheet root. When set, discovery also
+    # probes <base>/<year>/<month>-<year>/ for a structured HTML factsheet that
+    # supplies AUM and expense ratio the PDF path does not carry.
+    digital_factsheet_base_url: str | None = None
 
 
 def _env_url(name: str, default: str) -> str:
@@ -60,6 +64,10 @@ SOURCES: dict[str, AMCDocumentSource] = {
         runtime_enabled=True,
         discovery_strategy="ppfas_adapter",
         allowed_host_suffixes=("amc.ppfas.com", "ppfas.com"),
+        digital_factsheet_base_url=_env_url(
+            "MF_PPFAS_DIGITAL_FACTSHEET_BASE_URL",
+            "https://amc.ppfas.com/downloads/digital-factsheet",
+        ),
     ),
     "mirae": AMCDocumentSource(
         amc_name="Mirae Asset Mutual Fund",

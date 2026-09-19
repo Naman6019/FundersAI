@@ -13,6 +13,7 @@ from urllib.parse import unquote
 
 from app.database import supabase
 from app.mf_ingestion.constants import VALIDATION_STATUS_INVALID, VALIDATION_STATUS_REVIEW
+from app.services.supported_amcs import canonical_amc_label, supported_amc_label_from_text
 from app.mf_ingestion.extractors.contracts import NormalizedExtraction, NormalizedExtractionRecord
 from app.mf_ingestion.extractors.llm_extractor import LLMExtractionUnavailable, StrictJSONLLMExtractor
 from app.mf_ingestion.normalizers.scheme_name_normalizer import (
@@ -28,6 +29,17 @@ from app.mf_ingestion.normalizers.scheme_name_normalizer import (
     _scheme_name_for_matching,
     _select_best_scheme_candidate,
     match_scheme_name,
+)
+from app.mf_ingestion.agents.layout_drift import (
+    LayoutFingerprint,
+    build_layout_fingerprint,
+    detect_layout_drift,
+)
+from app.mf_ingestion.services.field_merge import (
+    SOURCE_KIND_DIGITAL,
+    SOURCE_KIND_PDF,
+    SourceFields,
+    merge_scheme_fields,
 )
 from app.mf_ingestion.parsers.adapters.hdfc_adapter import HDFCAdapter
 from app.mf_ingestion.parsers.adapters.icici_adapter import ICICIAdapter
@@ -298,7 +310,153 @@ class ParsingService:
         for document in documents:
             processed.append(self._parse_one(document))
 
+        self._reconcile_factsheet_field_merges(documents)
+
         return {"status": "ok", "processed": processed, "count": len(processed)}
+
+    def _reconcile_factsheet_field_merges(self, documents: list[dict[str, Any]]) -> int:
+        """Merge complementary factsheet fields across documents for a scheme.
+
+        A scheme's factsheet data can arrive in two documents: the PDF factsheet
+        (which carries `risk_level`) and the digital HTML factsheet (which
+        carries `aum` and `expense_ratio`). The coverage gate selects a single
+        latest factsheet document per AMC/month, so the two documents must not
+        compete -- their fields are merged onto every candidate row for the
+        scheme, whichever document ends up selected.
+
+        Order-independent and idempotent: merging twice changes nothing. Never
+        raises; a merge failure must not fail the parse.
+        """
+        scopes: dict[tuple[str, str], None] = {}
+        for document in documents:
+            document_type = str(
+                document.get("document_type") or document.get("source_document_type") or ""
+            ).strip().lower()
+            if document_type != "factsheet":
+                continue
+            amc_code = str(document.get("amc_code") or "").strip()
+            report_month = document.get("report_month")
+            month_key = str(report_month)[:10] if report_month else ""
+            if amc_code and month_key:
+                scopes[(amc_code, month_key)] = None
+
+        merged_rows = 0
+        for amc_code, month_key in scopes:
+            merged_rows += self._merge_factsheet_candidates_for_scope(amc_code, month_key)
+        if merged_rows:
+            logger.info(
+                "event=factsheet_field_merge_completed scopes=%s rows_touched=%s",
+                len(scopes),
+                merged_rows,
+            )
+        return merged_rows
+
+    def _merge_factsheet_candidates_for_scope(self, amc_code: str, month_key: str) -> int:
+        try:
+            rows = (
+                _execute_supabase(
+                    supabase.table("mf_factsheet_candidates")
+                    .select(
+                        "id,source_document_id,normalized_scheme_name,"
+                        "aum,expense_ratio,benchmark,fund_manager,risk_level"
+                    )
+                    .eq("amc_code", amc_code)
+                    .eq("report_month", month_key),
+                    "load_candidates_for_field_merge",
+                ).data
+                or []
+            )
+        except Exception:
+            logger.exception(
+                "event=factsheet_field_merge_load_failed amc=%s month=%s", amc_code, month_key
+            )
+            return 0
+
+        if not rows:
+            return 0
+
+        # Resolve each contributing document's file kind once.
+        document_ids = {
+            str(row.get("source_document_id") or "")
+            for row in rows
+            if row.get("source_document_id")
+        }
+        kind_by_document: dict[str, str] = {}
+        if document_ids:
+            try:
+                docs = (
+                    _execute_supabase(
+                        supabase.table("mf_raw_documents")
+                        .select("id,file_ext,storage_key,source_url")
+                        .in_("id", sorted(document_ids)),
+                        "load_merge_source_documents",
+                    ).data
+                    or []
+                )
+                for doc in docs:
+                    kind_by_document[str(doc.get("id"))] = _field_merge_source_kind(doc)
+            except Exception:
+                logger.exception(
+                    "event=factsheet_field_merge_doc_lookup_failed amc=%s month=%s",
+                    amc_code,
+                    month_key,
+                )
+
+        by_scheme: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            key = str(row.get("normalized_scheme_name") or "")
+            if key:
+                by_scheme.setdefault(key, []).append(row)
+
+        touched = 0
+        for scheme_rows in by_scheme.values():
+            if len(scheme_rows) < 2:
+                continue
+            sources = [
+                SourceFields(
+                    source_kind=kind_by_document.get(str(row.get("source_document_id") or ""), "unknown"),
+                    values={
+                        "aum": row.get("aum"),
+                        "expense_ratio": row.get("expense_ratio"),
+                        "benchmark": row.get("benchmark"),
+                        "fund_manager": row.get("fund_manager"),
+                        "risk_level": row.get("risk_level"),
+                    },
+                    source_document_id=str(row.get("source_document_id") or ""),
+                )
+                for row in scheme_rows
+            ]
+            merged = merge_scheme_fields(sources)
+            if not merged.values:
+                continue
+            for row in scheme_rows:
+                current = {
+                    "aum": row.get("aum"),
+                    "expense_ratio": row.get("expense_ratio"),
+                    "benchmark": row.get("benchmark"),
+                    "fund_manager": row.get("fund_manager"),
+                    "risk_level": row.get("risk_level"),
+                }
+                update = {
+                    name: value
+                    for name, value in merged.values.items()
+                    if current.get(name) in (None, "")
+                }
+                if not update:
+                    continue
+                try:
+                    _execute_supabase(
+                        supabase.table("mf_factsheet_candidates")
+                        .update(update)
+                        .eq("id", row.get("id")),
+                        "apply_merged_factsheet_fields",
+                    )
+                    touched += 1
+                except Exception:
+                    logger.exception(
+                        "event=factsheet_field_merge_apply_failed candidate_id=%s", row.get("id")
+                    )
+        return touched
 
     def _parse_one(self, document: dict[str, Any], *, bypass_official_coverage: bool = False, target_scheme_name: str | None = None) -> dict[str, Any]:
         document_id = str(document.get("id"))
@@ -825,6 +983,8 @@ class ParsingService:
             self._mark_document(document_id, "needs_review", [issue])
             return {"source_document_id": document_id, "status": "needs_review", "reason": issue}
 
+        drift_issues = self._record_layout_fingerprint(document, records, file_path=file_path)
+
         updated = 0
         unmatched = 0
         for record in records:
@@ -832,7 +992,6 @@ class ParsingService:
                 temp_match = match_scheme_name(record.scheme_name, candidates=[target_scheme_name])
                 if temp_match.confidence < 80.0:
                     continue
-                    
             matched = self._stage_amc_core_fields(
                 amc_code=amc_code,
                 scheme_name=record.scheme_name,
@@ -895,6 +1054,109 @@ class ParsingService:
             "unmatched_schemes": unmatched,
             "validation_issues": issues,
         }
+
+    def _record_layout_fingerprint(
+        self,
+        document: dict[str, Any],
+        records: list[Any],
+        *,
+        file_path: str,
+    ) -> list[str]:
+        """Record this document's field yield and flag a collapsed layout.
+
+        The layout of an official factsheet can change without notice and the
+        parser reports no error -- a field simply stops extracting. Comparing
+        the current yield against the previous factsheet for the same AMC turns
+        that silent degradation into a reviewable issue.
+
+        The baseline is restricted to the same document kind (HTML vs HTML, PDF
+        vs PDF). A digital HTML factsheet legitimately yields no `risk_level`
+        (the Risk-o-Meter is an image there) while the PDF yields it, so
+        comparing across kinds would report false drift on every run.
+
+        Returns drift issue strings (empty when nothing changed). Never raises:
+        drift detection must not fail a parse.
+        """
+        document_id = str(document.get("id") or "")
+        amc_code = str(document.get("amc_code") or "")
+        document_kind = str(document.get("file_ext") or "").lstrip(".").lower() or "unknown"
+        try:
+            current = build_layout_fingerprint(records, document_kind=document_kind)
+            baseline = self._load_previous_layout_fingerprint(
+                amc_code=amc_code,
+                exclude_document_id=document_id,
+                report_month=_to_date_or_none(document.get("report_month")),
+                document_kind=document_kind,
+            )
+            report = detect_layout_drift(current, baseline)
+
+            metadata = document.get("storage_metadata")
+            metadata = dict(metadata) if isinstance(metadata, dict) else {}
+            metadata["layout_fingerprint"] = current.to_dict()
+            if baseline is not None:
+                metadata["layout_drift"] = report.evidence()
+            _execute_supabase(
+                supabase.table("mf_raw_documents")
+                .update({"storage_metadata": metadata})
+                .eq("id", document_id),
+                "persist_layout_fingerprint",
+            )
+
+            if not report.drifted:
+                return []
+            logger.warning(
+                "event=layout_drift_detected source_document_id=%s amc=%s reasons=%s lost_fields=%s",
+                document_id,
+                amc_code,
+                ",".join(report.reasons),
+                ",".join(report.lost_fields),
+            )
+            return [f"layout_drift_{'+'.join(report.reasons)}"]
+        except Exception:
+            logger.exception("event=layout_drift_check_failed source_document_id=%s", document_id)
+            return []
+
+    def _load_previous_layout_fingerprint(
+        self,
+        *,
+        amc_code: str,
+        exclude_document_id: str,
+        report_month: date | None,
+        document_kind: str | None = None,
+    ) -> Any:
+        """Most recent prior fingerprint for the same AMC and document kind."""
+        try:
+            query = (
+                supabase.table("mf_raw_documents")
+                .select("id,file_ext,storage_metadata")
+                .eq("amc_code", amc_code)
+                .order("parsed_at", desc=True)
+                .limit(25)
+            )
+            rows = _execute_supabase(query, "load_previous_layout_fingerprint").data or []
+        except Exception:
+            return None
+        for row in rows:
+            if str(row.get("id") or "") == exclude_document_id:
+                continue
+            metadata = row.get("storage_metadata")
+            if not isinstance(metadata, dict):
+                continue
+            stored = metadata.get("layout_fingerprint")
+            if not isinstance(stored, dict) or not stored.get("field_counts"):
+                continue
+            stored_kind = str(stored.get("document_kind") or "unknown").strip().lower()
+            if document_kind and stored_kind != str(document_kind).strip().lower():
+                continue
+            return LayoutFingerprint(
+                document_kind=stored_kind,
+                record_count=int(stored.get("record_count") or 0),
+                field_counts={
+                    str(key): int(value)
+                    for key, value in (stored.get("field_counts") or {}).items()
+                },
+            )
+        return None
 
     def _try_llm_fallback(self, *, document: dict[str, Any], file_path: str, issues: list[str]) -> dict[str, Any] | None:
         document_id = str(document.get("id") or "")
@@ -1465,7 +1727,7 @@ class ParsingService:
         snapshot = self.repository.get_mutual_fund_core_snapshot(scheme_code) or {}
         snapshot_name = str(snapshot.get("scheme_name") or "").strip()
         snapshot_amc = str(snapshot.get("amc_name") or "").strip()
-        if not snapshot_name or not _snapshot_matches_amc(amc_code, snapshot_amc):
+        if not snapshot_name or not _snapshot_matches_amc(amc_code, snapshot_amc, snapshot_name):
             return scheme_code, None, 0.0, "needs_review"
 
         match = match_scheme_name(
@@ -1633,6 +1895,28 @@ def _to_date_or_none(value: Any) -> date | None:
         return None
 
 
+def _field_merge_source_kind(document: dict[str, Any]) -> str:
+    """Classify a stored factsheet document for field-merge precedence.
+
+    HTML is the digital factsheet; PDF is the rendered factsheet. Anything else
+    is reported as `unknown` so it cannot participate in the merge.
+    """
+    file_ext = str(document.get("file_ext") or "").strip().lower().lstrip(".")
+    if not file_ext:
+        storage_key = str(document.get("storage_key") or "").lower()
+        source_url = str(document.get("source_url") or "").lower()
+        probe = f"{storage_key} {source_url}"
+        for candidate in ("html", "htm", "pdf"):
+            if f".{candidate}" in probe:
+                file_ext = candidate
+                break
+    if file_ext in {"html", "htm"}:
+        return SOURCE_KIND_DIGITAL
+    if file_ext == "pdf":
+        return SOURCE_KIND_PDF
+    return "unknown"
+
+
 def _parsed_record_report_month_issue(
     parsed_report_month: Any,
     document_report_month: Any,
@@ -1671,26 +1955,28 @@ def _should_write_risk_level(existing: dict[str, Any], report_month: date | None
 def _snapshot_matches_amc(
     amc_code: str,
     snapshot_amc_name: str,
+    snapshot_scheme_name: str | None = None,
 ) -> bool:
-    normalized = _normalize_lookup_text(snapshot_amc_name)
-    aliases = {
-        "hdfc": ("hdfc",),
-        "sbi": ("sbi",),
-        "icici": ("icici",),
-        "axis": ("axis",),
-        "ppfas": ("ppfas", "parag parikh"),
-        "nippon": ("nippon",),
-        "motilal": ("motilal",),
-        "mirae": ("mirae",),
-        "uti": ("uti",),
-        "dsp": ("dsp",),
-        "kotak": ("kotak",),
-        "aditya_birla": ("aditya birla", "birla sun life"),
-        "absl": ("aditya birla", "birla sun life"),
-        "edelweiss": ("edelweiss",),
-        "hsbc": ("hsbc",),
-    }.get(str(amc_code or "").strip().lower(), ())
-    return bool(normalized and aliases and any(alias in normalized for alias in aliases))
+    """Return True when the snapshot row belongs to the parser's AMC.
+
+    `mutual_fund_core_snapshot.amc_name` is NULL for most AMFI NAV rows, so the
+    explicit label is only the first signal. Fall back to the scheme name, which
+    carries the AMC brand for the supported set, before declaring a mismatch.
+    Both sides are resolved through the shared 42-AMC marker map so an AMC added
+    to the registry is accepted here without editing a second alias list.
+
+    `amc_code` may arrive as the persisted DB value (`PPFAS`), the registry key
+    (`aditya_birla`), or the canonical code (`ABSL`). Underscore-joined codes
+    such as `ANGEL_ONE` do not match their own marker, so resolve the code to its
+    canonical label through the registry before comparing.
+    """
+    expected_label = canonical_amc_label(amc_code)
+    if not expected_label:
+        return False
+    for candidate in (snapshot_amc_name, snapshot_scheme_name):
+        if supported_amc_label_from_text(candidate) == expected_label:
+            return True
+    return False
 
 
 KNOWN_PARSING_AMC_SCHEME_ALIASES: dict[str, dict[str, tuple[str, str]]] = {

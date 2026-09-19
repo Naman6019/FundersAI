@@ -62,6 +62,13 @@ FILE_PRIORITY = {
 DEFAULT_UNKNOWN_FILE_SCORE = 80
 MAX_SECONDARY_PAGES = 10
 
+# Digital (HTML) factsheet. Published at a deterministic per-month URL and
+# scored far above file-based factsheets so it wins the candidate ranking when
+# both exist for the same month.
+DEFAULT_DIGITAL_FACTSHEET_BASE_URL = "https://amc.ppfas.com/downloads/digital-factsheet"
+DIGITAL_FACTSHEET_PRIORITY = 900
+DIGITAL_FACTSHEET_LOOKBACK_MONTHS = 3
+
 MONTH_PATTERN = re.compile(
     r"(?P<month>jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:[\s\-_]+(?P<day>\d{1,2}))?[\s\-_]+(?P<year>20\d{2})",
     re.IGNORECASE,
@@ -151,8 +158,15 @@ class PPFASAdapter(BaseAMCAdapter):
         return refreshed.text
 
     def discover_factsheet_documents(self, source: AMCDocumentSource) -> list[DiscoveredDocument]:
+        # The digital (HTML) factsheet is preferred when published: it carries
+        # per-scheme AUM and expense ratio that the PDF path does not, while the
+        # PDF remains the source for risk_level. Both are returned so discovery
+        # and the candidate merge can use whichever is available.
+        digital_docs = self.discover_digital_factsheet_documents(source)
+
         if not source.factsheet_page_url:
-            return []
+            return digital_docs
+
         html = self.fetch_page(source.factsheet_page_url)
         if source.requires_confirmation and self.has_indian_citizen_confirmation(html):
             html = self.handle_confirmation(self.session, source.factsheet_page_url, html)
@@ -167,6 +181,7 @@ class PPFASAdapter(BaseAMCAdapter):
                 base_page_url=source.factsheet_page_url,
                 parent_links=links,
             )
+        docs.extend(digital_docs)
         docs.sort(key=lambda item: item.priority_score, reverse=True)
         if docs:
             logger.info("event=ppfas_selected_link document_type=factsheet url=%s", docs[0].url)
@@ -201,6 +216,64 @@ class PPFASAdapter(BaseAMCAdapter):
         if doc_type == "portfolio_disclosure":
             return self.discover_portfolio_disclosure_documents(source)
         raise ValueError(f"Unsupported document_type for PPFAS: {document_type}")
+
+    def discover_digital_factsheet_documents(
+        self,
+        source: AMCDocumentSource,
+        expected_month: date | None = None,
+    ) -> list[DiscoveredDocument]:
+        """Discover the month's digital (HTML) factsheet landing page.
+
+        The digital factsheet is server-rendered HTML carrying every scheme's
+        AUM, expense ratio, benchmark and fund manager on one page. It is
+        published at a deterministic URL, so no anchor crawling is required:
+
+            /downloads/digital-factsheet/<year>/<month-name>-<year>/
+
+        The PDF factsheet remains the source for `risk_level` (the Risk-o-Meter
+        is rendered as an image here), so this is additive, not a replacement.
+        """
+        candidate_months = _digital_factsheet_candidate_months(expected_month)
+        base_url = (source.digital_factsheet_base_url or DEFAULT_DIGITAL_FACTSHEET_BASE_URL).rstrip("/")
+
+        docs: list[DiscoveredDocument] = []
+        for month in candidate_months:
+            url = f"{base_url}/{month.year}/{month.strftime('%B').lower()}-{month.year}/"
+            if not self._digital_factsheet_page_available(url):
+                continue
+            recency_score = (month.year * 12 + month.month) * 10
+            docs.append(
+                DiscoveredDocument(
+                    amc_name=source.amc_name,
+                    amc_code=source.amc_code,
+                    document_type="factsheet",
+                    title=f"Parag Parikh Digital Factsheet {month.strftime('%B %Y')}",
+                    url=url,
+                    discovery_page_url=url,
+                    file_ext=".html",
+                    report_month=month,
+                    priority_score=DIGITAL_FACTSHEET_PRIORITY + recency_score,
+                )
+            )
+        docs.sort(key=lambda item: item.priority_score, reverse=True)
+        if docs:
+            logger.info(
+                "event=ppfas_digital_factsheet_selected url=%s report_month=%s",
+                docs[0].url,
+                docs[0].report_month,
+            )
+        return docs
+
+    def _digital_factsheet_page_available(self, url: str) -> bool:
+        try:
+            response = self._request("GET", url, session=self.session)
+        except Exception as exc:
+            logger.info("event=ppfas_digital_factsheet_probe_failed url=%s error=%s", url, exc)
+            return False
+        if response.status_code != 200:
+            return False
+        body = response.text or ""
+        return "digital factsheet" in body.lower() and "parag parikh" in body.lower()
 
     def download_document(self, url: str) -> requests.Response:
         logger.info("event=ppfas_download_file url=%s", url)
@@ -540,6 +613,31 @@ def detect_report_month(text: str) -> date | None:
     month = datetime.strptime(match.group("month")[:3], "%b").month
     year = int(match.group("year"))
     return date(year, month, 1)
+
+
+def _digital_factsheet_candidate_months(expected_month: date | None) -> list[date]:
+    """Months to probe for a digital factsheet, most recent first.
+
+    Only completed months are published, so when no expected month is known the
+    most recent completed month is offered first. When an expected month is
+    known it is preferred, then preceding months are offered so a late or
+    delayed publication is still discovered.
+    """
+    today = date.today()
+    if expected_month is None:
+        # Previous calendar month is the newest completed month.
+        total = (today.year * 12 + (today.month - 1)) - 1
+        year, month_index = divmod(total, 12)
+        anchor = date(year, month_index + 1, 1)
+    else:
+        anchor = expected_month
+
+    candidates: list[date] = []
+    for offset in range(DIGITAL_FACTSHEET_LOOKBACK_MONTHS + 1):
+        total = (anchor.year * 12 + (anchor.month - 1)) - offset
+        year, month_index = divmod(total, 12)
+        candidates.append(date(year, month_index + 1, 1))
+    return candidates
 
 
 def _parse_holdings_frame(frame: pd.DataFrame, context: ParseContext) -> dict | None:
