@@ -6,6 +6,7 @@ import os
 import argparse
 import logging
 import re
+import sys
 import requests
 import time
 from datetime import datetime, timezone
@@ -20,6 +21,12 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 load_dotenv(BASE_DIR / ".env")
+
+# The backend root is needed for the `app.*` imports below; `scripts/` stays ahead of it so the
+# shared ingest helpers still resolve locally first.
+sys.path.insert(0, str(BASE_DIR))
+
+from app.services.mf_category_service import parse_navall_categories, sebi_category
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
@@ -93,7 +100,16 @@ def _auto_family_id(scheme_name: str) -> str:
 
 
 def parse_amfi_nav_payload(payload: str) -> list[dict]:
-    """Parse AMFI's six-column fund rows and eight-column ETF rows."""
+    """Parse AMFI's six-column fund rows and eight-column ETF rows.
+
+    Also captures each row's SEBI category, which AMFI publishes as a section header above the
+    scheme group ("Open Ended Schemes(Debt Scheme - Gilt Fund)") rather than as a column. The
+    headers were previously discarded, which is why `mutual_fund_core_snapshot.category` was
+    NULL for most rows and most fund pages could not pass the catalog gate. Both the raw AMFI
+    label and its canonical translation are attached so the provenance of any published
+    category is auditable back to AMFI's own text.
+    """
+    label_by_code = parse_navall_categories(payload)
     updates = []
     for line in str(payload or "").splitlines():
         trimmed = line.strip().lstrip("\ufeff")
@@ -132,6 +148,7 @@ def parse_amfi_nav_payload(payload: str) -> list[dict]:
             logger.warning("Skipping AMFI NAV row with invalid date for scheme %s: %r", scheme_code, date_str)
             continue
 
+        amfi_label = label_by_code.get(str(scheme_code))
         updates.append(
             {
                 "scheme_code": scheme_code,
@@ -139,6 +156,8 @@ def parse_amfi_nav_payload(payload: str) -> list[dict]:
                 "isin": isin,
                 "nav": nav,
                 "nav_date": nav_date,
+                "amfi_category_label": amfi_label,
+                "amfi_category": sebi_category(amfi_label),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
                 **(
                     {"amc_name": amc_name}
@@ -170,6 +189,22 @@ def fetch_amfi_nav():
         return []
 
 
+def _has_category(existing: dict | None) -> bool:
+    return bool(str((existing or {}).get("category") or "").strip())
+
+
+# Columns the legacy `mutual_funds` compatibility mirror actually declares. Everything else in a
+# raw update dict is parser-internal and must not be sent to it.
+_MUTUAL_FUNDS_MIRROR_COLUMNS = (
+    "scheme_code",
+    "scheme_name",
+    "isin",
+    "nav",
+    "nav_date",
+    "category",
+)
+
+
 def _load_existing_core_rows(supabase, batch: list[dict]) -> dict[str, dict]:
     codes = [str(row.get("scheme_code")) for row in batch if row.get("scheme_code") is not None]
     if not codes:
@@ -177,7 +212,7 @@ def _load_existing_core_rows(supabase, batch: list[dict]) -> dict[str, dict]:
     try:
         res = (
             supabase.table("mutual_fund_core_snapshot")
-            .select("scheme_code,amc_name,data_source,provider_payload")
+            .select("scheme_code,amc_name,data_source,provider_payload,category")
             .in_("scheme_code", codes)
             .execute()
         )
@@ -251,6 +286,16 @@ def _build_core_snapshot_row(update: dict, existing: dict | None = None) -> dict
     amc_name = existing.get("amc_name") or update.get("amc_name")
     if amc_name:
         row["amc_name"] = amc_name
+
+    # Category is filled only when absent. Three live published funds disagree with AMFI's
+    # current filing — SBI Contra, Quant Multi Cap and ICICI Prudential Value are all live as
+    # "Flexi Cap" while AMFI now files them under Contra / Multi Cap / Value. Overwriting would
+    # republish them under categories the catalog gate does not accept, which sets
+    # `is_published = false` and de-indexes pages that currently rank. A curated value that a
+    # human already validated is therefore never replaced by this feed.
+    if not _has_category(existing) and update.get("amfi_category"):
+        row["category"] = update["amfi_category"]
+
     return row
 
 
@@ -289,8 +334,13 @@ def main(argv: list[str] | None = None):
 
             # Keep the compatibility table aligned when it is available. Fresh OCI
             # installations can safely run before its idempotent migration is applied.
+            #
+            # The mirror takes only columns it actually defines. The raw update dict also carries
+            # parser-internal keys (`amfi_category_label`, `amfi_category`, `updated_at`), and a
+            # passthrough of those would make PostgREST reject the whole batch — which is how a
+            # latent defect here would silently stop the legacy mirror from ever updating.
             mutual_fund_batch = [
-                {key: value for key, value in row.items() if key != "amc_name"}
+                {key: row[key] for key in _MUTUAL_FUNDS_MIRROR_COLUMNS if key in row}
                 for row in batch
             ]
             try:

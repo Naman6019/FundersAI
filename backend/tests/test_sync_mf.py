@@ -1,11 +1,144 @@
 from __future__ import annotations
 
 from backend.scripts.sync_mf import (
+    _MUTUAL_FUNDS_MIRROR_COLUMNS,
     _build_core_snapshot_row,
     _build_missing_etf_family_mappings,
     main,
     parse_amfi_nav_payload,
 )
+from app.services.mf_catalog_service import CATEGORIES
+
+
+# ─── Category capture from AMFI section headers ──────────────────────────────
+#
+# AMFI publishes the SEBI category as a header above each scheme group, not as a column. These
+# headers were previously discarded, which left `category` NULL and blocked fund pages.
+
+_CATEGORY_PAYLOAD = "\n".join(
+    [
+        "Open Ended Schemes(Debt Scheme - Gilt Fund)",
+        "",
+        "Bajaj Finserv Mutual Fund",
+        "",
+        "153206;INF0QA701AP9;-;Bajaj Finserv Gilt Fund;Direct Plan;Growth;1076.1554;21-Sep-2026",
+        "Open Ended Schemes(Equity Scheme - Flexi Cap Fund)",
+        "",
+        "Parag Parikh Mutual Fund",
+        "",
+        "122639;INF879O01019;-;Parag Parikh Flexi Cap Fund;Direct Plan;Growth;89.7169;21-Sep-2026",
+    ]
+)
+
+
+def test_rows_carry_the_amfi_category_header_above_them():
+    rows = parse_amfi_nav_payload(_CATEGORY_PAYLOAD)
+    by_code = {row["scheme_code"]: row for row in rows}
+
+    assert by_code[153206]["amfi_category"] == "Debt - Gilt"
+    assert by_code[122639]["amfi_category"] == "Flexi Cap"
+    # The raw AMFI text is retained so a published category traces back to its source.
+    assert by_code[122639]["amfi_category_label"] == "Equity Scheme - Flexi Cap Fund"
+
+
+def test_equity_category_capture_lands_on_a_publishable_value():
+    """What makes the newly-covered equity schemes eligible without touching the gate."""
+    rows = parse_amfi_nav_payload(_CATEGORY_PAYLOAD)
+    equity = next(row for row in rows if row["scheme_code"] == 122639)
+
+    assert equity["amfi_category"] in CATEGORIES
+
+
+def test_debt_category_is_captured_but_is_not_publishable():
+    """Populating the column must not silently widen what the gate accepts."""
+    rows = parse_amfi_nav_payload(_CATEGORY_PAYLOAD)
+    debt = next(row for row in rows if row["scheme_code"] == 153206)
+
+    assert debt["amfi_category"] == "Debt - Gilt"
+    assert debt["amfi_category"] not in CATEGORIES
+
+
+def test_row_without_a_preceding_header_has_no_category():
+    """Absent evidence must stay absent; it must not be guessed."""
+    rows = parse_amfi_nav_payload(
+        "122639;INF879O01019;-;Parag Parikh Flexi Cap Fund;Direct Plan;Growth;89.7169;21-Sep-2026"
+    )
+
+    assert rows[0]["amfi_category"] is None
+    assert rows[0]["amfi_category_label"] is None
+
+
+def test_core_snapshot_fills_an_absent_category():
+    update = {
+        "scheme_code": 122639,
+        "scheme_name": "Parag Parikh Flexi Cap Fund - Direct Plan - Growth",
+        "nav": 89.7169,
+        "nav_date": "2026-09-21",
+        "amfi_category": "Flexi Cap",
+    }
+
+    row = _build_core_snapshot_row(update, {"category": None})
+
+    assert row["category"] == "Flexi Cap"
+
+
+def test_core_snapshot_never_overwrites_an_existing_category():
+    """The regression this guards is severe: overwriting de-indexes live pages.
+
+    SBI Contra (119835), Quant Multi Cap (120823) and ICICI Prudential Value (120323) are live
+    under "Flexi Cap" while AMFI now files them as Contra / Multi Cap / Value. Those replacement
+    values are not in CATEGORIES, so writing them would flip `is_published` to false and drop
+    three ranking pages out of the index.
+    """
+    update = {
+        "scheme_code": 119835,
+        "scheme_name": "SBI CONTRA FUND - Direct Plan - Growth",
+        "nav": 1.0,
+        "nav_date": "2026-09-21",
+        "amfi_category": "Contra",
+    }
+
+    row = _build_core_snapshot_row(update, {"category": "Flexi Cap"})
+
+    assert "category" not in row
+
+
+def test_core_snapshot_does_not_write_a_null_category():
+    update = {
+        "scheme_code": 1,
+        "scheme_name": "Unknown Fund - Direct Plan - Growth",
+        "nav": 10.0,
+        "nav_date": "2026-09-21",
+        "amfi_category": None,
+    }
+
+    row = _build_core_snapshot_row(update, {"category": None})
+
+    assert "category" not in row
+
+
+def test_legacy_mirror_receives_only_its_declared_columns():
+    """Parser-internal keys must not reach the mirror, whose schema does not define them.
+
+    PostgREST rejects an unknown column for the whole batch, so a passthrough here would stop
+    the legacy mirror from updating at all while the core snapshot kept succeeding.
+    """
+    update = {
+        "scheme_code": 122639,
+        "scheme_name": "Parag Parikh Flexi Cap Fund - Direct Plan - Growth",
+        "nav": 89.7169,
+        "nav_date": "2026-09-21",
+        "isin": "INF879O01019",
+        "amfi_category": "Flexi Cap",
+        "amfi_category_label": "Equity Scheme - Flexi Cap Fund",
+        "updated_at": "2026-09-21T00:00:00+00:00",
+    }
+    mirror = {key: update[key] for key in _MUTUAL_FUNDS_MIRROR_COLUMNS if key in update}
+
+    assert "amfi_category" not in mirror
+    assert "amfi_category_label" not in mirror
+    assert "updated_at" not in mirror
+    assert mirror["scheme_code"] == 122639
 
 
 def test_parse_amfi_nav_payload_keeps_direct_growth_and_eight_column_etf_rows():

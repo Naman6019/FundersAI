@@ -25,9 +25,13 @@ test('sitemap.ts is configured for the two supported production hosts', () => {
   // Prototype route check
   assert.doesNotMatch(source, /emergent-replica/);
 
-  // Catalog-backed URLs are submitted only after a verified catalog read succeeds.
+  // Catalog-backed URLs are submitted only after a verified catalog read succeeds, and a
+  // failed read must not publish a truncated sitemap (that churn is what Search Console
+  // reports as "Discovered – currently not indexed"). Throwing yields a 5xx, which Google
+  // answers by retaining the last complete sitemap.
   assert.match(source, /await tryGetPublishedFunds\(\)/);
-  assert.match(source, /funds && funds\.length > 0/);
+  assert.match(source, /if \(funds === undefined\) \{\s*throw new Error/);
+  assert.match(source, /if \(funds\.length > 0\) \{/);
   assert.doesNotMatch(source, /await getPublishedAmcs\(\)/);
   assert.match(source, /CATEGORY_LIST/);
   assert.match(source, /COMPARE_PAIRS/);

@@ -112,6 +112,7 @@ stitch_downloads/
 *.json
 !backend/evals/fund_research_v1/judge_report.json
 !frontend/tests/fixtures/*.json
+!backend/tests/fixtures/*.json
 *.yaml
 *.yml
 !frontend/data/*.yaml

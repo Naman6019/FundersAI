@@ -1,0 +1,512 @@
+{
+  "source": "https://portal.amfiindia.com/spages/NAVAll.txt",
+  "capturedOn": "2026-09-21",
+  "note": "Distinct AMFI NAVAll category labels. Regenerate by re-downloading NAVAll.txt; never edit by hand.",
+  "labels": [
+    {
+      "label": "Children’s Fund - Childrens' Fund",
+      "key": "childrensfundchildrensfund",
+      "category": "Solution Oriented - Children's"
+    },
+    {
+      "label": "Debt Scheme - Banking and PSU Fund",
+      "key": "debtschemebankingandpsufund",
+      "category": "Debt - Banking and PSU"
+    },
+    {
+      "label": "Debt Scheme - Corporate Bond Fund",
+      "key": "debtschemecorporatebondfund",
+      "category": "Debt - Corporate Bond"
+    },
+    {
+      "label": "Debt Scheme - Credit Risk Fund",
+      "key": "debtschemecreditriskfund",
+      "category": "Debt - Credit Risk"
+    },
+    {
+      "label": "Debt Scheme - Dynamic Bond",
+      "key": "debtschemedynamicbond",
+      "category": "Debt - Dynamic Bond"
+    },
+    {
+      "label": "Debt Scheme - Gilt Fund",
+      "key": "debtschemegiltfund",
+      "category": "Debt - Gilt"
+    },
+    {
+      "label": "Debt Scheme - Liquid Fund",
+      "key": "debtschemeliquidfund",
+      "category": "Debt - Liquid"
+    },
+    {
+      "label": "Debt Scheme - Long Duration Fund",
+      "key": "debtschemelongdurationfund",
+      "category": "Debt - Long Duration"
+    },
+    {
+      "label": "Debt Scheme - Low Duration Fund",
+      "key": "debtschemelowdurationfund",
+      "category": "Debt - Low Duration"
+    },
+    {
+      "label": "Debt Scheme - Medium Duration Fund",
+      "key": "debtschememediumdurationfund",
+      "category": "Debt - Medium Duration"
+    },
+    {
+      "label": "Debt Scheme - Medium to Long Duration Fund",
+      "key": "debtschememediumtolongdurationfund",
+      "category": "Debt - Medium to Long Duration"
+    },
+    {
+      "label": "Debt Scheme - Money Market Fund",
+      "key": "debtschememoneymarketfund",
+      "category": "Debt - Money Market"
+    },
+    {
+      "label": "Debt Scheme - Overnight Fund",
+      "key": "debtschemeovernightfund",
+      "category": "Debt - Overnight"
+    },
+    {
+      "label": "Debt Scheme - Short Duration Fund",
+      "key": "debtschemeshortdurationfund",
+      "category": "Debt - Short Duration"
+    },
+    {
+      "label": "Debt Scheme - Ultra Short Duration Fund",
+      "key": "debtschemeultrashortdurationfund",
+      "category": "Debt - Ultra Short Duration"
+    },
+    {
+      "label": "ELSS",
+      "key": "elss",
+      "category": "ELSS"
+    },
+    {
+      "label": "Equity Scheme - Contra Fund",
+      "key": "equityschemecontrafund",
+      "category": "Contra"
+    },
+    {
+      "label": "Equity Scheme - Dividend Yield Fund",
+      "key": "equityschemedividendyieldfund",
+      "category": "Dividend Yield"
+    },
+    {
+      "label": "Equity Scheme - ELSS",
+      "key": "equityschemeelss",
+      "category": "ELSS"
+    },
+    {
+      "label": "Equity Scheme - Flexi Cap Fund",
+      "key": "equityschemeflexicapfund",
+      "category": "Flexi Cap"
+    },
+    {
+      "label": "Equity Scheme - Focused Fund",
+      "key": "equityschemefocusedfund",
+      "category": "Focused"
+    },
+    {
+      "label": "Equity Scheme - Large & Mid Cap Fund",
+      "key": "equityschemelarge&midcapfund",
+      "category": "Large & Mid Cap"
+    },
+    {
+      "label": "Equity Scheme - Large Cap Fund",
+      "key": "equityschemelargecapfund",
+      "category": "Large Cap"
+    },
+    {
+      "label": "Equity Scheme - Mid Cap Fund",
+      "key": "equityschememidcapfund",
+      "category": "Mid Cap"
+    },
+    {
+      "label": "Equity Scheme - Multi Cap Fund",
+      "key": "equityschememulticapfund",
+      "category": "Multi Cap"
+    },
+    {
+      "label": "Equity Scheme - Sectoral/ Thematic",
+      "key": "equityschemesectoral/thematic",
+      "category": "Sectoral/Thematic"
+    },
+    {
+      "label": "Equity Scheme - Small Cap Fund",
+      "key": "equityschemesmallcapfund",
+      "category": "Small Cap"
+    },
+    {
+      "label": "Equity Scheme - Value Fund",
+      "key": "equityschemevaluefund",
+      "category": "Value"
+    },
+    {
+      "label": "Equity Schemes - Contra Fund",
+      "key": "equityschemecontrafund",
+      "category": "Contra"
+    },
+    {
+      "label": "Equity Schemes - Dividend Yield Fund",
+      "key": "equityschemedividendyieldfund",
+      "category": "Dividend Yield"
+    },
+    {
+      "label": "Equity Schemes - ELSS- Tax Saver Fund",
+      "key": "equityschemeelsstaxsaverfund",
+      "category": "ELSS"
+    },
+    {
+      "label": "Equity Schemes - Flexi Cap Fund",
+      "key": "equityschemeflexicapfund",
+      "category": "Flexi Cap"
+    },
+    {
+      "label": "Equity Schemes - Focused Fund",
+      "key": "equityschemefocusedfund",
+      "category": "Focused"
+    },
+    {
+      "label": "Equity Schemes - Large & Mid Cap Fund",
+      "key": "equityschemelarge&midcapfund",
+      "category": "Large & Mid Cap"
+    },
+    {
+      "label": "Equity Schemes - Large Cap Fund",
+      "key": "equityschemelargecapfund",
+      "category": "Large Cap"
+    },
+    {
+      "label": "Equity Schemes - Mid Cap Fund",
+      "key": "equityschememidcapfund",
+      "category": "Mid Cap"
+    },
+    {
+      "label": "Equity Schemes - Multi Cap Fund",
+      "key": "equityschememulticapfund",
+      "category": "Multi Cap"
+    },
+    {
+      "label": "Equity Schemes - Sectoral Fund",
+      "key": "equityschemesectoralfund",
+      "category": "Sectoral/Thematic"
+    },
+    {
+      "label": "Equity Schemes - Small Cap Fund",
+      "key": "equityschemesmallcapfund",
+      "category": "Small Cap"
+    },
+    {
+      "label": "Equity Schemes - Thematic Fund",
+      "key": "equityschemethematicfund",
+      "category": "Sectoral/Thematic"
+    },
+    {
+      "label": "Equity Schemes - Value Fund",
+      "key": "equityschemevaluefund",
+      "category": "Value"
+    },
+    {
+      "label": "Exchange Traded Funds (ETFs) - Debt ETF",
+      "key": "etfdebtetf",
+      "category": "ETF - Debt"
+    },
+    {
+      "label": "Exchange Traded Funds (ETFs) - ETFs investing overseas",
+      "key": "etfetfsinvestingoverseas",
+      "category": "ETF - Overseas"
+    },
+    {
+      "label": "Exchange Traded Funds (ETFs) - Equity ETF",
+      "key": "etfequityetf",
+      "category": "ETF - Equity"
+    },
+    {
+      "label": "Exchange Traded Funds (ETFs) - Gold ETF",
+      "key": "etfgoldetf",
+      "category": "ETF - Gold"
+    },
+    {
+      "label": "Exchange Traded Funds (ETFs) - Hybrid ETF",
+      "key": "etfhybridetf",
+      "category": "ETF - Hybrid"
+    },
+    {
+      "label": "Exchange Traded Funds (ETFs) - Other ETF",
+      "key": "etfotheretf",
+      "category": "ETF - Other"
+    },
+    {
+      "label": "Exchange Traded Funds (ETFs) - Silver ETF",
+      "key": "etfsilveretf",
+      "category": "ETF - Silver"
+    },
+    {
+      "label": "Fund of Funds Scheme (Domestic) - Fund of Funds Scheme (Domestic)",
+      "key": "fundoffundsdomesticfundoffundsdomestic",
+      "category": "Fund of Funds - Domestic"
+    },
+    {
+      "label": "Gilt",
+      "key": "gilt",
+      "category": "Debt - Gilt"
+    },
+    {
+      "label": "Growth",
+      "key": "growth",
+      "category": "Debt - Growth (legacy)"
+    },
+    {
+      "label": "Hybrid Scheme - Aggressive Hybrid Fund",
+      "key": "hybridschemeaggressivehybridfund",
+      "category": "Hybrid - Aggressive"
+    },
+    {
+      "label": "Hybrid Scheme - Arbitrage Fund",
+      "key": "hybridschemearbitragefund",
+      "category": "Hybrid - Arbitrage"
+    },
+    {
+      "label": "Hybrid Scheme - Balanced Hybrid Fund",
+      "key": "hybridschemebalancedhybridfund",
+      "category": "Hybrid - Balanced"
+    },
+    {
+      "label": "Hybrid Scheme - Conservative Hybrid Fund",
+      "key": "hybridschemeconservativehybridfund",
+      "category": "Hybrid - Conservative"
+    },
+    {
+      "label": "Hybrid Scheme - Dynamic Asset Allocation or Balanced Advantage",
+      "key": "hybridschemedynamicassetallocationorbalancedadvantage",
+      "category": "Hybrid - Balanced Advantage"
+    },
+    {
+      "label": "Hybrid Scheme - Equity Savings",
+      "key": "hybridschemeequitysavings",
+      "category": "Hybrid - Equity Savings"
+    },
+    {
+      "label": "Hybrid Scheme - Multi Asset Allocation",
+      "key": "hybridschememultiassetallocation",
+      "category": "Hybrid - Multi Asset Allocation"
+    },
+    {
+      "label": "Hybrid Schemes - Aggressive Hybrid Fund",
+      "key": "hybridschemeaggressivehybridfund",
+      "category": "Hybrid - Aggressive"
+    },
+    {
+      "label": "Hybrid Schemes - Arbitrage Fund",
+      "key": "hybridschemearbitragefund",
+      "category": "Hybrid - Arbitrage"
+    },
+    {
+      "label": "Hybrid Schemes - Balanced Advantage Fund/ Dynamic Asset Allocation",
+      "key": "hybridschemebalancedadvantagefund/dynamicassetallocation",
+      "category": "Hybrid - Balanced Advantage"
+    },
+    {
+      "label": "Hybrid Schemes - Balanced Hybrid Fund",
+      "key": "hybridschemebalancedhybridfund",
+      "category": "Hybrid - Balanced"
+    },
+    {
+      "label": "Hybrid Schemes - Conservative Hybrid Fund",
+      "key": "hybridschemeconservativehybridfund",
+      "category": "Hybrid - Conservative"
+    },
+    {
+      "label": "Hybrid Schemes - Equity Savings Fund",
+      "key": "hybridschemeequitysavingsfund",
+      "category": "Hybrid - Equity Savings"
+    },
+    {
+      "label": "Hybrid Schemes - Multi Asset Allocation Fund",
+      "key": "hybridschememultiassetallocationfund",
+      "category": "Hybrid - Multi Asset Allocation"
+    },
+    {
+      "label": "Income",
+      "key": "income",
+      "category": "Debt - Income (legacy)"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - 10-year Constant Maturity Gilt Fund",
+      "key": "income/debtorientedschemes10yearconstantmaturitygiltfund",
+      "category": "Debt - Gilt"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Banking and PSU Debt Fund",
+      "key": "income/debtorientedschemesbankingandpsudebtfund",
+      "category": "Debt - Banking and PSU"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Corporate Bond Fund",
+      "key": "income/debtorientedschemescorporatebondfund",
+      "category": "Debt - Corporate Bond"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Credit Risk Fund",
+      "key": "income/debtorientedschemescreditriskfund",
+      "category": "Debt - Credit Risk"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Dynamic Term Fund",
+      "key": "income/debtorientedschemesdynamictermfund",
+      "category": "Debt - Dynamic Bond"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Fixed Term Plan",
+      "key": "income/debtorientedschemesfixedtermplan",
+      "category": "Debt - Fixed Term"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Floating Interest Rates Fund",
+      "key": "income/debtorientedschemesfloatinginterestratesfund",
+      "category": "Debt - Floater"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Gilt Fund",
+      "key": "income/debtorientedschemesgiltfund",
+      "category": "Debt - Gilt"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Liquid Fund",
+      "key": "income/debtorientedschemesliquidfund",
+      "category": "Debt - Liquid"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Long Term Fund",
+      "key": "income/debtorientedschemeslongtermfund",
+      "category": "Debt - Long Duration"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Medium Term Fund",
+      "key": "income/debtorientedschemesmediumtermfund",
+      "category": "Debt - Medium Duration"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Medium to Long Term Fund",
+      "key": "income/debtorientedschemesmediumtolongtermfund",
+      "category": "Debt - Medium to Long Duration"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Money Market Fund",
+      "key": "income/debtorientedschemesmoneymarketfund",
+      "category": "Debt - Money Market"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Other Debt Scheme",
+      "key": "income/debtorientedschemesotherdebtscheme",
+      "category": "Debt - Other"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Overnight Fund",
+      "key": "income/debtorientedschemesovernightfund",
+      "category": "Debt - Overnight"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Sectoral Fund",
+      "key": "income/debtorientedschemessectoralfund",
+      "category": "Debt - Sectoral"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Short Term Fund",
+      "key": "income/debtorientedschemesshorttermfund",
+      "category": "Debt - Short Duration"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Ultra Short Term Fund",
+      "key": "income/debtorientedschemesultrashorttermfund",
+      "category": "Debt - Ultra Short Duration"
+    },
+    {
+      "label": "Income/Debt Oriented Schemes - Ultra Short to Short Term Fund",
+      "key": "income/debtorientedschemesultrashorttoshorttermfund",
+      "category": "Debt - Ultra Short Duration"
+    },
+    {
+      "label": "Index Funds - Debt Funds",
+      "key": "indexfundsdebtfunds",
+      "category": "Index Fund - Debt"
+    },
+    {
+      "label": "Index Funds - Equity Funds",
+      "key": "indexfundsequityfunds",
+      "category": "Index Fund"
+    },
+    {
+      "label": "Index Funds - Hybrid Fund",
+      "key": "indexfundshybridfund",
+      "category": "Index Fund - Hybrid"
+    },
+    {
+      "label": "Life Cycle Funds - Life Cycle Fund with Maturity of 10 Years",
+      "key": "lifecyclefundslifecyclefundwithmaturityof10years",
+      "category": "Life Cycle - 10 Year"
+    },
+    {
+      "label": "Life Cycle Funds - Life Cycle Fund with Maturity of 15 Years",
+      "key": "lifecyclefundslifecyclefundwithmaturityof15years",
+      "category": "Life Cycle - 15 Year"
+    },
+    {
+      "label": "Life Cycle Funds - Life Cycle Fund with Maturity of 5 Years",
+      "key": "lifecyclefundslifecyclefundwithmaturityof5years",
+      "category": "Life Cycle - 5 Year"
+    },
+    {
+      "label": "Money Market",
+      "key": "moneymarket",
+      "category": "Debt - Money Market"
+    },
+    {
+      "label": "Other Scheme - FoF Domestic",
+      "key": "otherschemefofdomestic",
+      "category": "Fund of Funds - Domestic"
+    },
+    {
+      "label": "Other Scheme - FoF Overseas",
+      "key": "otherschemefofoverseas",
+      "category": "Fund of Funds - Overseas"
+    },
+    {
+      "label": "Other Scheme - Gold ETF",
+      "key": "otherschemegoldetf",
+      "category": "ETF - Gold"
+    },
+    {
+      "label": "Other Scheme - Index Funds",
+      "key": "otherschemeindexfunds",
+      "category": "Index Fund"
+    },
+    {
+      "label": "Other Scheme - Other  ETFs",
+      "key": "otherschemeotheretfs",
+      "category": "ETF - Other"
+    },
+    {
+      "label": "Overseas Fund of Funds - Fund of Funds investing overseas",
+      "key": "overseasfundoffundsfundoffundsinvestingoverseas",
+      "category": "Fund of Funds - Overseas"
+    },
+    {
+      "label": "Solution Oriented Scheme - Children’s Fund",
+      "key": "solutionorientedschemechildrensfund",
+      "category": "Solution Oriented - Children's"
+    },
+    {
+      "label": "Solution Oriented Scheme - Retirement Fund",
+      "key": "solutionorientedschemeretirementfund",
+      "category": "Solution Oriented - Retirement"
+    },
+    {
+      "label": "Solution Oriented Schemes ** - Retirement Fund",
+      "key": "solutionorientedschemesretirementfund",
+      "category": "Solution Oriented - Retirement"
+    }
+  ]
+}

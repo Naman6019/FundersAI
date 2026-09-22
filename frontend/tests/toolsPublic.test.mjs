@@ -14,6 +14,7 @@ import {
   getHoldingsForScheme,
   calculateDetailedOverlap,
 } from '../lib/fund-holdings.ts';
+import { FUND_REGISTRY, getFundBySchemeCode } from '../lib/fund-registry.ts';
 
 test('calculateDetailedOverlap computes 100% overlap for identical holdings', () => {
   const holdings = [
@@ -45,13 +46,13 @@ test('calculateDetailedOverlap computes 0% overlap for disjoint holdings', () =>
 });
 
 test('calculateDetailedOverlap evaluates PPFAS vs HDFC Flexi Cap correctly', () => {
-  const ppfasHoldings = FUND_HOLDINGS_DB[122639];
-  const hdfcHoldings = FUND_HOLDINGS_DB[120503];
+  const ppfas = FUND_HOLDINGS_DB[122639];
+  const hdfc = FUND_HOLDINGS_DB[118955];
 
-  assert.ok(ppfasHoldings && ppfasHoldings.length > 0, 'PPFAS holdings must exist');
-  assert.ok(hdfcHoldings && hdfcHoldings.length > 0, 'HDFC holdings must exist');
+  assert.ok(ppfas?.holdings.length, 'PPFAS holdings must exist');
+  assert.ok(hdfc?.holdings.length, 'HDFC Flexi Cap holdings must exist');
 
-  const result = calculateDetailedOverlap(ppfasHoldings, hdfcHoldings);
+  const result = calculateDetailedOverlap(ppfas.holdings, hdfc.holdings);
 
   // Both hold HDFC Bank, ICICI Bank, Axis Bank, Infosys, ITC, SBI
   assert.ok(result.percentage > 20 && result.percentage < 45, `Expected overlap between 20% and 45%, got ${result.percentage}%`);
@@ -64,11 +65,34 @@ test('calculateDetailedOverlap evaluates PPFAS vs HDFC Flexi Cap correctly', () 
   assert.ok(commonStockNames.includes('ICICI Bank Ltd'));
 });
 
-test('getHoldingsForScheme falls back gracefully for unregistered schemes', () => {
-  const holdings = getHoldingsForScheme(999999, 'Small Cap');
-  assert.ok(Array.isArray(holdings));
-  assert.ok(holdings.length >= 5);
-  assert.ok(holdings.every((h) => typeof h.isin === 'string' && typeof h.weight === 'number'));
+test('getHoldingsForScheme abstains for schemes with no curated holdings', () => {
+  // Returning a category proxy here is what attributed one fund's stocks to another, so an
+  // unknown scheme must yield null and force the caller to show the unavailable state.
+  assert.equal(getHoldingsForScheme(999999), null);
+
+  // A scheme in the registry with no snapshot must also abstain, not fall back by category.
+  const withoutSnapshot = FUND_REGISTRY.find((f) => FUND_HOLDINGS_DB[f.schemeCode] === undefined);
+  assert.ok(withoutSnapshot, 'expected at least one registry scheme without curated holdings');
+  assert.equal(getHoldingsForScheme(withoutSnapshot.schemeCode), null);
+});
+
+test('every curated holdings entry is attributed to its own scheme', () => {
+  // The keys previously named one fund while pointing at another (120503 = Axis ELSS, not
+  // HDFC Flexi Cap). Provenance fields make the attribution auditable.
+  for (const [code, entry] of Object.entries(FUND_HOLDINGS_DB)) {
+    assert.match(entry.asOf, /^\d{4}-\d{2}$/, `${code} must state the month it describes`);
+    assert.ok(entry.source.length > 0, `${code} must state its source`);
+    assert.ok(entry.holdings.length > 0, `${code} must have holdings`);
+    assert.ok(
+      getFundBySchemeCode(Number(code)),
+      `${code} is not in FUND_REGISTRY, so no picker can select it`,
+    );
+    for (const h of entry.holdings) {
+      assert.equal(typeof h.isin, 'string');
+      assert.equal(typeof h.weight, 'number');
+      assert.ok(h.weight > 0 && h.weight <= 100, `${code}/${h.isin} has an implausible weight`);
+    }
+  }
 });
 
 test('Public Tools directory and pages exist and are well-formed', () => {
@@ -101,6 +125,17 @@ test('sitemap.ts contains all public tool URLs', () => {
 test('next.config.ts redirects legacy synthesis tool path to /tools/portfolio-overlap', () => {
   const nextConfigSource = readFileSync(path.join(FRONTEND_ROOT, 'next.config.ts'), 'utf-8');
   assert.match(nextConfigSource, /destination: '\/tools\/portfolio-overlap'/);
+});
+
+test('next.config.ts permanently retires the deleted emergent-replica prototype', () => {
+  // The route was deleted in 18a3d4a2, but Search Console still reports impressions for it
+  // while it 404s. A permanent redirect retires the URL and forwards residual signals.
+  const nextConfigSource = readFileSync(path.join(FRONTEND_ROOT, 'next.config.ts'), 'utf-8');
+  assert.match(nextConfigSource, /source: '\/emergent-replica', destination: '\/', permanent: true/);
+  assert.ok(
+    !existsSync(path.join(FRONTEND_ROOT, 'app', 'emergent-replica')),
+    'the deleted prototype route must not be resurrected to satisfy the redirect',
+  );
 });
 
 test('Mathematical SIP compounding formulas execute with deterministic precision', () => {

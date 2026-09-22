@@ -69,8 +69,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   // 3. Mutual-fund URLs are discoverable only after their verified catalog is published.
+  //
+  // `undefined` is an infrastructure failure. Serving a 200 sitemap with the ~90 catalog
+  // URLs silently removed, then re-adding them after the outage, is exactly the churn that
+  // Search Console reports as "Discovered – currently not indexed" / "Crawled – currently
+  // not indexed". Throwing instead returns a 5xx, which Google treats as a transient fetch
+  // failure and answers by keeping the previously fetched, complete sitemap.
   const funds = await tryGetPublishedFunds();
-  if (funds && funds.length > 0) {
+  if (funds === undefined) {
+    throw new Error('Sitemap catalog read failed; refusing to publish a truncated sitemap');
+  }
+
+  if (funds.length > 0) {
     routes.push({
       url: `${BASE_URL}/mutual-funds`,
       changeFrequency: 'weekly',

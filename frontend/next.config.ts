@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
     // Synthesis Studio moved from /reports/* to /synthesis/* so the whole product
     // (marketing splash + tool) lives under one consistent URL namespace.
     return [
+      // Retired design prototype (`app/emergent-replica`), deleted in 18a3d4a2 with no
+      // successor. Search Console still reports impressions for the URL while it 404s, so a
+      // permanent redirect retires it and passes any residual signals to the homepage.
+      { source: '/emergent-replica', destination: '/', permanent: true },
       { source: '/reports', destination: '/synthesis', permanent: true },
       { source: '/reports/generate', destination: '/synthesis/generate', permanent: true },
       { source: '/reports/dashboard', destination: '/synthesis/dashboard', permanent: true },

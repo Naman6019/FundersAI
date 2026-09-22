@@ -20,8 +20,14 @@ test('FundJsonLd defines FinancialProduct, BreadcrumbList, and FAQPage graphs', 
   assert.match(source, /'@type':\s*'FinancialProduct'/);
   assert.match(source, /'@type':\s*'BreadcrumbList'/);
   assert.match(source, /'@type':\s*'FAQPage'/);
-  assert.match(source, /Direct plan has zero distributor commission/);
+  // The commission statement is now plan-conditional, so it must stay accurate for both.
+  assert.match(source, /no distributor commission/);
+  assert.match(source, /includes distributor commission in its expense ratio/);
   assert.match(source, /What is the benchmark index for/);
+  // Answers are built from held data rather than hardcoded, so the FAQ text can never
+  // describe a figure the page does not actually have.
+  assert.match(source, /export function fundFaqs/);
+  assert.match(source, /Insufficient history|omitted rather than estimated/);
 });
 
 test('CompareJsonLd creates valid side-by-side comparison metadata', () => {

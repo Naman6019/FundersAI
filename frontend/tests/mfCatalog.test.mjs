@@ -54,7 +54,9 @@ test('directory pagination keeps all eligible rows and fails on partial lookup f
 });
 
 test('directory recovery distinguishes an unavailable catalog from an empty published catalog', async () => {
-  assert.equal(await loadCatalog([{ data: null, error: { message: 'offline' } }]).tryGetPublishedFunds(), null);
+  // `undefined` marks an infrastructure failure, so callers can tell it apart from a
+  // definitively empty catalog and avoid flipping pages to noindex during an outage.
+  assert.equal(await loadCatalog([{ data: null, error: { message: 'offline' } }]).tryGetPublishedFunds(), undefined);
   const emptyCatalog = await loadCatalog([{ data: [], error: null }]).tryGetPublishedFunds();
   assert.ok(Array.isArray(emptyCatalog));
   assert.equal(emptyCatalog.length, 0);
@@ -80,4 +82,29 @@ test('public fund routes use catalog lookups without handwritten fallback or sta
   assert.match(detail, /CatalogUnavailable/);
   assert.doesNotMatch(readFileSync('app/not-found.tsx', 'utf8'), /1,000\+ verified schemes/);
   assert.doesNotMatch(readFileSync('components/ecosystem/EcosystemHeader.tsx', 'utf8'), /30\+ funds/);
+});
+
+test('catalog routes never emit noindex for an infrastructure failure', () => {
+  // A transient outage previously collapsed to `null` and published `noindex`, which made
+  // Google oscillate between "Excluded by 'noindex' tag" and indexed. Each route must test
+  // the infra sentinel explicitly, and the failure branch must stay indexable.
+  const routes = {
+    'app/mutual-funds/page.tsx': /if \(funds === undefined\) return metadata;/,
+    'app/mutual-funds/[amcSlug]/page.tsx': /if \(funds === undefined\) return \{ title:/,
+    'app/mutual-funds/category/[categorySlug]/page.tsx': /if \(funds === undefined\) return \{ title:/,
+    // The fund detail route distinguishes the sentinel inside `requiredFund` and collapses it
+    // for metadata only via a single `if (!fund)` guard, which must stay indexable.
+    'app/mutual-funds/[amcSlug]/[fundSlug]/page.tsx': /if \(fund === undefined\) return undefined;/,
+  };
+  for (const [route, pattern] of Object.entries(routes)) {
+    const source = readFileSync(route, 'utf8');
+    assert.match(source, pattern, `${route} must handle the infra sentinel`);
+
+    // The infra-failure branch must not carry the noindex tag. Read the sentinel through the
+    // end of its statement and assert no `index: false` appears inside it.
+    const branch = source.slice(source.search(pattern));
+    const end = branch.indexOf('\n  ', 1);
+    const statement = end === -1 ? branch : branch.slice(0, end);
+    assert.doesNotMatch(statement, /index: false/, `${route} must stay indexable on outage`);
+  }
 });

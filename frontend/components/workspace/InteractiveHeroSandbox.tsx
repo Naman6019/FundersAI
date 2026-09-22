@@ -13,7 +13,7 @@ const presetPairings = [
     label: "PPFAS vs HDFC",
     name: "Parag Parikh vs HDFC Flexi Cap",
     tag: "Flexi Cap Alpha Battle",
-    codes: "119551,118955",
+    codes: "122639,118955",
     metrics: {
       fundA: { name: "PPFAS Flexi Cap", cagr3y: "21.4%", sharpe: "1.42", maxDrawdown: "-14.2%", ter: "0.62%" },
       fundB: { name: "HDFC Flexi Cap", cagr3y: "23.8%", sharpe: "1.28", maxDrawdown: "-17.8%", ter: "0.85%" },
@@ -26,7 +26,7 @@ const presetPairings = [
     label: "Quant vs Nippon",
     name: "Quant Small Cap vs Nippon Small Cap",
     tag: "High Beta Volatility Review",
-    codes: "120828,118668",
+    codes: "120828,118778",
     metrics: {
       fundA: { name: "Quant Small Cap", cagr3y: "32.1%", sharpe: "1.65", maxDrawdown: "-22.1%", ter: "0.77%" },
       fundB: { name: "Nippon Small Cap", cagr3y: "28.4%", sharpe: "1.51", maxDrawdown: "-19.4%", ter: "0.68%" },
@@ -39,7 +39,7 @@ const presetPairings = [
     label: "ICICI vs Mirae",
     name: "ICICI Bluechip vs Mirae Large Cap",
     tag: "Large Cap Core Battle",
-    codes: "100356,112090",
+    codes: "120586,118825",
     metrics: {
       fundA: { name: "ICICI Bluechip", cagr3y: "16.8%", sharpe: "1.12", maxDrawdown: "-12.5%", ter: "0.91%" },
       fundB: { name: "Mirae Large Cap", cagr3y: "15.4%", sharpe: "1.05", maxDrawdown: "-14.1%", ter: "0.54%" },

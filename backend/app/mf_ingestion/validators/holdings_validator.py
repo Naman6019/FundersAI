@@ -9,6 +9,7 @@ from app.mf_ingestion.constants import (
     VALIDATION_STATUS_VALID,
 )
 from app.mf_ingestion.validators.metrics_validator import validate_percent_aum_total
+from app.services.mf_holdings_semantics import validate_isin_identity
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,16 @@ def validate_holdings(
 
     if not rows:
         issues.append("holdings_empty")
+
+    # Cross-check that each ISIN denotes a single security. `rows` is the holdings of one
+    # source document, which is one authoritative set, so a contradiction here means the parser
+    # attached an ISIN to the wrong instrument. That is the failure mode which silently corrupts
+    # ISIN-keyed joins downstream, so it must surface as a review issue rather than pass as
+    # `valid`. Scoping is inherent: cross-document naming variance is legitimate and is not seen
+    # because only this document's rows are compared.
+    identity = validate_isin_identity(rows)
+    if not identity.is_consistent:
+        issues.extend(identity.review_issues())
 
     unique_issues = sorted(set(issues))
     if not unique_issues:

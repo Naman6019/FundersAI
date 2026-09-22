@@ -22,9 +22,13 @@ load_dotenv()
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+# The backend root is needed for `app.*` imports (the holdings alignment validator), and it is
+# safe to add: `mf_ingest_utils` in scripts/ still resolves first for the shared helpers.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from supabase import create_client
 
+from app.services.mf_holdings_alignment import validate_holdings_alignment
 from mf_ingest_utils import (
     build_scheme_index,
     clean_scheme_name,
@@ -520,6 +524,7 @@ def sync_amfi_holdings_api(supabase, funds: list[dict[str, Any]], session) -> in
         holdings: list[dict[str, Any]] = []
         fetched_row_count = 0
         skipped_no_source_data = 0
+        rejected_unusable_payload = 0
 
         for amfi_fund in amfi_funds[:AMFI_HOLDINGS_FUND_LIMIT]:
             try:
@@ -549,6 +554,26 @@ def sync_amfi_holdings_api(supabase, funds: list[dict[str, Any]], session) -> in
                 )
                 continue
 
+            # AMFI has shipped quarters whose ISIN column is not row-aligned with Company_Name.
+            # Persisting those rows attaches the wrong ISIN to a stock, which corrupts every
+            # downstream ISIN-keyed join while still looking plausible row by row. Refuse the
+            # whole fund-quarter rather than write partially-wrong holdings.
+            alignment = validate_holdings_alignment(rows)
+            if not alignment.is_usable:
+                rejected_unusable_payload += 1
+                logger.warning(
+                    "AMFI holdings rejected_unusable_payload fund=%s quarter=%s issues=%s "
+                    "isin_conflicts=%s/%s null_isin=%s negative_weights=%s",
+                    amfi_fund["mf_name"],
+                    as_of_date,
+                    ",".join(alignment.issues),
+                    alignment.isin_name_conflicts,
+                    alignment.checked_isins,
+                    alignment.null_isin_rows,
+                    alignment.negative_weight_rows,
+                )
+                continue
+
             fetched_row_count += len(rows)
             for row in rows:
                 scheme_name = clean_scheme_name(row.get("Scheme_Name"))
@@ -572,9 +597,11 @@ def sync_amfi_holdings_api(supabase, funds: list[dict[str, Any]], session) -> in
 
         if fetched_row_count == 0:
             logger.info(
-                "AMFI holdings quarter %s had no source rows. skipped_no_source_data=%s",
+                "AMFI holdings quarter %s had no usable source rows. skipped_no_source_data=%s "
+                "rejected_unusable_payload=%s",
                 as_of_date,
                 skipped_no_source_data,
+                rejected_unusable_payload,
             )
             continue
 

@@ -19,7 +19,7 @@ function TerminalLedger() {
       <p className="text-[#00FF9D]">
         <span className="text-slate-500">$</span> compare ppfas-flexi-cap hdfc-flexi-cap --metrics=cagr,sharpe,alpha
       </p>
-      <p className="text-slate-400 mt-1">&gt; Resolving schemes… 2 matched (AMFI 119551, 118955)</p>
+      <p className="text-slate-400 mt-1">&gt; Resolving schemes… 2 matched (AMFI 122639, 118955)</p>
       <p className="text-slate-400">&gt; Computing deterministic metrics from NAV history + factsheet…</p>
 
       <div className="mt-3 grid grid-cols-[1fr_auto_auto] gap-x-4 gap-y-1 text-slate-300">

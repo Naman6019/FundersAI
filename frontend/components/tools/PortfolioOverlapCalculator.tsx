@@ -2,13 +2,14 @@
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { FUND_REGISTRY, FundEntry, getComparePair } from '@/lib/fund-registry';
+import { FUND_REGISTRY, getComparePair } from '@/lib/fund-registry';
 import {
   getHoldingsForScheme,
+  hasCuratedHoldings,
   calculateDetailedOverlap,
   DetailedOverlapResult,
 } from '@/lib/fund-holdings';
-import { Search, ArrowRight, Layers, PieChart, ShieldCheck, AlertTriangle, Sparkles, CheckCircle2, ChevronRight, Share2, Check } from 'lucide-react';
+import { Search, ArrowRight, ShieldCheck, AlertTriangle, Sparkles, CheckCircle2, ChevronRight, Share2, Check } from 'lucide-react';
 
 interface PopularPair {
   label: string;
@@ -17,11 +18,16 @@ interface PopularPair {
   tag: string;
 }
 
+// Every code below is an AMFI scheme code verified against mutual_fund_core_snapshot and
+// cross-checked to FUND_REGISTRY by tests/fundHoldingsIdentity.test.mjs. An earlier version
+// carried codes that resolved to entirely different funds (Axis ELSS presented as HDFC Flexi
+// Cap, Mirae ELSS as Tata Digital), and three codes that were absent from the registry fell
+// back to an unrelated fund, so the headline pairing never matched the numbers shown.
 const POPULAR_PAIRS: PopularPair[] = [
   {
     label: 'PPFAS Flexi Cap vs HDFC Flexi Cap',
     schemeCodeA: 122639,
-    schemeCodeB: 120503,
+    schemeCodeB: 118955,
     tag: 'Flexi Cap Battle',
   },
   {
@@ -31,20 +37,20 @@ const POPULAR_PAIRS: PopularPair[] = [
     tag: 'Small Cap Heavyweights',
   },
   {
-    label: 'SBI Bluechip vs ICICI Pru Bluechip',
+    label: 'SBI Large Cap vs ICICI Pru Large Cap',
     schemeCodeA: 119598,
     schemeCodeB: 120586,
     tag: 'Large Cap Anchors',
   },
   {
     label: 'Tata Digital vs ICICI Tech',
-    schemeCodeA: 135781,
+    schemeCodeA: 135800,
     schemeCodeB: 120594,
     tag: 'Sectoral Tech Duel',
   },
   {
     label: 'Mirae Large & Midcap vs Kotak Flexicap',
-    schemeCodeA: 120038,
+    schemeCodeA: 118834,
     schemeCodeB: 120166,
     tag: 'Core Equity Blend',
   },
@@ -52,7 +58,7 @@ const POPULAR_PAIRS: PopularPair[] = [
 
 export default function PortfolioOverlapCalculator() {
   const [codeA, setCodeA] = useState<number>(122639); // PPFAS Flexi Cap
-  const [codeB, setCodeB] = useState<number>(120503); // HDFC Flexi Cap
+  const [codeB, setCodeB] = useState<number>(118955); // HDFC Flexi Cap
   const [searchA, setSearchA] = useState<string>('');
   const [searchB, setSearchB] = useState<string>('');
   const [openSelectorA, setOpenSelectorA] = useState<boolean>(false);
@@ -69,16 +75,13 @@ export default function PortfolioOverlapCalculator() {
     }
   };
 
-  const fundA = useMemo(
-    () => FUND_REGISTRY.find((f) => f.schemeCode === codeA) || FUND_REGISTRY[0],
-    [codeA]
-  );
-  const fundB = useMemo(
-    () => FUND_REGISTRY.find((f) => f.schemeCode === codeB) || FUND_REGISTRY[1],
-    [codeB]
-  );
+  // Resolve strictly. A code that is not in the registry must render as unavailable rather
+  // than silently collapsing onto FUND_REGISTRY[0]/[1] — that fallback is what let the tool
+  // advertise one fund while computing another fund's numbers.
+  const fundA = useMemo(() => FUND_REGISTRY.find((f) => f.schemeCode === codeA) ?? null, [codeA]);
+  const fundB = useMemo(() => FUND_REGISTRY.find((f) => f.schemeCode === codeB) ?? null, [codeB]);
 
-  const comparePair = getComparePair(fundA.fundSlug, fundB.fundSlug);
+  const comparePair = fundA && fundB ? getComparePair(fundA.fundSlug, fundB.fundSlug) : undefined;
 
   const filteredFundsA = useMemo(() => {
     if (!searchA.trim()) return FUND_REGISTRY;
@@ -102,11 +105,24 @@ export default function PortfolioOverlapCalculator() {
     );
   }, [searchB]);
 
+  // Both schemes must have curated holdings before any overlap figure is shown. There is no
+  // proxy: a missing set renders the unavailable state instead of substituting another fund's
+  // stocks, which is what produced plausible-looking but fabricated overlap percentages.
+  const holdingsA = fundA ? getHoldingsForScheme(fundA.schemeCode) : null;
+  const holdingsB = fundB ? getHoldingsForScheme(fundB.schemeCode) : null;
+  const holdingsAvailable = holdingsA !== null && holdingsB !== null;
+
+  // Within the `holdingsAvailable` render branch both funds resolve, so the view uses these
+  // non-null aliases rather than optional chaining everywhere.
+  const aFund = fundA!;
+  const bFund = fundB!;
+
   const overlapResult: DetailedOverlapResult = useMemo(() => {
-    const holdingsA = getHoldingsForScheme(fundA.schemeCode, fundA.category);
-    const holdingsB = getHoldingsForScheme(fundB.schemeCode, fundB.category);
-    return calculateDetailedOverlap(holdingsA, holdingsB);
-  }, [fundA, fundB]);
+    if (!holdingsA || !holdingsB) {
+      return calculateDetailedOverlap([], []);
+    }
+    return calculateDetailedOverlap(holdingsA.holdings, holdingsB.holdings);
+  }, [holdingsA, holdingsB]);
 
   const handleSelectPair = (pair: PopularPair) => {
     setCodeA(pair.schemeCodeA);
@@ -152,7 +168,7 @@ export default function PortfolioOverlapCalculator() {
             <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[#00FF9D]">
               Scheme A (Base Fund)
             </span>
-            <span className="text-xs text-[#7183a0] font-mono">{fundA.category}</span>
+            <span className="text-xs text-[#7183a0] font-mono">{fundA?.category}</span>
           </div>
 
           <div className="relative">
@@ -161,8 +177,8 @@ export default function PortfolioOverlapCalculator() {
               className="w-full text-left rounded-xl border border-white/15 bg-white/[0.03] hover:bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white flex items-center justify-between transition-colors"
             >
               <div className="truncate pr-2">
-                <p className="truncate text-white font-bold">{fundA.schemeName}</p>
-                <p className="text-xs text-[#7183a0] font-normal">{fundA.amcName} • AMFI: {fundA.schemeCode}</p>
+                <p className="truncate text-white font-bold">{fundA?.schemeName}</p>
+                <p className="text-xs text-[#7183a0] font-normal">{fundA?.amcName} • AMFI: {fundA?.schemeCode}</p>
               </div>
               <ChevronRight className={`w-4 h-4 text-[#7183a0] transition-transform ${openSelectorA ? 'rotate-90' : ''}`} />
             </button>
@@ -189,7 +205,7 @@ export default function PortfolioOverlapCalculator() {
                         setOpenSelectorA(false);
                       }}
                       className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between ${
-                        f.schemeCode === fundA.schemeCode
+                        f.schemeCode === fundA?.schemeCode
                           ? 'bg-[#00FF9D]/15 text-[#00FF9D] font-bold'
                           : 'text-[#aebed6] hover:bg-white/5 hover:text-white'
                       }`}
@@ -210,7 +226,7 @@ export default function PortfolioOverlapCalculator() {
             <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[#66a3ff]">
               Scheme B (Comparison Fund)
             </span>
-            <span className="text-xs text-[#7183a0] font-mono">{fundB.category}</span>
+            <span className="text-xs text-[#7183a0] font-mono">{fundB?.category}</span>
           </div>
 
           <div className="relative">
@@ -219,8 +235,8 @@ export default function PortfolioOverlapCalculator() {
               className="w-full text-left rounded-xl border border-white/15 bg-white/[0.03] hover:bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white flex items-center justify-between transition-colors"
             >
               <div className="truncate pr-2">
-                <p className="truncate text-white font-bold">{fundB.schemeName}</p>
-                <p className="text-xs text-[#7183a0] font-normal">{fundB.amcName} • AMFI: {fundB.schemeCode}</p>
+                <p className="truncate text-white font-bold">{fundB?.schemeName}</p>
+                <p className="text-xs text-[#7183a0] font-normal">{fundB?.amcName} • AMFI: {fundB?.schemeCode}</p>
               </div>
               <ChevronRight className={`w-4 h-4 text-[#7183a0] transition-transform ${openSelectorB ? 'rotate-90' : ''}`} />
             </button>
@@ -247,7 +263,7 @@ export default function PortfolioOverlapCalculator() {
                         setOpenSelectorB(false);
                       }}
                       className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between ${
-                        f.schemeCode === fundB.schemeCode
+                        f.schemeCode === fundB?.schemeCode
                           ? 'bg-[#66a3ff]/15 text-[#66a3ff] font-bold'
                           : 'text-[#aebed6] hover:bg-white/5 hover:text-white'
                       }`}
@@ -267,6 +283,33 @@ export default function PortfolioOverlapCalculator() {
       <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-[#0c1527] via-[#080e1a] to-[#050811] p-6 sm:p-10 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-[#00FF9D]/5 rounded-full blur-3xl pointer-events-none" />
 
+        {!holdingsAvailable ? (
+          /*
+           * Abstain rather than estimate. Only a small curated set of schemes has a holdings
+           * snapshot we can stand behind, so anything else states that plainly instead of
+           * showing a number the data cannot support.
+           */
+          <div className="max-w-2xl space-y-4">
+            <span className="text-xs font-mono font-bold uppercase tracking-[0.2em] text-[#7183a0]">
+              Overlap unavailable
+            </span>
+            <p className="text-2xl font-bold text-white">
+              Holdings are not published for {holdingsA ? fundB?.schemeName : fundA?.schemeName}.
+            </p>
+            <p className="text-sm text-[#aebed6] leading-relaxed">
+              FundersAI computes overlap only from a holdings snapshot it can attribute to the specific
+              scheme. It does not substitute a category proxy, so no overlap figure is shown here rather
+              than one derived from a different fund&apos;s portfolio.
+            </p>
+            <p className="text-sm text-[#aebed6]">
+              Curated holdings currently cover{' '}
+              {FUND_REGISTRY.filter((f) => hasCuratedHoldings(f.schemeCode)).length} of{' '}
+              {FUND_REGISTRY.length} registry schemes. Pick one of the presets above, or choose another
+              scheme.
+            </p>
+          </div>
+        ) : (
+        <>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           {/* Overlap Percentage Dial */}
           <div className="lg:col-span-4 text-center lg:text-left space-y-4">
@@ -278,7 +321,7 @@ export default function PortfolioOverlapCalculator() {
                 className="text-6xl sm:text-7xl font-extrabold tracking-tight"
                 style={{ color: overlapResult.verdict.color }}
               >
-                {overlapResult.percentage}%
+                {overlapResult.percentage.toFixed(1)}%
               </span>
               <span className="text-sm font-semibold text-[#7183a0]">shared weight</span>
             </div>
@@ -298,6 +341,10 @@ export default function PortfolioOverlapCalculator() {
               <span>40% (Redundant)</span>
               <span>100% (Identical)</span>
             </div>
+            <p className="text-[11px] text-[#7183a0] leading-relaxed pt-1">
+              Illustrative snapshot as of {holdingsA?.asOf} — {holdingsA?.source}. Not a live read of the
+              AMC&apos;s current statutory disclosure.
+            </p>
           </div>
 
           {/* Verdict Box */}
@@ -332,7 +379,7 @@ export default function PortfolioOverlapCalculator() {
             <div className="pt-2 flex flex-wrap items-center justify-between gap-4 border-t border-white/5 text-xs text-[#7183a0]">
               <div className="flex flex-wrap items-center gap-4">
                 <span>
-                  <strong className="text-white">{overlapResult.uniqueA.length}</strong> unique to {fundA.schemeName.split(' ')[0]}
+                  <strong className="text-white">{overlapResult.uniqueA.length}</strong> unique to {aFund.schemeName.split(' ')[0]}
                 </span>
                 <span>•</span>
                 <span>
@@ -340,7 +387,7 @@ export default function PortfolioOverlapCalculator() {
                 </span>
                 <span>•</span>
                 <span>
-                  <strong className="text-white">{overlapResult.uniqueB.length}</strong> unique to {fundB.schemeName.split(' ')[0]}
+                  <strong className="text-white">{overlapResult.uniqueB.length}</strong> unique to {bFund.schemeName.split(' ')[0]}
                 </span>
               </div>
 
@@ -397,7 +444,7 @@ export default function PortfolioOverlapCalculator() {
 
               {/* Fund A Label */}
               <text x="85" y="70" textAnchor="middle" fill="#00FF9D" fontSize="12" fontWeight="bold">
-                {fundA.schemeName.split(' ')[0]}
+                {aFund.schemeName.split(' ')[0]}
               </text>
               <text x="85" y="85" textAnchor="middle" fill="#7183a0" fontSize="9" fontFamily="monospace">
                 {(100 - overlapResult.percentage).toFixed(0)}% Unique
@@ -413,7 +460,7 @@ export default function PortfolioOverlapCalculator() {
 
               {/* Fund B Label */}
               <text x="235" y="70" textAnchor="middle" fill="#66a3ff" fontSize="12" fontWeight="bold">
-                {fundB.schemeName.split(' ')[0]}
+                {bFund.schemeName.split(' ')[0]}
               </text>
               <text x="235" y="85" textAnchor="middle" fill="#7183a0" fontSize="9" fontFamily="monospace">
                 {(100 - overlapResult.percentage).toFixed(0)}% Unique
@@ -421,9 +468,12 @@ export default function PortfolioOverlapCalculator() {
             </svg>
           </div>
         </div>
+        </>
+        )}
       </section>
 
       {/* ─── Tab Navigation for Holdings Breakdown ───────────────────────────── */}
+      {holdingsAvailable && (
       <section className="space-y-6">
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
           <div className="flex flex-wrap gap-2">
@@ -445,7 +495,7 @@ export default function PortfolioOverlapCalculator() {
                   : 'text-[#7183a0] hover:text-white'
               }`}
             >
-              Unique to {fundA.schemeName.split(' ')[0]} ({overlapResult.uniqueA.length})
+              Unique to {aFund.schemeName.split(' ')[0]} ({overlapResult.uniqueA.length})
             </button>
             <button
               onClick={() => setActiveTab('uniqueB')}
@@ -455,7 +505,7 @@ export default function PortfolioOverlapCalculator() {
                   : 'text-[#7183a0] hover:text-white'
               }`}
             >
-              Unique to {fundB.schemeName.split(' ')[0]} ({overlapResult.uniqueB.length})
+              Unique to {bFund.schemeName.split(' ')[0]} ({overlapResult.uniqueB.length})
             </button>
             <button
               onClick={() => setActiveTab('sectors')}
@@ -496,8 +546,8 @@ export default function PortfolioOverlapCalculator() {
                     <tr>
                       <th className="py-3 px-4">Stock Name</th>
                       <th className="py-3 px-4">Sector</th>
-                      <th className="py-3 px-4 text-right">{fundA.schemeName.split(' ')[0]} Weight</th>
-                      <th className="py-3 px-4 text-right">{fundB.schemeName.split(' ')[0]} Weight</th>
+                      <th className="py-3 px-4 text-right">{aFund.schemeName.split(' ')[0]} Weight</th>
+                      <th className="py-3 px-4 text-right">{bFund.schemeName.split(' ')[0]} Weight</th>
                       <th className="py-3 px-4 text-right font-bold text-[#00FF9D]">Overlap Weight</th>
                     </tr>
                   </thead>
@@ -535,7 +585,7 @@ export default function PortfolioOverlapCalculator() {
         {activeTab === 'uniqueA' && (
           <div className="rounded-2xl border border-white/10 bg-[#080e1a] p-6">
             <h3 className="text-sm font-bold text-white mb-4">
-              Holdings held exclusively by {fundA.schemeName}
+              Holdings held exclusively by {aFund.schemeName}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {overlapResult.uniqueA.map((stock) => (
@@ -555,7 +605,7 @@ export default function PortfolioOverlapCalculator() {
         {activeTab === 'uniqueB' && (
           <div className="rounded-2xl border border-white/10 bg-[#080e1a] p-6">
             <h3 className="text-sm font-bold text-white mb-4">
-              Holdings held exclusively by {fundB.schemeName}
+              Holdings held exclusively by {bFund.schemeName}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {overlapResult.uniqueB.map((stock) => (
@@ -583,12 +633,12 @@ export default function PortfolioOverlapCalculator() {
                   <div className="flex justify-between text-xs">
                     <span className="font-semibold text-white">{sec.sector}</span>
                     <span className="font-mono text-[#7183a0]">
-                      {fundA.schemeName.split(' ')[0]}: <strong className="text-[#00FF9D]">{sec.weightA}%</strong> | {fundB.schemeName.split(' ')[0]}: <strong className="text-[#66a3ff]">{sec.weightB}%</strong> | Overlap: <strong className="text-white">{sec.overlap}%</strong>
+                      {aFund.schemeName.split(' ')[0]}: <strong className="text-[#00FF9D]">{sec.weightA}%</strong> | {bFund.schemeName.split(' ')[0]}: <strong className="text-[#66a3ff]">{sec.weightB}%</strong> | Overlap: <strong className="text-white">{sec.overlap}%</strong>
                     </span>
                   </div>
                   <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden flex">
-                    <div className="h-full bg-[#00FF9D]/80" style={{ width: `${Math.min(100, sec.weightA)}%` }} title={`${fundA.schemeName}: ${sec.weightA}%`} />
-                    <div className="h-full bg-[#66a3ff]/80 ml-1" style={{ width: `${Math.min(100, sec.weightB)}%` }} title={`${fundB.schemeName}: ${sec.weightB}%`} />
+                    <div className="h-full bg-[#00FF9D]/80" style={{ width: `${Math.min(100, sec.weightA)}%` }} title={`${aFund.schemeName}: ${sec.weightA}%`} />
+                    <div className="h-full bg-[#66a3ff]/80 ml-1" style={{ width: `${Math.min(100, sec.weightB)}%` }} title={`${bFund.schemeName}: ${sec.weightB}%`} />
                   </div>
                 </div>
               ))}
@@ -596,6 +646,7 @@ export default function PortfolioOverlapCalculator() {
           </div>
         )}
       </section>
+      )}
 
       {/* ─── Bottom CTA Hub ─────────────────────────────────────────────────── */}
       <section className="rounded-2xl border border-white/10 bg-gradient-to-r from-blue-950/30 to-emerald-950/20 p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
@@ -613,7 +664,7 @@ export default function PortfolioOverlapCalculator() {
             href={
               comparePair
                 ? `/compare/${comparePair.pair}`
-                : `/dashboard?query=${encodeURIComponent(`Compare ${fundA.schemeName} and ${fundB.schemeName} with full metrics`)}`
+                : `/dashboard?query=${encodeURIComponent(`Compare ${aFund.schemeName} and ${bFund.schemeName} with full metrics`)}`
             }
             className="px-5 py-2.5 rounded-xl bg-[#00FF9D] text-black font-bold text-xs hover:bg-[#00FF9D]/90 transition-colors shadow-lg shadow-[#00FF9D]/20 flex items-center gap-2"
           >

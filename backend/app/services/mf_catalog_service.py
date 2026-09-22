@@ -4,6 +4,7 @@ from math import isfinite
 import re
 
 from app.services.mf_metrics_service import normalize_nav_history
+from app.services.mf_slug_service import fund_slug
 
 METHOD_VERSION = "catalog_nav_v1"
 CATEGORIES = ("Flexi Cap", "Large Cap", "Mid Cap", "Small Cap", "Large & Mid Cap", "ELSS", "Index Fund", "Sectoral/Thematic")
@@ -86,7 +87,10 @@ def catalog_row(snapshot, history, existing=None, reservation=None, *, today=Non
     # Existing and legacy URLs are permanent reservations, never eligibility overrides.
     frozen = existing or reservation or {}
     amc = frozen.get("amc_slug") or amc_slug or slug(str(snapshot.get("amc_name") or "unknown"))
-    fund = frozen.get("fund_slug") or f"{slug(snapshot.get('scheme_name') or code)}-{code}"
+    # An existing published row keeps its slug, so a generator improvement can never silently
+    # move a live URL. A new scheme gets a clean slug from the fund-name normalizer, which strips
+    # share-class metadata, rather than the old `-<code>`-suffixed form.
+    fund = frozen.get("fund_slug") or fund_slug(snapshot.get("scheme_name") or code)
     row = {"scheme_code": code, "amc_slug": amc, "fund_slug": fund,
            "scheme_name": snapshot.get("scheme_name") or code,
            "amc_name": snapshot.get("amc_name") or "Unknown", "category": label,

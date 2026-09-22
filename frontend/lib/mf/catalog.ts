@@ -40,15 +40,19 @@ export const getPublishedFunds = cache(async (): Promise<CatalogFund[]> => {
   return funds;
 });
 
-// Directory discovery must never turn a catalog infrastructure outage into a false empty catalog.
-export async function tryGetPublishedFunds(): Promise<CatalogFund[] | null> {
+// Directory discovery must never turn a catalog infrastructure outage into a false empty
+// catalog, and callers must be able to tell the two apart: `undefined` denotes an
+// infrastructure failure, while an empty array is a definitive "no eligible funds published".
+// Collapsing both into `null` previously made a momentary outage indistinguishable from an
+// empty catalog, so pages flipped to `noindex` and back on every failed read.
+export async function tryGetPublishedFunds(): Promise<CatalogFund[] | undefined> {
   try {
     return await getPublishedFunds();
   } catch (error) {
     console.error('[mf-catalog] public catalog unavailable', {
       message: error instanceof Error ? error.message : 'Unknown catalog error',
     });
-    return null;
+    return undefined;
   }
 }
 
@@ -70,6 +74,44 @@ export const getPublishedFund = cache(async (amcSlug: string, fundSlug: string):
   if (error) throw new Error('Catalog lookup failed', { cause: error });
   return data && isEligible(data as CatalogFund) ? data as CatalogFund : null;
 });
+
+/**
+ * Where a retired catalog URL should permanently redirect to, if anywhere.
+ *
+ * `mf_page_catalog` URLs are immutable once published, so a correction is always expressed as a
+ * reviewed row in `mf_catalog_url_redirects`. This resolves the old path to the current one so
+ * the route can issue a 308 instead of a 404. Returns `null` when the path was never a catalog
+ * URL, which is what lets the route distinguish "moved" from "never existed" and still return a
+ * real 404 for the latter.
+ */
+export const getCatalogUrlRedirect = cache(
+  async (amcSlug: string, fundSlug: string): Promise<{ amcSlug: string; fundSlug: string } | null> => {
+    const { data, error } = await client()
+      .from('mf_catalog_url_redirects')
+      .select('to_amc_slug,to_fund_slug')
+      .eq('from_amc_slug', amcSlug)
+      .eq('from_fund_slug', fundSlug)
+      .maybeSingle();
+    if (error) throw new Error('Catalog redirect lookup failed', { cause: error });
+    return data ? { amcSlug: data.to_amc_slug, fundSlug: data.to_fund_slug } : null;
+  },
+);
+
+export async function tryGetCatalogUrlRedirect(
+  amcSlug: string,
+  fundSlug: string,
+): Promise<{ amcSlug: string; fundSlug: string } | null | undefined> {
+  try {
+    return await getCatalogUrlRedirect(amcSlug, fundSlug);
+  } catch (error) {
+    // `undefined` is an infrastructure failure and must not be mistaken for "no redirect",
+    // which would render a 404 for a URL that actually moved.
+    console.error('[mf-catalog] catalog redirect unavailable', {
+      message: error instanceof Error ? error.message : 'Unknown catalog error',
+    });
+    return undefined;
+  }
+}
 
 export async function getPublishedAmcs() {
   const funds = await getPublishedFunds();

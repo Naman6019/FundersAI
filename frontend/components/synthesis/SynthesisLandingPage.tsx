@@ -16,19 +16,19 @@ import { InstitutionalPDFTemplate } from "@/components/synthesis/InstitutionalPD
 // Data Definitions
 const heroPresets = [
     {
-        title: "HDFC Defence Fund vs Quant Small Cap",
-        tag: "#DEFENCE_VS_VOLATILITY",
-        codes: "151745,120828"
+        title: "HDFC Flexi Cap vs Quant Small Cap",
+        tag: "#FLEXI_VS_VOLATILITY",
+        codes: "118955,120828"
     },
     {
         title: "Parag Parikh Flexi Cap vs SBI Contra",
         tag: "#VALUE_VS_CONTRARIAN",
-        codes: "119551,100033"
+        codes: "122639,119835"
     },
     {
-        title: "ICICI Bluechip vs Mirae Asset Large Cap",
+        title: "ICICI Pru Large Cap vs Mirae Asset Large Cap",
         tag: "#BLUECHIP_ALPHA_BATTLE",
-        codes: "100356,112090"
+        codes: "120586,118825"
     }
 ];
 

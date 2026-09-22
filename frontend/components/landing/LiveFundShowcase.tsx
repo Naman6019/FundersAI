@@ -28,7 +28,7 @@ const FUNDS_BY_CATEGORY: Record<CategoryTab, FundCard[]> = {
       name: "Parag Parikh Flexi Cap Fund",
       amc: "PPFAS",
       schemeCode: 122639,
-      href: "/mutual-funds/parag-parikh/parag-parikh-flexi-cap-fund",
+      href: "/mutual-funds/ppfas/parag-parikh-flexi-cap-fund",
       cagr3Y: "21.4%",
       cagr5Y: "23.8%",
       sharpe: "1.42",
@@ -40,7 +40,7 @@ const FUNDS_BY_CATEGORY: Record<CategoryTab, FundCard[]> = {
     {
       name: "HDFC Flexi Cap Fund",
       amc: "HDFC",
-      schemeCode: 120503,
+      schemeCode: 118955,
       href: "/mutual-funds/hdfc/hdfc-flexi-cap-fund",
       cagr3Y: "23.6%",
       cagr5Y: "22.9%",
@@ -53,7 +53,7 @@ const FUNDS_BY_CATEGORY: Record<CategoryTab, FundCard[]> = {
     {
       name: "Kotak Flexi Cap Fund",
       amc: "Kotak",
-      schemeCode: 120505,
+      schemeCode: 120166,
       href: "/mutual-funds/kotak/kotak-flexi-cap-fund",
       cagr3Y: "19.8%",
       cagr5Y: "21.2%",
@@ -66,7 +66,7 @@ const FUNDS_BY_CATEGORY: Record<CategoryTab, FundCard[]> = {
     {
       name: "Axis Flexi Cap Fund",
       amc: "Axis",
-      schemeCode: 141870,
+      schemeCode: 141925,
       href: "/mutual-funds/axis/axis-flexi-cap-fund",
       cagr3Y: "17.9%",
       cagr5Y: "19.4%",
@@ -81,7 +81,7 @@ const FUNDS_BY_CATEGORY: Record<CategoryTab, FundCard[]> = {
     {
       name: "Quant Small Cap Fund",
       amc: "Quant",
-      schemeCode: 120847,
+      schemeCode: 120828,
       href: "/mutual-funds/quant/quant-small-cap-fund",
       cagr3Y: "28.1%",
       cagr5Y: "34.2%",
@@ -94,8 +94,8 @@ const FUNDS_BY_CATEGORY: Record<CategoryTab, FundCard[]> = {
     {
       name: "Nippon India Small Cap Fund",
       amc: "Nippon",
-      schemeCode: 118825,
-      href: "/mutual-funds/nippon-india/nippon-india-small-cap-fund",
+      schemeCode: 118778,
+      href: "/mutual-funds/nippon/nippon-india-small-cap-fund",
       cagr3Y: "26.4%",
       cagr5Y: "31.5%",
       sharpe: "1.58",
@@ -107,7 +107,7 @@ const FUNDS_BY_CATEGORY: Record<CategoryTab, FundCard[]> = {
     {
       name: "HDFC Small Cap Fund",
       amc: "HDFC",
-      schemeCode: 119598,
+      schemeCode: 130503,
       href: "/mutual-funds/hdfc/hdfc-small-cap-fund",
       cagr3Y: "24.9%",
       cagr5Y: "29.8%",
@@ -120,7 +120,7 @@ const FUNDS_BY_CATEGORY: Record<CategoryTab, FundCard[]> = {
     {
       name: "Axis Small Cap Fund",
       amc: "Axis",
-      schemeCode: 120465,
+      schemeCode: 125354,
       href: "/mutual-funds/axis/axis-small-cap-fund",
       cagr3Y: "22.3%",
       cagr5Y: "27.1%",
@@ -135,7 +135,7 @@ const FUNDS_BY_CATEGORY: Record<CategoryTab, FundCard[]> = {
     {
       name: "HDFC Mid-Cap Opportunities Fund",
       amc: "HDFC",
-      schemeCode: 119552,
+      schemeCode: 118989,
       href: "/mutual-funds/hdfc/hdfc-mid-cap-opportunities-fund",
       cagr3Y: "25.6%",
       cagr5Y: "28.4%",
@@ -148,7 +148,7 @@ const FUNDS_BY_CATEGORY: Record<CategoryTab, FundCard[]> = {
     {
       name: "Kotak Emerging Equity Fund",
       amc: "Kotak",
-      schemeCode: 120152,
+      schemeCode: 119775,
       href: "/mutual-funds/kotak/kotak-emerging-equity-fund",
       cagr3Y: "24.1%",
       cagr5Y: "27.5%",
@@ -161,8 +161,8 @@ const FUNDS_BY_CATEGORY: Record<CategoryTab, FundCard[]> = {
     {
       name: "Nippon India Growth Fund",
       amc: "Nippon",
-      schemeCode: 118834,
-      href: "/mutual-funds/nippon-india/nippon-india-growth-fund",
+      schemeCode: 118668,
+      href: "/mutual-funds/nippon/nippon-india-growth-fund",
       cagr3Y: "22.8%",
       cagr5Y: "26.1%",
       sharpe: "1.31",
@@ -189,7 +189,7 @@ const FUNDS_BY_CATEGORY: Record<CategoryTab, FundCard[]> = {
     {
       name: "HDFC Top 100 Fund",
       amc: "HDFC",
-      schemeCode: 119533,
+      schemeCode: 119018,
       href: "/mutual-funds/hdfc/hdfc-top-100-fund",
       cagr3Y: "15.9%",
       cagr5Y: "17.1%",
@@ -202,7 +202,7 @@ const FUNDS_BY_CATEGORY: Record<CategoryTab, FundCard[]> = {
     {
       name: "Mirae Asset Large Cap Fund",
       amc: "Mirae",
-      schemeCode: 118701,
+      schemeCode: 118825,
       href: "/mutual-funds/mirae-asset/mirae-asset-large-cap-fund",
       cagr3Y: "15.4%",
       cagr5Y: "16.8%",
@@ -215,7 +215,7 @@ const FUNDS_BY_CATEGORY: Record<CategoryTab, FundCard[]> = {
     {
       name: "SBI Bluechip Fund",
       amc: "SBI",
-      schemeCode: 119206,
+      schemeCode: 119598,
       href: "/mutual-funds/sbi/sbi-bluechip-fund",
       cagr3Y: "14.2%",
       cagr5Y: "15.9%",
