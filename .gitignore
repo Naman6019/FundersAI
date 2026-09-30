@@ -111,6 +111,7 @@ stitch_downloads/
 !frontend/public/logos/**
 *.json
 !backend/evals/fund_research_v1/judge_report.json
+!backend/evals/gates/*.json
 !frontend/tests/fixtures/*.json
 !backend/tests/fixtures/*.json
 *.yaml

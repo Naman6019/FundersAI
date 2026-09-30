@@ -1,0 +1,64 @@
+name: Eval Gate
+
+# Closes the retrieval evaluation loop in CI: run the versioned golden eval,
+# compare it to the promoted baseline, and fail the check on regression.
+# Promote a new baseline with:
+#   cd backend && python -m evals.run_retrieval_gate --update-baseline
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/document_retrieval_service.py'
+      - 'backend/app/services/document_indexing_service.py'
+      - 'backend/evals/**'
+      - 'backend/tests/test_document_retrieval_service.py'
+      - 'backend/tests/test_retrieval_evaluation_dataset.py'
+      - '.github/workflows/eval-gate.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/app/services/document_retrieval_service.py'
+      - 'backend/app/services/document_indexing_service.py'
+      - 'backend/evals/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eval-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  retrieval-eval-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run retrieval regression gate
+        working-directory: backend
+        run: python -m evals.run_retrieval_gate --json-out evals/gates/last_gate_report.json
+
+      - name: Run offline evaluation unit tests
+        run: >-
+          python -m pytest
+          backend/tests/test_document_retrieval_service.py
+          backend/tests/test_retrieval_evaluation_dataset.py -q
+
+      - name: Upload gate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrieval-gate-report
+          path: backend/evals/gates/last_gate_report.json
+          if-no-files-found: ignore

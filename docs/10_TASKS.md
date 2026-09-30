@@ -167,6 +167,7 @@
   - [x] Commit a versioned development-seed dataset with relevant-source and abstention expectations.
   - [x] Add an offline runner that records dataset version, retrieval version, configuration, per-case results, and aggregate metrics.
   - [x] Capture the current lexical baseline before enabling query-vector retrieval.
+  - [x] Compare every run against a committed baseline and fail on regression, with a CI gate on retrieval-path changes (`backend/evals/run_retrieval_gate.py`, `.github/workflows/eval-gate.yml`).
   - [ ] Replace fixture cases with at least 50 reviewer-verified official-document cases.
 - [ ] Prefect orchestration
   - [x] Wrap existing acquire, parse, index, and evaluate entry points as tasks without copying business logic.
